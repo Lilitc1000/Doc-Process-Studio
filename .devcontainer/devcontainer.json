@@ -1,5 +1,5 @@
 {
-  "name": "Python+Vue DevContainer",
+  "name": "doc_process_studio",
   "dockerComposeFile": "docker-compose.devcontainer.yml",
   "service": "app",
   "workspaceFolder": "/workspace",
@@ -11,12 +11,15 @@
         "ms-python.vscode-pylance",
         "ms-azuretools.vscode-docker",
         "tamasfe.even-better-toml",
+        "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
         "vue.volar",
-        "Vue.volar",
-        "dbaeumer.vscode-eslint"
+        "ms-vscode.vscode-typescript-next"
       ]
     }
   },
-  "forwardPorts": [8000, 5173]
+  "forwardPorts": [
+    8000,
+    5173
+  ]
 }
