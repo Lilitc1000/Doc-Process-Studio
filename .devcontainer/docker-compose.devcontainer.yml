@@ -1,0 +1,12 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOCAL_WORKSPACE_FOLDER=/workspace
+    volumes:
+      - /var/run/docker.sock:/var/run/docker-host.sock
+      - ..:/workspace:delegated
+    command: bash -lc '/workspace/.devcontainer/startup.sh'
