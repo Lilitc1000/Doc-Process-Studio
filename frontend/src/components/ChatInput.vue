@@ -2,11 +2,7 @@
   <div class="chat-input">
     <div class="files-preview" v-if="files.length > 0">
       <div class="files-list">
-        <div
-          v-for="(file, index) in files"
-          :key="index"
-          class="file-item"
-        >
+        <div v-for="(file, index) in files" :key="index" class="file-item">
           <span class="file-icon">📄</span>
           <div class="file-details">
             <span class="file-name">{{ file.name }}</span>
@@ -14,9 +10,9 @@
           </div>
         </div>
       </div>
-      <button 
-        class="remove-all-btn" 
-        @click="$emit('clear-all-files')" 
+      <button
+        class="remove-all-btn"
+        @click="$emit('clear-all-files')"
         title="移除所有文件"
       >
         ✕ 移除所有文件
@@ -43,12 +39,12 @@
             @change="onFileSelectChange"
             :accept="accept"
             multiple
-          >
+          />
         </label>
 
         <button
           class="send-btn"
-          :class="{ 'disabled': !canSend }"
+          :class="{ disabled: !canSend }"
           @click="onSend"
           :disabled="!canSend"
           title="发送消息 (Enter)"
@@ -93,9 +89,12 @@ const canSend = computed(() => {
   return (localText.value.trim() || props.files.length > 0) && !props.isLoading;
 });
 
-watch(() => props.text, (newVal) => {
-  localText.value = newVal;
-});
+watch(
+  () => props.text,
+  (newVal) => {
+    localText.value = newVal;
+  },
+);
 
 const onInput = () => {
   emit('update:text', localText.value);
@@ -120,12 +119,18 @@ const onFileSelectChange = (e: Event) => {
     emit('upload-files', Array.from(input.files));
     // 清空文件选择器，允许重复选择同一文件
     input.value = '';
+    // 重置 localText 以触发重新渲染
+    localText.value = '';
   }
 };
 
 const handleDrop = (e: DragEvent) => {
   e.preventDefault();
-  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+  if (
+    e.dataTransfer &&
+    e.dataTransfer.files &&
+    e.dataTransfer.files.length > 0
+  ) {
     emit('upload-files', Array.from(e.dataTransfer.files));
   }
 };
@@ -178,8 +183,15 @@ onMounted(() => {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .remove-all-btn {

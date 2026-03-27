@@ -3,11 +3,17 @@
     <div class="message-header">
       <div class="avatar">
         <span class="avatar-icon">
-          {{ message.role === 'user' ? '👤' : message.role === 'system' ? '🤖' : '✨' }}
+          {{
+            message.role === 'user'
+              ? '👤'
+              : message.role === 'system'
+                ? '🤖'
+                : '✨'
+          }}
         </span>
       </div>
       <div class="message-info">
-        <span class="message-role">{{ message.roleText }}</span>
+        <span class="message-role">{{ messageRole }}</span>
         <span class="message-time">{{ formattedTime }}</span>
       </div>
     </div>
@@ -18,6 +24,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import MarkdownIt from 'markdown-it';
+import hljs from 'highlight.js';
 
 const props = defineProps<{
   message: {
@@ -35,27 +42,30 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
   langPrefix: 'language-',
-  highlight: (str: string, lang: string) => {
+  highlight: (str: string, lang: string): string => {
     if (lang && hljsAvailable) {
       try {
-        return `<pre class="highlight"><code class="hljs ${lang}">${ hljs.highlight(str, { language: lang }).value }</code></pre>`;
+        return `<pre class="highlight"><code class="hljs ${lang}">${hljs.highlight(str, { language: lang }).value}</code></pre>`;
       } catch (__) {}
     }
-    return `<pre class="highlight"><code class="hljs">${ md.utils.escapeHtml(str) }</code></pre>`;
-  }
+    return `<pre class="highlight"><code class="hljs">${md.utils.escapeHtml(str)}</code></pre>`;
+  },
 });
 
 const hljsAvailable = typeof hljs !== 'undefined';
 
 const formattedTime = computed(() => {
   const date = props.message.timestamp;
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 });
 
 const messageRoleMap = {
   user: '你',
   assistant: 'AI 助手',
-  system: '系统'
+  system: '系统',
 };
 
 const messageRole = computed(() => {

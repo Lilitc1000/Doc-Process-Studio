@@ -9,4 +9,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker-host.sock
       - ..:/workspace:delegated
+    ports:
+      - "5173:5173"
     command: bash -lc '/workspace/.devcontainer/startup.sh'

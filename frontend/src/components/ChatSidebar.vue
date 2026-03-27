@@ -3,14 +3,16 @@
     <div class="sidebar-header">
       <h2>⚙️ 设置</h2>
     </div>
-    
+
     <div class="sidebar-content">
       <div class="model-selector">
         <label for="model-select">选择模型</label>
         <select
           id="model-select"
           :value="selectedModel"
-          @change="$emit('select-model', ($event.target as HTMLSelectElement).value)"
+          @change="
+            $emit('select-model', ($event.target as HTMLSelectElement).value)
+          "
         >
           <option v-for="model in models" :key="model" :value="model">
             {{ model }}
@@ -36,9 +38,7 @@
     </div>
 
     <div class="sidebar-footer">
-      <button class="clear-btn" @click="$emit('clear-chat')">
-        清空对话
-      </button>
+      <button class="clear-btn" @click="$emit('clear-chat')">清空对话</button>
     </div>
   </aside>
 </template>

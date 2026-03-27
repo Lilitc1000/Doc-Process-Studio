@@ -3,15 +3,13 @@
     <ChatSidebar
       :models="availableModels"
       :selected-model="selectedModel"
+      :messages-count="messagesCount"
       @select-model="onSelectModel"
+      @clear-chat="onClearChat"
     />
     <div class="chat-main">
       <div class="chat-messages" ref="messageContainerRef">
-        <ChatMessage
-          v-for="msg in messages"
-          :key="msg.id"
-          :message="msg"
-        />
+        <ChatMessage v-for="msg in messages" :key="msg.id" :message="msg" />
         <div v-if="isLoading" class="loading-indicator">
           <span class="loading-text">正在思考中...</span>
           <div class="loading-dots">
@@ -52,8 +50,14 @@ const messages = ref<Array<ChatMessage>>([
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
 const selectedModel = ref('gpt-4o-mini');
-const availableModels = ref(['gpt-4o-mini', 'gpt-4o', 'claude-3.5-sonnet', 'deepseek-v3']);
+const availableModels = ref([
+  'gpt-4o-mini',
+  'gpt-4o',
+  'claude-3.5-sonnet',
+  'deepseek-v3',
+]);
 const isLoading = ref(false);
+const messagesCount = computed(() => messages.value.length);
 
 // DOM 引用
 const messageContainerRef = ref<HTMLElement | null>(null);
@@ -63,7 +67,8 @@ const inputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 const scrollToBottom = () => {
   nextTick(() => {
     if (messageContainerRef.value) {
-      messageContainerRef.value.scrollTop = messageContainerRef.value.scrollHeight;
+      messageContainerRef.value.scrollTop =
+        messageContainerRef.value.scrollHeight;
     }
   });
 };
@@ -86,17 +91,17 @@ const onSelectModel = (model: string) => {
   selectedModel.value = model;
 };
 
-const onFileSelect = (file: File) => {
-  selectedFile.value = file;
+const onFilesSelect = (files: File[]) => {
+  selectedFiles.value = files;
 };
 
 const onClearAllFiles = () => {
   selectedFiles.value = [];
 };
 
-const onFilesSelect = (files: File[]) => {
-  // 只保留最新的 5 个文件
-  selectedFiles.value = files.slice(-5);
+const onClearChat = () => {
+  messages.value = [];
+  selectedFiles.value = [];
 };
 
 const onSendMessage = async () => {
@@ -120,11 +125,13 @@ const onSendMessage = async () => {
 
   // 模拟 AI 响应
   isLoading.value = true;
-  
+
   try {
     // 模拟网络延迟
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1500));
-    
+    await new Promise((resolve) =>
+      setTimeout(resolve, 1000 + Math.random() * 1500),
+    );
+
     const assistantMessage: ChatMessage = {
       id: uuidv4(),
       role: 'assistant',
@@ -183,11 +190,23 @@ const onSendMessage = async () => {
   animation: bounce 1.4s infinite ease-in-out both;
 }
 
-.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
-.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+.loading-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
 
 @keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1); }
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+  }
+
+  40% {
+    transform: scale(1);
+  }
 }
 </style>
