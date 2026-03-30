@@ -1,15 +1,37 @@
 <template>
   <div class="chat-input">
     <div class="files-preview" v-if="files.length > 0">
-      <div class="files-list">
+      <button
+        v-if="showNav"
+        class="nav-btn left"
+        @click="scrollLeft"
+        title="向左滚动"
+      >
+        ◀
+      </button>
+      <div class="files-list" ref="filesContainerRef">
         <div v-for="(file, index) in files" :key="index" class="file-item">
           <span class="file-icon">📄</span>
           <div class="file-details">
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formattedSize(file) }}</span>
           </div>
+          <span
+            class="remove-file-btn"
+            @click.stop="$emit('remove-file', index)"
+            title="移除文件"
+            >✕</span
+          >
         </div>
       </div>
+      <button
+        v-if="showNav"
+        class="nav-btn right"
+        @click="scrollRight"
+        title="向右滚动"
+      >
+        ▶
+      </button>
       <button
         class="remove-all-btn"
         @click="$emit('clear-all-files')"
@@ -18,7 +40,6 @@
         ✕ 移除所有文件
       </button>
     </div>
-
     <div class="input-area">
       <textarea
         ref="textareaRef"
@@ -78,6 +99,21 @@ const localText = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
+const filesContainerRef = ref<HTMLDivElement | null>(null);
+const showNav = ref(false);
+const updateNav = () => {
+  if (filesContainerRef.value) {
+    showNav.value =
+      filesContainerRef.value.scrollWidth > filesContainerRef.value.clientWidth;
+  }
+};
+watch(
+  () => props.files,
+  () => {
+    nextTick(() => updateNav());
+  },
+  { immediate: true },
+);
 const formattedSize = (file: File) => {
   const size = file.size;
   if (size < 1024) return `${size} B`;
@@ -88,6 +124,16 @@ const formattedSize = (file: File) => {
 const canSend = computed(() => {
   return (localText.value.trim() || props.files.length > 0) && !props.isLoading;
 });
+const scrollLeft = () => {
+  if (filesContainerRef.value) {
+    filesContainerRef.value.scrollBy({ left: -150, behavior: 'smooth' });
+  }
+};
+const scrollRight = () => {
+  if (filesContainerRef.value) {
+    filesContainerRef.value.scrollBy({ left: 150, behavior: 'smooth' });
+  }
+};
 
 watch(
   () => props.text,
@@ -149,37 +195,44 @@ onMounted(() => {
 
 <style scoped>
 .chat-input {
+  width: 100%;
   display: flex;
   flex-direction: column;
   background: white;
   border-top: 1px solid #e0e0e0;
   padding: 1rem;
   gap: 0.75rem;
+  --input-width: 600px; /* 可自行调节 */
 }
 
 .files-preview {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+  overflow: hidden;
 }
-
 .files-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: hidden;
   gap: 0.5rem;
-  max-width: 500px;
+  width: 100%;
+  flex: 1 1 auto;
+  scroll-behavior: smooth;
 }
 
 .file-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex: 0 0 auto;
   padding: 0.4rem 0.8rem;
   background: #f5f5f5;
   border-radius: 20px;
-  max-width: 100%;
   animation: fadeIn 0.3s ease-in;
+  position: relative;
 }
 
 @keyframes fadeIn {
@@ -194,6 +247,41 @@ onMounted(() => {
   }
 }
 
+.remove-file-btn {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 0.9rem;
+  color: #888;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.file-item:hover .remove-file-btn {
+  opacity: 1;
+}
+
+.nav-btn {
+  background: #e0e0e0;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+.nav-btn:hover {
+  background: #c0c0c0;
+  color: #000;
+}
+
 .remove-all-btn {
   margin-top: 0.5rem;
   padding: 0.4rem 0.8rem;
@@ -205,7 +293,6 @@ onMounted(() => {
   font-size: 0.85rem;
   transition: all 0.2s;
 }
-
 .remove-all-btn:hover {
   background: #d32f2f;
   transform: translateY(-1px);
@@ -255,7 +342,6 @@ textarea {
   line-height: 1.5;
   transition: border-color 0.2s;
 }
-
 textarea:focus {
   outline: none;
   border-color: #007acc;

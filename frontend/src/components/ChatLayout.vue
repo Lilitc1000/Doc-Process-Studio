@@ -24,6 +24,7 @@
         @upload-files="onFilesSelect"
         @send="onSendMessage"
         @clear-all-files="onClearAllFiles"
+        @remove-file="onRemoveFile"
         :is-loading="isLoading"
       />
     </div>
@@ -93,6 +94,9 @@ const onSelectModel = (model: string) => {
 
 const onFilesSelect = (files: File[]) => {
   selectedFiles.value = files;
+};
+const onRemoveFile = (index: number) => {
+  selectedFiles.value.splice(index, 1);
 };
 
 const onClearAllFiles = () => {

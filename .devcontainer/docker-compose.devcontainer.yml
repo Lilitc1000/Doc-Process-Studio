@@ -3,12 +3,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    privileged: true
     environment:
       - PYTHONUNBUFFERED=1
+      - OLLAMA_API_KEY=ollama
       - LOCAL_WORKSPACE_FOLDER=/workspace
     volumes:
       - /var/run/docker.sock:/var/run/docker-host.sock
       - ..:/workspace:delegated
+      - ~/.codex:/home/vscode/.codex
     ports:
       - "5173:5173"
     command: bash -lc '/workspace/.devcontainer/startup.sh'
