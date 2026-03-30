@@ -1,14 +1,6 @@
 <template>
   <div class="chat-input">
     <div class="files-preview" v-if="files.length > 0">
-      <button
-        v-if="showNav"
-        class="nav-btn left"
-        @click="scrollLeft"
-        title="向左滚动"
-      >
-        ◀
-      </button>
       <div class="files-list" ref="filesContainerRef">
         <div v-for="(file, index) in files" :key="index" class="file-item">
           <span class="file-icon">📄</span>
@@ -24,14 +16,6 @@
           >
         </div>
       </div>
-      <button
-        v-if="showNav"
-        class="nav-btn right"
-        @click="scrollRight"
-        title="向右滚动"
-      >
-        ▶
-      </button>
       <button
         class="remove-all-btn"
         @click="$emit('clear-all-files')"
@@ -99,21 +83,7 @@ const localText = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
-const filesContainerRef = ref<HTMLDivElement | null>(null);
-const showNav = ref(false);
-const updateNav = () => {
-  if (filesContainerRef.value) {
-    showNav.value =
-      filesContainerRef.value.scrollWidth > filesContainerRef.value.clientWidth;
-  }
-};
-watch(
-  () => props.files,
-  () => {
-    nextTick(() => updateNav());
-  },
-  { immediate: true },
-);
+watch(() => props.files, { immediate: true });
 const formattedSize = (file: File) => {
   const size = file.size;
   if (size < 1024) return `${size} B`;
@@ -124,16 +94,6 @@ const formattedSize = (file: File) => {
 const canSend = computed(() => {
   return (localText.value.trim() || props.files.length > 0) && !props.isLoading;
 });
-const scrollLeft = () => {
-  if (filesContainerRef.value) {
-    filesContainerRef.value.scrollBy({ left: -150, behavior: 'smooth' });
-  }
-};
-const scrollRight = () => {
-  if (filesContainerRef.value) {
-    filesContainerRef.value.scrollBy({ left: 150, behavior: 'smooth' });
-  }
-};
 
 watch(
   () => props.text,
@@ -215,12 +175,8 @@ onMounted(() => {
 }
 .files-list {
   display: flex;
-  flex-wrap: nowrap;
-  overflow-x: hidden;
+  flex-wrap: wrap; /* 允许多行显示 */
   gap: 0.5rem;
-  width: 100%;
-  flex: 1 1 auto;
-  scroll-behavior: smooth;
 }
 
 .file-item {
@@ -259,27 +215,6 @@ onMounted(() => {
 }
 .file-item:hover .remove-file-btn {
   opacity: 1;
-}
-
-.nav-btn {
-  background: #e0e0e0;
-  border: none;
-  border-radius: 50%;
-  width: 30px;
-  height: 30px;
-  font-size: 1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #333;
-  transition:
-    background 0.2s,
-    color 0.2s;
-}
-.nav-btn:hover {
-  background: #c0c0c0;
-  color: #000;
 }
 
 .remove-all-btn {
