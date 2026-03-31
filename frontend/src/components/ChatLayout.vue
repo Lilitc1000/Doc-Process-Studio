@@ -9,7 +9,11 @@
     />
     <div class="chat-main">
       <div class="chat-messages" ref="messageContainerRef">
-        <ChatMessage v-for="msg in messages" :key="msg.id" :message="msg" />
+        <ChatMessage
+          v-for="msg in displayedMessages"
+          :key="msg.id"
+          :message="msg"
+        />
         <div v-if="isLoading" class="loading-indicator">
           <span class="loading-text">正在思考中...</span>
           <div class="loading-dots">
@@ -38,15 +42,16 @@ import ChatMessage from './ChatMessage.vue';
 import ChatInput from './ChatInput.vue';
 import { v4 as uuidv4 } from 'uuid';
 
-// 状态
-const messages = ref<Array<ChatMessage>>([
+const welcomeMessages: ChatMessage[] = [
   {
     id: 'welcome-1',
     role: 'system',
     content: '你好！我是文档处理助手。请上传文档或输入问题，我会帮你处理。',
     timestamp: new Date(),
   },
-]);
+];
+
+const messages = ref<Array<ChatMessage>>([]);
 
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
@@ -59,6 +64,9 @@ const availableModels = ref([
 ]);
 const isLoading = ref(false);
 const messagesCount = computed(() => messages.value.length);
+const displayedMessages = computed(() => {
+  return messages.value.length > 0 ? messages.value : welcomeMessages;
+});
 
 // DOM 引用
 const messageContainerRef = ref<HTMLElement | null>(null);
