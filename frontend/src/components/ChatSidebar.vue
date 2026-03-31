@@ -63,6 +63,7 @@ defineEmits<{
   color: #e0e0e0;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   border-right: 1px solid #333;
 }
 
@@ -80,6 +81,7 @@ defineEmits<{
 
 .sidebar-content {
   flex: 1;
+  min-height: 0;
   padding: 1rem;
   overflow-y: auto;
 }

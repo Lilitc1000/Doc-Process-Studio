@@ -155,18 +155,23 @@ const onSendMessage = async () => {
   display: flex;
   height: 100vh;
   background: #f5f5f5;
+  overflow: hidden;
 }
 
 .chat-main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   background: white;
   border-left: 1px solid #e0e0e0;
+  overflow: hidden;
 }
 
 .chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 1.5rem;
   display: flex;
