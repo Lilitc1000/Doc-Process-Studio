@@ -22,9 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import MarkdownIt from 'markdown-it';
-import hljs from 'highlight.js';
+import { computed, ref, watchEffect } from 'vue';
 
 const props = defineProps<{
   message: {
@@ -35,24 +33,82 @@ const props = defineProps<{
 }>();
 
 const renderedContent = ref('');
-const md = new MarkdownIt({
-  html: false,
-  xhtmlOut: false,
-  breaks: true,
-  linkify: true,
-  typographer: true,
-  langPrefix: 'language-',
-  highlight: (str: string, lang: string): string => {
-    if (lang && hljsAvailable) {
-      try {
-        return `<pre class="highlight"><code class="hljs ${lang}">${hljs.highlight(str, { language: lang }).value}</code></pre>`;
-      } catch (__) {}
-    }
-    return `<pre class="highlight"><code class="hljs">${md.utils.escapeHtml(str)}</code></pre>`;
-  },
-});
 
-const hljsAvailable = typeof hljs !== 'undefined';
+type RenderMarkdown = (content: string) => string;
+
+let markdownRendererPromise: Promise<RenderMarkdown> | null = null;
+
+const loadMarkdownRenderer = async (): Promise<RenderMarkdown> => {
+  if (!markdownRendererPromise) {
+    markdownRendererPromise = Promise.all([
+      import('markdown-it'),
+      import('highlight.js/lib/core'),
+      import('highlight.js/lib/languages/javascript'),
+      import('highlight.js/lib/languages/typescript'),
+      import('highlight.js/lib/languages/json'),
+      import('highlight.js/lib/languages/bash'),
+      import('highlight.js/lib/languages/python'),
+      import('highlight.js/lib/languages/xml'),
+      import('highlight.js/lib/languages/css'),
+      import('highlight.js/lib/languages/markdown'),
+    ]).then(
+      ([
+        markdownItModule,
+        highlightCoreModule,
+        javascriptModule,
+        typescriptModule,
+        jsonModule,
+        bashModule,
+        pythonModule,
+        xmlModule,
+        cssModule,
+        markdownModule,
+      ]) => {
+        const MarkdownIt = markdownItModule.default;
+        const hljs = highlightCoreModule.default;
+
+        hljs.registerLanguage('javascript', javascriptModule.default);
+        hljs.registerLanguage('js', javascriptModule.default);
+        hljs.registerLanguage('typescript', typescriptModule.default);
+        hljs.registerLanguage('ts', typescriptModule.default);
+        hljs.registerLanguage('json', jsonModule.default);
+        hljs.registerLanguage('bash', bashModule.default);
+        hljs.registerLanguage('shell', bashModule.default);
+        hljs.registerLanguage('sh', bashModule.default);
+        hljs.registerLanguage('python', pythonModule.default);
+        hljs.registerLanguage('py', pythonModule.default);
+        hljs.registerLanguage('xml', xmlModule.default);
+        hljs.registerLanguage('html', xmlModule.default);
+        hljs.registerLanguage('vue', xmlModule.default);
+        hljs.registerLanguage('css', cssModule.default);
+        hljs.registerLanguage('markdown', markdownModule.default);
+        hljs.registerLanguage('md', markdownModule.default);
+
+        const markdown = new MarkdownIt({
+          html: false,
+          xhtmlOut: false,
+          breaks: true,
+          linkify: true,
+          typographer: true,
+          langPrefix: 'language-',
+          highlight: (str: string, lang: string): string => {
+            if (lang) {
+              try {
+                return `<pre class="highlight"><code class="hljs ${lang}">${hljs.highlight(str, { language: lang }).value}</code></pre>`;
+              } catch (_) {}
+            }
+
+            return `<pre class="highlight"><code class="hljs">${markdown.utils.escapeHtml(str)}</code></pre>`;
+          },
+        });
+
+        return (content: string) => markdown.render(content);
+      },
+    );
+  }
+
+  return markdownRendererPromise;
+};
 
 const formattedTime = computed(() => {
   const date = props.message.timestamp;
@@ -72,8 +128,24 @@ const messageRole = computed(() => {
   return messageRoleMap[props.message.role] || props.message.role;
 });
 
-onMounted(() => {
-  renderedContent.value = md.render(props.message.content);
+watchEffect((onCleanup) => {
+  let cancelled = false;
+
+  loadMarkdownRenderer()
+    .then((renderMarkdown) => {
+      if (!cancelled) {
+        renderedContent.value = renderMarkdown(props.message.content);
+      }
+    })
+    .catch(() => {
+      if (!cancelled) {
+        renderedContent.value = props.message.content;
+      }
+    });
+
+  onCleanup(() => {
+    cancelled = true;
+  });
 });
 </script>
 

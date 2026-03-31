@@ -40,7 +40,6 @@ import { ref, computed, onMounted, nextTick } from 'vue';
 import ChatSidebar from './ChatSidebar.vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatInput from './ChatInput.vue';
-import { v4 as uuidv4 } from 'uuid';
 
 const welcomeMessages: ChatMessage[] = [
   {
@@ -95,6 +94,11 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+// 优先使用浏览器原生 UUID，减少首屏依赖体积。
+const createMessageId = () => {
+  return crypto.randomUUID();
+};
+
 // 事件处理
 const onSelectModel = (model: string) => {
   selectedModel.value = model;
@@ -122,7 +126,7 @@ const onSendMessage = async () => {
 
   // 添加用户消息
   const userMessage: ChatMessage = {
-    id: uuidv4(),
+    id: createMessageId(),
     role: 'user',
     content: text || `（上传了 ${selectedFiles.value.length} 个文件）`,
     timestamp: new Date(),
@@ -145,7 +149,7 @@ const onSendMessage = async () => {
     );
 
     const assistantMessage: ChatMessage = {
-      id: uuidv4(),
+      id: createMessageId(),
       role: 'assistant',
       content: `收到！你正在使用模型 **${selectedModel.value}** 处理文档。\n\n> 这是一个模拟回复，展示了消息格式。后续会连接后端 API 获取真实响应。\n\n当前消息数量：${messages.value.length}\n\n已上传文件数：${uploadedFiles}`,
       timestamp: new Date(),
