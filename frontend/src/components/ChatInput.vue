@@ -49,13 +49,27 @@
 
         <button
           class="send-btn"
-          :class="{ disabled: !canSend }"
-          @click="onSend"
-          :disabled="!canSend"
-          title="发送消息 (Enter)"
+          :class="{
+            disabled: !canSend && !props.isLoading,
+            stopping: props.isLoading,
+          }"
+          @click="props.isLoading ? onStop() : onSend()"
+          :disabled="!canSend && !props.isLoading"
+          :title="props.isLoading ? '停止生成' : '发送消息 (Enter)'"
         >
-          <span class="send-icon">📤</span>
-          <span class="send-text">发送</span>
+          <span class="send-icon">{{ props.isLoading ? '⏹' : '📤' }}</span>
+          <span class="send-text">{{ props.isLoading ? '停止' : '发送' }}</span>
+        </button>
+
+        <button
+          v-if="props.canRegenerate && !props.isLoading"
+          class="regenerate-btn"
+          type="button"
+          @click="emit('regenerate')"
+          title="重新生成"
+        >
+          <span class="send-icon">↻</span>
+          <span class="send-text">重生成</span>
         </button>
       </div>
     </div>
@@ -70,6 +84,7 @@ const props = defineProps<{
   files: File[];
   accept?: string;
   isLoading?: boolean;
+  canRegenerate?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -77,6 +92,8 @@ const emit = defineEmits<{
   (e: 'upload-files', files: File[]): void;
   (e: 'clear-all-files'): void;
   (e: 'send'): void;
+  (e: 'stop'): void;
+  (e: 'regenerate'): void;
 }>();
 
 const localText = ref('');
@@ -110,6 +127,10 @@ const onSend = () => {
   if (canSend.value) {
     emit('send');
   }
+};
+
+const onStop = () => {
+  emit('stop');
 };
 
 const onKeydown = (e: KeyboardEvent) => {
@@ -342,6 +363,37 @@ textarea:focus {
 .send-btn.disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+.send-btn.stopping {
+  background: #d97706;
+}
+
+.send-btn.stopping:hover {
+  background: #b45309;
+  transform: none;
+}
+
+.regenerate-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  height: 40px;
+  background: #eef6ff;
+  color: #0f62a9;
+  border: 1px solid #bfdcff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.regenerate-btn:hover {
+  background: #dceeff;
+  border-color: #9fcbff;
+  transform: translateY(-1px);
 }
 
 .send-icon {

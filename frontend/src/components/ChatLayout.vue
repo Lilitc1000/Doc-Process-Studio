@@ -1,9 +1,13 @@
 <template>
   <div class="chat-layout">
     <ChatSidebar
+      :processing-modes="processingModes"
+      :selected-processing-mode="selectedProcessingMode"
       :models="availableModels"
       :selected-model="selectedModel"
       :messages-count="messagesCount"
+      :is-locked="isLoading"
+      @select-processing-mode="onSelectProcessingMode"
       @select-model="onSelectModel"
       @clear-chat="onClearChat"
     />
@@ -13,20 +17,18 @@
           v-for="msg in displayedMessages"
           :key="msg.id"
           :message="msg"
+          :is-thinking="isMessageThinking(msg)"
         />
-        <div v-if="isLoading" class="loading-indicator">
-          <span class="loading-text">正在思考中...</span>
-          <div class="loading-dots">
-            <span></span><span></span><span></span>
-          </div>
-        </div>
       </div>
       <ChatInput
         ref="inputRef"
         v-model:text="inputText"
         :files="selectedFiles"
+        :can-regenerate="canRegenerate"
         @upload-files="onFilesSelect"
         @send="onSendMessage"
+        @stop="onStopGeneration"
+        @regenerate="onRegenerate"
         @clear-all-files="onClearAllFiles"
         @remove-file="onRemoveFile"
         :is-loading="isLoading"
@@ -48,6 +50,13 @@ const fallbackModels = [
   'claude-3.5-sonnet',
   'deepseek-v3',
 ];
+const processingModes = [
+  '快速摘要',
+  '智能问答',
+  '结构化提取',
+  '全文整理',
+] as const;
+type ProcessingMode = (typeof processingModes)[number];
 
 const welcomeMessages: ChatMessage[] = [
   {
@@ -62,9 +71,14 @@ const messages = ref<Array<ChatMessage>>([]);
 
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
+const selectedProcessingMode = ref<ProcessingMode>('智能问答');
 const selectedModel = ref(fallbackModels[0]);
 const availableModels = ref(fallbackModels);
 const isLoading = ref(false);
+const canRegenerate = ref(false);
+const activeStreamController = ref<AbortController | null>(null);
+const activeAssistantMessageId = ref<string | null>(null);
+const lastRequestSnapshot = ref<ChatRequestSnapshot | null>(null);
 const messagesCount = computed(() => messages.value.length);
 const displayedMessages = computed(() => {
   return messages.value.length > 0 ? messages.value : welcomeMessages;
@@ -123,6 +137,17 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+interface ApiChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+interface ChatRequestSnapshot {
+  model: string;
+  processingMode: ProcessingMode;
+  messages: ApiChatMessage[];
+}
+
 // 优先使用浏览器原生 UUID，减少首屏依赖体积。
 const createMessageId = () => {
   return crypto.randomUUID();
@@ -131,6 +156,10 @@ const createMessageId = () => {
 // 事件处理
 const onSelectModel = (model: string) => {
   selectedModel.value = model;
+};
+
+const onSelectProcessingMode = (mode: string) => {
+  selectedProcessingMode.value = mode as ProcessingMode;
 };
 
 const onFilesSelect = (files: File[]) => {
@@ -145,19 +174,178 @@ const onClearAllFiles = () => {
 };
 
 const onClearChat = () => {
+  onStopGeneration();
   messages.value = [];
   selectedFiles.value = [];
+  canRegenerate.value = false;
+  lastRequestSnapshot.value = null;
+};
+
+const findMessageById = (messageId: string) => {
+  return messages.value.find((message) => message.id === messageId) ?? null;
+};
+
+const updateMessageContent = (messageId: string, content: string) => {
+  const targetMessage = findMessageById(messageId);
+  if (targetMessage) {
+    targetMessage.content = content;
+  }
+};
+
+const appendMessageContent = (messageId: string, chunk: string) => {
+  const targetMessage = findMessageById(messageId);
+  if (targetMessage) {
+    targetMessage.content += chunk;
+  }
+};
+
+const isMessageThinking = (message: ChatMessage) => {
+  return (
+    isLoading.value &&
+    message.role === 'assistant' &&
+    message.id === activeAssistantMessageId.value &&
+    !message.content.trim()
+  );
+};
+
+const markGenerationStopped = () => {
+  if (!activeAssistantMessageId.value) {
+    return;
+  }
+
+  const activeMessage = findMessageById(activeAssistantMessageId.value);
+  if (!activeMessage) {
+    return;
+  }
+
+  if (activeMessage.content.trim()) {
+    if (!activeMessage.content.includes('[已停止生成]')) {
+      activeMessage.content += '\n\n[已停止生成]';
+    }
+    return;
+  }
+
+  activeMessage.content = '已停止生成。';
+};
+
+const clearActiveGenerationState = () => {
+  activeStreamController.value = null;
+  activeAssistantMessageId.value = null;
+};
+
+const onStopGeneration = () => {
+  if (activeStreamController.value) {
+    activeStreamController.value.abort();
+    markGenerationStopped();
+    canRegenerate.value = true;
+    clearActiveGenerationState();
+    isLoading.value = false;
+  }
+};
+
+const streamAssistantReply = async (
+  requestSnapshot: ChatRequestSnapshot,
+  assistantMessageId: string,
+) => {
+  const abortController = new AbortController();
+  activeStreamController.value = abortController;
+  activeAssistantMessageId.value = assistantMessageId;
+
+  const response = await fetch('/api/chat/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    signal: abortController.signal,
+    body: JSON.stringify({
+      model: requestSnapshot.model,
+      processing_mode: requestSnapshot.processingMode,
+      messages: requestSnapshot.messages,
+    }),
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`聊天接口请求失败，状态码：${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split('\n\n');
+    buffer = events.pop() ?? '';
+
+    for (const eventChunk of events) {
+      const lines = eventChunk
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('data:'));
+
+      for (const line of lines) {
+        const payloadText = line.slice(5).trim();
+        if (!payloadText) {
+          continue;
+        }
+
+        const payload = JSON.parse(payloadText) as {
+          type?: string;
+          content?: string;
+          message?: string;
+        };
+
+        if (payload.type === 'delta' && payload.content) {
+          appendMessageContent(assistantMessageId, payload.content);
+          scrollToBottom();
+        }
+
+        if (payload.type === 'error') {
+          throw new Error(payload.message || '聊天流返回了错误事件');
+        }
+
+        if (payload.type === 'done') {
+          return;
+        }
+      }
+    }
+  }
 };
 
 const onSendMessage = async () => {
   const text = inputText.value.trim();
-  if (!text && selectedFiles.value.length === 0) return;
+  if ((!text && selectedFiles.value.length === 0) || isLoading.value) return;
+  canRegenerate.value = false;
+
+  const userContent =
+    text || `（上传了 ${selectedFiles.value.length} 个文件，文件联调尚未接入后端）`;
+  const requestMessages: ApiChatMessage[] = [
+    ...messages.value.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    {
+      role: 'user',
+      content: userContent,
+    },
+  ];
+  const requestSnapshot: ChatRequestSnapshot = {
+    model: selectedModel.value,
+    processingMode: selectedProcessingMode.value,
+    messages: requestMessages,
+  };
+  lastRequestSnapshot.value = requestSnapshot;
 
   // 添加用户消息
   const userMessage: ChatMessage = {
     id: createMessageId(),
     role: 'user',
-    content: text || `（上传了 ${selectedFiles.value.length} 个文件）`,
+    content: userContent,
     timestamp: new Date(),
   };
   messages.value.push(userMessage);
@@ -165,27 +353,88 @@ const onSendMessage = async () => {
 
   // 重置输入
   inputText.value = '';
-  const uploadedFiles = selectedFiles.value.length;
   selectedFiles.value = [];
 
   // 模拟 AI 响应
   isLoading.value = true;
+  const assistantMessageId = createMessageId();
+  messages.value.push({
+    id: assistantMessageId,
+    role: 'assistant',
+    content: '',
+    timestamp: new Date(),
+  });
+  scrollToBottom();
 
   try {
-    // 模拟网络延迟
-    await new Promise((resolve) =>
-      setTimeout(resolve, 1000 + Math.random() * 1500),
-    );
+    await streamAssistantReply(requestSnapshot, assistantMessageId);
 
-    const assistantMessage: ChatMessage = {
-      id: createMessageId(),
-      role: 'assistant',
-      content: `收到！你正在使用模型 **${selectedModel.value}** 处理文档。\n\n> 这是一个模拟回复，展示了消息格式。后续会连接后端 API 获取真实响应。\n\n当前消息数量：${messages.value.length}\n\n已上传文件数：${uploadedFiles}`,
-      timestamp: new Date(),
-    };
-    messages.value.push(assistantMessage);
-    scrollToBottom();
+    const streamedAssistantMessage = findMessageById(assistantMessageId);
+    if (streamedAssistantMessage && !streamedAssistantMessage.content.trim()) {
+      updateMessageContent(
+        assistantMessageId,
+        '模型已完成响应，但没有返回可显示的文本内容。',
+      );
+    }
+    canRegenerate.value = false;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return;
+    }
+
+    const errorMessage =
+      error instanceof Error ? error.message : '聊天请求失败，请稍后重试。';
+    updateMessageContent(assistantMessageId, `请求失败：${errorMessage}`);
+    canRegenerate.value = true;
   } finally {
+    clearActiveGenerationState();
+    isLoading.value = false;
+  }
+};
+
+const onRegenerate = async () => {
+  if (!lastRequestSnapshot.value || isLoading.value) {
+    return;
+  }
+
+  const lastMessage = messages.value.at(-1);
+  if (lastMessage?.role === 'assistant') {
+    messages.value.pop();
+  }
+
+  const assistantMessageId = createMessageId();
+  messages.value.push({
+    id: assistantMessageId,
+    role: 'assistant',
+    content: '',
+    timestamp: new Date(),
+  });
+  scrollToBottom();
+
+  isLoading.value = true;
+  canRegenerate.value = false;
+
+  try {
+    await streamAssistantReply(lastRequestSnapshot.value, assistantMessageId);
+
+    const streamedAssistantMessage = findMessageById(assistantMessageId);
+    if (streamedAssistantMessage && !streamedAssistantMessage.content.trim()) {
+      updateMessageContent(
+        assistantMessageId,
+        '模型已完成响应，但没有返回可显示的文本内容。',
+      );
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return;
+    }
+
+    const errorMessage =
+      error instanceof Error ? error.message : '重新生成失败，请稍后重试。';
+    updateMessageContent(assistantMessageId, `请求失败：${errorMessage}`);
+    canRegenerate.value = true;
+  } finally {
+    clearActiveGenerationState();
     isLoading.value = false;
   }
 };
@@ -220,43 +469,4 @@ const onSendMessage = async () => {
   gap: 1rem;
 }
 
-.loading-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #f0f0f0;
-  border-radius: 1rem;
-  width: fit-content;
-  margin: 0 auto;
-}
-
-.loading-dots span {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  background: #666;
-  border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out both;
-}
-
-.loading-dots span:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.loading-dots span:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-@keyframes bounce {
-  0%,
-  80%,
-  100% {
-    transform: scale(0);
-  }
-
-  40% {
-    transform: scale(1);
-  }
-}
 </style>

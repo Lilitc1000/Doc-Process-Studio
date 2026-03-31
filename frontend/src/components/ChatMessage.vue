@@ -17,7 +17,13 @@
         <span class="message-time">{{ formattedTime }}</span>
       </div>
     </div>
-    <div class="message-content" v-html="renderedContent"></div>
+    <div class="message-content" :class="{ thinking: isThinking }">
+      <div v-if="isThinking" class="thinking-state">
+        <span class="thinking-spinner"></span>
+        <span>思考中...</span>
+      </div>
+      <div v-else v-html="renderedContent"></div>
+    </div>
   </div>
 </template>
 
@@ -30,6 +36,7 @@ const props = defineProps<{
     content: string;
     timestamp: Date;
   };
+  isThinking?: boolean;
 }>();
 
 const renderedContent = ref('');
@@ -130,16 +137,17 @@ const messageRole = computed(() => {
 
 watchEffect((onCleanup) => {
   let cancelled = false;
+  const currentContent = props.message.content;
 
   loadMarkdownRenderer()
     .then((renderMarkdown) => {
       if (!cancelled) {
-        renderedContent.value = renderMarkdown(props.message.content);
+        renderedContent.value = renderMarkdown(currentContent);
       }
     })
     .catch(() => {
       if (!cancelled) {
-        renderedContent.value = props.message.content;
+        renderedContent.value = currentContent;
       }
     });
 
@@ -236,6 +244,11 @@ watchEffect((onCleanup) => {
   overflow-x: auto;
 }
 
+.message-content.thinking {
+  display: flex;
+  align-items: center;
+}
+
 .chat-message.role-user .message-content {
   background: #007acc;
   color: white;
@@ -246,6 +259,23 @@ watchEffect((onCleanup) => {
   background: #f0f0f0;
   color: #333;
   border-bottom-left-radius: 2px;
+}
+
+.thinking-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #666;
+  min-height: 1.5rem;
+}
+
+.thinking-spinner {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 122, 204, 0.18);
+  border-top-color: #007acc;
+  animation: spin 0.8s linear infinite;
 }
 
 .chat-message.role-system .message-content {
@@ -319,5 +349,11 @@ watchEffect((onCleanup) => {
 
 .message-content :deep(em) {
   font-style: italic;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

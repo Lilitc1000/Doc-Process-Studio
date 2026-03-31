@@ -14,6 +14,7 @@
           :aria-expanded="isProcessingModeOpen"
           aria-haspopup="listbox"
           aria-labelledby="processing-mode-label"
+          :disabled="props.isLocked"
           @click="toggleProcessingModeDropdown"
           @keydown.enter.prevent="toggleProcessingModeDropdown"
           @keydown.space.prevent="toggleProcessingModeDropdown"
@@ -47,6 +48,7 @@
               type="button"
               class="selector-option"
               :class="{ active: mode === selectedProcessingMode }"
+              :disabled="props.isLocked"
               @click="onSelectProcessingMode(mode)"
             >
               <span>{{ mode }}</span>
@@ -70,6 +72,7 @@
           :aria-expanded="isModelDropdownOpen"
           aria-haspopup="listbox"
           aria-labelledby="model-select-label"
+          :disabled="props.isLocked"
           @click="toggleModelDropdown"
           @keydown.enter.prevent="toggleModelDropdown"
           @keydown.space.prevent="toggleModelDropdown"
@@ -103,6 +106,7 @@
               type="button"
               class="selector-option"
               :class="{ active: model === selectedModel }"
+              :disabled="props.isLocked"
               @click="onSelectModel(model)"
             >
               <span>{{ model }}</span>
@@ -138,27 +142,23 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps<{
+  processingModes: string[];
+  selectedProcessingMode: string;
   models: string[];
   selectedModel: string;
   messagesCount: number;
+  isLocked?: boolean;
 }>();
 
 const emit = defineEmits<{
+  (e: 'select-processing-mode', mode: string): void;
   (e: 'select-model', model: string): void;
   (e: 'clear-chat'): void;
 }>();
 
-const processingModes = [
-  '快速摘要',
-  '智能问答',
-  '结构化提取',
-  '全文整理',
-];
-
-const selectedProcessingMode = ref(processingModes[0]);
 const isProcessingModeOpen = ref(false);
 const isModelDropdownOpen = ref(false);
 const processingModeSelectorRef = ref<HTMLElement | null>(null);
@@ -170,6 +170,9 @@ const closeAllDropdowns = () => {
 };
 
 const toggleProcessingModeDropdown = () => {
+  if (props.isLocked) {
+    return;
+  }
   isProcessingModeOpen.value = !isProcessingModeOpen.value;
   if (isProcessingModeOpen.value) {
     isModelDropdownOpen.value = false;
@@ -177,6 +180,9 @@ const toggleProcessingModeDropdown = () => {
 };
 
 const toggleModelDropdown = () => {
+  if (props.isLocked) {
+    return;
+  }
   isModelDropdownOpen.value = !isModelDropdownOpen.value;
   if (isModelDropdownOpen.value) {
     isProcessingModeOpen.value = false;
@@ -184,11 +190,17 @@ const toggleModelDropdown = () => {
 };
 
 const onSelectProcessingMode = (mode: string) => {
-  selectedProcessingMode.value = mode;
+  if (props.isLocked) {
+    return;
+  }
+  emit('select-processing-mode', mode);
   closeAllDropdowns();
 };
 
 const onSelectModel = (model: string) => {
+  if (props.isLocked) {
+    return;
+  }
   emit('select-model', model);
   closeAllDropdowns();
 };
@@ -218,6 +230,15 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
   window.removeEventListener('blur', handleWindowBlur);
 });
+
+watch(
+  () => props.isLocked,
+  (isLocked) => {
+    if (isLocked) {
+      closeAllDropdowns();
+    }
+  },
+);
 </script>
 
 <style scoped>
@@ -286,6 +307,13 @@ onBeforeUnmount(() => {
 .selector-trigger:hover {
   background: #343434;
   border-color: #555;
+}
+
+.selector-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  background: #292929;
+  border-color: #3b3b3b;
 }
 
 .selector-trigger:focus-visible {
@@ -374,6 +402,12 @@ onBeforeUnmount(() => {
 .selector-option:hover {
   background: rgba(255, 255, 255, 0.08);
   transform: translateX(2px);
+}
+
+.selector-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
 }
 
 .selector-option.active {
