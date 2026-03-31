@@ -22,7 +22,27 @@
         <span class="thinking-spinner"></span>
         <span>思考中...</span>
       </div>
-      <div v-else v-html="renderedContent"></div>
+      <template v-else>
+        <div
+          v-if="message.files && message.files.length > 0"
+          class="message-files"
+        >
+          <div
+            v-for="file in message.files"
+            :key="`${file.name}-${file.sizeLabel}`"
+            class="message-file-item"
+          >
+            <span class="message-file-icon">📄</span>
+            <span class="message-file-name">{{ file.name }}</span>
+            <span class="message-file-size">{{ file.sizeLabel }}</span>
+          </div>
+        </div>
+        <div
+          v-if="message.content.trim().length > 0"
+          class="message-text"
+          v-html="renderedContent"
+        ></div>
+      </template>
     </div>
   </div>
 </template>
@@ -34,6 +54,10 @@ const props = defineProps<{
   message: {
     role: 'user' | 'assistant' | 'system';
     content: string;
+    files?: Array<{
+      name: string;
+      sizeLabel: string;
+    }>;
     timestamp: Date;
   };
   isThinking?: boolean;
@@ -247,6 +271,54 @@ watchEffect((onCleanup) => {
 .message-content.thinking {
   display: flex;
   align-items: center;
+}
+
+.message-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.message-text {
+  min-width: 0;
+}
+
+.message-files + .message-text {
+  margin-top: 0.85rem;
+}
+
+.message-file-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.chat-message.role-assistant .message-file-item,
+.chat-message.role-system .message-file-item {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.message-file-icon {
+  flex-shrink: 0;
+}
+
+.message-file-name {
+  font-size: 0.84rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.message-file-size {
+  font-size: 0.74rem;
+  opacity: 0.8;
+  flex-shrink: 0;
 }
 
 .chat-message.role-user .message-content {

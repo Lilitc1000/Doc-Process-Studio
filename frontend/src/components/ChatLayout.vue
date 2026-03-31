@@ -134,6 +134,8 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  apiContent?: string;
+  files?: ChatAttachment[];
   timestamp: Date;
 }
 
@@ -142,15 +144,50 @@ interface ApiChatMessage {
   content: string;
 }
 
+interface ChatAttachment {
+  name: string;
+  sizeLabel: string;
+}
+
 interface ChatRequestSnapshot {
   model: string;
   processingMode: ProcessingMode;
   messages: ApiChatMessage[];
+  files: File[];
 }
 
 // 优先使用浏览器原生 UUID，减少首屏依赖体积。
 const createMessageId = () => {
   return crypto.randomUUID();
+};
+
+const formatAttachmentSize = (file: File) => {
+  if (file.size < 1024) return `${file.size} B`;
+  if (file.size < 1024 * 1024) return `${(file.size / 1024).toFixed(1)} KB`;
+  return `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const createAttachmentPreview = (files: File[]): ChatAttachment[] => {
+  return files.map((file) => ({
+    name: file.name,
+    sizeLabel: formatAttachmentSize(file),
+  }));
+};
+
+const createUserApiContent = (text: string, files: File[]) => {
+  const trimmedText = text.trim();
+  if (files.length === 0) {
+    return trimmedText;
+  }
+
+  const fileNames = files.map((file) => file.name).join('、');
+  const fileSummary = `[用户上传了 ${files.length} 个文件：${fileNames}]`;
+
+  if (!trimmedText) {
+    return `请结合我上传的文件进行处理。\n${fileSummary}`;
+  }
+
+  return `${trimmedText}\n${fileSummary}`;
 };
 
 // 事件处理
@@ -253,15 +290,24 @@ const streamAssistantReply = async (
 
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     signal: abortController.signal,
-    body: JSON.stringify({
-      model: requestSnapshot.model,
-      processing_mode: requestSnapshot.processingMode,
-      messages: requestSnapshot.messages,
-    }),
+    body: (() => {
+      const formData = new FormData();
+      formData.append(
+        'payload',
+        JSON.stringify({
+          model: requestSnapshot.model,
+          processing_mode: requestSnapshot.processingMode,
+          messages: requestSnapshot.messages,
+        }),
+      );
+
+      for (const file of requestSnapshot.files) {
+        formData.append('files', file);
+      }
+
+      return formData;
+    })(),
   });
 
   if (!response.ok || !response.body) {
@@ -322,22 +368,24 @@ const onSendMessage = async () => {
   if ((!text && selectedFiles.value.length === 0) || isLoading.value) return;
   canRegenerate.value = false;
 
-  const userContent =
-    text || `（上传了 ${selectedFiles.value.length} 个文件，文件联调尚未接入后端）`;
+  const attachmentPreview = createAttachmentPreview(selectedFiles.value);
+  const userContent = text;
+  const userApiContent = createUserApiContent(text, selectedFiles.value);
   const requestMessages: ApiChatMessage[] = [
     ...messages.value.map((message) => ({
       role: message.role,
-      content: message.content,
+      content: message.apiContent ?? message.content,
     })),
     {
       role: 'user',
-      content: userContent,
+      content: userApiContent,
     },
   ];
   const requestSnapshot: ChatRequestSnapshot = {
     model: selectedModel.value,
     processingMode: selectedProcessingMode.value,
     messages: requestMessages,
+    files: [...selectedFiles.value],
   };
   lastRequestSnapshot.value = requestSnapshot;
 
@@ -346,6 +394,8 @@ const onSendMessage = async () => {
     id: createMessageId(),
     role: 'user',
     content: userContent,
+    apiContent: userApiContent,
+    files: attachmentPreview,
     timestamp: new Date(),
   };
   messages.value.push(userMessage);

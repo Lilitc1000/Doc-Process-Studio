@@ -3,8 +3,10 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
+from fastapi import UploadFile
 
 from ..models.chat import ChatMessageInput, ChatStreamRequest, ProcessingMode
+from .file_context import build_uploaded_files_context
 from ..settings import settings
 
 
@@ -83,19 +85,32 @@ def build_processing_mode_prompt(processing_mode: ProcessingMode) -> str:
 
 def build_upstream_messages(
     request: ChatStreamRequest,
+    uploaded_files_context: str | None = None,
 ) -> list[dict[str, str]]:
     system_message = ChatMessageInput(
         role="system",
         content=build_processing_mode_prompt(request.processing_mode),
     )
-    return [
+    upstream_messages = [
         system_message.model_dump(),
-        *[message.model_dump() for message in request.messages],
     ]
+    if uploaded_files_context:
+        upstream_messages.append(
+            ChatMessageInput(
+                role="user",
+                content=uploaded_files_context,
+            ).model_dump()
+        )
+
+    upstream_messages.extend(
+        [message.model_dump() for message in request.messages]
+    )
+    return upstream_messages
 
 
 async def stream_remote_chat_completion(
     request: ChatStreamRequest,
+    upload_files: list[UploadFile] | None = None,
 ) -> AsyncIterator[str]:
     if not settings.ollama_base_url:
         yield format_sse_event(
@@ -109,9 +124,15 @@ async def stream_remote_chat_completion(
     remote_url = (
         f"{settings.ollama_base_url.rstrip('/')}/v1/chat/completions"
     )
+    uploaded_files_context = await build_uploaded_files_context(
+        upload_files or []
+    )
     payload = {
         "model": request.model,
-        "messages": build_upstream_messages(request),
+        "messages": build_upstream_messages(
+            request,
+            uploaded_files_context=uploaded_files_context,
+        ),
         "stream": True,
     }
 
