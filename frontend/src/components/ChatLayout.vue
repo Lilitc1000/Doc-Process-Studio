@@ -36,10 +36,18 @@
 </template>
 
 <script setup lang="ts">
+import axios from 'axios';
 import { ref, computed, onMounted, nextTick } from 'vue';
 import ChatSidebar from './ChatSidebar.vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatInput from './ChatInput.vue';
+
+const fallbackModels = [
+  'gpt-4o-mini',
+  'gpt-4o',
+  'claude-3.5-sonnet',
+  'deepseek-v3',
+];
 
 const welcomeMessages: ChatMessage[] = [
   {
@@ -54,13 +62,8 @@ const messages = ref<Array<ChatMessage>>([]);
 
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
-const selectedModel = ref('gpt-4o-mini');
-const availableModels = ref([
-  'gpt-4o-mini',
-  'gpt-4o',
-  'claude-3.5-sonnet',
-  'deepseek-v3',
-]);
+const selectedModel = ref(fallbackModels[0]);
+const availableModels = ref(fallbackModels);
 const isLoading = ref(false);
 const messagesCount = computed(() => messages.value.length);
 const displayedMessages = computed(() => {
@@ -81,9 +84,35 @@ const scrollToBottom = () => {
   });
 };
 
-// 监听消息变化，自动滚动
+const loadAvailableModels = async () => {
+  try {
+    const response = await axios.get<{
+      models?: Array<{ name?: string; model?: string; id?: string }>;
+      data?: Array<{ name?: string; model?: string; id?: string }>;
+    }>('/api/models');
+    const rawModels = response.data.models ?? response.data.data ?? [];
+    const modelNames = rawModels
+      .map((item) => item.name ?? item.model ?? item.id ?? '')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
+
+    if (modelNames.length === 0) {
+      return;
+    }
+
+    availableModels.value = modelNames;
+    if (!modelNames.includes(selectedModel.value)) {
+      selectedModel.value = modelNames[0];
+    }
+  } catch (error) {
+    console.error('加载远程模型列表失败，继续使用前端兜底模型列表。', error);
+  }
+};
+
+// 页面初始化时同步处理滚动和模型列表加载。
 onMounted(() => {
   scrollToBottom();
+  void loadAvailableModels();
 });
 
 // 消息类型定义
