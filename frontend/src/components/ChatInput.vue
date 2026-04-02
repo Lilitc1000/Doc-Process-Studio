@@ -61,30 +61,19 @@
           <span class="send-text">{{ props.isLoading ? '停止' : '发送' }}</span>
         </button>
 
-        <button
-          v-if="props.canRegenerate && !props.isLoading"
-          class="regenerate-btn"
-          type="button"
-          @click="emit('regenerate')"
-          title="重新生成"
-        >
-          <span class="send-icon">↻</span>
-          <span class="send-text">重生成</span>
-        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 
 const props = defineProps<{
   text: string;
   files: File[];
   accept?: string;
   isLoading?: boolean;
-  canRegenerate?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -93,7 +82,6 @@ const emit = defineEmits<{
   (e: 'clear-all-files'): void;
   (e: 'send'): void;
   (e: 'stop'): void;
-  (e: 'regenerate'): void;
 }>();
 
 const localText = ref('');
@@ -149,21 +137,6 @@ const onFileSelectChange = (e: Event) => {
     // 重置 localText 以触发重新渲染
     localText.value = '';
   }
-};
-
-const handleDrop = (e: DragEvent) => {
-  e.preventDefault();
-  if (
-    e.dataTransfer &&
-    e.dataTransfer.files &&
-    e.dataTransfer.files.length > 0
-  ) {
-    emit('upload-files', Array.from(e.dataTransfer.files));
-  }
-};
-
-const handleDragOver = (e: DragEvent) => {
-  e.preventDefault();
 };
 
 onMounted(() => {
@@ -372,28 +345,6 @@ textarea:focus {
 .send-btn.stopping:hover {
   background: #b45309;
   transform: none;
-}
-
-.regenerate-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 1rem;
-  height: 40px;
-  background: #eef6ff;
-  color: #0f62a9;
-  border: 1px solid #bfdcff;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.regenerate-btn:hover {
-  background: #dceeff;
-  border-color: #9fcbff;
-  transform: translateY(-1px);
 }
 
 .send-icon {

@@ -14,21 +14,31 @@
     <div class="chat-main">
       <div class="chat-messages" ref="messageContainerRef">
         <ChatMessage
-          v-for="msg in displayedMessages"
-          :key="msg.id"
-          :message="msg"
-          :is-thinking="isMessageThinking(msg)"
+          v-for="message in displayedMessages"
+          :key="message.id"
+          :message="message"
+          :is-thinking="isMessageThinking(message)"
+          :version-index="getAssistantVersionIndex(message.id)"
+          :version-count="getAssistantVersionCount(message.id)"
+          :can-go-prev="canSwitchAssistantVersion(message.id, -1)"
+          :can-go-next="canSwitchAssistantVersion(message.id, 1)"
+          :can-regenerate="message.role === 'assistant' && !isLoading"
+          :can-copy="message.role === 'assistant' && message.content.trim().length > 0"
+          :can-download="message.role === 'assistant' && message.content.trim().length > 0"
+          :is-version-locked="message.role === 'assistant' && isLoading"
+          @prev-version="switchAssistantVersion(message.id, -1)"
+          @next-version="switchAssistantVersion(message.id, 1)"
+          @regenerate="onRegenerate(message.id)"
+          @copy="copyAssistantMessage(message.id)"
+          @download="downloadAssistantMessage(message.id)"
         />
       </div>
       <ChatInput
-        ref="inputRef"
         v-model:text="inputText"
         :files="selectedFiles"
-        :can-regenerate="canRegenerate"
         @upload-files="onFilesSelect"
         @send="onSendMessage"
         @stop="onStopGeneration"
-        @regenerate="onRegenerate"
         @clear-all-files="onClearAllFiles"
         @remove-file="onRemoveFile"
         :is-loading="isLoading"
@@ -39,10 +49,10 @@
 
 <script setup lang="ts">
 import axios from 'axios';
-import { ref, computed, onMounted, nextTick } from 'vue';
-import ChatSidebar from './ChatSidebar.vue';
-import ChatMessage from './ChatMessage.vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import ChatInput from './ChatInput.vue';
+import ChatMessage from './ChatMessage.vue';
+import ChatSidebar from './ChatSidebar.vue';
 
 const fallbackModels = [
   'gpt-4o-mini',
@@ -56,18 +66,56 @@ const processingModes = [
   '结构化提取',
   '全文整理',
 ] as const;
-type ProcessingMode = (typeof processingModes)[number];
 
-const welcomeMessages: ChatMessage[] = [
+type ProcessingMode = (typeof processingModes)[number];
+type ChatMessageRole = 'user' | 'assistant' | 'system';
+
+interface ChatAttachment {
+  name: string;
+  sizeLabel: string;
+}
+
+interface ChatMessageNode {
+  id: string;
+  role: ChatMessageRole;
+  content: string;
+  apiContent?: string;
+  files?: ChatAttachment[];
+  requestFiles?: File[];
+  timestamp: Date;
+  parentId: string | null;
+  childIds: string[];
+}
+
+interface ApiChatMessage {
+  role: ChatMessageRole;
+  content: string;
+}
+
+interface ChatRequestSnapshot {
+  userMessageId: string;
+  model: string;
+  processingMode: ProcessingMode;
+  messages: ApiChatMessage[];
+  files: File[];
+}
+
+interface ActiveGenerationState {
+  assistantId: string;
+  userMessageId: string;
+  controller: AbortController;
+}
+
+const welcomeMessages: ChatMessageNode[] = [
   {
     id: 'welcome-1',
     role: 'system',
     content: '你好！我是文档处理助手。请上传文档或输入问题，我会帮你处理。',
     timestamp: new Date(),
+    parentId: null,
+    childIds: [],
   },
 ];
-
-const messages = ref<Array<ChatMessage>>([]);
 
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
@@ -75,20 +123,62 @@ const selectedProcessingMode = ref<ProcessingMode>('智能问答');
 const selectedModel = ref(fallbackModels[0]);
 const availableModels = ref(fallbackModels);
 const isLoading = ref(false);
-const canRegenerate = ref(false);
-const activeStreamController = ref<AbortController | null>(null);
-const activeAssistantMessageId = ref<string | null>(null);
-const lastRequestSnapshot = ref<ChatRequestSnapshot | null>(null);
-const messagesCount = computed(() => messages.value.length);
+const messageNodes = ref<Record<string, ChatMessageNode>>({});
+const rootMessageId = ref<string | null>(null);
+const selectedChildIdByParent = ref<Record<string, string>>({});
+const activeGeneration = ref<ActiveGenerationState | null>(null);
+
+const messageContainerRef = ref<HTMLElement | null>(null);
+
+const getNodeById = (messageId: string) => {
+  return messageNodes.value[messageId] ?? null;
+};
+
+const getSelectedChildId = (messageId: string) => {
+  const currentNode = getNodeById(messageId);
+  if (!currentNode || currentNode.childIds.length === 0) {
+    return null;
+  }
+
+  return (
+    selectedChildIdByParent.value[messageId] ?? currentNode.childIds[0] ?? null
+  );
+};
+
 const displayedMessages = computed(() => {
-  return messages.value.length > 0 ? messages.value : welcomeMessages;
+  if (!rootMessageId.value) {
+    return welcomeMessages;
+  }
+
+  const visibleMessages: ChatMessageNode[] = [];
+  let currentMessageId: string | null = rootMessageId.value;
+
+  while (currentMessageId) {
+    const currentNode = getNodeById(currentMessageId);
+    if (!currentNode) {
+      break;
+    }
+
+    visibleMessages.push(currentNode);
+    currentMessageId = getSelectedChildId(currentNode.id);
+  }
+
+  return visibleMessages;
 });
 
-// DOM 引用
-const messageContainerRef = ref<HTMLElement | null>(null);
-const inputRef = ref<InstanceType<typeof ChatInput> | null>(null);
+const messagesCount = computed(() => {
+  return rootMessageId.value ? displayedMessages.value.length : 0;
+});
 
-// 滚动到底部
+const currentLeafMessageId = computed(() => {
+  if (!rootMessageId.value) {
+    return null;
+  }
+
+  const lastMessage = displayedMessages.value.at(-1);
+  return lastMessage?.id ?? null;
+});
+
 const scrollToBottom = () => {
   nextTick(() => {
     if (messageContainerRef.value) {
@@ -98,65 +188,6 @@ const scrollToBottom = () => {
   });
 };
 
-const loadAvailableModels = async () => {
-  try {
-    const response = await axios.get<{
-      models?: Array<{ name?: string; model?: string; id?: string }>;
-      data?: Array<{ name?: string; model?: string; id?: string }>;
-    }>('/api/models');
-    const rawModels = response.data.models ?? response.data.data ?? [];
-    const modelNames = rawModels
-      .map((item) => item.name ?? item.model ?? item.id ?? '')
-      .map((name) => name.trim())
-      .filter((name) => name.length > 0);
-
-    if (modelNames.length === 0) {
-      return;
-    }
-
-    availableModels.value = modelNames;
-    if (!modelNames.includes(selectedModel.value)) {
-      selectedModel.value = modelNames[0];
-    }
-  } catch (error) {
-    console.error('加载远程模型列表失败，继续使用前端兜底模型列表。', error);
-  }
-};
-
-// 页面初始化时同步处理滚动和模型列表加载。
-onMounted(() => {
-  scrollToBottom();
-  void loadAvailableModels();
-});
-
-// 消息类型定义
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  apiContent?: string;
-  files?: ChatAttachment[];
-  timestamp: Date;
-}
-
-interface ApiChatMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
-
-interface ChatAttachment {
-  name: string;
-  sizeLabel: string;
-}
-
-interface ChatRequestSnapshot {
-  model: string;
-  processingMode: ProcessingMode;
-  messages: ApiChatMessage[];
-  files: File[];
-}
-
-// 优先使用浏览器原生 UUID，减少首屏依赖体积。
 const createMessageId = () => {
   return crypto.randomUUID();
 };
@@ -190,36 +221,65 @@ const createUserApiContent = (text: string, files: File[]) => {
   return `${trimmedText}\n${fileSummary}`;
 };
 
-// 事件处理
-const onSelectModel = (model: string) => {
-  selectedModel.value = model;
+const createMessageNode = (
+  node: Omit<ChatMessageNode, 'id' | 'childIds'> & { id?: string },
+) => {
+  const messageId = node.id ?? createMessageId();
+  const newNode: ChatMessageNode = {
+    ...node,
+    id: messageId,
+    childIds: [],
+  };
+
+  messageNodes.value[messageId] = newNode;
+
+  if (node.parentId) {
+    const parentNode = getNodeById(node.parentId);
+    if (parentNode) {
+      parentNode.childIds.push(messageId);
+      selectedChildIdByParent.value[node.parentId] = messageId;
+    }
+  } else {
+    rootMessageId.value = messageId;
+  }
+
+  return newNode;
 };
 
-const onSelectProcessingMode = (mode: string) => {
-  selectedProcessingMode.value = mode as ProcessingMode;
+const getMessagePathToNode = (messageId: string) => {
+  const path: ChatMessageNode[] = [];
+  let currentNode = getNodeById(messageId);
+
+  while (currentNode) {
+    path.push(currentNode);
+    currentNode = currentNode.parentId
+      ? getNodeById(currentNode.parentId)
+      : null;
+  }
+
+  return path.reverse();
 };
 
-const onFilesSelect = (files: File[]) => {
-  selectedFiles.value = files;
-};
-const onRemoveFile = (index: number) => {
-  selectedFiles.value.splice(index, 1);
+const collectRequestFilesFromPath = (path: ChatMessageNode[]) => {
+  return path.flatMap((message) => message.requestFiles ?? []);
 };
 
-const onClearAllFiles = () => {
-  selectedFiles.value = [];
-};
-
-const onClearChat = () => {
-  onStopGeneration();
-  messages.value = [];
-  selectedFiles.value = [];
-  canRegenerate.value = false;
-  lastRequestSnapshot.value = null;
+const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
+  const path = getMessagePathToNode(userMessageId);
+  return {
+    userMessageId,
+    model: selectedModel.value,
+    processingMode: selectedProcessingMode.value,
+    messages: path.map((message) => ({
+      role: message.role,
+      content: message.apiContent ?? message.content,
+    })),
+    files: collectRequestFilesFromPath(path),
+  } satisfies ChatRequestSnapshot;
 };
 
 const findMessageById = (messageId: string) => {
-  return messages.value.find((message) => message.id === messageId) ?? null;
+  return getNodeById(messageId);
 };
 
 const updateMessageContent = (messageId: string, content: string) => {
@@ -236,58 +296,128 @@ const appendMessageContent = (messageId: string, chunk: string) => {
   }
 };
 
-const isMessageThinking = (message: ChatMessage) => {
+const getAssistantSiblingIds = (assistantMessageId: string) => {
+  const assistantNode = getNodeById(assistantMessageId);
+  if (!assistantNode?.parentId) {
+    return [assistantMessageId];
+  }
+
+  const parentNode = getNodeById(assistantNode.parentId);
+  if (!parentNode) {
+    return [assistantMessageId];
+  }
+
+  return parentNode.childIds.filter((childId) => {
+    return getNodeById(childId)?.role === 'assistant';
+  });
+};
+
+const getAssistantVersionIndex = (assistantMessageId: string) => {
+  const assistantNode = getNodeById(assistantMessageId);
+  if (assistantNode?.role !== 'assistant') {
+    return 0;
+  }
+
+  const siblingIds = getAssistantSiblingIds(assistantMessageId);
+  const currentIndex = siblingIds.indexOf(assistantMessageId);
+  return currentIndex >= 0 ? currentIndex + 1 : 1;
+};
+
+const getAssistantVersionCount = (assistantMessageId: string) => {
+  const assistantNode = getNodeById(assistantMessageId);
+  if (assistantNode?.role !== 'assistant') {
+    return 0;
+  }
+
+  return getAssistantSiblingIds(assistantMessageId).length;
+};
+
+const canSwitchAssistantVersion = (
+  assistantMessageId: string,
+  direction: -1 | 1,
+) => {
+  const assistantNode = getNodeById(assistantMessageId);
+  if (assistantNode?.role !== 'assistant') {
+    return false;
+  }
+
+  const siblingIds = getAssistantSiblingIds(assistantMessageId);
+  const currentIndex = siblingIds.indexOf(assistantMessageId);
+  const targetIndex = currentIndex + direction;
+
+  return targetIndex >= 0 && targetIndex < siblingIds.length;
+};
+
+const switchAssistantVersion = (
+  assistantMessageId: string,
+  direction: -1 | 1,
+) => {
+  const assistantNode = getNodeById(assistantMessageId);
+  if (!assistantNode?.parentId || assistantNode.role !== 'assistant' || isLoading.value) {
+    return;
+  }
+
+  const siblingIds = getAssistantSiblingIds(assistantMessageId);
+  const currentIndex = siblingIds.indexOf(assistantMessageId);
+  const targetMessageId = siblingIds[currentIndex + direction];
+
+  if (targetMessageId) {
+    selectedChildIdByParent.value[assistantNode.parentId] = targetMessageId;
+  }
+};
+
+const isMessageThinking = (message: ChatMessageNode) => {
   return (
     isLoading.value &&
     message.role === 'assistant' &&
-    message.id === activeAssistantMessageId.value &&
+    message.id === activeGeneration.value?.assistantId &&
     !message.content.trim()
   );
 };
 
 const markGenerationStopped = () => {
-  if (!activeAssistantMessageId.value) {
+  if (!activeGeneration.value?.assistantId) {
     return;
   }
 
-  const activeMessage = findMessageById(activeAssistantMessageId.value);
+  const activeMessage = findMessageById(activeGeneration.value.assistantId);
   if (!activeMessage) {
     return;
   }
 
   if (activeMessage.content.trim()) {
-    if (!activeMessage.content.includes('[已停止生成]')) {
-      activeMessage.content += '\n\n[已停止生成]';
+    if (!activeMessage.content.endsWith('已停止输出')) {
+      activeMessage.content += '\n\n已停止输出';
     }
     return;
   }
 
-  activeMessage.content = '已停止生成。';
-};
-
-const clearActiveGenerationState = () => {
-  activeStreamController.value = null;
-  activeAssistantMessageId.value = null;
+  activeMessage.content = '已停止输出';
 };
 
 const onStopGeneration = () => {
-  if (activeStreamController.value) {
-    activeStreamController.value.abort();
+  if (activeGeneration.value?.controller) {
+    activeGeneration.value.controller.abort();
     markGenerationStopped();
-    canRegenerate.value = true;
-    clearActiveGenerationState();
+    activeGeneration.value = null;
     isLoading.value = false;
   }
+};
+
+const createAssistantVariant = (userMessageId: string) => {
+  return createMessageNode({
+    role: 'assistant',
+    content: '',
+    timestamp: new Date(),
+    parentId: userMessageId,
+  });
 };
 
 const streamAssistantReply = async (
   requestSnapshot: ChatRequestSnapshot,
   assistantMessageId: string,
+  abortController: AbortController,
 ) => {
-  const abortController = new AbortController();
-  activeStreamController.value = abortController;
-  activeAssistantMessageId.value = assistantMessageId;
-
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
     signal: abortController.signal,
@@ -363,70 +493,28 @@ const streamAssistantReply = async (
   }
 };
 
-const onSendMessage = async () => {
-  const text = inputText.value.trim();
-  if ((!text && selectedFiles.value.length === 0) || isLoading.value) return;
-  canRegenerate.value = false;
+const executeAssistantGeneration = async (requestSnapshot: ChatRequestSnapshot) => {
+  const assistantNode = createAssistantVariant(requestSnapshot.userMessageId);
+  const abortController = new AbortController();
 
-  const attachmentPreview = createAttachmentPreview(selectedFiles.value);
-  const userContent = text;
-  const userApiContent = createUserApiContent(text, selectedFiles.value);
-  const requestMessages: ApiChatMessage[] = [
-    ...messages.value.map((message) => ({
-      role: message.role,
-      content: message.apiContent ?? message.content,
-    })),
-    {
-      role: 'user',
-      content: userApiContent,
-    },
-  ];
-  const requestSnapshot: ChatRequestSnapshot = {
-    model: selectedModel.value,
-    processingMode: selectedProcessingMode.value,
-    messages: requestMessages,
-    files: [...selectedFiles.value],
-  };
-  lastRequestSnapshot.value = requestSnapshot;
-
-  // 添加用户消息
-  const userMessage: ChatMessage = {
-    id: createMessageId(),
-    role: 'user',
-    content: userContent,
-    apiContent: userApiContent,
-    files: attachmentPreview,
-    timestamp: new Date(),
-  };
-  messages.value.push(userMessage);
-  scrollToBottom();
-
-  // 重置输入
-  inputText.value = '';
-  selectedFiles.value = [];
-
-  // 模拟 AI 响应
   isLoading.value = true;
-  const assistantMessageId = createMessageId();
-  messages.value.push({
-    id: assistantMessageId,
-    role: 'assistant',
-    content: '',
-    timestamp: new Date(),
-  });
+  activeGeneration.value = {
+    assistantId: assistantNode.id,
+    userMessageId: requestSnapshot.userMessageId,
+    controller: abortController,
+  };
   scrollToBottom();
 
   try {
-    await streamAssistantReply(requestSnapshot, assistantMessageId);
+    await streamAssistantReply(requestSnapshot, assistantNode.id, abortController);
 
-    const streamedAssistantMessage = findMessageById(assistantMessageId);
+    const streamedAssistantMessage = findMessageById(assistantNode.id);
     if (streamedAssistantMessage && !streamedAssistantMessage.content.trim()) {
       updateMessageContent(
-        assistantMessageId,
+        assistantNode.id,
         '模型已完成响应，但没有返回可显示的文本内容。',
       );
     }
-    canRegenerate.value = false;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return;
@@ -434,60 +522,145 @@ const onSendMessage = async () => {
 
     const errorMessage =
       error instanceof Error ? error.message : '聊天请求失败，请稍后重试。';
-    updateMessageContent(assistantMessageId, `请求失败：${errorMessage}`);
-    canRegenerate.value = true;
+    updateMessageContent(assistantNode.id, `请求失败：${errorMessage}`);
   } finally {
-    clearActiveGenerationState();
+    activeGeneration.value = null;
     isLoading.value = false;
   }
 };
 
-const onRegenerate = async () => {
-  if (!lastRequestSnapshot.value || isLoading.value) {
+const copyAssistantMessage = async (assistantMessageId: string) => {
+  const assistantNode = getNodeById(assistantMessageId);
+  if (!assistantNode?.content.trim() || !navigator.clipboard) {
     return;
   }
 
-  const lastMessage = messages.value.at(-1);
-  if (lastMessage?.role === 'assistant') {
-    messages.value.pop();
+  try {
+    await navigator.clipboard.writeText(assistantNode.content);
+  } catch (error) {
+    console.error('复制 AI 回复失败。', error);
+  }
+};
+
+const downloadAssistantMessage = (assistantMessageId: string) => {
+  const assistantNode = getNodeById(assistantMessageId);
+  if (!assistantNode?.content.trim()) {
+    return;
   }
 
-  const assistantMessageId = createMessageId();
-  messages.value.push({
-    id: assistantMessageId,
-    role: 'assistant',
-    content: '',
+  const blob = new Blob([assistantNode.content], {
+    type: 'text/markdown;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const safeTimestamp = assistantNode.timestamp
+    .toISOString()
+    .replace(/[:.]/g, '-');
+
+  link.href = url;
+  link.download = `assistant-reply-${safeTimestamp}.md`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+const onSelectModel = (model: string) => {
+  selectedModel.value = model;
+};
+
+const onSelectProcessingMode = (mode: string) => {
+  selectedProcessingMode.value = mode as ProcessingMode;
+};
+
+const onFilesSelect = (files: File[]) => {
+  selectedFiles.value = files;
+};
+
+const onRemoveFile = (index: number) => {
+  selectedFiles.value.splice(index, 1);
+};
+
+const onClearAllFiles = () => {
+  selectedFiles.value = [];
+};
+
+const onClearChat = () => {
+  onStopGeneration();
+  messageNodes.value = {};
+  rootMessageId.value = null;
+  selectedChildIdByParent.value = {};
+  selectedFiles.value = [];
+};
+
+const onSendMessage = async () => {
+  const text = inputText.value.trim();
+  if ((!text && selectedFiles.value.length === 0) || isLoading.value) {
+    return;
+  }
+
+  const currentRequestFiles = [...selectedFiles.value];
+  const userMessage = createMessageNode({
+    role: 'user',
+    content: text,
+    apiContent: createUserApiContent(text, currentRequestFiles),
+    files: createAttachmentPreview(currentRequestFiles),
+    requestFiles: currentRequestFiles,
     timestamp: new Date(),
+    parentId: currentLeafMessageId.value,
   });
   scrollToBottom();
 
-  isLoading.value = true;
-  canRegenerate.value = false;
+  inputText.value = '';
+  selectedFiles.value = [];
 
+  await executeAssistantGeneration(
+    buildRequestSnapshotForUserMessage(userMessage.id),
+  );
+};
+
+const onRegenerate = async (assistantMessageId: string) => {
+  if (isLoading.value) {
+    return;
+  }
+
+  const assistantNode = getNodeById(assistantMessageId);
+  if (!assistantNode?.parentId || assistantNode.role !== 'assistant') {
+    return;
+  }
+
+  await executeAssistantGeneration(
+    buildRequestSnapshotForUserMessage(assistantNode.parentId),
+  );
+};
+
+const loadAvailableModels = async () => {
   try {
-    await streamAssistantReply(lastRequestSnapshot.value, assistantMessageId);
+    const response = await axios.get<{
+      models?: Array<{ name?: string; model?: string; id?: string }>;
+      data?: Array<{ name?: string; model?: string; id?: string }>;
+    }>('/api/models');
+    const rawModels = response.data.models ?? response.data.data ?? [];
+    const modelNames = rawModels
+      .map((item) => item.name ?? item.model ?? item.id ?? '')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
 
-    const streamedAssistantMessage = findMessageById(assistantMessageId);
-    if (streamedAssistantMessage && !streamedAssistantMessage.content.trim()) {
-      updateMessageContent(
-        assistantMessageId,
-        '模型已完成响应，但没有返回可显示的文本内容。',
-      );
-    }
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (modelNames.length === 0) {
       return;
     }
 
-    const errorMessage =
-      error instanceof Error ? error.message : '重新生成失败，请稍后重试。';
-    updateMessageContent(assistantMessageId, `请求失败：${errorMessage}`);
-    canRegenerate.value = true;
-  } finally {
-    clearActiveGenerationState();
-    isLoading.value = false;
+    availableModels.value = modelNames;
+    if (!modelNames.includes(selectedModel.value)) {
+      selectedModel.value = modelNames[0];
+    }
+  } catch (error) {
+    console.error('加载远程模型列表失败，继续使用前端兜底模型列表。', error);
   }
 };
+
+onMounted(() => {
+  scrollToBottom();
+  void loadAvailableModels();
+});
 </script>
 
 <style scoped>
@@ -518,5 +691,4 @@ const onRegenerate = async () => {
   flex-direction: column;
   gap: 1rem;
 }
-
 </style>

@@ -18,9 +18,5 @@
         "openai.chatgpt"
       ]
     }
-  },
-  "forwardPorts": [
-    8000,
-    5173
-  ]
+  }
 }

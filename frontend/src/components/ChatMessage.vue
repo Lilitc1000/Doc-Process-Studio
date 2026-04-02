@@ -44,6 +44,56 @@
         ></div>
       </template>
     </div>
+    <div v-if="message.role === 'assistant'" class="message-toolbar">
+      <div class="message-version-switcher">
+        <button
+          class="message-tool-btn"
+          :disabled="!canGoPrev || isVersionLocked"
+          title="查看上一版"
+          @click="$emit('prev-version')"
+        >
+          ‹
+        </button>
+        <span class="message-version-text">
+          {{ versionIndex }}/{{ versionCount }}
+        </span>
+        <button
+          class="message-tool-btn"
+          :disabled="!canGoNext || isVersionLocked"
+          title="查看下一版"
+          @click="$emit('next-version')"
+        >
+          ›
+        </button>
+      </div>
+
+      <div class="message-tool-actions">
+        <button
+          class="message-tool-btn"
+          :disabled="!canRegenerate"
+          title="重新生成"
+          @click="$emit('regenerate')"
+        >
+          ↻
+        </button>
+        <button
+          class="message-tool-btn"
+          :disabled="!canCopy"
+          title="复制回答"
+          @click="$emit('copy')"
+        >
+          ⧉
+        </button>
+        <button
+          class="message-tool-btn"
+          :disabled="!canDownload"
+          title="下载为 Markdown"
+          @click="$emit('download')"
+        >
+          ⇩
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -61,6 +111,22 @@ const props = defineProps<{
     timestamp: Date;
   };
   isThinking?: boolean;
+  versionIndex?: number;
+  versionCount?: number;
+  canGoPrev?: boolean;
+  canGoNext?: boolean;
+  canRegenerate?: boolean;
+  canCopy?: boolean;
+  canDownload?: boolean;
+  isVersionLocked?: boolean;
+}>();
+
+defineEmits<{
+  (e: 'prev-version'): void;
+  (e: 'next-version'): void;
+  (e: 'regenerate'): void;
+  (e: 'copy'): void;
+  (e: 'download'): void;
 }>();
 
 const renderedContent = ref('');
@@ -353,6 +419,59 @@ watchEffect((onCleanup) => {
 .chat-message.role-system .message-content {
   background: transparent;
   color: inherit;
+}
+
+.message-toolbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.message-version-switcher,
+.message-tool-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.message-version-text {
+  min-width: 2.2rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #666;
+}
+
+.message-tool-btn {
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d7d7d7;
+  border-radius: 999px;
+  background: white;
+  color: #555;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.message-tool-btn:hover:not(:disabled) {
+  background: #f6f6f6;
+  border-color: #c6c6c6;
+  transform: translateY(-1px);
+}
+
+.message-tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .message-content :deep(p) {
