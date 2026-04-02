@@ -114,7 +114,20 @@ const welcomeMessages: ChatMessageNode[] = [
   {
     id: 'welcome-1',
     role: 'system',
-    content: '你好！我是文档处理助手。请上传文档或输入问题，我会帮你处理。',
+    content: [
+      '### 欢迎来到文档处理助手',
+      '',
+      '**上传一份文档，或者直接问我一个问题。**',
+      '',
+      '我会根据你选择的处理方式和模型，帮你更快地读懂、提炼和整理内容。',
+      '',
+      '你可以试试这些开始方式：',
+      '',
+      '- 上传 PDF、Word、Excel、PPT 等常见文档',
+      '- 直接提问，快速拿到摘要、答案或重点结论',
+      '- 围绕同一批文件连续追问，进行多轮对话',
+      '- 让我输出提纲、表格、要点或结构化结果',
+    ].join('\n'),
     timestamp: new Date(),
     parentId: null,
     childIds: [],
@@ -593,7 +606,7 @@ const onSelectProcessingMode = (mode: string) => {
 };
 
 const onFilesSelect = (files: File[]) => {
-  selectedFiles.value = files;
+  selectedFiles.value = [...selectedFiles.value, ...files];
 };
 
 const onRemoveFile = (index: number) => {

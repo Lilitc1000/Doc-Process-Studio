@@ -168,8 +168,8 @@ onMounted(() => {
   overflow: hidden;
 }
 .files-list {
-  display: flex;
-  flex-wrap: wrap; /* 允许多行显示 */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 0.5rem;
 }
 
@@ -177,12 +177,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex: 0 0 auto;
-  padding: 0.4rem 0.8rem;
+  min-width: 0;
+  width: 100%;
+  padding: 0.5rem 2.2rem 0.5rem 0.9rem;
   background: #f5f5f5;
   border-radius: 20px;
   animation: fadeIn 0.3s ease-in;
   position: relative;
+  border: 1px solid #e4e4e4;
 }
 
 @keyframes fadeIn {
@@ -199,16 +201,29 @@ onMounted(() => {
 
 .remove-file-btn {
   position: absolute;
-  top: 2px;
-  right: 4px;
-  font-size: 0.9rem;
-  color: #888;
+  top: 50%;
+  right: 0.45rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  color: #fff;
+  background: #9ca3af;
+  border-radius: 999px;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.2s;
+  transform: translateY(-50%);
+  transition:
+    opacity 0.2s,
+    background-color 0.2s;
 }
 .file-item:hover .remove-file-btn {
   opacity: 1;
+}
+.remove-file-btn:hover {
+  background: #6b7280;
 }
 
 .remove-all-btn {
@@ -235,6 +250,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .file-name {

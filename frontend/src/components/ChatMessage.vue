@@ -271,13 +271,11 @@ watchEffect((onCleanup) => {
 
 .chat-message.role-system {
   align-self: center;
-  align-items: center;
-  max-width: 60%;
-  font-size: 0.85rem;
-  color: #666;
-  background: #f5f5f5;
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
+  align-items: stretch;
+  width: min(100%, 760px);
+  max-width: 760px;
+  color: #5b4b2f;
+  margin-bottom: 0.5rem;
 }
 
 .message-header {
@@ -308,7 +306,7 @@ watchEffect((onCleanup) => {
 }
 
 .message.role-system .avatar {
-  background: #ff9800;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
 }
 
 .avatar-icon {
@@ -421,8 +419,67 @@ watchEffect((onCleanup) => {
 }
 
 .chat-message.role-system .message-content {
-  background: transparent;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.95),
+      transparent 38%
+    ),
+    linear-gradient(135deg, #fff8e8, #f6efe1);
   color: inherit;
+  border: 1px solid #eadab8;
+  border-radius: 20px;
+  box-shadow: 0 16px 30px rgba(163, 122, 45, 0.08);
+  padding: 1.15rem 1.35rem;
+}
+
+.chat-message.role-system .message-header {
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+  color: #8b6f3d;
+}
+
+.chat-message.role-system .message-role {
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+}
+
+.chat-message.role-system .message-time {
+  color: #b09158;
+}
+
+.chat-message.role-system .avatar {
+  width: 32px;
+  height: 32px;
+  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.22);
+}
+
+.chat-message.role-system .avatar-icon {
+  font-size: 16px;
+}
+
+.chat-message.role-system .message-content :deep(h3) {
+  margin: 0 0 0.7rem 0;
+  font-size: 1.15rem;
+  line-height: 1.25;
+  color: #4d3c1e;
+}
+
+.chat-message.role-system .message-content :deep(strong) {
+  color: #7a4f16;
+}
+
+.chat-message.role-system .message-content :deep(ul) {
+  margin-top: 0.75rem;
+}
+
+.chat-message.role-system .message-content :deep(li) {
+  margin-bottom: 0.45rem;
+}
+
+.chat-message.role-system .message-content :deep(li::marker) {
+  color: #d29b2f;
 }
 
 .message-toolbar {

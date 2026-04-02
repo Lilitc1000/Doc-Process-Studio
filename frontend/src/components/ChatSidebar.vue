@@ -119,22 +119,6 @@
           </div>
         </Transition>
       </div>
-
-      <div class="info-section">
-        <h3>💡 提示</h3>
-        <ul>
-          <li>支持多种文档格式（PDF、Word、Excel、PPT）</li>
-          <li>支持自然语言提问</li>
-          <li>支持多轮对话</li>
-          <li>上传文件后，AI 会自动分析内容</li>
-        </ul>
-      </div>
-
-      <div class="info-section">
-        <h3>📊 状态</h3>
-        <p>模型：{{ selectedModel }}</p>
-        <p>消息数：{{ messagesCount }}</p>
-      </div>
     </div>
 
     <div class="sidebar-footer">
