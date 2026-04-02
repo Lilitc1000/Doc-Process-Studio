@@ -12,7 +12,7 @@
       @clear-chat="onClearChat"
     />
     <div class="chat-main">
-      <div class="chat-messages" ref="messageContainerRef">
+      <div ref="messageContainerRef" class="chat-messages">
         <ChatMessage
           v-for="message in displayedMessages"
           :key="message.id"
@@ -23,8 +23,12 @@
           :can-go-prev="canSwitchAssistantVersion(message.id, -1)"
           :can-go-next="canSwitchAssistantVersion(message.id, 1)"
           :can-regenerate="message.role === 'assistant' && !isLoading"
-          :can-copy="message.role === 'assistant' && message.content.trim().length > 0"
-          :can-download="message.role === 'assistant' && message.content.trim().length > 0"
+          :can-copy="
+            message.role === 'assistant' && message.content.trim().length > 0
+          "
+          :can-download="
+            message.role === 'assistant' && message.content.trim().length > 0
+          "
           :is-version-locked="message.role === 'assistant' && isLoading"
           @prev-version="switchAssistantVersion(message.id, -1)"
           @next-version="switchAssistantVersion(message.id, 1)"
@@ -36,12 +40,12 @@
       <ChatInput
         v-model:text="inputText"
         :files="selectedFiles"
+        :is-loading="isLoading"
         @upload-files="onFilesSelect"
         @send="onSendMessage"
         @stop="onStopGeneration"
         @clear-all-files="onClearAllFiles"
         @remove-file="onRemoveFile"
-        :is-loading="isLoading"
       />
     </div>
   </div>
@@ -175,7 +179,8 @@ const currentLeafMessageId = computed(() => {
     return null;
   }
 
-  const lastMessage = displayedMessages.value.at(-1);
+  const lastMessage =
+    displayedMessages.value[displayedMessages.value.length - 1] ?? null;
   return lastMessage?.id ?? null;
 });
 
@@ -248,13 +253,16 @@ const createMessageNode = (
 
 const getMessagePathToNode = (messageId: string) => {
   const path: ChatMessageNode[] = [];
-  let currentNode = getNodeById(messageId);
+  let currentMessageId: string | null = messageId;
 
-  while (currentNode) {
+  while (currentMessageId !== null) {
+    const currentNode = getNodeById(currentMessageId);
+    if (!currentNode) {
+      break;
+    }
+
     path.push(currentNode);
-    currentNode = currentNode.parentId
-      ? getNodeById(currentNode.parentId)
-      : null;
+    currentMessageId = currentNode.parentId;
   }
 
   return path.reverse();
@@ -353,7 +361,11 @@ const switchAssistantVersion = (
   direction: -1 | 1,
 ) => {
   const assistantNode = getNodeById(assistantMessageId);
-  if (!assistantNode?.parentId || assistantNode.role !== 'assistant' || isLoading.value) {
+  if (
+    !assistantNode?.parentId ||
+    assistantNode.role !== 'assistant' ||
+    isLoading.value
+  ) {
     return;
   }
 
@@ -448,8 +460,11 @@ const streamAssistantReply = async (
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
 
-  while (true) {
+  let isDone = false;
+
+  while (!isDone) {
     const { value, done } = await reader.read();
+    isDone = done;
     if (done) {
       break;
     }
@@ -493,7 +508,9 @@ const streamAssistantReply = async (
   }
 };
 
-const executeAssistantGeneration = async (requestSnapshot: ChatRequestSnapshot) => {
+const executeAssistantGeneration = async (
+  requestSnapshot: ChatRequestSnapshot,
+) => {
   const assistantNode = createAssistantVariant(requestSnapshot.userMessageId);
   const abortController = new AbortController();
 
@@ -506,7 +523,11 @@ const executeAssistantGeneration = async (requestSnapshot: ChatRequestSnapshot) 
   scrollToBottom();
 
   try {
-    await streamAssistantReply(requestSnapshot, assistantNode.id, abortController);
+    await streamAssistantReply(
+      requestSnapshot,
+      assistantNode.id,
+      abortController,
+    );
 
     const streamedAssistantMessage = findMessageById(assistantNode.id);
     if (streamedAssistantMessage && !streamedAssistantMessage.content.trim()) {

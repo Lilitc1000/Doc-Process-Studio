@@ -1,7 +1,7 @@
 <template>
   <div class="chat-input">
-    <div class="files-preview" v-if="files.length > 0">
-      <div class="files-list" ref="filesContainerRef">
+    <div v-if="files.length > 0" class="files-preview">
+      <div ref="filesContainerRef" class="files-list">
         <div v-for="(file, index) in files" :key="index" class="file-item">
           <span class="file-icon">📄</span>
           <div class="file-details">
@@ -10,16 +10,17 @@
           </div>
           <span
             class="remove-file-btn"
-            @click.stop="$emit('remove-file', index)"
             title="移除文件"
-            >✕</span
+            @click.stop="$emit('remove-file', index)"
           >
+            ✕
+          </span>
         </div>
       </div>
       <button
         class="remove-all-btn"
-        @click="$emit('clear-all-files')"
         title="移除所有文件"
+        @click="$emit('clear-all-files')"
       >
         ✕ 移除所有文件
       </button>
@@ -31,19 +32,18 @@
         placeholder="输入消息... (支持 Markdown)"
         @input="onInput"
         @keydown="onKeydown"
-        @change="onFileSelectChange"
       ></textarea>
 
       <div class="input-actions">
         <label class="file-input-label" title="上传文件">
           <span class="action-icon">📎</span>
           <input
-            type="file"
             ref="fileInputRef"
+            type="file"
             class="file-input"
-            @change="onFileSelectChange"
             :accept="accept"
             multiple
+            @change="onFileSelectChange"
           />
         </label>
 
@@ -53,14 +53,13 @@
             disabled: !canSend && !props.isLoading,
             stopping: props.isLoading,
           }"
-          @click="props.isLoading ? onStop() : onSend()"
           :disabled="!canSend && !props.isLoading"
           :title="props.isLoading ? '停止生成' : '发送消息 (Enter)'"
+          @click="props.isLoading ? onStop() : onSend()"
         >
           <span class="send-icon">{{ props.isLoading ? '⏹' : '📤' }}</span>
           <span class="send-text">{{ props.isLoading ? '停止' : '发送' }}</span>
         </button>
-
       </div>
     </div>
   </div>
@@ -80,6 +79,7 @@ const emit = defineEmits<{
   (e: 'update:text', value: string): void;
   (e: 'upload-files', files: File[]): void;
   (e: 'clear-all-files'): void;
+  (e: 'remove-file', index: number): void;
   (e: 'send'): void;
   (e: 'stop'): void;
 }>();
@@ -87,8 +87,7 @@ const emit = defineEmits<{
 const localText = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
-
-watch(() => props.files, { immediate: true });
+const filesContainerRef = ref<HTMLDivElement | null>(null);
 const formattedSize = (file: File) => {
   const size = file.size;
   if (size < 1024) return `${size} B`;
@@ -105,6 +104,7 @@ watch(
   (newVal) => {
     localText.value = newVal;
   },
+  { immediate: true },
 );
 
 const onInput = () => {

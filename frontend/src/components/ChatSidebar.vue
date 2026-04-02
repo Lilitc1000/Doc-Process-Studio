@@ -5,7 +5,7 @@
     </div>
 
     <div class="sidebar-content">
-      <div class="selector-group" ref="processingModeSelectorRef">
+      <div ref="processingModeSelectorRef" class="selector-group">
         <label id="processing-mode-label">文档处理方式</label>
         <button
           type="button"
@@ -20,7 +20,9 @@
           @keydown.space.prevent="toggleProcessingModeDropdown"
           @keydown.esc.prevent="closeAllDropdowns"
         >
-          <span class="selector-trigger-text">{{ selectedProcessingMode }}</span>
+          <span class="selector-trigger-text">
+            {{ selectedProcessingMode }}
+          </span>
           <span class="selector-trigger-icon" aria-hidden="true">
             <svg viewBox="0 0 16 16" class="selector-trigger-icon-svg">
               <path
@@ -63,7 +65,7 @@
         </Transition>
       </div>
 
-      <div class="selector-group" ref="modelSelectorRef">
+      <div ref="modelSelectorRef" class="selector-group">
         <label id="model-select-label">选择模型</label>
         <button
           type="button"
@@ -145,9 +147,9 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps<{
-  processingModes: string[];
+  processingModes: readonly string[];
   selectedProcessingMode: string;
-  models: string[];
+  models: readonly string[];
   selectedModel: string;
   messagesCount: number;
   isLocked?: boolean;

@@ -37,11 +37,13 @@
             <span class="message-file-size">{{ file.sizeLabel }}</span>
           </div>
         </div>
+        <!-- eslint-disable vue/no-v-html -->
         <div
           v-if="message.content.trim().length > 0"
           class="message-text"
           v-html="renderedContent"
         ></div>
+        <!-- eslint-enable vue/no-v-html -->
       </template>
     </div>
     <div v-if="message.role === 'assistant'" class="message-toolbar">
@@ -192,7 +194,9 @@ const loadMarkdownRenderer = async (): Promise<RenderMarkdown> => {
             if (lang) {
               try {
                 return `<pre class="highlight"><code class="hljs ${lang}">${hljs.highlight(str, { language: lang }).value}</code></pre>`;
-              } catch (_) {}
+              } catch {
+                // Fall back to escaped plain text when the language is unknown.
+              }
             }
 
             return `<pre class="highlight"><code class="hljs">${markdown.utils.escapeHtml(str)}</code></pre>`;
