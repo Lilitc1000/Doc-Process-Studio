@@ -1,7 +1,7 @@
 <template>
   <aside class="chat-sidebar">
     <div class="sidebar-header">
-      <h2>⚙️ 设置</h2>
+      <h2>设置</h2>
     </div>
 
     <div class="sidebar-content">
@@ -230,59 +230,70 @@ watch(
 <style scoped>
 .chat-sidebar {
   width: 280px;
-  background: #1e1e1e;
-  color: #e0e0e0;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0.98),
+    rgba(255, 255, 255, 0.94)
+  );
+  color: #0f172a;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-right: 1px solid #333;
+  border-right: 1px solid #e2e8f0;
+  backdrop-filter: blur(14px);
 }
 
 .sidebar-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid #333;
+  padding: 1.35rem 1.25rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .sidebar-header h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.02rem;
   font-weight: 600;
-  color: #fff;
+  color: #0f172a;
+  letter-spacing: 0.01em;
 }
 
 .sidebar-content {
   flex: 1;
   min-height: 0;
-  padding: 1rem;
+  padding: 1.1rem 1rem;
   overflow-y: auto;
 }
 
 .selector-group {
   position: relative;
-  margin-bottom: 2rem;
+  margin-bottom: 1.35rem;
 }
 
 .selector-group label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-  color: #aaa;
+  margin-bottom: 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.02em;
 }
 
 .selector-trigger {
   width: 100%;
   min-height: 44px;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid #444;
-  border-radius: 12px;
-  background: #2d2d2d;
-  color: #fff;
+  padding: 0.78rem 0.95rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
   font-size: 0.9rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
@@ -291,27 +302,27 @@ watch(
 }
 
 .selector-trigger:hover {
-  background: #343434;
-  border-color: #555;
+  background: #f8fbff;
+  border-color: #cbd5e1;
 }
 
 .selector-trigger:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
-  background: #292929;
-  border-color: #3b3b3b;
+  opacity: 0.6;
+  background: #f8fafc;
+  border-color: #e2e8f0;
 }
 
 .selector-trigger:focus-visible {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.15);
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
 }
 
 .selector-trigger.open {
-  border-color: #007acc;
-  background: #32363a;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
+  border-color: #93c5fd;
+  background: #f8fbff;
+  box-shadow: 0 16px 36px rgba(59, 130, 246, 0.12);
 }
 
 .selector-trigger-text {
@@ -328,13 +339,14 @@ watch(
   justify-content: center;
   flex-shrink: 0;
   border-radius: 999px;
-  color: #d8f1ff;
-  background: transparent;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   box-shadow: none;
   transition:
     transform 0.22s ease,
     background 0.22s ease,
-    box-shadow 0.22s ease;
+    border-color 0.22s ease;
 }
 
 .selector-trigger-icon-svg {
@@ -345,8 +357,8 @@ watch(
 
 .selector-trigger.open .selector-trigger-icon {
   transform: rotate(180deg);
-  background: transparent;
-  box-shadow: none;
+  background: #eff6ff;
+  border-color: #bfdbfe;
 }
 
 .selector-dropdown {
@@ -356,13 +368,13 @@ watch(
   right: 0;
   z-index: 20;
   padding: 0.45rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(28, 28, 28, 0.96);
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 20px 40px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .selector-option {
@@ -373,9 +385,9 @@ watch(
   gap: 0.75rem;
   padding: 0.8rem 0.9rem;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   background: transparent;
-  color: #f3f3f3;
+  color: #1e293b;
   font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
@@ -386,7 +398,7 @@ watch(
 }
 
 .selector-option:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: #f8fafc;
   transform: translateX(2px);
 }
 
@@ -397,15 +409,15 @@ watch(
 }
 
 .selector-option.active {
-  background: rgba(0, 122, 204, 0.16);
-  color: #cfeeff;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .selector-option-tag {
   padding: 0.18rem 0.45rem;
   border-radius: 999px;
-  background: rgba(0, 122, 204, 0.18);
-  color: #8fcfff;
+  background: #dbeafe;
+  color: #2563eb;
   font-size: 0.72rem;
   flex-shrink: 0;
 }
@@ -456,22 +468,28 @@ watch(
 
 .sidebar-footer {
   padding: 1rem;
-  border-top: 1px solid #333;
+  border-top: 1px solid #e2e8f0;
 }
 
 .clear-btn {
   width: 100%;
-  padding: 0.6rem;
-  background: #d32f2f;
-  color: white;
-  border: none;
-  border-radius: 6px;
+  padding: 0.72rem 0.9rem;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
   cursor: pointer;
-  font-size: 0.85rem;
-  transition: background 0.2s;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .clear-btn:hover {
-  background: #b71c1c;
+  background: #ffedd5;
+  border-color: #fdba74;
+  transform: translateY(-1px);
 }
 </style>

@@ -728,7 +728,7 @@ watchEffect((onCleanup) => {
 
 .message-content {
   box-sizing: border-box;
-  padding: 1.05rem 1.2rem;
+  padding: 0.9rem 1rem;
   border-radius: 18px;
   line-height: 1.6;
   font-size: 0.95rem;
@@ -1015,7 +1015,6 @@ watchEffect((onCleanup) => {
 
 .chat-message.role-assistant .message-track {
   width: max-content;
-  min-width: min(18rem, var(--message-track-max-width));
   max-width: calc(var(--message-track-max-width) - 1.25rem);
 }
 
@@ -1030,10 +1029,18 @@ watchEffect((onCleanup) => {
 .chat-message.role-user .message-header {
   justify-content: flex-end;
   padding-right: 0.15rem;
+  width: fit-content;
+  justify-self: end;
 }
 
 .chat-message.role-user .message-info {
   align-items: flex-end;
+}
+
+.chat-message.role-user .message-content {
+  width: fit-content;
+  max-width: 100%;
+  justify-self: end;
 }
 
 .chat-message.role-user .message-content :deep(a) {
@@ -1056,11 +1063,15 @@ watchEffect((onCleanup) => {
 }
 
 .chat-message.role-user.is-editing .message-content {
+  width: 100%;
+  justify-self: stretch;
   backdrop-filter: blur(4px);
 }
 
 .chat-message.role-user .message-toolbar {
   justify-content: flex-end;
+  width: fit-content;
+  justify-self: end;
 }
 
 .chat-message.role-assistant .message-toolbar {
