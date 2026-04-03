@@ -7,6 +7,7 @@ from fastapi import UploadFile
 
 from ..models.chat import ChatMessageInput, ChatStreamRequest
 from .file_context import build_uploaded_files_context
+from .skill_runtime import ensure_skill_context_for_request
 from .skill_registry import get_skill_interface
 from ..settings import settings
 
@@ -68,6 +69,7 @@ def build_skill_prompt(skill_id: str) -> str:
 
 def build_upstream_messages(
     request: ChatStreamRequest,
+    skill_context: str | None = None,
     uploaded_files_context: str | None = None,
 ) -> list[dict[str, str]]:
     system_message = ChatMessageInput(
@@ -77,6 +79,13 @@ def build_upstream_messages(
     upstream_messages = [
         system_message.model_dump(),
     ]
+    if skill_context:
+        upstream_messages.append(
+            ChatMessageInput(
+                role="system",
+                content=skill_context,
+            ).model_dump()
+        )
     if uploaded_files_context:
         upstream_messages.append(
             ChatMessageInput(
@@ -105,8 +114,12 @@ async def stream_remote_chat_completion(
         return
 
     try:
+        skill_state, skill_context = await ensure_skill_context_for_request(
+            request
+        )
         upstream_messages = build_upstream_messages(
             request,
+            skill_context=skill_context,
             uploaded_files_context=await build_uploaded_files_context(
                 upload_files or []
             ),

@@ -12,6 +12,10 @@ class ChatMessageInput(BaseModel):
 
 
 class ChatStreamRequest(BaseModel):
+    conversation_id: str = Field(
+        ...,
+        description="前后端共享的会话标识，用于缓存 skill 上下文",
+    )
     model: str = Field(..., description="要调用的模型名称")
     skill_id: str = Field(
         ...,

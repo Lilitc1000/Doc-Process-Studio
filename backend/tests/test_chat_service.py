@@ -44,6 +44,7 @@ def test_build_skill_prompt_returns_skill_default_prompt() -> None:
 
 def test_build_upstream_messages_prepends_skill_system_prompt() -> None:
     request = ChatStreamRequest(
+        conversation_id="conversation-1",
         model="qwen2.5:7b",
         skill_id="document-assistant",
         messages=[

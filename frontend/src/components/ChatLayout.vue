@@ -128,6 +128,7 @@ interface ApiChatMessage {
 
 interface ChatRequestSnapshot {
   userMessageId: string;
+  conversationId: string;
   model: string;
   skillId: string;
   messages: ApiChatMessage[];
@@ -189,6 +190,17 @@ const isCopyToastVisible = ref(false);
 let copyToastTimer: ReturnType<typeof setTimeout> | null = null;
 
 const messageContainerRef = ref<HTMLElement | null>(null);
+const createConversationId = () => {
+  if (
+    typeof globalThis.crypto !== 'undefined' &&
+    typeof globalThis.crypto.randomUUID === 'function'
+  ) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+const conversationId = ref(createConversationId());
 
 const getNodeById = (messageId: string) => {
   return messageNodes.value[messageId] ?? null;
@@ -354,6 +366,7 @@ const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
   const path = getMessagePathToNode(userMessageId);
   return {
     userMessageId,
+    conversationId: conversationId.value,
     model: selectedModel.value,
     skillId: selectedProcessingMode.value,
     messages: path.map((message) => ({
@@ -500,6 +513,7 @@ const streamAssistantReply = async (
       formData.append(
         'payload',
         JSON.stringify({
+          conversation_id: requestSnapshot.conversationId,
           model: requestSnapshot.model,
           skill_id: requestSnapshot.skillId,
           messages: requestSnapshot.messages,
@@ -693,6 +707,7 @@ const onClearChat = () => {
   selectedRootChildId.value = null;
   selectedChildIdByParent.value = {};
   selectedFiles.value = [];
+  conversationId.value = createConversationId();
   resetEditingState();
 };
 

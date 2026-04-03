@@ -20,3 +20,24 @@ class SkillListResponse(BaseModel):
         ...,
         description="默认选中的 skill 标识",
     )
+
+
+class SkillContextSearchResponse(BaseModel):
+    skill_id: str = Field(..., description="skill 标识")
+    query: str = Field(..., description="检索关键词")
+    chunks: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="命中的 skill 片段",
+    )
+
+
+class SkillCacheStatusResponse(BaseModel):
+    ok: bool = Field(..., description="Redis 是否可用")
+    message: str = Field(..., description="状态消息")
+
+
+class SkillConversationCacheResponse(BaseModel):
+    conversation_id: str = Field(..., description="会话标识")
+    exists: bool = Field(..., description="Redis 中是否存在该会话状态")
+    ttl_seconds: int = Field(..., description="当前剩余 TTL 秒数")
+    message: str = Field(..., description="状态说明")

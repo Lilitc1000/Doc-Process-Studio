@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_ENV = "dev"
@@ -17,17 +18,49 @@ def resolve_env_file_path(env_name: str | None = None) -> Path:
     return BACKEND_DIR / f".env.{normalized_env_name}"
 
 
+def normalize_redis_url(raw_value: str | None) -> str | None:
+    if raw_value is None:
+        return None
+
+    normalized = raw_value.strip()
+    if not normalized:
+        return None
+
+    if normalized.startswith("http://"):
+        return "redis://" + normalized[len("http://") :]
+    if normalized.startswith("https://"):
+        return "rediss://" + normalized[len("https://") :]
+    return normalized
+
+
 class Settings(BaseSettings):
     app_name: str = "doc-process-studio-service"
     env: str = resolve_runtime_env()
     db_dsn: str | None = None
     ollama_base_url: str | None = None
     ollama_timeout_seconds: float = 10.0
+    redis_url: str | None = Field(default=None, validation_alias="REDIS_URL")
+    redis_password: str | None = Field(
+        default=None,
+        validation_alias="REDIS_PASSWORD",
+    )
+    redis_key_prefix: str = "doc-process-studio"
+    redis_ttl_seconds: int = 60 * 60 * 12
+    skill_context_max_characters: int = 16_000
+    skill_chunk_max_characters: int = 1_800
+    skill_compact_summary_max_characters: int = 2_400
+    skill_context_search_limit: int = 4
+    skill_tool_max_iterations: int = 2
 
     model_config = SettingsConfigDict(
         env_prefix="APP_",
         extra="ignore",
     )
+
+    @field_validator("redis_url", mode="before")
+    @classmethod
+    def validate_redis_url(cls, value: str | None) -> str | None:
+        return normalize_redis_url(value)
 
 
 settings = Settings(
