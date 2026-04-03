@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     privileged: true
+    depends_on:
+      redis:
+        condition: service_healthy
     environment:
       - PYTHONUNBUFFERED=1
       - LOCAL_WORKSPACE_FOLDER=/workspace
@@ -15,3 +18,19 @@ services:
       - "5173:5173"
       - "8000:8000"
     command: bash -lc '/workspace/.devcontainer/startup.sh'
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass redis_dev_password --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_dev_password", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  redis_data:
