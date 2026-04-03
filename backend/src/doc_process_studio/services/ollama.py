@@ -42,7 +42,7 @@ async def fetch_remote_model_names() -> list[str]:
         )
 
     remote_url = (
-        f"{settings.ollama_base_url.rstrip('/')}{settings.ollama_models_path}"
+        f"{settings.ollama_base_url.rstrip('/')}/v1/models"
     )
 
     try:

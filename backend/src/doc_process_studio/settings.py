@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     env: str = resolve_runtime_env()
     db_dsn: str | None = None
     ollama_base_url: str | None = None
-    ollama_models_path: str = "/v1/models"
     ollama_timeout_seconds: float = 10.0
 
     model_config = SettingsConfigDict(

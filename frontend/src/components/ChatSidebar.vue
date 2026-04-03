@@ -21,7 +21,7 @@
           @keydown.esc.prevent="closeAllDropdowns"
         >
           <span class="selector-trigger-text">
-            {{ selectedProcessingMode }}
+            {{ selectedProcessingModeLabel }}
           </span>
           <span class="selector-trigger-icon" aria-hidden="true">
             <svg viewBox="0 0 16 16" class="selector-trigger-icon-svg">
@@ -46,16 +46,16 @@
           >
             <button
               v-for="mode in processingModes"
-              :key="mode"
+              :key="mode.id"
               type="button"
               class="selector-option"
-              :class="{ active: mode === selectedProcessingMode }"
+              :class="{ active: mode.id === selectedProcessingMode }"
               :disabled="props.isLocked"
               @click="onSelectProcessingMode(mode)"
             >
-              <span>{{ mode }}</span>
+              <span>{{ mode.displayName }}</span>
               <span
-                v-if="mode === selectedProcessingMode"
+                v-if="mode.id === selectedProcessingMode"
                 class="selector-option-tag"
               >
                 当前
@@ -128,10 +128,15 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+
+interface SkillOption {
+  id: string;
+  displayName: string;
+}
 
 const props = defineProps<{
-  processingModes: readonly string[];
+  processingModes: readonly SkillOption[];
   selectedProcessingMode: string;
   models: readonly string[];
   selectedModel: string;
@@ -149,6 +154,12 @@ const isProcessingModeOpen = ref(false);
 const isModelDropdownOpen = ref(false);
 const processingModeSelectorRef = ref<HTMLElement | null>(null);
 const modelSelectorRef = ref<HTMLElement | null>(null);
+const selectedProcessingModeLabel = computed(() => {
+  const selectedOption = props.processingModes.find((mode) => {
+    return mode.id === props.selectedProcessingMode;
+  });
+  return selectedOption?.displayName ?? props.selectedProcessingMode;
+});
 
 const closeAllDropdowns = () => {
   isProcessingModeOpen.value = false;
@@ -175,11 +186,11 @@ const toggleModelDropdown = () => {
   }
 };
 
-const onSelectProcessingMode = (mode: string) => {
+const onSelectProcessingMode = (mode: SkillOption) => {
   if (props.isLocked) {
     return;
   }
-  emit('select-processing-mode', mode);
+  emit('select-processing-mode', mode.id);
   closeAllDropdowns();
 };
 

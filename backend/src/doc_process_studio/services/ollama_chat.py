@@ -5,8 +5,9 @@ from typing import Any
 import httpx
 from fastapi import UploadFile
 
-from ..models.chat import ChatMessageInput, ChatStreamRequest, ProcessingMode
+from ..models.chat import ChatMessageInput, ChatStreamRequest
 from .file_context import build_uploaded_files_context
+from .skill_registry import get_skill_interface
 from ..settings import settings
 
 
@@ -61,26 +62,8 @@ def extract_finish_reason(chunk_payload: dict[str, Any]) -> str | None:
     return None
 
 
-def build_processing_mode_prompt(processing_mode: ProcessingMode) -> str:
-    prompt_map: dict[ProcessingMode, str] = {
-        "快速摘要": (
-            "你是文档处理助手。请优先输出简洁、重点明确的摘要，"
-            "先给核心结论，再补充关键细节。"
-        ),
-        "智能问答": (
-            "你是文档处理助手。请围绕用户问题直接作答，"
-            "结论清晰、条理明确，并在必要时引用上下文中的关键信息。"
-        ),
-        "结构化提取": (
-            "你是文档处理助手。请优先提取结构化信息，"
-            "尽量用分点、表格式思路或字段化表达输出结果。"
-        ),
-        "全文整理": (
-            "你是文档处理助手。请对内容进行系统整理与归纳，"
-            "保持层次清晰，适合继续阅读、复盘或二次加工。"
-        ),
-    }
-    return prompt_map[processing_mode]
+def build_skill_prompt(skill_id: str) -> str:
+    return get_skill_interface(skill_id).default_prompt
 
 
 def build_upstream_messages(
@@ -89,7 +72,7 @@ def build_upstream_messages(
 ) -> list[dict[str, str]]:
     system_message = ChatMessageInput(
         role="system",
-        content=build_processing_mode_prompt(request.processing_mode),
+        content=build_skill_prompt(request.skill_id),
     )
     upstream_messages = [
         system_message.model_dump(),
@@ -121,18 +104,23 @@ async def stream_remote_chat_completion(
         )
         return
 
+    try:
+        upstream_messages = build_upstream_messages(
+            request,
+            uploaded_files_context=await build_uploaded_files_context(
+                upload_files or []
+            ),
+        )
+    except ValueError as exc:
+        yield format_sse_event({"type": "error", "message": str(exc)})
+        return
+
     remote_url = (
         f"{settings.ollama_base_url.rstrip('/')}/v1/chat/completions"
     )
-    uploaded_files_context = await build_uploaded_files_context(
-        upload_files or []
-    )
     payload = {
         "model": request.model,
-        "messages": build_upstream_messages(
-            request,
-            uploaded_files_context=uploaded_files_context,
-        ),
+        "messages": upstream_messages,
         "stream": True,
     }
 

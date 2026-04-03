@@ -2,13 +2,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ProcessingMode = Literal[
-    "快速摘要",
-    "智能问答",
-    "结构化提取",
-    "全文整理",
-]
-
 
 class ChatMessageInput(BaseModel):
     role: Literal["system", "user", "assistant"] = Field(
@@ -20,9 +13,9 @@ class ChatMessageInput(BaseModel):
 
 class ChatStreamRequest(BaseModel):
     model: str = Field(..., description="要调用的模型名称")
-    processing_mode: ProcessingMode = Field(
+    skill_id: str = Field(
         ...,
-        description="文档处理方式",
+        description="当前选中的 skill 标识",
     )
     messages: list[ChatMessageInput] = Field(
         default_factory=list,

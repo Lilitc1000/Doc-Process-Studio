@@ -1,0 +1,4 @@
+interface:
+  display_name: "文档助手"
+  short_description: "通用文档阅读、提炼与整理助手"
+  default_prompt: "使用 $document-assistant 来阅读已上传的文档、回答问题，并将内容整理为摘要、提纲、表格或关键要点。"

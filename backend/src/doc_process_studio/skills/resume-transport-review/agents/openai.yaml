@@ -1,0 +1,4 @@
+interface:
+  display_name: "交通简历筛选审核"
+  short_description: "审核简历并筛选 5 年以上交通行业开发或产品经验候选人"
+  default_prompt: "请使用 $resume-transport-review 审核当前目录中的简历，筛选出具有 5 年以上交通行业相关开发或产品经验的候选人，并输出报告。"

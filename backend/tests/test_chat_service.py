@@ -1,5 +1,5 @@
 from doc_process_studio.services.ollama_chat import (
-    build_processing_mode_prompt,
+    build_skill_prompt,
     build_upstream_messages,
     extract_delta_text,
     extract_finish_reason,
@@ -36,25 +36,25 @@ def test_extract_finish_reason_reads_done_signal() -> None:
     assert extract_finish_reason(payload) == "stop"
 
 
-def test_build_processing_mode_prompt_returns_mode_specific_prompt() -> None:
-    prompt = build_processing_mode_prompt("结构化提取")
+def test_build_skill_prompt_returns_skill_default_prompt() -> None:
+    prompt = build_skill_prompt("document-assistant")
 
-    assert "结构化信息" in prompt
+    assert "$document-assistant" in prompt
 
 
-def test_build_upstream_messages_prepends_processing_mode_system_prompt() -> None:
+def test_build_upstream_messages_prepends_skill_system_prompt() -> None:
     request = ChatStreamRequest(
-      model="qwen2.5:7b",
-      processing_mode="智能问答",
-      messages=[
-          ChatMessageInput(role="user", content="请解释这份文档"),
-      ],
+        model="qwen2.5:7b",
+        skill_id="document-assistant",
+        messages=[
+            ChatMessageInput(role="user", content="请解释这份文档"),
+        ],
     )
 
     upstream_messages = build_upstream_messages(request)
 
     assert upstream_messages[0]["role"] == "system"
-    assert "围绕用户问题直接作答" in upstream_messages[0]["content"]
+    assert "$document-assistant" in upstream_messages[0]["content"]
     assert upstream_messages[1] == {
         "role": "user",
         "content": "请解释这份文档",

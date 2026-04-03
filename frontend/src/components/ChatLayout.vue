@@ -97,15 +97,12 @@ const fallbackModels = [
   'claude-3.5-sonnet',
   'deepseek-v3',
 ];
-const processingModes = [
-  '快速摘要',
-  '智能问答',
-  '结构化提取',
-  '全文整理',
-] as const;
-
-type ProcessingMode = (typeof processingModes)[number];
 type ChatMessageRole = 'user' | 'assistant' | 'system';
+type SkillOption = {
+  id: string;
+  displayName: string;
+  shortDescription?: string;
+};
 
 interface ChatAttachment {
   name: string;
@@ -132,7 +129,7 @@ interface ApiChatMessage {
 interface ChatRequestSnapshot {
   userMessageId: string;
   model: string;
-  processingMode: ProcessingMode;
+  skillId: string;
   messages: ApiChatMessage[];
   files: File[];
 }
@@ -169,7 +166,13 @@ const welcomeMessages: ChatMessageNode[] = [
 
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
-const selectedProcessingMode = ref<ProcessingMode>('智能问答');
+const processingModes = ref<SkillOption[]>([
+  {
+    id: 'document-assistant',
+    displayName: '文档助手',
+  },
+]);
+const selectedProcessingMode = ref('document-assistant');
 const selectedModel = ref(fallbackModels[0]);
 const availableModels = ref(fallbackModels);
 const isLoading = ref(false);
@@ -352,7 +355,7 @@ const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
   return {
     userMessageId,
     model: selectedModel.value,
-    processingMode: selectedProcessingMode.value,
+    skillId: selectedProcessingMode.value,
     messages: path.map((message) => ({
       role: message.role,
       content: message.apiContent ?? message.content,
@@ -498,7 +501,7 @@ const streamAssistantReply = async (
         'payload',
         JSON.stringify({
           model: requestSnapshot.model,
-          processing_mode: requestSnapshot.processingMode,
+          skill_id: requestSnapshot.skillId,
           messages: requestSnapshot.messages,
         }),
       );
@@ -668,7 +671,7 @@ const onSelectModel = (model: string) => {
 };
 
 const onSelectProcessingMode = (mode: string) => {
-  selectedProcessingMode.value = mode as ProcessingMode;
+  selectedProcessingMode.value = mode;
 };
 
 const onFilesSelect = (files: File[]) => {
@@ -822,8 +825,75 @@ const loadAvailableModels = async () => {
   }
 };
 
+const loadAvailableSkills = async () => {
+  try {
+    const response = await axios.get<{
+      skills?: Array<{
+        id?: string;
+        display_name?: string;
+        displayName?: string;
+        short_description?: string;
+        shortDescription?: string;
+      }>;
+      default_skill_id?: string;
+      defaultSkillId?: string;
+    }>('/api/skills');
+
+    const rawSkills = response.data.skills ?? [];
+    const nextSkills = rawSkills
+      .map((skill) => {
+        const id = skill.id?.trim() ?? '';
+        const displayName = (
+          skill.display_name ??
+          skill.displayName ??
+          skill.id ??
+          ''
+        ).trim();
+        const shortDescription = (
+          skill.short_description ??
+          skill.shortDescription ??
+          ''
+        ).trim();
+
+        if (!id || !displayName) {
+          return null;
+        }
+
+        return {
+          id,
+          displayName,
+          shortDescription,
+        } satisfies SkillOption;
+      })
+      .filter((skill): skill is SkillOption => skill !== null);
+
+    if (nextSkills.length === 0) {
+      return;
+    }
+
+    processingModes.value = nextSkills;
+    const defaultSkillId =
+      response.data.default_skill_id?.trim() ||
+      response.data.defaultSkillId?.trim() ||
+      'document-assistant';
+
+    const resolvedSkillId = nextSkills.some((skill) => {
+      return skill.id === selectedProcessingMode.value;
+    })
+      ? selectedProcessingMode.value
+      : nextSkills.some((skill) => skill.id === defaultSkillId)
+        ? defaultSkillId
+        : nextSkills[0].id;
+
+    selectedProcessingMode.value = resolvedSkillId;
+  } catch (error) {
+    console.error('加载 skill 列表失败，继续使用前端兜底选项。', error);
+  }
+};
+
 onMounted(() => {
   scrollToBottom();
+  void loadAvailableSkills();
   void loadAvailableModels();
 });
 
