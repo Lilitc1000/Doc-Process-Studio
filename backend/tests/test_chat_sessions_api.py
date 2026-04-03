@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-import doc_process_studio.routers.chat_sessions as chat_sessions_router_module
-from doc_process_studio.models.chat_sessions import (
+import doc_process_studio.routers.conversation.sessions as chat_sessions_router_module
+from doc_process_studio.models.conversation.sessions import (
     ChatSessionDetail,
     ChatSessionListResponse,
     ChatSessionSnapshot,

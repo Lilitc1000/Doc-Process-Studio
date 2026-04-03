@@ -41,3 +41,4 @@ class SkillConversationCacheResponse(BaseModel):
     exists: bool = Field(..., description="Redis 中是否存在该会话状态")
     ttl_seconds: int = Field(..., description="当前剩余 TTL 秒数")
     message: str = Field(..., description="状态说明")
+

@@ -3,8 +3,12 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
-from ..models.ollama import UpstreamOllamaModelRecord
-from ..settings import settings
+from ...models.system.ollama import UpstreamOllamaModelRecord
+from .ollama_client import (
+    OllamaNotConfiguredError,
+    build_models_url,
+    build_timeout,
+)
 
 
 def extract_model_names(payload: Any) -> list[str]:
@@ -35,20 +39,16 @@ def extract_model_names(payload: Any) -> list[str]:
 
 
 async def fetch_remote_model_names() -> list[str]:
-    if not settings.ollama_base_url:
+    try:
+        remote_url = build_models_url()
+    except OllamaNotConfiguredError as exc:
         raise HTTPException(
             status_code=500,
-            detail="未配置 APP_OLLAMA_BASE_URL，请检查 backend/.env",
-        )
-
-    remote_url = (
-        f"{settings.ollama_base_url.rstrip('/')}/v1/models"
-    )
+            detail=str(exc),
+        ) from exc
 
     try:
-        async with httpx.AsyncClient(
-            timeout=settings.ollama_timeout_seconds
-        ) as client:
+        async with httpx.AsyncClient(timeout=build_timeout()) as client:
             response = await client.get(remote_url)
             response.raise_for_status()
     except httpx.HTTPError as exc:
@@ -73,3 +73,4 @@ async def fetch_remote_model_names() -> list[str]:
         )
 
     return model_names
+

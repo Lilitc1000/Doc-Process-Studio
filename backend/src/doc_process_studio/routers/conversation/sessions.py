@@ -1,20 +1,20 @@
 from fastapi import APIRouter, HTTPException
 
-from ..models.chat_sessions import (
+from ...models.conversation.sessions import (
     ChatSessionDetail,
     ChatSessionListResponse,
     ChatSessionSummary,
     ChatSessionTitleUpdateRequest,
     ChatSessionUpsertRequest,
 )
-from ..services.chat_sessions import (
+from ...services.chat.sessions import (
     delete_chat_session,
     get_chat_session,
     list_chat_sessions,
     upsert_chat_session,
     update_chat_session_title,
 )
-from ..services.skill_conversation_store import clear_conversation_state
+from ...services.skill.conversation_store import clear_conversation_state
 
 router = APIRouter(prefix="/api/chat-sessions", tags=["chat-sessions"])
 
@@ -61,3 +61,4 @@ async def remove_session(session_id: str) -> dict[str, bool]:
     deleted = await delete_chat_session(session_id)
     await clear_conversation_state(session_id)
     return {"deleted": deleted}
+

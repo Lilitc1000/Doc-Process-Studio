@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from redis.asyncio import Redis
 
-from ..settings import settings
+from ...settings import settings
 
 _redis_client: Redis | None = None
 
@@ -87,3 +87,4 @@ async def redis_client_context() -> AsyncIterator[Redis]:
         yield client
     finally:
         pass
+

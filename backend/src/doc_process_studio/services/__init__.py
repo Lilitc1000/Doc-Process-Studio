@@ -1,1 +1,7 @@
-# 服务层包初始化文件。
+from . import chat, infra, skill
+
+__all__ = [
+    "chat",
+    "infra",
+    "skill",
+]

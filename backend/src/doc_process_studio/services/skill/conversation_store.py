@@ -1,6 +1,6 @@
-from ..models.skill_runtime import SkillConversationState
-from ..settings import settings
-from .redis_store import (
+from ...models.skill.runtime import SkillConversationState
+from ...settings import settings
+from ..infra.redis_store import (
     build_cache_key,
     delete_key,
     get_json,
@@ -43,3 +43,4 @@ async def clear_conversation_state(conversation_id: str) -> bool:
 
 async def get_conversation_state_ttl_seconds(conversation_id: str) -> int:
     return await get_ttl_seconds(build_conversation_state_key(conversation_id))
+

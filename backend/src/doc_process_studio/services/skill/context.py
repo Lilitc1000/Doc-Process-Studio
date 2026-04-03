@@ -2,12 +2,9 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from ..models.skill_runtime import (
-    SkillContextChunk,
-    SkillContextChunkSummary,
-)
-from ..settings import settings
-from .skill_registry import SKILLS_DIR, get_skill_interface
+from ...models.skill.runtime import SkillContextChunk, SkillContextChunkSummary
+from ...settings import settings
+from .registry import SKILLS_DIR, get_skill_interface
 
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 TOKEN_PATTERN = re.compile(r"[\u4e00-\u9fff]{1,8}|[a-zA-Z0-9_-]{2,}")
@@ -142,9 +139,7 @@ def get_skill_context_chunks_by_ids(
     skill_id: str,
     chunk_ids: list[str],
 ) -> list[SkillContextChunk]:
-    chunk_map = {
-        chunk.id: chunk for chunk in load_skill_context_chunks(skill_id)
-    }
+    chunk_map = {chunk.id: chunk for chunk in load_skill_context_chunks(skill_id)}
     return [chunk_map[chunk_id] for chunk_id in chunk_ids if chunk_id in chunk_map]
 
 
@@ -174,9 +169,18 @@ def search_skill_context_chunks(
             continue
 
         haystack = "\n".join(
-            [chunk.title.lower(), chunk.source_path.lower(), chunk.preview.lower(), chunk.content.lower()]
+            [
+                chunk.title.lower(),
+                chunk.source_path.lower(),
+                chunk.preview.lower(),
+                chunk.content.lower(),
+            ]
         )
-        score = sum(3 if token in chunk.title.lower() else 1 for token in query_tokens if token in haystack)
+        score = sum(
+            3 if token in chunk.title.lower() else 1
+            for token in query_tokens
+            if token in haystack
+        )
         if score > 0:
             scored_chunks.append((score, chunk))
 
@@ -185,3 +189,4 @@ def search_skill_context_chunks(
     )
     final_limit = limit or settings.skill_context_search_limit
     return [chunk for _, chunk in scored_chunks[:final_limit]]
+

@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-import doc_process_studio.routers.models as models_router_module
-from doc_process_studio.services.ollama import extract_model_names
+import doc_process_studio.routers.system.models as models_router_module
+from doc_process_studio.services.infra.ollama import extract_model_names
 
 
 def test_extract_model_names_supports_multiple_payload_shapes() -> None:

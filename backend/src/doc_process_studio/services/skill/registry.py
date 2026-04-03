@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
 
-from ..models.skills import SkillInterfaceConfig
+from ...models.skill.catalog import SkillInterfaceConfig
 
-SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
+SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
 DEFAULT_SKILL_ID = "document-assistant"
 
 
@@ -111,3 +111,4 @@ def get_skill_interface(skill_id: str) -> SkillInterfaceConfig:
     raise ValueError(
         f"未找到 skill `{normalized_skill_id}`。当前可用 skills: {available_skill_ids}"
     )
+

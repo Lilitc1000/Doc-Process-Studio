@@ -1,12 +1,12 @@
 from io import BytesIO
 from pathlib import Path
 
+from docx import Document
 from fastapi import UploadFile
 from openpyxl import load_workbook
 from pypdf import PdfReader
-from docx import Document
 
-from ..models.file_context import UploadedFileContext
+from ...models.conversation.file_context import UploadedFileContext
 
 TEXT_EXTENSIONS = {
     ".txt",
@@ -61,10 +61,7 @@ def truncate_content(content: str) -> str:
 
 def extract_pdf_text(raw_bytes: bytes) -> str:
     reader = PdfReader(BytesIO(raw_bytes))
-    page_texts = [
-        (page.extract_text() or "").strip()
-        for page in reader.pages
-    ]
+    page_texts = [(page.extract_text() or "").strip() for page in reader.pages]
     return "\n\n".join(text for text in page_texts if text)
 
 
@@ -90,9 +87,7 @@ def extract_docx_text(raw_bytes: bytes) -> str:
                 row_texts.append(" | ".join(non_empty_cells))
 
         if row_texts:
-            table_sections.append(
-                f"[表格 {table_index}]\n" + "\n".join(row_texts)
-            )
+            table_sections.append(f"[表格 {table_index}]\n" + "\n".join(row_texts))
 
     if table_sections:
         sections.append("\n\n".join(table_sections))
@@ -120,9 +115,7 @@ def extract_xlsx_text(raw_bytes: bytes) -> str:
                 row_texts.append(" | ".join(cell_values))
 
         if row_texts:
-            sheet_sections.append(
-                f"[工作表：{sheet.title}]\n" + "\n".join(row_texts)
-            )
+            sheet_sections.append(f"[工作表：{sheet.title}]\n" + "\n".join(row_texts))
 
     return "\n\n".join(sheet_sections)
 
@@ -201,3 +194,4 @@ async def build_uploaded_files_context(
         "以下是用户本次上传的文件内容，请你优先结合这些文件进行理解与回答：\n\n"
         + "\n\n---\n\n".join(sections)
     )
+

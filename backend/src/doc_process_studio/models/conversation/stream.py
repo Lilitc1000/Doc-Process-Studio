@@ -25,3 +25,4 @@ class ChatStreamRequest(BaseModel):
         default_factory=list,
         description="对话消息列表",
     )
+

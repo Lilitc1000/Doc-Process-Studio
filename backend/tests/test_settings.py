@@ -2,7 +2,7 @@ from doc_process_studio.settings import resolve_env_file_path, resolve_runtime_e
 
 
 def test_resolve_runtime_env_defaults_to_dev(monkeypatch) -> None:
-    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
 
     assert resolve_runtime_env() == "dev"
 

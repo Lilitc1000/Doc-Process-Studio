@@ -45,3 +45,4 @@ class SkillConversationState(BaseModel):
         default_factory=list,
         description="已经被压缩进 compact_summary 的 chunk 列表",
     )
+

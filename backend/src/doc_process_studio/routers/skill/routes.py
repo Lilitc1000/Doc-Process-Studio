@@ -1,19 +1,19 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from ..models.skills import (
-    SkillConversationCacheResponse,
+from ...models.skill.catalog import (
     SkillCacheStatusResponse,
     SkillContextSearchResponse,
+    SkillConversationCacheResponse,
     SkillListResponse,
 )
-from ..services.redis_store import ping_redis
-from ..services.skill_context import search_skill_context_chunks
-from ..services.skill_conversation_store import (
+from ...services.infra.redis_store import ping_redis
+from ...services.skill.context import search_skill_context_chunks
+from ...services.skill.conversation_store import (
     clear_conversation_state,
     get_conversation_state_ttl_seconds,
     refresh_conversation_state_ttl,
 )
-from ..services.skill_registry import (
+from ...services.skill.registry import (
     get_default_skill_id,
     get_skill_interface,
     list_skill_interfaces,
@@ -115,3 +115,4 @@ async def delete_skill_conversation_cache(
             else "未找到该会话缓存，无需清理。"
         ),
     )
+

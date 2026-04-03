@@ -6,7 +6,7 @@ from fastapi import UploadFile
 from docx import Document
 from openpyxl import Workbook
 
-from doc_process_studio.services.file_context import (
+from doc_process_studio.services.chat.file_context import (
     decode_file_bytes,
     extract_upload_file_context,
     extract_docx_text,
@@ -67,7 +67,7 @@ def test_extract_pdf_text_reads_page_text(monkeypatch) -> None:
     fake_reader = SimpleNamespace(pages=[fake_page])
 
     monkeypatch.setattr(
-        "doc_process_studio.services.file_context.PdfReader",
+        "doc_process_studio.services.chat.file_context.PdfReader",
         lambda _: fake_reader,
     )
 

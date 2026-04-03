@@ -1,12 +1,12 @@
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-import doc_process_studio.routers.skills as skills_router_module
-from doc_process_studio.models.skill_runtime import (
+import doc_process_studio.routers.skill.routes as skills_router_module
+from doc_process_studio.models.skill.runtime import (
     SkillContextChunk,
     SkillConversationState,
 )
-from doc_process_studio.services.skill_runtime import (
+from doc_process_studio.services.skill.context_packer import (
     _build_local_compact_summary,
     _build_skill_context_budget_text,
 )

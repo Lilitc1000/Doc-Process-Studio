@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_ENV = "dev"
@@ -9,7 +9,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 def resolve_runtime_env() -> str:
-    runtime_env = os.getenv("APP_ENV", DEFAULT_ENV).strip()
+    runtime_env = os.getenv("ENV", DEFAULT_ENV).strip()
     return runtime_env or DEFAULT_ENV
 
 
@@ -39,11 +39,8 @@ class Settings(BaseSettings):
     db_dsn: str | None = None
     ollama_base_url: str | None = None
     ollama_timeout_seconds: float = 10.0
-    redis_url: str | None = Field(default=None, validation_alias="REDIS_URL")
-    redis_password: str | None = Field(
-        default=None,
-        validation_alias="REDIS_PASSWORD",
-    )
+    redis_url: str | None = None
+    redis_password: str | None = None
     redis_key_prefix: str = "doc-process-studio"
     redis_ttl_seconds: int = 60 * 60 * 12
     skill_context_max_characters: int = 16_000
@@ -52,10 +49,7 @@ class Settings(BaseSettings):
     skill_context_search_limit: int = 4
     skill_tool_max_iterations: int = 2
 
-    model_config = SettingsConfigDict(
-        env_prefix="APP_",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(extra="ignore")
 
     @field_validator("redis_url", mode="before")
     @classmethod

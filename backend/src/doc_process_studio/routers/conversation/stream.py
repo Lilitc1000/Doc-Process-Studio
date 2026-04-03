@@ -2,8 +2,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from ..models.chat import ChatStreamRequest
-from ..services.ollama_chat import stream_remote_chat_completion
+from ...models.conversation.stream import ChatStreamRequest
+from ...services.chat.stream import stream_remote_chat_completion
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -27,3 +27,4 @@ async def stream_chat(
             "X-Accel-Buffering": "no",
         },
     )
+

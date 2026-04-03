@@ -8,3 +8,4 @@ class UploadedFileContext(BaseModel):
         description="上传文件的 MIME 类型",
     )
     content: str = Field(..., description="提取出的文件内容")
+

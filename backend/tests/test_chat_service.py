@@ -1,10 +1,13 @@
-from doc_process_studio.services.ollama_chat import (
+from doc_process_studio.services.chat.stream import (
     build_skill_prompt,
     build_upstream_messages,
     extract_delta_text,
     extract_finish_reason,
 )
-from doc_process_studio.models.chat import ChatMessageInput, ChatStreamRequest
+from doc_process_studio.models.conversation.stream import (
+    ChatMessageInput,
+    ChatStreamRequest,
+)
 
 
 def test_extract_delta_text_reads_openai_compatible_chunk() -> None:
