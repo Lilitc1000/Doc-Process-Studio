@@ -18,25 +18,58 @@
           :key="message.id"
           :message="message"
           :is-thinking="isMessageThinking(message)"
-          :version-index="getAssistantVersionIndex(message.id)"
-          :version-count="getAssistantVersionCount(message.id)"
-          :can-go-prev="canSwitchAssistantVersion(message.id, -1)"
-          :can-go-next="canSwitchAssistantVersion(message.id, 1)"
+          :version-index="getMessageVersionIndex(message.id)"
+          :version-count="getMessageVersionCount(message.id)"
+          :show-version-switcher="getMessageVersionCount(message.id) > 1"
+          :can-go-prev="canSwitchMessageVersion(message.id, -1)"
+          :can-go-next="canSwitchMessageVersion(message.id, 1)"
+          :can-edit="message.role === 'user' && !isLoading"
           :can-regenerate="message.role === 'assistant' && !isLoading"
-          :can-copy="
-            message.role === 'assistant' && message.content.trim().length > 0
-          "
+          :can-copy="message.content.trim().length > 0"
           :can-download="
             message.role === 'assistant' && message.content.trim().length > 0
           "
-          :is-version-locked="message.role === 'assistant' && isLoading"
-          @prev-version="switchAssistantVersion(message.id, -1)"
-          @next-version="switchAssistantVersion(message.id, 1)"
+          :is-version-locked="message.role !== 'system' && isLoading"
+          :is-editing="editingMessageId === message.id"
+          :editing-text="editingDraftText"
+          :editing-files="
+            editingMessageId === message.id ? editingDraftFiles : []
+          "
+          :can-confirm-edit="canConfirmEdit"
+          :show-toolbar-by-default="message.id === lastAssistantMessageId"
+          @prev-version="switchMessageVersion(message.id, -1)"
+          @next-version="switchMessageVersion(message.id, 1)"
+          @start-edit="startEditingMessage(message.id)"
+          @update-edit-text="updateEditingText"
+          @upload-edit-files="appendEditingFiles"
+          @remove-edit-file="removeEditingFile"
+          @cancel-edit="cancelEditingMessage"
+          @confirm-edit="confirmEditingMessage"
           @regenerate="onRegenerate(message.id)"
-          @copy="copyAssistantMessage(message.id)"
+          @copy="copyMessage(message.id)"
           @download="downloadAssistantMessage(message.id)"
         />
       </div>
+      <Transition name="copy-toast">
+        <div v-if="isCopyToastVisible" class="copy-toast">
+          <div class="copy-toast-icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" class="copy-toast-icon-svg">
+              <path
+                d="M5 10.5L8.25 13.75L15 7"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+              />
+            </svg>
+          </div>
+          <div class="copy-toast-content">
+            <span class="copy-toast-title">复制成功</span>
+            <span class="copy-toast-description">{{ copyToastMessage }}</span>
+          </div>
+        </div>
+      </Transition>
       <ChatInput
         v-model:text="inputText"
         :files="selectedFiles"
@@ -53,7 +86,7 @@
 
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatSidebar from './ChatSidebar.vue';
@@ -141,9 +174,16 @@ const selectedModel = ref(fallbackModels[0]);
 const availableModels = ref(fallbackModels);
 const isLoading = ref(false);
 const messageNodes = ref<Record<string, ChatMessageNode>>({});
-const rootMessageId = ref<string | null>(null);
+const rootChildIds = ref<string[]>([]);
+const selectedRootChildId = ref<string | null>(null);
 const selectedChildIdByParent = ref<Record<string, string>>({});
 const activeGeneration = ref<ActiveGenerationState | null>(null);
+const editingMessageId = ref<string | null>(null);
+const editingDraftText = ref('');
+const editingDraftFiles = ref<File[]>([]);
+const copyToastMessage = ref('复制成功');
+const isCopyToastVisible = ref(false);
+let copyToastTimer: ReturnType<typeof setTimeout> | null = null;
 
 const messageContainerRef = ref<HTMLElement | null>(null);
 
@@ -163,12 +203,14 @@ const getSelectedChildId = (messageId: string) => {
 };
 
 const displayedMessages = computed(() => {
-  if (!rootMessageId.value) {
+  const rootMessageId =
+    selectedRootChildId.value ?? rootChildIds.value[0] ?? null;
+  if (!rootMessageId) {
     return welcomeMessages;
   }
 
   const visibleMessages: ChatMessageNode[] = [];
-  let currentMessageId: string | null = rootMessageId.value;
+  let currentMessageId: string | null = rootMessageId;
 
   while (currentMessageId) {
     const currentNode = getNodeById(currentMessageId);
@@ -184,17 +226,36 @@ const displayedMessages = computed(() => {
 });
 
 const messagesCount = computed(() => {
-  return rootMessageId.value ? displayedMessages.value.length : 0;
+  return rootChildIds.value.length > 0 ? displayedMessages.value.length : 0;
 });
 
 const currentLeafMessageId = computed(() => {
-  if (!rootMessageId.value) {
+  if (rootChildIds.value.length === 0) {
     return null;
   }
 
   const lastMessage =
     displayedMessages.value[displayedMessages.value.length - 1] ?? null;
   return lastMessage?.id ?? null;
+});
+
+const lastAssistantMessageId = computed(() => {
+  for (let index = displayedMessages.value.length - 1; index >= 0; index -= 1) {
+    const message = displayedMessages.value[index];
+    if (message?.role === 'assistant') {
+      return message.id;
+    }
+  }
+
+  return null;
+});
+
+const canConfirmEdit = computed(() => {
+  return (
+    !isLoading.value &&
+    (editingDraftText.value.trim().length > 0 ||
+      editingDraftFiles.value.length > 0)
+  );
 });
 
 const scrollToBottom = () => {
@@ -258,7 +319,8 @@ const createMessageNode = (
       selectedChildIdByParent.value[node.parentId] = messageId;
     }
   } else {
-    rootMessageId.value = messageId;
+    rootChildIds.value.push(messageId);
+    selectedRootChildId.value = messageId;
   }
 
   return newNode;
@@ -317,77 +379,61 @@ const appendMessageContent = (messageId: string, chunk: string) => {
   }
 };
 
-const getAssistantSiblingIds = (assistantMessageId: string) => {
-  const assistantNode = getNodeById(assistantMessageId);
-  if (!assistantNode?.parentId) {
-    return [assistantMessageId];
+const getMessageSiblingIds = (messageId: string) => {
+  const messageNode = getNodeById(messageId);
+  if (!messageNode) {
+    return [];
   }
 
-  const parentNode = getNodeById(assistantNode.parentId);
-  if (!parentNode) {
-    return [assistantMessageId];
-  }
+  const siblingSourceIds = messageNode.parentId
+    ? (getNodeById(messageNode.parentId)?.childIds ?? [])
+    : rootChildIds.value;
 
-  return parentNode.childIds.filter((childId) => {
-    return getNodeById(childId)?.role === 'assistant';
+  return siblingSourceIds.filter((childId) => {
+    return getNodeById(childId)?.role === messageNode.role;
   });
 };
 
-const getAssistantVersionIndex = (assistantMessageId: string) => {
-  const assistantNode = getNodeById(assistantMessageId);
-  if (assistantNode?.role !== 'assistant') {
-    return 0;
-  }
-
-  const siblingIds = getAssistantSiblingIds(assistantMessageId);
-  const currentIndex = siblingIds.indexOf(assistantMessageId);
+const getMessageVersionIndex = (messageId: string) => {
+  const siblingIds = getMessageSiblingIds(messageId);
+  const currentIndex = siblingIds.indexOf(messageId);
   return currentIndex >= 0 ? currentIndex + 1 : 1;
 };
 
-const getAssistantVersionCount = (assistantMessageId: string) => {
-  const assistantNode = getNodeById(assistantMessageId);
-  if (assistantNode?.role !== 'assistant') {
-    return 0;
-  }
-
-  return getAssistantSiblingIds(assistantMessageId).length;
+const getMessageVersionCount = (messageId: string) => {
+  return getMessageSiblingIds(messageId).length;
 };
 
-const canSwitchAssistantVersion = (
-  assistantMessageId: string,
-  direction: -1 | 1,
-) => {
-  const assistantNode = getNodeById(assistantMessageId);
-  if (assistantNode?.role !== 'assistant') {
+const canSwitchMessageVersion = (messageId: string, direction: -1 | 1) => {
+  const messageNode = getNodeById(messageId);
+  if (!messageNode) {
     return false;
   }
 
-  const siblingIds = getAssistantSiblingIds(assistantMessageId);
-  const currentIndex = siblingIds.indexOf(assistantMessageId);
+  const siblingIds = getMessageSiblingIds(messageId);
+  const currentIndex = siblingIds.indexOf(messageId);
   const targetIndex = currentIndex + direction;
 
   return targetIndex >= 0 && targetIndex < siblingIds.length;
 };
 
-const switchAssistantVersion = (
-  assistantMessageId: string,
-  direction: -1 | 1,
-) => {
-  const assistantNode = getNodeById(assistantMessageId);
-  if (
-    !assistantNode?.parentId ||
-    assistantNode.role !== 'assistant' ||
-    isLoading.value
-  ) {
+const switchMessageVersion = (messageId: string, direction: -1 | 1) => {
+  const messageNode = getNodeById(messageId);
+  if (!messageNode || isLoading.value) {
     return;
   }
 
-  const siblingIds = getAssistantSiblingIds(assistantMessageId);
-  const currentIndex = siblingIds.indexOf(assistantMessageId);
+  const siblingIds = getMessageSiblingIds(messageId);
+  const currentIndex = siblingIds.indexOf(messageId);
   const targetMessageId = siblingIds[currentIndex + direction];
 
   if (targetMessageId) {
-    selectedChildIdByParent.value[assistantNode.parentId] = targetMessageId;
+    if (messageNode.parentId) {
+      selectedChildIdByParent.value[messageNode.parentId] = targetMessageId;
+      return;
+    }
+
+    selectedRootChildId.value = targetMessageId;
   }
 };
 
@@ -563,16 +609,36 @@ const executeAssistantGeneration = async (
   }
 };
 
-const copyAssistantMessage = async (assistantMessageId: string) => {
-  const assistantNode = getNodeById(assistantMessageId);
-  if (!assistantNode?.content.trim() || !navigator.clipboard) {
+const resetEditingState = () => {
+  editingMessageId.value = null;
+  editingDraftText.value = '';
+  editingDraftFiles.value = [];
+};
+
+const showCopyToast = (message: string) => {
+  copyToastMessage.value = message;
+  isCopyToastVisible.value = true;
+
+  if (copyToastTimer) {
+    clearTimeout(copyToastTimer);
+  }
+
+  copyToastTimer = setTimeout(() => {
+    isCopyToastVisible.value = false;
+  }, 1600);
+};
+
+const copyMessage = async (messageId: string) => {
+  const messageNode = getNodeById(messageId);
+  if (!messageNode?.content.trim() || !navigator.clipboard) {
     return;
   }
 
   try {
-    await navigator.clipboard.writeText(assistantNode.content);
+    await navigator.clipboard.writeText(messageNode.content);
+    showCopyToast('内容已复制到剪贴板');
   } catch (error) {
-    console.error('复制 AI 回复失败。', error);
+    console.error('复制消息失败。', error);
   }
 };
 
@@ -620,9 +686,74 @@ const onClearAllFiles = () => {
 const onClearChat = () => {
   onStopGeneration();
   messageNodes.value = {};
-  rootMessageId.value = null;
+  rootChildIds.value = [];
+  selectedRootChildId.value = null;
   selectedChildIdByParent.value = {};
   selectedFiles.value = [];
+  resetEditingState();
+};
+
+const startEditingMessage = (messageId: string) => {
+  if (isLoading.value) {
+    return;
+  }
+
+  const messageNode = getNodeById(messageId);
+  if (!messageNode || messageNode.role !== 'user') {
+    return;
+  }
+
+  editingMessageId.value = messageId;
+  editingDraftText.value = messageNode.content;
+  editingDraftFiles.value = [...(messageNode.requestFiles ?? [])];
+};
+
+const updateEditingText = (value: string) => {
+  editingDraftText.value = value;
+};
+
+const appendEditingFiles = (files: File[]) => {
+  editingDraftFiles.value = [...editingDraftFiles.value, ...files];
+};
+
+const removeEditingFile = (index: number) => {
+  editingDraftFiles.value.splice(index, 1);
+};
+
+const cancelEditingMessage = () => {
+  resetEditingState();
+};
+
+const confirmEditingMessage = async () => {
+  if (!editingMessageId.value || !canConfirmEdit.value) {
+    return;
+  }
+
+  const sourceMessage = getNodeById(editingMessageId.value);
+  if (!sourceMessage || sourceMessage.role !== 'user') {
+    resetEditingState();
+    return;
+  }
+
+  const nextText = editingDraftText.value.trim();
+  const nextFiles = [...editingDraftFiles.value];
+
+  const editedUserMessage = createMessageNode({
+    role: 'user',
+    content: nextText,
+    apiContent: createUserApiContent(nextText, nextFiles),
+    files: createAttachmentPreview(nextFiles),
+    requestFiles: nextFiles,
+    timestamp: new Date(),
+    parentId: sourceMessage.parentId,
+  });
+
+  resetEditingState();
+  scrollToBottom();
+
+  await executeAssistantGeneration(
+    buildRequestSnapshotForUserMessage(editedUserMessage.id),
+  );
 };
 
 const onSendMessage = async () => {
@@ -695,6 +826,12 @@ onMounted(() => {
   scrollToBottom();
   void loadAvailableModels();
 });
+
+onBeforeUnmount(() => {
+  if (copyToastTimer) {
+    clearTimeout(copyToastTimer);
+  }
+});
 </script>
 
 <style scoped>
@@ -706,6 +843,7 @@ onMounted(() => {
 }
 
 .chat-main {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -724,5 +862,77 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.copy-toast-enter-active,
+.copy-toast-leave-active {
+  transition:
+    opacity 0.26s ease,
+    transform 0.26s ease,
+    filter 0.26s ease;
+}
+
+.copy-toast-enter-from,
+.copy-toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px) scale(0.96);
+  filter: blur(6px);
+}
+
+.copy-toast {
+  position: fixed;
+  left: 50%;
+  top: 1.25rem;
+  transform: translateX(-50%);
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2937;
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.14),
+    0 6px 16px rgba(15, 23, 42, 0.08);
+  pointer-events: none;
+  z-index: 30;
+}
+
+.copy-toast-icon {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #16a34a, #22c55e);
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 10px 18px rgba(34, 197, 94, 0.24);
+}
+
+.copy-toast-icon-svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.copy-toast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.copy-toast-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.copy-toast-description {
+  font-size: 0.8rem;
+  color: #5b6472;
 }
 </style>

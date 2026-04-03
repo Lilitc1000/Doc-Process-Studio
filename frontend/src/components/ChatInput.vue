@@ -168,8 +168,8 @@ onMounted(() => {
   overflow: hidden;
 }
 .files-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -178,7 +178,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
-  width: 100%;
+  width: min(100%, 220px);
   padding: 0.5rem 2.2rem 0.5rem 0.9rem;
   background: #f5f5f5;
   border-radius: 20px;
