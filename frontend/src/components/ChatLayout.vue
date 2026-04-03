@@ -6,50 +6,61 @@
       :models="availableModels"
       :selected-model="selectedModel"
       :messages-count="messagesCount"
+      :sessions="sessionSummaries"
+      :active-session-id="activeSessionId"
       :is-locked="isLoading"
       @select-processing-mode="onSelectProcessingMode"
       @select-model="onSelectModel"
       @clear-chat="onClearChat"
+      @load-session="onLoadSession"
+      @rename-session="onRenameSession"
+      @delete-session="onDeleteSession"
     />
     <div class="chat-main">
-      <div ref="messageContainerRef" class="chat-messages">
-        <ChatMessage
-          v-for="message in displayedMessages"
-          :key="message.id"
-          :message="message"
-          :is-thinking="isMessageThinking(message)"
-          :version-index="getMessageVersionIndex(message.id)"
-          :version-count="getMessageVersionCount(message.id)"
-          :show-version-switcher="getMessageVersionCount(message.id) > 1"
-          :can-go-prev="canSwitchMessageVersion(message.id, -1)"
-          :can-go-next="canSwitchMessageVersion(message.id, 1)"
-          :can-edit="message.role === 'user' && !isLoading"
-          :can-regenerate="message.role === 'assistant' && !isLoading"
-          :can-copy="message.content.trim().length > 0"
-          :can-download="
-            message.role === 'assistant' && message.content.trim().length > 0
-          "
-          :is-version-locked="message.role !== 'system' && isLoading"
-          :is-editing="editingMessageId === message.id"
-          :editing-text="editingDraftText"
-          :editing-files="
-            editingMessageId === message.id ? editingDraftFiles : []
-          "
-          :can-confirm-edit="canConfirmEdit"
-          :show-toolbar-by-default="message.id === lastAssistantMessageId"
-          @prev-version="switchMessageVersion(message.id, -1)"
-          @next-version="switchMessageVersion(message.id, 1)"
-          @start-edit="startEditingMessage(message.id)"
-          @update-edit-text="updateEditingText"
-          @upload-edit-files="appendEditingFiles"
-          @remove-edit-file="removeEditingFile"
-          @cancel-edit="cancelEditingMessage"
-          @confirm-edit="confirmEditingMessage"
-          @regenerate="onRegenerate(message.id)"
-          @copy="copyMessage(message.id)"
-          @download="downloadAssistantMessage(message.id)"
-        />
-      </div>
+      <Transition name="session-switch" mode="out-in">
+        <div
+          :key="sessionViewKey"
+          ref="messageContainerRef"
+          class="chat-messages"
+        >
+          <ChatMessage
+            v-for="message in displayedMessages"
+            :key="message.id"
+            :message="message"
+            :is-thinking="isMessageThinking(message)"
+            :version-index="getMessageVersionIndex(message.id)"
+            :version-count="getMessageVersionCount(message.id)"
+            :show-version-switcher="getMessageVersionCount(message.id) > 1"
+            :can-go-prev="canSwitchMessageVersion(message.id, -1)"
+            :can-go-next="canSwitchMessageVersion(message.id, 1)"
+            :can-edit="message.role === 'user' && !isLoading"
+            :can-regenerate="message.role === 'assistant' && !isLoading"
+            :can-copy="message.content.trim().length > 0"
+            :can-download="
+              message.role === 'assistant' && message.content.trim().length > 0
+            "
+            :is-version-locked="message.role !== 'system' && isLoading"
+            :is-editing="editingMessageId === message.id"
+            :editing-text="editingDraftText"
+            :editing-files="
+              editingMessageId === message.id ? editingDraftFiles : []
+            "
+            :can-confirm-edit="canConfirmEdit"
+            :show-toolbar-by-default="message.id === lastAssistantMessageId"
+            @prev-version="switchMessageVersion(message.id, -1)"
+            @next-version="switchMessageVersion(message.id, 1)"
+            @start-edit="startEditingMessage(message.id)"
+            @update-edit-text="updateEditingText"
+            @upload-edit-files="appendEditingFiles"
+            @remove-edit-file="removeEditingFile"
+            @cancel-edit="cancelEditingMessage"
+            @confirm-edit="confirmEditingMessage"
+            @regenerate="onRegenerate(message.id)"
+            @copy="copyMessage(message.id)"
+            @download="downloadAssistantMessage(message.id)"
+          />
+        </div>
+      </Transition>
       <Transition name="copy-toast">
         <div v-if="isCopyToastVisible" class="copy-toast">
           <div class="copy-toast-icon" aria-hidden="true">
@@ -135,6 +146,39 @@ interface ChatRequestSnapshot {
   files: File[];
 }
 
+interface ChatSessionNodePayload {
+  id: string;
+  role: ChatMessageRole;
+  content: string;
+  api_content?: string | null;
+  files?: ChatAttachment[];
+  timestamp: string;
+  parent_id: string | null;
+  child_ids: string[];
+}
+
+interface ChatSessionSnapshotPayload {
+  message_nodes: ChatSessionNodePayload[];
+  root_child_ids: string[];
+  selected_root_child_id: string | null;
+  selected_child_id_by_parent: Record<string, string>;
+  selected_processing_mode: string;
+  selected_model: string;
+}
+
+interface ChatSessionSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  selected_processing_mode: string;
+  selected_model: string;
+}
+
+interface ChatSessionDetail extends ChatSessionSummary {
+  snapshot: ChatSessionSnapshotPayload;
+}
+
 interface ActiveGenerationState {
   assistantId: string;
   userMessageId: string;
@@ -185,6 +229,9 @@ const activeGeneration = ref<ActiveGenerationState | null>(null);
 const editingMessageId = ref<string | null>(null);
 const editingDraftText = ref('');
 const editingDraftFiles = ref<File[]>([]);
+const sessionSummaries = ref<ChatSessionSummary[]>([]);
+const activeSessionId = ref<string | null>(null);
+const sessionViewKey = ref(0);
 const copyToastMessage = ref('复制成功');
 const isCopyToastVisible = ref(false);
 let copyToastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -201,9 +248,94 @@ const createConversationId = () => {
   return `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 const conversationId = ref(createConversationId());
+const bumpSessionViewKey = () => {
+  sessionViewKey.value += 1;
+};
 
 const getNodeById = (messageId: string) => {
   return messageNodes.value[messageId] ?? null;
+};
+
+const mapSessionSummary = (session: ChatSessionSummary | ChatSessionDetail) => {
+  return {
+    id: session.id,
+    title: session.title,
+    created_at: session.created_at,
+    updated_at: session.updated_at,
+    selected_processing_mode: session.selected_processing_mode,
+    selected_model: session.selected_model,
+  } satisfies ChatSessionSummary;
+};
+
+const mergeSessionSummary = (
+  session: ChatSessionSummary | ChatSessionDetail,
+) => {
+  const nextSessions = sessionSummaries.value.filter((item) => {
+    return item.id !== session.id;
+  });
+  nextSessions.unshift(mapSessionSummary(session));
+  nextSessions.sort((left, right) => {
+    return (
+      new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
+    );
+  });
+  sessionSummaries.value = nextSessions;
+};
+
+const buildSessionSnapshotPayload = (): ChatSessionSnapshotPayload => {
+  return {
+    message_nodes: Object.values(messageNodes.value).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      api_content: message.apiContent ?? null,
+      files: message.files ?? [],
+      timestamp: message.timestamp.toISOString(),
+      parent_id: message.parentId,
+      child_ids: [...message.childIds],
+    })),
+    root_child_ids: [...rootChildIds.value],
+    selected_root_child_id: selectedRootChildId.value,
+    selected_child_id_by_parent: { ...selectedChildIdByParent.value },
+    selected_processing_mode: selectedProcessingMode.value,
+    selected_model: selectedModel.value,
+  };
+};
+
+const buildTitleSourceMessages = () => {
+  return displayedMessages.value
+    .filter((message) => message.role !== 'system')
+    .slice(0, 4)
+    .map((message) => message.content.trim())
+    .filter((content) => content.length > 0)
+    .map((content) => content.slice(0, 180));
+};
+
+const hydrateSessionSnapshot = (snapshot: ChatSessionSnapshotPayload) => {
+  const nextMessageNodes: Record<string, ChatMessageNode> = {};
+  for (const message of snapshot.message_nodes) {
+    nextMessageNodes[message.id] = {
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      apiContent: message.api_content ?? undefined,
+      files: message.files ?? [],
+      timestamp: new Date(message.timestamp),
+      parentId: message.parent_id,
+      childIds: [...message.child_ids],
+      requestFiles: [],
+    };
+  }
+
+  messageNodes.value = nextMessageNodes;
+  rootChildIds.value = [...snapshot.root_child_ids];
+  selectedRootChildId.value = snapshot.selected_root_child_id;
+  selectedChildIdByParent.value = { ...snapshot.selected_child_id_by_parent };
+  selectedProcessingMode.value = snapshot.selected_processing_mode;
+  selectedModel.value = snapshot.selected_model;
+  inputText.value = '';
+  selectedFiles.value = [];
+  resetEditingState();
 };
 
 const getSelectedChildId = (messageId: string) => {
@@ -623,6 +755,7 @@ const executeAssistantGeneration = async (
   } finally {
     activeGeneration.value = null;
     isLoading.value = false;
+    await persistCurrentSession();
   }
 };
 
@@ -643,6 +776,98 @@ const showCopyToast = (message: string) => {
   copyToastTimer = setTimeout(() => {
     isCopyToastVisible.value = false;
   }, 1600);
+};
+
+const loadSessionSummaries = async () => {
+  try {
+    const response = await axios.get<{
+      sessions?: ChatSessionSummary[];
+    }>('/api/chat-sessions');
+    const sessions = response.data.sessions ?? [];
+    sessionSummaries.value = [...sessions].sort((left, right) => {
+      return (
+        new Date(right.updated_at).getTime() -
+        new Date(left.updated_at).getTime()
+      );
+    });
+  } catch (error) {
+    console.error('加载历史会话列表失败。', error);
+  }
+};
+
+const persistCurrentSession = async (options?: { title?: string }) => {
+  if (rootChildIds.value.length === 0) {
+    return null;
+  }
+
+  const sessionId = activeSessionId.value ?? conversationId.value;
+  activeSessionId.value = sessionId;
+
+  try {
+    const response = await axios.put<ChatSessionSummary>(
+      `/api/chat-sessions/${sessionId}`,
+      {
+        title: options?.title ?? '',
+        title_source_messages: buildTitleSourceMessages(),
+        snapshot: buildSessionSnapshotPayload(),
+      },
+    );
+    mergeSessionSummary(response.data);
+    return response.data;
+  } catch (error) {
+    console.error('保存历史会话失败。', error);
+    return null;
+  }
+};
+
+const loadChatSession = async (sessionId: string) => {
+  if (isLoading.value) {
+    return;
+  }
+
+  try {
+    const response = await axios.get<ChatSessionDetail>(
+      `/api/chat-sessions/${sessionId}`,
+    );
+    hydrateSessionSnapshot(response.data.snapshot);
+    activeSessionId.value = response.data.id;
+    conversationId.value = response.data.id;
+    mergeSessionSummary(response.data);
+    bumpSessionViewKey();
+    await nextTick();
+    scrollToBottom();
+  } catch (error) {
+    console.error('加载历史会话失败。', error);
+  }
+};
+
+const renameChatSession = async (sessionId: string, title: string) => {
+  try {
+    const response = await axios.patch<ChatSessionSummary>(
+      `/api/chat-sessions/${sessionId}/title`,
+      {
+        title,
+      },
+    );
+    mergeSessionSummary(response.data);
+  } catch (error) {
+    console.error('修改历史会话标题失败。', error);
+  }
+};
+
+const deleteChatSession = async (sessionId: string) => {
+  try {
+    await axios.delete(`/api/chat-sessions/${sessionId}`);
+    sessionSummaries.value = sessionSummaries.value.filter((session) => {
+      return session.id !== sessionId;
+    });
+
+    if (activeSessionId.value === sessionId) {
+      onClearChat();
+    }
+  } catch (error) {
+    console.error('删除历史会话失败。', error);
+  }
 };
 
 const copyMessage = async (messageId: string) => {
@@ -682,10 +907,16 @@ const downloadAssistantMessage = (assistantMessageId: string) => {
 
 const onSelectModel = (model: string) => {
   selectedModel.value = model;
+  if (activeSessionId.value && rootChildIds.value.length > 0) {
+    void persistCurrentSession();
+  }
 };
 
 const onSelectProcessingMode = (mode: string) => {
   selectedProcessingMode.value = mode;
+  if (activeSessionId.value && rootChildIds.value.length > 0) {
+    void persistCurrentSession();
+  }
 };
 
 const onFilesSelect = (files: File[]) => {
@@ -707,8 +938,25 @@ const onClearChat = () => {
   selectedRootChildId.value = null;
   selectedChildIdByParent.value = {};
   selectedFiles.value = [];
+  activeSessionId.value = null;
   conversationId.value = createConversationId();
+  bumpSessionViewKey();
   resetEditingState();
+};
+
+const onLoadSession = async (sessionId: string) => {
+  await loadChatSession(sessionId);
+};
+
+const onRenameSession = async (payload: {
+  sessionId: string;
+  title: string;
+}) => {
+  await renameChatSession(payload.sessionId, payload.title);
+};
+
+const onDeleteSession = async (sessionId: string) => {
+  await deleteChatSession(sessionId);
 };
 
 const startEditingMessage = (messageId: string) => {
@@ -768,6 +1016,7 @@ const confirmEditingMessage = async () => {
 
   resetEditingState();
   scrollToBottom();
+  await persistCurrentSession();
 
   await executeAssistantGeneration(
     buildRequestSnapshotForUserMessage(editedUserMessage.id),
@@ -794,6 +1043,8 @@ const onSendMessage = async () => {
 
   inputText.value = '';
   selectedFiles.value = [];
+  activeSessionId.value = conversationId.value;
+  await persistCurrentSession();
 
   await executeAssistantGeneration(
     buildRequestSnapshotForUserMessage(userMessage.id),
@@ -810,6 +1061,7 @@ const onRegenerate = async (assistantMessageId: string) => {
     return;
   }
 
+  await persistCurrentSession();
   await executeAssistantGeneration(
     buildRequestSnapshotForUserMessage(assistantNode.parentId),
   );
@@ -908,6 +1160,7 @@ const loadAvailableSkills = async () => {
 
 onMounted(() => {
   scrollToBottom();
+  void loadSessionSummaries();
   void loadAvailableSkills();
   void loadAvailableModels();
 });
@@ -947,6 +1200,21 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.session-switch-enter-active,
+.session-switch-leave-active {
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease,
+    filter 0.24s ease;
+}
+
+.session-switch-enter-from,
+.session-switch-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(3px);
 }
 
 .copy-toast-enter-active,

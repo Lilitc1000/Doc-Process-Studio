@@ -45,10 +45,17 @@ async def set_json(
     payload: dict | list,
     ttl_seconds: int | None = None,
 ) -> None:
+    if ttl_seconds is None:
+        await get_redis_client().set(
+            key,
+            json.dumps(payload, ensure_ascii=False),
+        )
+        return
+
     await get_redis_client().set(
         key,
         json.dumps(payload, ensure_ascii=False),
-        ex=ttl_seconds or settings.redis_ttl_seconds,
+        ex=ttl_seconds,
     )
 
 
