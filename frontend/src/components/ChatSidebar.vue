@@ -206,85 +206,73 @@
       </section>
     </div>
 
-    <Transition name="dialog-fade">
-      <div
-        v-if="renameDialogSession"
-        class="dialog-mask"
-        @click.self="closeRenameDialog"
-      >
-        <div class="rename-dialog">
-          <div class="rename-dialog-header">
-            <h3>修改名称</h3>
-            <button
-              type="button"
-              class="rename-dialog-close"
-              @click="closeRenameDialog"
-            >
-              <svg
-                viewBox="0 0 16 16"
-                class="rename-dialog-close-icon"
-                aria-hidden="true"
+    <Teleport to="body">
+      <Transition name="dialog-fade">
+        <div
+          v-if="renameDialogSession"
+          class="dialog-mask"
+          @click.self="closeRenameDialog"
+        >
+          <div class="rename-dialog">
+            <div class="rename-dialog-header">
+              <h3>修改名称</h3>
+              <button
+                type="button"
+                class="rename-dialog-close"
+                @click="closeRenameDialog"
               >
-                <path
-                  d="M4 4L12 12M12 4L4 12"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-width="1.8"
-                />
-              </svg>
-            </button>
-          </div>
+                <svg
+                  viewBox="0 0 16 16"
+                  class="rename-dialog-close-icon"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 4L12 12M12 4L4 12"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-width="1.8"
+                  />
+                </svg>
+              </button>
+            </div>
 
-          <textarea
-            v-model="renameInput"
-            class="rename-dialog-input"
-            rows="3"
-            placeholder="请输入新的对话名称"
-          ></textarea>
+            <textarea
+              v-model="renameInput"
+              class="rename-dialog-input"
+              rows="3"
+              placeholder="请输入新的对话名称"
+            ></textarea>
 
-          <div class="rename-dialog-actions">
-            <button
-              type="button"
-              class="dialog-btn is-secondary"
-              @click="closeRenameDialog"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              class="dialog-btn is-primary"
-              :disabled="renameInput.trim().length === 0"
-              @click="confirmRename"
-            >
-              确定
-            </button>
+            <div class="rename-dialog-actions">
+              <button
+                type="button"
+                class="dialog-btn is-secondary"
+                @click="closeRenameDialog"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                class="dialog-btn is-primary"
+                :disabled="renameInput.trim().length === 0"
+                @click="confirmRename"
+              >
+                确定
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </Transition>
+      </Transition>
+    </Teleport>
   </aside>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-
-interface SkillOption {
-  id: string;
-  displayName: string;
-}
-
-interface ChatSessionSummary {
-  id: string;
-  title: string;
-  updated_at: string;
-}
-
-interface SessionGroup {
-  id: string;
-  label: string;
-  sessions: ChatSessionSummary[];
-}
+import type { ChatSessionSummary, SessionGroup } from '../types/session';
+import type { SkillOption } from '../types/skill';
+import { groupSessionsByDate } from '../utils/session-groups';
 
 const props = defineProps<{
   processingModes: readonly SkillOption[];
@@ -322,43 +310,7 @@ const selectedProcessingModeLabel = computed(() => {
 });
 
 const sessionGroups = computed<SessionGroup[]>(() => {
-  const now = Date.now();
-  const recentThreshold = now - 30 * 24 * 60 * 60 * 1000;
-  const groups: SessionGroup[] = [];
-  const recentSessions: ChatSessionSummary[] = [];
-  const olderGroups = new Map<string, SessionGroup>();
-
-  for (const session of props.sessions) {
-    const updatedAt = new Date(session.updated_at).getTime();
-    if (!Number.isFinite(updatedAt) || updatedAt >= recentThreshold) {
-      recentSessions.push(session);
-      continue;
-    }
-
-    const date = new Date(updatedAt);
-    const groupId = `${date.getFullYear()}-${date.getMonth() + 1}`;
-    const existingGroup = olderGroups.get(groupId);
-    if (existingGroup) {
-      existingGroup.sessions.push(session);
-      continue;
-    }
-
-    olderGroups.set(groupId, {
-      id: groupId,
-      label: `${date.getFullYear()}年${date.getMonth() + 1}月`,
-      sessions: [session],
-    });
-  }
-
-  if (recentSessions.length > 0) {
-    groups.push({
-      id: 'recent',
-      label: '最近',
-      sessions: recentSessions,
-    });
-  }
-
-  return groups.concat(Array.from(olderGroups.values()));
+  return groupSessionsByDate(props.sessions);
 });
 
 const closeAllDropdowns = () => {
@@ -498,529 +450,4 @@ watch(
 );
 </script>
 
-<style scoped>
-.chat-sidebar {
-  width: 300px;
-  background: linear-gradient(
-    180deg,
-    rgba(248, 250, 252, 0.98),
-    rgba(255, 255, 255, 0.94)
-  );
-  color: #0f172a;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-right: 1px solid #e2e8f0;
-  backdrop-filter: blur(14px);
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  padding: 1.25rem 1.15rem 0.95rem;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.sidebar-header h2 {
-  margin: 0;
-  font-size: 1.02rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.sidebar-content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 1rem 0.95rem 1.1rem;
-}
-
-.history-section,
-.settings-section {
-  display: flex;
-  flex-direction: column;
-}
-
-.settings-section {
-  margin-top: 1.2rem;
-  margin-inline: -0.95rem;
-  padding-top: 1.2rem;
-  padding-inline: 0.95rem;
-  border-top: 1px solid #e2e8f0;
-}
-
-.history-group-title {
-  margin-bottom: 0.7rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #64748b;
-  letter-spacing: 0.04em;
-}
-
-.history-group + .history-group {
-  margin-top: 1.1rem;
-}
-
-.history-group-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.history-session {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 0;
-  padding: 0.16rem;
-  border-radius: 16px;
-  transition:
-    background-color 0.22s ease,
-    box-shadow 0.22s ease,
-    transform 0.22s ease;
-}
-
-.history-session.active {
-  background: linear-gradient(
-    135deg,
-    rgba(219, 234, 254, 0.88),
-    rgba(239, 246, 255, 0.96)
-  );
-  box-shadow:
-    inset 0 0 0 1px rgba(59, 130, 246, 0.2),
-    0 12px 24px rgba(37, 99, 235, 0.12);
-  transform: translateX(2px);
-}
-
-.history-session-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0.72rem 0.8rem;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  color: #0f172a;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease;
-}
-
-.history-session-main:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.76);
-}
-
-.history-session-main:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.history-session.active .history-session-main {
-  background: transparent;
-  color: #0f3c9d;
-}
-
-.history-session-title {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.86rem;
-  font-weight: 500;
-  transition:
-    color 0.2s ease,
-    font-weight 0.2s ease;
-}
-
-.history-session.active .history-session-title {
-  color: #0f3c9d;
-  font-weight: 700;
-}
-
-.session-more-btn {
-  width: 2rem;
-  height: 2rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border: none;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #64748b;
-  cursor: pointer;
-  opacity: 0;
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
-  transition:
-    opacity 0.18s ease,
-    background-color 0.18s ease,
-    color 0.18s ease;
-}
-
-.history-session:hover .session-more-btn,
-.history-session.menu-open .session-more-btn,
-.session-more-btn.visible {
-  opacity: 1;
-}
-
-.history-session.active .session-more-btn {
-  background: rgba(255, 255, 255, 0.96);
-  color: #2563eb;
-}
-
-.session-more-btn:hover:not(:disabled) {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.session-more-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.session-more-icon {
-  width: 0.95rem;
-  height: 0.95rem;
-}
-
-.history-session-menu {
-  position: absolute;
-  top: calc(100% + 0.2rem);
-  right: 0.1rem;
-  z-index: 30;
-  min-width: 8.2rem;
-  padding: 0.35rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14);
-}
-
-.history-session-menu-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  padding: 0.72rem 0.82rem;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: #1e293b;
-  cursor: pointer;
-  font-size: 0.86rem;
-  text-align: left;
-}
-
-.history-session-menu-item:hover {
-  background: #f8fafc;
-}
-
-.history-session-menu-item.is-danger {
-  color: #b42318;
-}
-
-.selector-group {
-  position: relative;
-  margin-bottom: 1.2rem;
-}
-
-.selector-group:last-child {
-  margin-bottom: 0;
-}
-
-.selector-group label {
-  display: block;
-  margin-bottom: 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #64748b;
-  letter-spacing: 0.02em;
-}
-
-.selector-trigger {
-  width: 100%;
-  min-height: 44px;
-  padding: 0.78rem 0.95rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #0f172a;
-  font-size: 0.9rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  box-shadow:
-    0 10px 24px rgba(15, 23, 42, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.selector-trigger:hover {
-  background: #f8fbff;
-  border-color: #cbd5e1;
-}
-
-.selector-trigger:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.selector-trigger.open {
-  border-color: #93c5fd;
-  background: #f8fbff;
-  box-shadow: 0 16px 36px rgba(59, 130, 246, 0.12);
-}
-
-.selector-trigger-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.selector-trigger-icon {
-  width: 2rem;
-  height: 2rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: 999px;
-  color: #475569;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  transition:
-    transform 0.22s ease,
-    background 0.22s ease,
-    border-color 0.22s ease;
-}
-
-.selector-trigger-icon-svg {
-  width: 0.95rem;
-  height: 0.95rem;
-  display: block;
-}
-
-.selector-trigger.open .selector-trigger-icon {
-  transform: rotate(180deg);
-  background: #eff6ff;
-  border-color: #bfdbfe;
-}
-
-.selector-dropdown {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  left: 0;
-  right: 0;
-  z-index: 20;
-  padding: 0.45rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(12px);
-  box-shadow:
-    0 20px 40px rgba(15, 23, 42, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.selector-option {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.8rem 0.9rem;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  color: #1e293b;
-  font-size: 0.9rem;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 0.18s ease,
-    color 0.18s ease,
-    transform 0.18s ease;
-}
-
-.selector-option:hover {
-  background: #f8fafc;
-  transform: translateX(2px);
-}
-
-.selector-option.active {
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.selector-option-tag {
-  padding: 0.18rem 0.45rem;
-  border-radius: 999px;
-  background: #dbeafe;
-  color: #2563eb;
-  font-size: 0.72rem;
-  flex-shrink: 0;
-}
-
-.clear-btn {
-  padding: 0.72rem 0.95rem;
-  background: linear-gradient(135deg, #eff6ff, #dbeafe);
-  color: #1d4ed8;
-  border: 1px solid rgba(59, 130, 246, 0.22);
-  border-radius: 14px;
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 600;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
-}
-
-.clear-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.12);
-}
-
-.clear-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.dialog-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  background: rgba(15, 23, 42, 0.18);
-  backdrop-filter: blur(4px);
-}
-
-.rename-dialog {
-  width: min(100%, 28rem);
-  padding: 1.1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
-}
-
-.rename-dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.95rem;
-}
-
-.rename-dialog-header h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.rename-dialog-close {
-  width: 2rem;
-  height: 2rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #64748b;
-  cursor: pointer;
-}
-
-.rename-dialog-close-icon {
-  width: 0.95rem;
-  height: 0.95rem;
-}
-
-.rename-dialog-input {
-  width: 100%;
-  min-height: 6rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid #dbe3ee;
-  border-radius: 16px;
-  resize: none;
-  font: inherit;
-  line-height: 1.5;
-  color: #0f172a;
-  background: #fff;
-}
-
-.rename-dialog-input:focus {
-  outline: none;
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
-}
-
-.rename-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.65rem;
-  margin-top: 1rem;
-}
-
-.dialog-btn {
-  min-width: 5rem;
-  padding: 0.68rem 1rem;
-  border-radius: 12px;
-  border: none;
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 600;
-}
-
-.dialog-btn.is-secondary {
-  background: #eef2f7;
-  color: #334155;
-}
-
-.dialog-btn.is-primary {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: white;
-}
-
-.dialog-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.dropdown-enter-active,
-.dropdown-leave-active,
-.menu-fade-enter-active,
-.menu-fade-leave-active,
-.dialog-fade-enter-active,
-.dialog-fade-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-
-.dropdown-enter-from,
-.dropdown-leave-to,
-.menu-fade-enter-from,
-.menu-fade-leave-to,
-.dialog-fade-enter-from,
-.dialog-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-</style>
+<style scoped src="../styles/components/chat-sidebar.css"></style>

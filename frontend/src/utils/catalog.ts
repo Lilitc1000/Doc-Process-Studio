@@ -1,0 +1,67 @@
+import type { SkillCatalogPayload, SkillOption } from '../types/skill';
+
+export interface RemoteModelRecord {
+  name?: string;
+  model?: string;
+  id?: string;
+}
+
+export interface ModelCatalogPayload {
+  models?: RemoteModelRecord[];
+  data?: RemoteModelRecord[];
+}
+
+export const extractModelNames = (payload: ModelCatalogPayload) => {
+  const rawModels = payload.models ?? payload.data ?? [];
+  const uniqueModelNames = new Set<string>();
+
+  for (const item of rawModels) {
+    const resolvedName = (item.name ?? item.model ?? item.id ?? '').trim();
+    if (resolvedName) {
+      uniqueModelNames.add(resolvedName);
+    }
+  }
+
+  return Array.from(uniqueModelNames);
+};
+
+export const normalizeSkillCatalog = (
+  payload: SkillCatalogPayload,
+  fallbackSkillId = 'document-assistant',
+) => {
+  const rawSkills = payload.skills ?? [];
+  const skills: SkillOption[] = [];
+
+  for (const skill of rawSkills) {
+    const id = skill.id?.trim() ?? '';
+    const displayName = (
+      skill.display_name ??
+      skill.displayName ??
+      skill.id ??
+      ''
+    ).trim();
+    const shortDescription = (
+      skill.short_description ??
+      skill.shortDescription ??
+      ''
+    ).trim();
+
+    if (!id || !displayName) {
+      continue;
+    }
+
+    skills.push({
+      id,
+      displayName,
+      shortDescription,
+    });
+  }
+
+  return {
+    skills,
+    defaultSkillId:
+      payload.default_skill_id?.trim() ||
+      payload.defaultSkillId?.trim() ||
+      fallbackSkillId,
+  };
+};

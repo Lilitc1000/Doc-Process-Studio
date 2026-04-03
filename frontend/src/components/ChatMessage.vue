@@ -20,7 +20,11 @@
           <span class="message-time">{{ formattedTime }}</span>
         </div>
       </div>
-      <div class="message-content" :class="{ thinking: isThinking }">
+      <div
+        ref="messageContentRef"
+        class="message-content"
+        :class="{ thinking: isThinking }"
+      >
         <div v-if="isThinking" class="thinking-state">
           <span class="thinking-spinner"></span>
           <span>思考中...</span>
@@ -35,7 +39,9 @@
               <span class="message-file-icon">📄</span>
               <div class="message-edit-file-meta">
                 <span class="message-file-name">{{ file.name }}</span>
-                <span class="message-file-size">{{ formattedSize(file) }}</span>
+                <span class="message-file-size">
+                  {{ formatFileSize(file) }}
+                </span>
               </div>
               <button
                 class="message-edit-file-remove"
@@ -362,18 +368,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, watchEffect } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  watchEffect,
+} from 'vue';
+import type { ChatMessageDisplay } from '../types/chat';
+import { formatFileSize } from '../utils/file';
+import {
+  getCachedRenderedContent,
+  renderMarkdown,
+  renderPlainText,
+  setCachedRenderedContent,
+  shouldUseMarkdownRendering,
+} from '../utils/render-markdown';
 
 const props = defineProps<{
-  message: {
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-    files?: Array<{
-      name: string;
-      sizeLabel: string;
-    }>;
-    timestamp: Date;
-  };
+  message: ChatMessageDisplay;
+  cacheScopeId: string;
   isThinking?: boolean;
   showVersionSwitcher?: boolean;
   versionIndex?: number;
@@ -409,84 +425,9 @@ const emit = defineEmits<{
 const renderedContent = ref('');
 const editFileInputRef = ref<HTMLInputElement | null>(null);
 const editTextareaRef = ref<HTMLTextAreaElement | null>(null);
-
-type RenderMarkdown = (content: string) => string;
-
-let markdownRendererPromise: Promise<RenderMarkdown> | null = null;
-
-const loadMarkdownRenderer = async (): Promise<RenderMarkdown> => {
-  if (!markdownRendererPromise) {
-    markdownRendererPromise = Promise.all([
-      import('markdown-it'),
-      import('highlight.js/lib/core'),
-      import('highlight.js/lib/languages/javascript'),
-      import('highlight.js/lib/languages/typescript'),
-      import('highlight.js/lib/languages/json'),
-      import('highlight.js/lib/languages/bash'),
-      import('highlight.js/lib/languages/python'),
-      import('highlight.js/lib/languages/xml'),
-      import('highlight.js/lib/languages/css'),
-      import('highlight.js/lib/languages/markdown'),
-    ]).then(
-      ([
-        markdownItModule,
-        highlightCoreModule,
-        javascriptModule,
-        typescriptModule,
-        jsonModule,
-        bashModule,
-        pythonModule,
-        xmlModule,
-        cssModule,
-        markdownModule,
-      ]) => {
-        const MarkdownIt = markdownItModule.default;
-        const hljs = highlightCoreModule.default;
-
-        hljs.registerLanguage('javascript', javascriptModule.default);
-        hljs.registerLanguage('js', javascriptModule.default);
-        hljs.registerLanguage('typescript', typescriptModule.default);
-        hljs.registerLanguage('ts', typescriptModule.default);
-        hljs.registerLanguage('json', jsonModule.default);
-        hljs.registerLanguage('bash', bashModule.default);
-        hljs.registerLanguage('shell', bashModule.default);
-        hljs.registerLanguage('sh', bashModule.default);
-        hljs.registerLanguage('python', pythonModule.default);
-        hljs.registerLanguage('py', pythonModule.default);
-        hljs.registerLanguage('xml', xmlModule.default);
-        hljs.registerLanguage('html', xmlModule.default);
-        hljs.registerLanguage('vue', xmlModule.default);
-        hljs.registerLanguage('css', cssModule.default);
-        hljs.registerLanguage('markdown', markdownModule.default);
-        hljs.registerLanguage('md', markdownModule.default);
-
-        const markdown = new MarkdownIt({
-          html: false,
-          xhtmlOut: false,
-          breaks: true,
-          linkify: true,
-          typographer: true,
-          langPrefix: 'language-',
-          highlight: (str: string, lang: string): string => {
-            if (lang) {
-              try {
-                return `<pre class="highlight"><code class="hljs ${lang}">${hljs.highlight(str, { language: lang }).value}</code></pre>`;
-              } catch {
-                // Fall back to escaped plain text when the language is unknown.
-              }
-            }
-
-            return `<pre class="highlight"><code class="hljs">${markdown.utils.escapeHtml(str)}</code></pre>`;
-          },
-        });
-
-        return (content: string) => markdown.render(content);
-      },
-    );
-  }
-
-  return markdownRendererPromise;
-};
+const messageContentRef = ref<HTMLElement | null>(null);
+const hasEnteredViewport = ref(false);
+let messageViewportObserver: IntersectionObserver | null = null;
 
 const formattedTime = computed(() => {
   const date = props.message.timestamp;
@@ -524,11 +465,54 @@ const showToolbarByDefault = computed(
   () => props.showToolbarByDefault ?? false,
 );
 const canConfirmEdit = computed(() => props.canConfirmEdit ?? false);
+const shouldRenderMarkdownContent = computed(() => {
+  return shouldUseMarkdownRendering(props.message.content, props.message.role);
+});
 
-const formattedSize = (file: File) => {
-  if (file.size < 1024) return `${file.size} B`;
-  if (file.size < 1024 * 1024) return `${(file.size / 1024).toFixed(1)} KB`;
-  return `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+const activateLazyMarkdownRendering = () => {
+  hasEnteredViewport.value = true;
+  if (messageViewportObserver) {
+    messageViewportObserver.disconnect();
+    messageViewportObserver = null;
+  }
+};
+
+const ensureViewportObservation = () => {
+  if (
+    hasEnteredViewport.value ||
+    !shouldRenderMarkdownContent.value ||
+    isEditing.value
+  ) {
+    return;
+  }
+
+  if (
+    showToolbarByDefault.value ||
+    typeof IntersectionObserver === 'undefined' ||
+    !messageContentRef.value
+  ) {
+    activateLazyMarkdownRendering();
+    return;
+  }
+
+  if (messageViewportObserver) {
+    return;
+  }
+
+  messageViewportObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        activateLazyMarkdownRendering();
+      }
+    },
+    {
+      root: null,
+      rootMargin: '280px 0px',
+      threshold: 0.01,
+    },
+  );
+
+  messageViewportObserver.observe(messageContentRef.value);
 };
 
 const onEditTextInput = (event: Event) => {
@@ -571,16 +555,62 @@ watch(
 watchEffect((onCleanup) => {
   let cancelled = false;
   const currentContent = props.message.content;
+  const currentRole = props.message.role;
+  const currentCacheScopeId = props.cacheScopeId;
+  const currentMessageId = props.message.id;
 
-  loadMarkdownRenderer()
-    .then((renderMarkdown) => {
+  if (!shouldRenderMarkdownContent.value || !hasEnteredViewport.value) {
+    const plainTextContent = renderPlainText(currentContent);
+    renderedContent.value = plainTextContent;
+
+    if (!shouldRenderMarkdownContent.value) {
+      setCachedRenderedContent(
+        currentCacheScopeId,
+        currentMessageId,
+        currentContent,
+        currentRole,
+        plainTextContent,
+      );
+    }
+
+    return;
+  }
+
+  const cachedRenderedContent = getCachedRenderedContent(
+    currentCacheScopeId,
+    currentMessageId,
+    currentContent,
+    currentRole,
+  );
+  if (cachedRenderedContent) {
+    renderedContent.value = cachedRenderedContent;
+    return;
+  }
+
+  renderMarkdown(currentContent)
+    .then((renderedHtml) => {
       if (!cancelled) {
-        renderedContent.value = renderMarkdown(currentContent);
+        renderedContent.value = renderedHtml;
+        setCachedRenderedContent(
+          currentCacheScopeId,
+          currentMessageId,
+          currentContent,
+          currentRole,
+          renderedHtml,
+        );
       }
     })
     .catch(() => {
       if (!cancelled) {
-        renderedContent.value = currentContent;
+        const fallbackContent = renderPlainText(currentContent);
+        renderedContent.value = fallbackContent;
+        setCachedRenderedContent(
+          currentCacheScopeId,
+          currentMessageId,
+          currentContent,
+          currentRole,
+          fallbackContent,
+        );
       }
     });
 
@@ -588,645 +618,39 @@ watchEffect((onCleanup) => {
     cancelled = true;
   });
 });
+
+onMounted(() => {
+  ensureViewportObservation();
+});
+
+watch(
+  [shouldRenderMarkdownContent, showToolbarByDefault, isEditing],
+  async () => {
+    await nextTick();
+    ensureViewportObservation();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => props.message.content,
+  async () => {
+    await nextTick();
+    ensureViewportObservation();
+  },
+  { flush: 'post' },
+);
+
+watch(messageContentRef, () => {
+  ensureViewportObservation();
+});
+
+onBeforeUnmount(() => {
+  if (messageViewportObserver) {
+    messageViewportObserver.disconnect();
+    messageViewportObserver = null;
+  }
+});
 </script>
 
-<style scoped>
-.chat-message {
-  --message-track-edge-gap: 1.5rem;
-  --message-track-max-width: calc(100% - (var(--message-track-edge-gap) * 2));
-  --user-message-max-width: 560px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.08rem;
-}
-
-.message-track {
-  display: inline-grid;
-  justify-items: stretch;
-  gap: 0.28rem;
-}
-
-.chat-message.role-user {
-  align-self: flex-end;
-  align-items: flex-end;
-  padding-left: max(20%, var(--message-track-edge-gap));
-  padding-right: var(--message-track-edge-gap);
-}
-
-.chat-message.role-assistant {
-  align-self: flex-start;
-  align-items: flex-start;
-  padding-inline: var(--message-track-edge-gap);
-}
-
-.chat-message.role-system {
-  align-self: center;
-  align-items: stretch;
-  width: min(100%, 760px);
-  max-width: 760px;
-  color: #5b4b2f;
-  margin-bottom: 0.5rem;
-}
-
-.message-header {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin-bottom: 0.4rem;
-  font-size: 0.74rem;
-  color: #7a8699;
-}
-
-.avatar {
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 0.85rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border: 1px solid transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.avatar-user {
-  background: linear-gradient(180deg, #eff6ff, #dbeafe);
-  border-color: rgba(59, 130, 246, 0.2);
-  color: #1d4ed8;
-}
-
-.avatar-assistant {
-  background: linear-gradient(180deg, #eefbf3, #dcfce7);
-  border-color: rgba(34, 197, 94, 0.2);
-  color: #15803d;
-}
-
-.avatar-system {
-  background: linear-gradient(180deg, #fff7ed, #ffedd5);
-  border-color: rgba(249, 115, 22, 0.2);
-  color: #c2410c;
-}
-
-.avatar-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.04em;
-}
-
-.message-info {
-  display: flex;
-  align-items: center;
-  gap: 0.42rem;
-  min-width: 0;
-}
-
-.message-role {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.16rem 0.52rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: 0.01em;
-}
-
-.chat-message.role-user .message-role {
-  background: rgba(22, 121, 255, 0.12);
-  color: #175cd3;
-}
-
-.chat-message.role-assistant .message-role {
-  background: #eef7f1;
-  color: #166534;
-}
-
-.chat-message.role-system .message-role {
-  background: rgba(212, 155, 47, 0.14);
-  color: #8a6115;
-}
-
-.message-meta-dot {
-  display: block;
-  width: 0.22rem;
-  height: 0.22rem;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.35;
-  flex-shrink: 0;
-  align-self: center;
-}
-
-.message-time {
-  font-size: 0.72rem;
-  letter-spacing: 0.01em;
-  opacity: 0.82;
-}
-
-.message-content {
-  box-sizing: border-box;
-  padding: 0.9rem 1rem;
-  border-radius: 18px;
-  line-height: 1.6;
-  font-size: 0.95rem;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.message-content.thinking {
-  display: flex;
-  align-items: center;
-}
-
-.message-files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.message-edit-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
-
-.message-edit-files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.message-edit-file-item {
-  position: relative;
-  padding-right: 2.15rem;
-}
-
-.message-file-meta,
-.message-edit-file-meta {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.08rem;
-}
-
-.message-edit-file-remove {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.38rem;
-  width: 1.1rem;
-  height: 1.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 999px;
-  background: #9ca3af;
-  color: white;
-  font-size: 0.72rem;
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity 0.2s ease,
-    background-color 0.2s ease;
-}
-
-.message-edit-file-item:hover .message-edit-file-remove {
-  opacity: 1;
-}
-
-.message-edit-file-remove:hover {
-  background: #6b7280;
-}
-
-.message-edit-textarea {
-  width: 100%;
-  min-height: 1.6em;
-  height: 1.6em;
-  padding: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  resize: none;
-  overflow: hidden;
-  font: inherit;
-  line-height: 1.6;
-  color: inherit;
-}
-
-.message-edit-textarea::placeholder {
-  color: inherit;
-  opacity: 0.6;
-}
-
-.message-text {
-  min-width: 0;
-}
-
-.message-files + .message-text {
-  margin-top: 0.85rem;
-}
-
-.message-file-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: min(100%, 250px);
-  padding: 0.45rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.chat-message.role-user .message-file-item,
-.message-edit-file-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  width: min(100%, 250px);
-  padding: 0.55rem 0.85rem;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.chat-message.role-assistant .message-edit-file-item {
-  border-color: #dddddd;
-  background: white;
-}
-
-.chat-message.role-assistant .message-file-item,
-.chat-message.role-system .message-file-item {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.message-file-icon {
-  flex-shrink: 0;
-}
-
-.message-file-name {
-  font-size: 0.84rem;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.message-file-size {
-  font-size: 0.74rem;
-  opacity: 0.8;
-  flex-shrink: 0;
-}
-
-.message-file-meta {
-  min-width: 0;
-}
-
-.chat-message.role-user .message-file-item .message-file-icon,
-.message-edit-file-item .message-file-icon {
-  margin-top: 0.1rem;
-}
-
-.chat-message.role-user .message-content {
-  background: linear-gradient(135deg, #1679ff, #0f67df);
-  color: white;
-  border: 1px solid rgba(15, 103, 223, 0.95);
-  border-bottom-right-radius: 6px;
-  box-shadow: 0 14px 28px rgba(15, 103, 223, 0.18);
-}
-
-.chat-message.role-assistant .message-content {
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
-  color: #243041;
-  border: 1px solid #e2e8f0;
-  border-bottom-left-radius: 6px;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
-}
-
-.thinking-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: #666;
-  min-height: 1.5rem;
-}
-
-.thinking-spinner {
-  width: 0.95rem;
-  height: 0.95rem;
-  border-radius: 50%;
-  border: 2px solid rgba(0, 122, 204, 0.18);
-  border-top-color: #007acc;
-  animation: spin 0.8s linear infinite;
-}
-
-.chat-message.role-system .message-content {
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.95),
-      transparent 38%
-    ),
-    linear-gradient(135deg, #fff8e8, #f6efe1);
-  color: inherit;
-  border: 1px solid #eadab8;
-  border-radius: 20px;
-  box-shadow: 0 16px 30px rgba(163, 122, 45, 0.08);
-  padding: 1.15rem 1.35rem;
-}
-
-.chat-message.role-system .message-header {
-  justify-content: center;
-  gap: 0.75rem;
-  margin-bottom: 0.55rem;
-  color: #8b6f3d;
-}
-
-.chat-message.role-system .message-role {
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-}
-
-.chat-message.role-system .message-time {
-  color: #b09158;
-}
-
-.chat-message.role-system .avatar {
-  width: 2rem;
-  height: 2rem;
-  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.22);
-}
-
-.chat-message.role-system .avatar-label {
-  font-size: 0.64rem;
-}
-
-.chat-message.role-system .message-content :deep(h3) {
-  margin: 0 0 0.7rem 0;
-  font-size: 1.15rem;
-  line-height: 1.25;
-  color: #4d3c1e;
-}
-
-.chat-message.role-system .message-content :deep(strong) {
-  color: #7a4f16;
-}
-
-.chat-message.role-system .message-content :deep(ul) {
-  margin-top: 0.75rem;
-}
-
-.chat-message.role-system .message-content :deep(li) {
-  margin-bottom: 0.45rem;
-}
-
-.chat-message.role-system .message-content :deep(li::marker) {
-  color: #d29b2f;
-}
-
-.message-toolbar {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-2px);
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.chat-message.role-user .message-track {
-  width: fit-content;
-  max-width: min(var(--user-message-max-width), var(--message-track-max-width));
-  margin-left: auto;
-}
-
-.chat-message.role-user.is-editing .message-track {
-  width: min(var(--user-message-max-width), var(--message-track-max-width));
-}
-
-.chat-message.role-assistant .message-track {
-  width: max-content;
-  max-width: calc(var(--message-track-max-width) - 1.25rem);
-}
-
-.chat-message.role-system .message-track {
-  width: 100%;
-}
-
-.chat-message.role-assistant .message-header {
-  padding-left: 0.15rem;
-}
-
-.chat-message.role-user .message-header {
-  justify-content: flex-end;
-  padding-right: 0.15rem;
-  width: fit-content;
-  justify-self: end;
-}
-
-.chat-message.role-user .message-info {
-  align-items: flex-end;
-}
-
-.chat-message.role-user .message-content {
-  width: fit-content;
-  max-width: 100%;
-  justify-self: end;
-}
-
-.chat-message.role-user .message-content :deep(a) {
-  color: rgba(255, 255, 255, 0.96);
-}
-
-.chat-message.role-user .message-content :deep(code) {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.chat-message.role-user .message-content :deep(blockquote) {
-  border-left-color: rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.chat-message.role-assistant .message-content :deep(blockquote) {
-  background: #f8fbff;
-  border-left-color: #60a5fa;
-}
-
-.chat-message.role-user.is-editing .message-content {
-  width: 100%;
-  justify-self: stretch;
-  backdrop-filter: blur(4px);
-}
-
-.chat-message.role-user .message-toolbar {
-  justify-content: flex-end;
-  width: fit-content;
-  justify-self: end;
-}
-
-.chat-message.role-assistant .message-toolbar {
-  justify-content: space-between;
-}
-
-.chat-message:hover .message-toolbar,
-.chat-message.is-editing .message-toolbar,
-.chat-message.toolbar-visible .message-toolbar {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.message-toolbar.toolbar-actions-only {
-  justify-content: flex-end;
-}
-
-.message-version-switcher,
-.message-tool-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.message-version-text {
-  min-width: 2.2rem;
-  text-align: center;
-  font-size: 0.78rem;
-  color: #666;
-}
-
-.message-tool-btn {
-  min-width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #475569;
-  cursor: pointer;
-  font-size: 0.85rem;
-  text-decoration: none;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.message-tool-btn:hover:not(:disabled) {
-  background: white;
-  border-color: #cbd5e1;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
-  transform: translateY(-1px);
-}
-
-.message-tool-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.message-tool-btn.is-cancel {
-  color: #c2410c;
-}
-
-.message-tool-btn.is-confirm {
-  color: #166534;
-}
-
-.message-tool-icon {
-  width: 0.95rem;
-  height: 0.95rem;
-  flex-shrink: 0;
-}
-
-.message-edit-file-input {
-  display: none;
-}
-
-.message-content :deep(p) {
-  margin: 0 0 0.5rem 0;
-}
-
-.message-content :deep(p:last-child) {
-  margin: 0;
-}
-
-.message-content :deep(ul),
-.message-content :deep(ol) {
-  margin: 0 0 0.5rem 0;
-  padding-left: 1.5rem;
-}
-
-.message-content :deep(li) {
-  margin-bottom: 0.25rem;
-}
-
-.message-content :deep(code) {
-  font-family: 'Courier New', monospace;
-  font-size: 0.85em;
-  background: rgba(0, 0, 0, 0.1);
-  padding: 0.2em 0.4em;
-  border-radius: 3px;
-}
-
-.message-content :deep(pre) {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  padding: 1rem;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin: 0.5rem 0;
-}
-
-.message-content :deep(pre code) {
-  background: transparent;
-  padding: 0;
-  color: inherit;
-}
-
-.message-content :deep(blockquote) {
-  border-left: 4px solid #007acc;
-  padding-left: 1rem;
-  margin: 0.5rem 0;
-  color: #555;
-  background: #f9f9f9;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-}
-
-.message-content :deep(a) {
-  color: #007acc;
-  text-decoration: none;
-}
-
-.message-content :deep(a:hover) {
-  text-decoration: underline;
-}
-
-.message-content :deep(strong) {
-  font-weight: 600;
-}
-
-.message-content :deep(em) {
-  font-style: italic;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>
+<style scoped src="../styles/components/chat-message.css"></style>
