@@ -569,6 +569,38 @@ def _format_declared_tool_default_name(
         return f"{tool.name}-output.bin"
 
 
+def _coerce_json_file_argument(argument_name: str, argument_value: Any) -> dict | list:
+    """把 json_file 入参规整成可序列化的对象/数组。"""
+    if isinstance(argument_value, (dict, list)):
+        return argument_value
+
+    if isinstance(argument_value, str):
+        normalized = argument_value.strip()
+        if not normalized:
+            raise ValueError(f"参数 `{argument_name}` 不能为空字符串。")
+
+        parsed_value: Any = normalized
+        # 兼容模型把 JSON 对象当字符串、甚至双层字符串传回来的情况。
+        for _ in range(2):
+            if not isinstance(parsed_value, str):
+                break
+            try:
+                parsed_value = json.loads(parsed_value)
+            except json.JSONDecodeError:
+                break
+
+        if isinstance(parsed_value, (dict, list)):
+            return parsed_value
+
+        raise ValueError(
+            f"参数 `{argument_name}` 需要是对象或数组。当前收到字符串，且无法解析为 JSON。"
+        )
+
+    raise ValueError(
+        f"参数 `{argument_name}` 需要是对象或数组，当前类型为 {type(argument_value).__name__}。"
+    )
+
+
 def _build_declared_tool_command(
     *,
     request: ChatStreamRequest,
@@ -610,9 +642,13 @@ def _build_declared_tool_command(
             continue
 
         if serializer == "json_file":
+            normalized_json_value = _coerce_json_file_argument(
+                argument_name,
+                argument_value,
+            )
             json_file_path = temp_dir_path / f"{argument_name}.json"
             json_file_path.write_text(
-                json.dumps(argument_value, ensure_ascii=False, indent=2),
+                json.dumps(normalized_json_value, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
             command.append(str(json_file_path))

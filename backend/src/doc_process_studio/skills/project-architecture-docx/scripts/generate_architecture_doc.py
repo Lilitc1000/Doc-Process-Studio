@@ -214,15 +214,15 @@ def read_text(path: Path) -> str:
             return path.read_text(encoding="latin-1", errors="ignore")
 
 
-def load_json(path: Path) -> dict:
+def load_json(path: Path):
     return json.loads(read_text(path))
 
 
-def load_yaml(path: Path) -> dict:
+def load_yaml(path: Path):
     if yaml is None:
         return {}
     data = yaml.safe_load(read_text(path))
-    return data if isinstance(data, dict) else {}
+    return data
 
 
 def clear_document_body(doc: Document) -> None:
@@ -324,6 +324,22 @@ def set_style_tabs_and_indents(
         ind.set(qn("w:right"), str(right_indent))
 
 
+def find_style_by_name_or_id(doc: Document, style_key: str):
+    """按样式名称或 style_id 查找样式，避免触发 doc.styles[style_id] 的弃用警告。"""
+    normalized_key = str(style_key).strip().lower()
+    if not normalized_key:
+        return None
+
+    for style in doc.styles:
+        style_name = getattr(style, "name", "")
+        style_id = getattr(style, "style_id", "")
+        if isinstance(style_name, str) and style_name.strip().lower() == normalized_key:
+            return style
+        if isinstance(style_id, str) and style_id.strip().lower() == normalized_key:
+            return style
+    return None
+
+
 def normalize_document_styles(doc: Document) -> None:
     """修正模板中的关键样式，确保 Word 更新目录和页码后字体仍然正确。"""
     style_map = {
@@ -341,44 +357,40 @@ def normalize_document_styles(doc: Document) -> None:
         "-body": (SIZE_HEADING_2, True),
     }
     for style_name, (size, bold) in style_map.items():
-        try:
-            set_style_font(doc.styles[style_name], size, bold)
-        except KeyError:
-            continue
+        style = find_style_by_name_or_id(doc, style_name)
+        if style is not None:
+            set_style_font(style, size, bold)
 
-    try:
+    toc1_style = find_style_by_name_or_id(doc, "toc 1")
+    if toc1_style is not None:
         set_style_tabs_and_indents(
-            doc.styles["toc 1"],
+            toc1_style,
             right_tab_pos=9300,
             right_tab_leader="dot",
             left_indent=448,
             hanging=448,
             right_indent=0,
         )
-    except KeyError:
-        pass
-    try:
+    toc2_style = find_style_by_name_or_id(doc, "toc 2")
+    if toc2_style is not None:
         set_style_tabs_and_indents(
-            doc.styles["toc 2"],
+            toc2_style,
             right_tab_pos=9300,
             right_tab_leader="dot",
             left_indent=1038,
             hanging=750,
             right_indent=0,
         )
-    except KeyError:
-        pass
-    try:
+    toc3_style = find_style_by_name_or_id(doc, "toc 3")
+    if toc3_style is not None:
         set_style_tabs_and_indents(
-            doc.styles["toc 3"],
+            toc3_style,
             right_tab_pos=9300,
             right_tab_leader="dot",
             left_indent=1418,
             hanging=938,
             right_indent=0,
         )
-    except KeyError:
-        pass
 
 
 def set_run_font(run, size: int | None = None, bold: bool | None = None) -> None:
@@ -445,17 +457,24 @@ def clear_paragraph_numbering(paragraph) -> None:
         p_pr.remove(num_pr)
 
 
-def style_paragraph(paragraph, style_name: str, fallback_align: WD_ALIGN_PARAGRAPH | None = None) -> None:
-    try:
-        paragraph.style = style_name
-    except KeyError:
-        if fallback_align is not None:
-            paragraph.alignment = fallback_align
+def style_paragraph(
+    doc: Document,
+    paragraph,
+    style_name: str,
+    fallback_align: WD_ALIGN_PARAGRAPH | None = None,
+) -> None:
+    """为段落应用样式，优先按样式对象赋值，避免 style_id 查找警告。"""
+    resolved_style = find_style_by_name_or_id(doc, style_name)
+    if resolved_style is not None:
+        paragraph.style = resolved_style
+        return
+    if fallback_align is not None:
+        paragraph.alignment = fallback_align
 
 
 def add_text_paragraph(doc: Document, text: str, style: str = "Normal", bold: bool = False) -> None:
     paragraph = doc.add_paragraph()
-    style_paragraph(paragraph, style)
+    style_paragraph(doc, paragraph, style)
     run = paragraph.add_run(to_traditional_text(text))
     set_run_font(run, SIZE_BODY, bold)
     if style == "Normal":
@@ -473,7 +492,7 @@ def add_heading(
     text = normalize_heading_text(text)
     paragraph = doc.add_paragraph()
     style_name = {1: "Heading 1", 2: "Heading 2", 3: "Heading 3"}.get(level, "Heading 1")
-    style_paragraph(paragraph, style_name)
+    style_paragraph(doc, paragraph, style_name)
     run = paragraph.add_run(text)
     set_run_font(run, {1: SIZE_HEADING_1, 2: SIZE_HEADING_2, 3: SIZE_HEADING_3}.get(level, SIZE_BODY), True)
     if bookmark_name is not None and bookmark_id is not None:
@@ -530,11 +549,10 @@ def add_table(
     font_size: int = 11,
 ) -> None:
     table = doc.add_table(rows=len(rows) + 1, cols=len(headers))
-    try:
-        if style_name:
-            table.style = style_name
-    except KeyError:
-        pass
+    if style_name:
+        resolved_style = find_style_by_name_or_id(doc, style_name)
+        if resolved_style is not None:
+            table.style = resolved_style
 
     for index, header in enumerate(headers):
         set_cell_text(table.rows[0].cells[index], header, bold=True, center=True, font_size=font_size)
@@ -669,11 +687,8 @@ def configure_header_footer(
 
     left_p = left_cell.paragraphs[0]
     right_p = right_cell.paragraphs[0]
-    try:
-        left_p.style = "ae"
-        right_p.style = "ae"
-    except KeyError:
-        pass
+    style_paragraph(doc, left_p, "ae")
+    style_paragraph(doc, right_p, "ae")
     clear_paragraph(left_p)
     clear_paragraph(right_p)
     set_paragraph_default_font(left_p, SIZE_FOOTER, False)
@@ -699,10 +714,7 @@ def configure_header_footer(
     footer_mid = cells[1].paragraphs[0]
     footer_right = cells[2].paragraphs[0]
     for paragraph in (footer_left, footer_mid, footer_right):
-        try:
-            paragraph.style = "ac"
-        except KeyError:
-            pass
+        style_paragraph(doc, paragraph, "ac")
         clear_paragraph(paragraph)
         set_paragraph_default_font(paragraph, SIZE_FOOTER, False)
     footer_mid.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -755,21 +767,21 @@ def add_cover(
         logo_run.add_picture(str(logo_path), width=Cm(2.8))
         doc.add_paragraph("")
     title = doc.add_paragraph()
-    style_paragraph(title, "-Section-Central", WD_ALIGN_PARAGRAPH.CENTER)
+    style_paragraph(doc, title, "-Section-Central", WD_ALIGN_PARAGRAPH.CENTER)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = title.add_run(to_traditional_text(document_title))
     set_run_font(run, SIZE_TITLE, True)
 
     doc.add_paragraph("")
     connector = doc.add_paragraph()
-    style_paragraph(connector, "-Section-Central", WD_ALIGN_PARAGRAPH.CENTER)
+    style_paragraph(doc, connector, "-Section-Central", WD_ALIGN_PARAGRAPH.CENTER)
     connector.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = connector.add_run("for")
     set_run_font(run, SIZE_FOR, True)
 
     doc.add_paragraph("")
     system = doc.add_paragraph()
-    style_paragraph(system, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
+    style_paragraph(doc, system, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
     system.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = system.add_run(system_name)
     set_run_font(run, SIZE_SYSTEM, False)
@@ -777,7 +789,7 @@ def add_cover(
     for _ in range(5):
         doc.add_paragraph("")
     version_p = doc.add_paragraph()
-    style_paragraph(version_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
+    style_paragraph(doc, version_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
     version_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = version_p.add_run(f"Version: {version}")
     set_run_font(run, SIZE_VERSION, False)
@@ -785,7 +797,7 @@ def add_cover(
     doc.add_paragraph("")
 
     date_p = doc.add_paragraph()
-    style_paragraph(date_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
+    style_paragraph(doc, date_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
     date_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = date_p.add_run(current.strftime("%B %Y"))
     set_run_font(run, SIZE_DATE, True)
@@ -793,7 +805,7 @@ def add_cover(
     doc.add_paragraph("")
 
     copy_p = doc.add_paragraph()
-    style_paragraph(copy_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
+    style_paragraph(doc, copy_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
     copy_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = copy_p.add_run("© The Government of the Hong Kong Special Administrative Region")
     set_run_font(run, SIZE_COPYRIGHT, False)
@@ -801,7 +813,7 @@ def add_cover(
     doc.add_paragraph("")
 
     notice_p = doc.add_paragraph()
-    style_paragraph(notice_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
+    style_paragraph(doc, notice_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
     notice_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = notice_p.add_run(
         "The contents of this document remain the property of and may not be reproduced in whole or in part without the express permission of the Government of the HKSAR."
@@ -895,11 +907,37 @@ def normalize_doc_plan(path: Path) -> list[dict]:
         data = load_yaml(path)
     else:
         data = load_json(path)
+
+    if isinstance(data, str):
+        normalized = data.strip()
+        reparsed = None
+        if normalized:
+            try:
+                reparsed = json.loads(normalized)
+            except json.JSONDecodeError:
+                if yaml is not None:
+                    try:
+                        reparsed = yaml.safe_load(normalized)
+                    except Exception:
+                        reparsed = None
+        if isinstance(reparsed, (dict, list)):
+            data = reparsed
+
     if isinstance(data, list):
         chapters = data
-    else:
+    elif isinstance(data, dict):
         chapters = data.get("chapters", [])
-    return chapters if isinstance(chapters, list) else []
+    else:
+        raise SystemExit(
+            "`--doc-plan` 内容格式错误：应为 JSON/YAML 对象或数组，"
+            f"当前为 {type(data).__name__}。"
+        )
+
+    if not isinstance(chapters, list):
+        raise SystemExit("`--doc-plan` 中的 chapters 必须是数组。")
+    if any(not isinstance(chapter, dict) for chapter in chapters):
+        raise SystemExit("`--doc-plan` 的 chapters 必须是对象数组。")
+    return chapters
 
 
 def text_list(value) -> list[str]:
