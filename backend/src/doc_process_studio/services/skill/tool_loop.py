@@ -5,12 +5,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ...models.conversation.artifacts import GeneratedArtifact
+from ...models.conversation.attachments import ChatAttachment
 from ...models.conversation.stream import ChatStreamRequest
 from ...models.skill.catalog import SkillToolConfig
 from ...models.skill.runtime import SkillConversationState
 from ...settings import BACKEND_DIR, settings
-from ..chat.artifacts import save_generated_artifact
+from ..chat.attachments import save_generated_attachment
 from .context import (
     get_skill_context_chunks_by_ids,
     search_skill_context_chunks,
@@ -277,7 +277,7 @@ def build_tool_status_finish(
     state: SkillConversationState,
     tool_call: dict[str, Any],
     tool_result: dict[str, Any],
-    artifacts: list[GeneratedArtifact],
+    attachments: list[ChatAttachment],
 ) -> dict[str, str]:
     """根据工具执行结果生成更业务化的完成状态。"""
     del state
@@ -388,16 +388,16 @@ def build_tool_status_finish(
             "message": declared_tool.status.success,
         }
 
-    if len(artifacts) == 1:
+    if len(attachments) == 1:
         return {
             "label": status_label,
-            "message": f"已生成文件：{artifacts[0].name}。",
+            "message": f"已生成文件：{attachments[0].name}。",
         }
 
-    if len(artifacts) > 1:
+    if len(attachments) > 1:
         return {
             "label": status_label,
-            "message": f"已生成 {len(artifacts)} 个文件产物。",
+            "message": f"已生成 {len(attachments)} 个文件附件。",
         }
 
     return {
@@ -548,10 +548,10 @@ def _format_declared_tool_default_name(
     tool: SkillToolConfig,
     arguments: dict[str, Any],
 ) -> str:
-    artifact_config = tool.execution.artifact
+    attachment_config = tool.execution.attachment
     default_template = (
-        artifact_config.default_name_template
-        if artifact_config is not None
+        attachment_config.default_name_template
+        if attachment_config is not None
         else "{tool_name}-output.bin"
     )
 
@@ -595,8 +595,8 @@ def _build_declared_tool_command(
             )
         )
 
-    artifact_output_name: str | None = None
-    artifact_output_path: Path | None = None
+    attachment_output_name: str | None = None
+    attachment_output_path: Path | None = None
     for argument_name, binding in execution.arg_bindings.items():
         if argument_name not in arguments:
             continue
@@ -618,33 +618,33 @@ def _build_declared_tool_command(
             command.append(str(json_file_path))
             continue
 
-        if serializer == "artifact_output_name":
+        if serializer == "attachment_output_name":
             file_name = str(argument_value).strip() or _format_declared_tool_default_name(
                 tool,
                 arguments,
             )
-            artifact_output_name = file_name
-            artifact_output_path = temp_dir_path / file_name
-            command.append(str(artifact_output_path))
+            attachment_output_name = file_name
+            attachment_output_path = temp_dir_path / file_name
+            command.append(str(attachment_output_path))
             continue
 
         raise ValueError(f"暂不支持的参数序列化方式：{serializer}")
 
-    if execution.artifact and artifact_output_path is None:
-        artifact_output_name = _format_declared_tool_default_name(tool, arguments)
-        artifact_output_path = temp_dir_path / artifact_output_name
+    if execution.attachment and attachment_output_path is None:
+        attachment_output_name = _format_declared_tool_default_name(tool, arguments)
+        attachment_output_path = temp_dir_path / attachment_output_name
         output_binding = next(
             (
                 binding
                 for binding in execution.arg_bindings.values()
-                if binding.serializer == "artifact_output_name"
+                if binding.serializer == "attachment_output_name"
             ),
             None,
         )
         if output_binding is not None:
-            command.extend([output_binding.flag, str(artifact_output_path)])
+            command.extend([output_binding.flag, str(attachment_output_path)])
 
-    return command, artifact_output_name
+    return command, attachment_output_name
 
 
 def _execute_declared_script_tool(
@@ -652,7 +652,7 @@ def _execute_declared_script_tool(
     request: ChatStreamRequest,
     tool: SkillToolConfig,
     arguments: dict[str, Any],
-) -> tuple[dict[str, Any], list[GeneratedArtifact]]:
+) -> tuple[dict[str, Any], list[ChatAttachment]]:
     if tool.kind != "script":
         return {
             "ok": False,
@@ -661,7 +661,7 @@ def _execute_declared_script_tool(
 
     with tempfile.TemporaryDirectory(prefix="skill-tool-") as temp_dir:
         temp_dir_path = Path(temp_dir)
-        command, artifact_output_name = _build_declared_tool_command(
+        command, attachment_output_name = _build_declared_tool_command(
             request=request,
             tool=tool,
             arguments=arguments,
@@ -682,14 +682,14 @@ def _execute_declared_script_tool(
                 "error": stderr or stdout or "脚本执行失败。",
             }, []
 
-        artifact_config = tool.execution.artifact
-        if artifact_config is None:
+        attachment_config = tool.execution.attachment
+        if attachment_config is None:
             return {
                 "ok": True,
                 "stdout": completed.stdout.strip(),
             }, []
 
-        resolved_output_name = artifact_output_name or _format_declared_tool_default_name(
+        resolved_output_name = attachment_output_name or _format_declared_tool_default_name(
             tool,
             arguments,
         )
@@ -700,18 +700,18 @@ def _execute_declared_script_tool(
                 "error": "脚本执行完成，但未找到输出文件。",
             }, []
 
-        artifact = save_generated_artifact(
+        attachment = save_generated_attachment(
             source_path=output_path,
             conversation_id=request.conversation_id,
             skill_id=request.skill_id,
             output_name=resolved_output_name,
-            mime_type=artifact_config.mime_type,
+            mime_type=attachment_config.mime_type,
         )
         return {
             "ok": True,
-            "artifact": artifact.model_dump(mode="json", by_alias=True),
+            "attachment": attachment.model_dump(mode="json", by_alias=True),
             "stdout": completed.stdout.strip(),
-        }, [artifact]
+        }, [attachment]
 
 
 def execute_skill_tool_call(
@@ -719,7 +719,7 @@ def execute_skill_tool_call(
     request: ChatStreamRequest,
     state: SkillConversationState,
     tool_call: dict[str, Any],
-) -> tuple[dict[str, Any], list[GeneratedArtifact]]:
+) -> tuple[dict[str, Any], list[ChatAttachment]]:
     """执行单个 tool call，并返回工具结果与产物列表。"""
     tool_name = _get_tool_name(tool_call)
     arguments = _parse_tool_arguments(tool_call)

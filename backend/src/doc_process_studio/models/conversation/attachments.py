@@ -3,14 +3,15 @@ from datetime import datetime
 from pydantic import AliasChoices, BaseModel, Field
 
 
-class GeneratedArtifact(BaseModel):
-    artifact_id: str = Field(
+class ChatAttachment(BaseModel):
+    attachment_id: str = Field(
         ...,
-        description="前端下载时使用的产物标识",
-        validation_alias=AliasChoices("artifact_id", "artifactId"),
-        serialization_alias="artifactId",
+        description="前端下载时使用的附件标识",
+        validation_alias=AliasChoices("attachment_id", "attachmentId"),
+        serialization_alias="attachmentId",
     )
-    name: str = Field(..., description="前端展示文件名")
+    name: str = Field(..., description="前端展示附件文件名")
+    source: str = Field(..., description="附件来源，如 uploaded/generated")
     mime_type: str = Field(
         ...,
         description="文件 MIME 类型",
@@ -31,7 +32,7 @@ class GeneratedArtifact(BaseModel):
     )
     download_url: str = Field(
         ...,
-        description="受控下载地址",
+        description="受控附件下载地址",
         validation_alias=AliasChoices("download_url", "downloadUrl"),
         serialization_alias="downloadUrl",
     )
@@ -43,11 +44,17 @@ class GeneratedArtifact(BaseModel):
     )
 
 
-class GeneratedArtifactMetadata(BaseModel):
-    artifact_id: str = Field(..., description="产物唯一标识")
+class ChatAttachmentMetadata(BaseModel):
+    attachment_id: str = Field(
+        ...,
+        description="附件唯一标识",
+        validation_alias=AliasChoices("attachment_id", "attachmentId"),
+        serialization_alias="attachmentId",
+    )
     conversation_id: str = Field(..., description="所属会话标识")
     skill_id: str = Field(..., description="所属 skill 标识")
-    name: str = Field(..., description="文件名")
+    source: str = Field(..., description="附件来源，如 uploaded/generated")
+    name: str = Field(..., description="附件文件名")
     mime_type: str = Field(..., description="文件 MIME 类型")
     size_bytes: int = Field(..., description="文件大小")
     created_at: datetime = Field(..., description="创建时间")

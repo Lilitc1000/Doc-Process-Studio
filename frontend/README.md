@@ -91,6 +91,8 @@ frontend/
   历史会话接口。
 - [api/chat.ts](/workspace/frontend/src/api/chat.ts)
   聊天流式请求封装。
+- [api/attachments.ts](/workspace/frontend/src/api/attachments.ts)
+  附件下载接口封装（统一使用 `attachment` 语义）。
 
 ### 4. 类型层
 
@@ -234,6 +236,7 @@ cacheScopeId + messageId + role + contentHash
 - catalog 映射
 - 历史会话分组
 - 聊天流事件解析
+- 附件上传/下载与 `attachment` 流事件
 - `ChatSidebar` 基础交互
 
 后续如果继续补测试，优先补这些高价值点：

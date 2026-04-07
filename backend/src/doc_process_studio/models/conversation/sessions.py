@@ -5,17 +5,21 @@ from pydantic import AliasChoices, BaseModel, Field
 
 class ChatSessionAttachment(BaseModel):
     name: str = Field(..., description="附件名称")
+    source: str | None = Field(
+        default=None,
+        description="附件来源，如 uploaded/generated",
+    )
     size_label: str = Field(
         ...,
         description="附件大小显示文本",
         validation_alias=AliasChoices("size_label", "sizeLabel"),
         serialization_alias="sizeLabel",
     )
-    artifact_id: str | None = Field(
+    attachment_id: str | None = Field(
         default=None,
-        description="可下载产物标识",
-        validation_alias=AliasChoices("artifact_id", "artifactId"),
-        serialization_alias="artifactId",
+        description="可下载附件标识",
+        validation_alias=AliasChoices("attachment_id", "attachmentId"),
+        serialization_alias="attachmentId",
     )
     download_url: str | None = Field(
         default=None,

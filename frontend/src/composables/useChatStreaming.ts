@@ -95,9 +95,19 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
             options.scrollToBottom();
           }
 
-          if (payload.type === 'artifact' && payload.artifact) {
-            options.appendMessageAttachment(assistantNode.id, payload.artifact);
+          if (payload.type === 'attachment' && payload.attachment) {
+            options.appendMessageAttachment(
+              assistantNode.id,
+              payload.attachment,
+            );
             options.scrollToBottom();
+          }
+
+          if (payload.type === 'uploaded-attachment' && payload.attachment) {
+            options.appendMessageAttachment(
+              requestSnapshot.userMessageId,
+              payload.attachment,
+            );
           }
 
           if (payload.type === 'tool-status' && payload.message) {

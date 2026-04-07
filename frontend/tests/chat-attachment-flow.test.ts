@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ChatLayout from '../src/components/ChatLayout.vue';
 
 const streamChatReplyMock = vi.hoisted(() => vi.fn());
-const downloadGeneratedArtifactMock = vi.hoisted(() => vi.fn());
+const downloadAttachmentMock = vi.hoisted(() => vi.fn());
 const fetchAvailableModelsMock = vi.hoisted(() => vi.fn());
 const fetchAvailableSkillsMock = vi.hoisted(() => vi.fn());
 const fetchSessionSummariesMock = vi.hoisted(() => vi.fn());
@@ -13,8 +13,8 @@ vi.mock('../src/api/chat', () => ({
   streamChatReply: streamChatReplyMock,
 }));
 
-vi.mock('../src/api/artifacts', () => ({
-  downloadGeneratedArtifact: downloadGeneratedArtifactMock,
+vi.mock('../src/api/attachments', () => ({
+  downloadAttachment: downloadAttachmentMock,
 }));
 
 vi.mock('../src/api/catalog', () => ({
@@ -31,8 +31,8 @@ vi.mock('../src/api/sessions', () => ({
   saveSession: saveSessionMock,
 }));
 
-describe('chat artifact flow', () => {
-  it('渲染 artifact 文件框并触发下载', async () => {
+describe('chat attachment flow', () => {
+  it('渲染附件文件框并触发下载', async () => {
     fetchAvailableModelsMock.mockResolvedValue(['qwen3-coder-next:latest']);
     fetchAvailableSkillsMock.mockResolvedValue({
       skills: [
@@ -54,14 +54,16 @@ describe('chat artifact flow', () => {
     });
 
     streamChatReplyMock.mockImplementation(
-      async (_requestSnapshot, _signal, onEvent) => {
+      async (requestSnapshot, _signal, onEvent) => {
+        expect(requestSnapshot.attachmentIds).toEqual([]);
         onEvent({
-          type: 'artifact',
-          artifact: {
-            artifactId: 'artifact-1',
+          type: 'attachment',
+          attachment: {
+            attachmentId: 'attachment-1',
             name: '系统架构与设计文档.docx',
+            source: 'generated',
             sizeLabel: '24 KB',
-            downloadUrl: '/api/artifacts/artifact-1/download',
+            downloadUrl: '/api/attachments/attachment-1/download',
             mimeType:
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             expiresAt: '2026-04-14T00:00:00Z',
@@ -85,13 +87,13 @@ describe('chat artifact flow', () => {
 
     expect(wrapper.text()).toContain('文件已生成，可直接下载。');
 
-    const artifactButton = wrapper.find(
+    const attachmentButton = wrapper.find(
       '.chat-message.role-assistant .message-file-item.is-downloadable',
     );
-    expect(artifactButton.exists()).toBe(true);
-    expect(artifactButton.text()).toContain('系统架构与设计文档.docx');
+    expect(attachmentButton.exists()).toBe(true);
+    expect(attachmentButton.text()).toContain('系统架构与设计文档.docx');
 
-    await artifactButton.trigger('click');
-    expect(downloadGeneratedArtifactMock).toHaveBeenCalledWith('artifact-1');
+    await attachmentButton.trigger('click');
+    expect(downloadAttachmentMock).toHaveBeenCalledWith('attachment-1');
   });
 });

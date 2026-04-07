@@ -4,13 +4,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .routers import routers as app_routers
-from .services.chat.artifacts import cleanup_expired_artifacts
+from .services.chat.attachments import cleanup_expired_attachments
 from .settings import settings
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    cleanup_expired_artifacts()
+    cleanup_expired_attachments()
     yield
 
 

@@ -248,9 +248,10 @@
 }
 
 .message-edit-files {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 250px));
   gap: 0.5rem;
+  justify-content: start;
 }
 
 .message-edit-file-item {
@@ -346,12 +347,15 @@
   width: min(100%, 250px);
   padding: 0.55rem 0.85rem;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-.message-file-item:disabled {
+.message-file-item.is-static {
   opacity: 1;
+  color: inherit;
+  cursor: default;
 }
 
 .message-file-item.is-downloadable {
@@ -370,6 +374,11 @@
 .chat-message.role-assistant .message-file-item,
 .chat-message.role-system .message-file-item {
   background: rgba(0, 0, 0, 0.05);
+}
+
+.chat-message.role-user.is-editing .message-edit-file-item {
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.36);
 }
 
 .message-file-icon {

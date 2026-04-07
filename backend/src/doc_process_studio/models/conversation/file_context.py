@@ -1,3 +1,4 @@
+from .attachments import ChatAttachment
 from pydantic import BaseModel, Field
 
 
@@ -9,3 +10,7 @@ class UploadedFileContext(BaseModel):
     )
     content: str = Field(..., description="提取出的文件内容")
 
+
+class PreparedUploadedFile(BaseModel):
+    attachment: ChatAttachment = Field(..., description="已持久化的附件信息")
+    context: UploadedFileContext = Field(..., description="提取出的文件上下文")

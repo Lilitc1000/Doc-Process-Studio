@@ -1,4 +1,4 @@
-from .artifacts import GeneratedArtifact, GeneratedArtifactMetadata
+from .attachments import ChatAttachment, ChatAttachmentMetadata
 from .file_context import UploadedFileContext
 from .sessions import (
     ChatSessionAttachment,
@@ -23,7 +23,7 @@ __all__ = [
     "ChatSessionTitleUpdateRequest",
     "ChatSessionUpsertRequest",
     "ChatStreamRequest",
-    "GeneratedArtifact",
-    "GeneratedArtifactMetadata",
+    "ChatAttachment",
+    "ChatAttachmentMetadata",
     "UploadedFileContext",
 ]

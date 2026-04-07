@@ -18,11 +18,14 @@ const parseDownloadFilename = (contentDisposition: string | null) => {
   return null;
 };
 
-export const downloadGeneratedArtifact = async (artifactId: string) => {
-  const response = await apiClient.get(`/artifacts/${artifactId}/download`, {
-    responseType: 'blob',
-    validateStatus: () => true,
-  });
+export const downloadAttachment = async (attachmentId: string) => {
+  const response = await apiClient.get(
+    `/attachments/${attachmentId}/download`,
+    {
+      responseType: 'blob',
+      validateStatus: () => true,
+    },
+  );
 
   if (response.status === 410) {
     throw new Error('该文件已过期，请重新生成。');

@@ -33,14 +33,14 @@
           <div v-if="editingFiles.length > 0" class="message-edit-files">
             <div
               v-for="(file, index) in editingFiles"
-              :key="`${file.name}-${file.size}-${index}`"
+              :key="`${file.name}-${file.sizeLabel}-${index}`"
               class="message-edit-file-item"
             >
               <span class="message-file-icon">📄</span>
               <div class="message-edit-file-meta">
                 <span class="message-file-name">{{ file.name }}</span>
                 <span class="message-file-size">
-                  {{ formatFileSize(file) }}
+                  {{ file.sizeLabel }}
                 </span>
               </div>
               <button
@@ -125,11 +125,13 @@
           >
             <button
               v-for="file in message.files"
-              :key="`${file.name}-${file.sizeLabel}-${file.artifactId ?? 'plain'}`"
+              :key="`${file.name}-${file.sizeLabel}-${file.attachmentId ?? 'plain'}`"
               class="message-file-item"
-              :class="{ 'is-downloadable': Boolean(file.artifactId) }"
+              :class="{
+                'is-downloadable': Boolean(file.attachmentId),
+                'is-static': !file.attachmentId,
+              }"
               type="button"
-              :disabled="!file.artifactId"
               @click="onMessageFileClick(file)"
             >
               <span class="message-file-icon">📄</span>
@@ -439,10 +441,10 @@ import {
 } from 'vue';
 import type {
   ChatAttachment,
+  ChatEditAttachment,
   ChatMessageDisplay,
   ChatToolStatus,
 } from '../types/chat';
-import { formatFileSize } from '../utils/file';
 import {
   getCachedRenderedContent,
   renderMarkdown,
@@ -467,7 +469,7 @@ const props = defineProps<{
   isVersionLocked?: boolean;
   isEditing?: boolean;
   editingText?: string;
-  editingFiles?: File[];
+  editingFiles?: ChatEditAttachment[];
   canConfirmEdit?: boolean;
   showToolbarByDefault?: boolean;
 }>();
@@ -599,7 +601,7 @@ const onEditFileSelect = (event: Event) => {
 };
 
 const onMessageFileClick = (file: ChatAttachment) => {
-  if (!file.artifactId) {
+  if (!file.attachmentId) {
     return;
   }
 

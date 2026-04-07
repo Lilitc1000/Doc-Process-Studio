@@ -47,12 +47,14 @@ def test_build_skill_prompt_returns_skill_default_prompt() -> None:
 
 def test_build_upstream_messages_prepends_skill_system_prompt() -> None:
     request = ChatStreamRequest(
+        user_message_id="user-1",
         conversation_id="conversation-1",
         model="qwen2.5:7b",
         skill_id="document-assistant",
         messages=[
             ChatMessageInput(role="user", content="请解释这份文档"),
         ],
+        attachment_ids=[],
     )
 
     upstream_messages = build_upstream_messages(request)

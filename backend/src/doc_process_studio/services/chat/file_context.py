@@ -6,7 +6,11 @@ from fastapi import UploadFile
 from openpyxl import load_workbook
 from pypdf import PdfReader
 
-from ...models.conversation.file_context import UploadedFileContext
+from ...models.conversation.file_context import (
+    PreparedUploadedFile,
+    UploadedFileContext,
+)
+from .attachments import load_uploaded_attachment_context, save_uploaded_attachment
 
 TEXT_EXTENSIONS = {
     ".txt",
@@ -142,7 +146,20 @@ async def extract_upload_file_context(
     raw_bytes = await upload_file.read()
     await upload_file.close()
 
-    suffix = Path(upload_file.filename or "").suffix.lower()
+    return _build_uploaded_file_context(
+        filename=upload_file.filename or "未命名文件",
+        content_type=upload_file.content_type,
+        raw_bytes=raw_bytes,
+    )
+
+
+def _build_uploaded_file_context(
+    *,
+    filename: str,
+    content_type: str | None,
+    raw_bytes: bytes,
+) -> UploadedFileContext:
+    suffix = Path(filename).suffix.lower()
     try:
         if suffix in SPECIAL_DOCUMENT_EXTENSIONS:
             extracted_text = extract_special_document_text(suffix, raw_bytes)
@@ -160,38 +177,96 @@ async def extract_upload_file_context(
         content = truncate_content(extracted_text or "")
 
     return UploadedFileContext(
-        filename=upload_file.filename or "未命名文件",
-        content_type=upload_file.content_type,
+        filename=filename,
+        content_type=content_type,
         content=content,
     )
 
 
-async def build_uploaded_files_context(
+def _build_uploaded_file_section(file_context: UploadedFileContext) -> str:
+    return "\n".join(
+        [
+            f"文件名：{file_context.filename}",
+            f"类型：{file_context.content_type or 'unknown'}",
+            "内容：",
+            file_context.content,
+        ]
+    )
+
+
+async def prepare_uploaded_files(
+    *,
     upload_files: list[UploadFile],
-) -> str | None:
+    conversation_id: str,
+    skill_id: str,
+) -> tuple[list[PreparedUploadedFile], str | None]:
     if not upload_files:
+        return [], None
+
+    prepared_files: list[PreparedUploadedFile] = []
+    for upload_file in upload_files:
+        raw_bytes = await upload_file.read()
+        await upload_file.close()
+        file_context = _build_uploaded_file_context(
+            filename=upload_file.filename or "未命名文件",
+            content_type=upload_file.content_type,
+            raw_bytes=raw_bytes,
+        )
+        attachment = save_uploaded_attachment(
+            raw_bytes=raw_bytes,
+            conversation_id=conversation_id,
+            skill_id=skill_id,
+            file_name=file_context.filename,
+            mime_type=file_context.content_type,
+            extracted_text=file_context.content,
+        )
+        prepared_files.append(
+            PreparedUploadedFile(
+                attachment=attachment,
+                context=file_context,
+            )
+        )
+
+    return prepared_files, (
+        "以下是用户本次上传的文件内容，请你优先结合这些文件进行理解与回答：\n\n"
+        + "\n\n---\n\n".join(
+            _build_uploaded_file_section(prepared_file.context)
+            for prepared_file in prepared_files
+        )
+    )
+
+def build_persisted_uploaded_files_context(
+    attachment_ids: list[str],
+) -> str | None:
+    normalized_attachment_ids: list[str] = []
+    for attachment_id in attachment_ids:
+        normalized_attachment_id = attachment_id.strip()
+        if normalized_attachment_id and normalized_attachment_id not in normalized_attachment_ids:
+            normalized_attachment_ids.append(normalized_attachment_id)
+
+    if not normalized_attachment_ids:
         return None
 
-    file_contexts = [
-        await extract_upload_file_context(upload_file)
-        for upload_file in upload_files
-    ]
-
     sections: list[str] = []
-    for file_context in file_contexts:
+    for attachment_id in normalized_attachment_ids:
+        metadata, extracted_text, is_expired = load_uploaded_attachment_context(attachment_id)
+        if is_expired or metadata is None or not extracted_text:
+            continue
         sections.append(
             "\n".join(
                 [
-                    f"文件名：{file_context.filename}",
-                    f"类型：{file_context.content_type or 'unknown'}",
+                    f"文件名：{metadata.name}",
+                    f"类型：{metadata.mime_type or 'unknown'}",
                     "内容：",
-                    file_context.content,
+                    extracted_text,
                 ]
             )
         )
 
+    if not sections:
+        return None
+
     return (
-        "以下是用户本次上传的文件内容，请你优先结合这些文件进行理解与回答：\n\n"
+        "以下是当前会话中已绑定的历史上传文件内容，请你继续结合这些文件进行理解与回答：\n\n"
         + "\n\n---\n\n".join(sections)
     )
-

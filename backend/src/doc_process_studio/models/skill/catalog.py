@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class SkillToolArtifactConfig(BaseModel):
+class SkillToolAttachmentConfig(BaseModel):
     mime_type: str = Field(..., description="产物 MIME 类型")
     default_name_template: str = Field(
         default="{tool_name}-output.bin",
@@ -13,7 +13,7 @@ class SkillToolArgBinding(BaseModel):
     flag: str = Field(..., description="命令列参数名，例如 --output")
     serializer: str = Field(
         default="string",
-        description="参数序列化方式，如 string/json_file/artifact_output_name",
+        description="参数序列化方式，如 string/json_file/attachment_output_name",
     )
 
 
@@ -27,9 +27,9 @@ class SkillToolExecutionConfig(BaseModel):
         default_factory=dict,
         description="工具入参与脚本参数的映射关系",
     )
-    artifact: SkillToolArtifactConfig | None = Field(
+    attachment: SkillToolAttachmentConfig | None = Field(
         default=None,
-        description="若该工具会生成文件产物，则声明其输出配置",
+        description="若该工具会生成文件附件，则声明其输出配置",
     )
 
 

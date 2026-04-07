@@ -149,8 +149,8 @@ cython_debug/
 logs/
 *.log
 
-# Generated artifacts
-generated-artifacts/
+# Generated attachments
+generated-attachments/
 
 # OS files
 .DS_Store

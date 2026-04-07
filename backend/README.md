@@ -292,7 +292,7 @@ Skill 内容来自 [skills](/workspace/backend/src/doc_process_studio/skills) �
 - 已读取的 chunk 会缓存在 Redis 会话状态中
 - 重复的相同工具调用会被后端自动去重，避免模型反复读取同一文件或同一批 chunk
 - 如果某一轮工具调用没有带来任何新信息，后端会自动收束到“直接回答”，而不是继续空转
-- 生成类 skill 可以通过 `tools.json` 声明的脚本型工具产出文件 artifact
+- 生成类 skill 可以通过 `tools.json` 声明的脚本型工具产出可下载附件
 
 因此在维护时要注意：
 
@@ -302,16 +302,15 @@ Skill 内容来自 [skills](/workspace/backend/src/doc_process_studio/skills) �
 - 不要在路由层直接操作这些缓存和工具细节
 
 ## 生成文件与下载
-当前 backend 已支持 skill 在工具调用中生成受控文件产物：
+当前 backend 已支持 skill 在工具调用中生成受控附件，也支持把用户上传文件统一落成会话附件：
 
-- 文件落到 `backend/generated-artifacts/`
+- 文件落到 `backend/generated-attachments/`
 - 该目录已加入 `.gitignore`
 - 默认有效期 7 天
 - 过期文件会在启动时、生成新文件时、下载文件前自动清理
-- 下载接口为：
-  - `GET /api/artifacts/{artifact_id}/download`
-
-前端收到流式 `artifact` 事件后，应把它展示成文件框或下载入口，而不是把文件路径写进模型正文。
+- 当前统一下载接口为：
+  - `GET /api/attachments/{attachment_id}/download`
+前端收到流式附件事件后，应把它展示成文件框或下载入口，而不是把文件路径写进模型正文。
 
 ## 提交改动前建议自查
 每次改动后，建议至少确认下面几点：

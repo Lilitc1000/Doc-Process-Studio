@@ -3,10 +3,15 @@ export type ChatMessageRole = 'user' | 'assistant' | 'system';
 export interface ChatAttachment {
   name: string;
   sizeLabel: string;
-  artifactId?: string;
+  attachmentId?: string;
   downloadUrl?: string;
   expiresAt?: string;
   mimeType?: string;
+  source?: string;
+}
+
+export interface ChatEditAttachment extends ChatAttachment {
+  requestFile?: File | null;
 }
 
 export interface ChatToolStatus {
@@ -48,6 +53,7 @@ export interface ChatRequestSnapshot {
   skillId: string;
   messages: ApiChatMessage[];
   files: File[];
+  attachmentIds: string[];
 }
 
 export interface ActiveGenerationState {
@@ -64,5 +70,5 @@ export interface ChatStreamEvent {
   phase?: string;
   tool_name?: string;
   label?: string;
-  artifact?: ChatAttachment;
+  attachment?: ChatAttachment;
 }

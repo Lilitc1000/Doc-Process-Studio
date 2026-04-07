@@ -99,7 +99,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
-import { downloadGeneratedArtifact } from '../api/artifacts';
+import { downloadAttachment } from '../api/attachments';
 import {
   fetchAvailableModels,
   fetchAvailableSkills,
@@ -110,6 +110,7 @@ import { useChatStreaming } from '../composables/useChatStreaming';
 import { useCopyToast } from '../composables/useCopyToast';
 import type {
   ChatAttachment,
+  ChatEditAttachment,
   ChatMessageNode,
   ChatRequestSnapshot,
   ChatToolStatus,
@@ -163,7 +164,7 @@ const selectedRootChildId = ref<string | null>(null);
 const selectedChildIdByParent = ref<Record<string, string>>({});
 const editingMessageId = ref<string | null>(null);
 const editingDraftText = ref('');
-const editingDraftFiles = ref<File[]>([]);
+const editingDraftFiles = ref<ChatEditAttachment[]>([]);
 const { copyToastMessage, copyToastTitle, isCopyToastVisible, showCopyToast } =
   useCopyToast();
 
@@ -344,10 +345,22 @@ const createAttachmentPreview = (files: File[]): ChatAttachment[] => {
   return files.map((file) => ({
     name: file.name,
     sizeLabel: formatFileSize(file),
+    source: 'uploaded',
   }));
 };
 
-const createUserApiContent = (text: string, files: File[]) => {
+const createEditableAttachmentPreview = (
+  files: File[],
+): ChatEditAttachment[] => {
+  return files.map((file) => ({
+    name: file.name,
+    sizeLabel: formatFileSize(file),
+    source: 'uploaded',
+    requestFile: file,
+  }));
+};
+
+const createUserApiContent = (text: string, files: Array<{ name: string }>) => {
   const trimmedText = text.trim();
   if (files.length === 0) {
     return trimmedText;
@@ -406,12 +419,33 @@ const getMessagePathToNode = (messageId: string) => {
   return path.reverse();
 };
 
-const collectRequestFilesFromPath = (path: ChatMessageNode[]) => {
-  return path.flatMap((message) => message.requestFiles ?? []);
+const collectPersistedUploadedAttachmentIdsFromPath = (
+  path: ChatMessageNode[],
+) => {
+  const attachmentIds: string[] = [];
+
+  for (const message of path) {
+    for (const file of message.files ?? []) {
+      const normalizedAttachmentId = file.attachmentId?.trim();
+      const isUploadedAttachment =
+        file.source === 'uploaded' || (!file.source && message.role === 'user');
+
+      if (
+        normalizedAttachmentId &&
+        isUploadedAttachment &&
+        !attachmentIds.includes(normalizedAttachmentId)
+      ) {
+        attachmentIds.push(normalizedAttachmentId);
+      }
+    }
+  }
+
+  return attachmentIds;
 };
 
 const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
   const path = getMessagePathToNode(userMessageId);
+  const currentUserMessage = getNodeById(userMessageId);
   return {
     userMessageId,
     conversationId: conversationId.value,
@@ -421,7 +455,8 @@ const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
       role: message.role,
       content: message.apiContent ?? message.content,
     })),
-    files: collectRequestFilesFromPath(path),
+    files: currentUserMessage?.requestFiles ?? [],
+    attachmentIds: collectPersistedUploadedAttachmentIdsFromPath(path),
   } satisfies ChatRequestSnapshot;
 };
 
@@ -454,8 +489,8 @@ const appendMessageAttachment = (
 
   const nextFiles = [...(targetMessage.files ?? [])];
   const duplicateIndex = nextFiles.findIndex((file) => {
-    if (file.artifactId && attachment.artifactId) {
-      return file.artifactId === attachment.artifactId;
+    if (file.attachmentId && attachment.attachmentId) {
+      return file.attachmentId === attachment.attachmentId;
     }
 
     return (
@@ -622,12 +657,12 @@ const downloadAssistantMessage = (assistantMessageId: string) => {
 };
 
 const downloadMessageFile = async (file: ChatAttachment) => {
-  if (!file.artifactId) {
+  if (!file.attachmentId) {
     return;
   }
 
   try {
-    await downloadGeneratedArtifact(file.artifactId);
+    await downloadAttachment(file.attachmentId);
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : '下载文件失败，请稍后重试。';
@@ -699,7 +734,19 @@ const startEditingMessage = (messageId: string) => {
 
   editingMessageId.value = messageId;
   editingDraftText.value = messageNode.content;
-  editingDraftFiles.value = [...(messageNode.requestFiles ?? [])];
+  const requestFileEntries: Array<[string, File]> = (
+    messageNode.requestFiles ?? []
+  ).map((file) => [`${file.name}::${formatFileSize(file)}`, file]);
+  const requestFileMap = new Map<string, File>(requestFileEntries);
+  const sourceFiles =
+    messageNode.files && messageNode.files.length > 0
+      ? messageNode.files
+      : createAttachmentPreview(messageNode.requestFiles ?? []);
+
+  editingDraftFiles.value = sourceFiles.map<ChatEditAttachment>((file) => ({
+    ...file,
+    requestFile: requestFileMap.get(`${file.name}::${file.sizeLabel}`) ?? null,
+  }));
 };
 
 const updateEditingText = (value: string) => {
@@ -707,7 +754,10 @@ const updateEditingText = (value: string) => {
 };
 
 const appendEditingFiles = (files: File[]) => {
-  editingDraftFiles.value = [...editingDraftFiles.value, ...files];
+  editingDraftFiles.value = [
+    ...editingDraftFiles.value,
+    ...createEditableAttachmentPreview(files),
+  ];
 };
 
 const removeEditingFile = (index: number) => {
@@ -730,13 +780,24 @@ const confirmEditingMessage = async () => {
   }
 
   const nextText = editingDraftText.value.trim();
-  const nextFiles = [...editingDraftFiles.value];
+  const nextFiles = editingDraftFiles.value.flatMap((file) => {
+    return file.requestFile ? [file.requestFile] : [];
+  });
+  const nextAttachments = editingDraftFiles.value.map((file) => ({
+    name: file.name,
+    sizeLabel: file.sizeLabel,
+    attachmentId: file.attachmentId,
+    downloadUrl: file.downloadUrl,
+    expiresAt: file.expiresAt,
+    mimeType: file.mimeType,
+    source: file.source,
+  }));
 
   const editedUserMessage = createMessageNode({
     role: 'user',
     content: nextText,
-    apiContent: createUserApiContent(nextText, nextFiles),
-    files: createAttachmentPreview(nextFiles),
+    apiContent: createUserApiContent(nextText, nextAttachments),
+    files: nextAttachments,
     requestFiles: nextFiles,
     timestamp: new Date(),
     parentId: sourceMessage.parentId,

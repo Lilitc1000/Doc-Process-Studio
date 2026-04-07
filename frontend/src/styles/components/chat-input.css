@@ -20,8 +20,8 @@
 }
 
 .files-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.5rem;
 }
 
@@ -30,7 +30,7 @@
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
-  width: min(100%, 220px);
+  width: 100%;
   padding: 0.5rem 2.2rem 0.5rem 0.9rem;
   background: #f8fafc;
   border-radius: 18px;

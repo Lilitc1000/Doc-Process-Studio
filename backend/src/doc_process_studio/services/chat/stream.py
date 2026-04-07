@@ -20,7 +20,10 @@ from ..skill.tool_loop import (
     build_tool_status_start,
     execute_skill_tool_call,
 )
-from .file_context import build_uploaded_files_context
+from .file_context import (
+    build_persisted_uploaded_files_context,
+    prepare_uploaded_files,
+)
 
 
 def format_sse_event(payload: dict[str, Any]) -> str:
@@ -187,12 +190,12 @@ def detect_tool_call_progress(
     before_loaded_chunk_ids: set[str],
     after_loaded_chunk_ids: set[str],
     tool_result: dict[str, Any],
-    next_artifacts: list[dict[str, Any]] | list[Any],
+    next_attachments: list[dict[str, Any]] | list[Any],
 ) -> bool:
     if not tool_result.get("ok"):
         return False
 
-    if next_artifacts:
+    if next_attachments:
         return True
 
     if tool_name == "read_skill_context":
@@ -272,6 +275,17 @@ def build_upstream_messages(
     return upstream_messages
 
 
+def merge_uploaded_files_context(
+    *contexts: str | None,
+) -> str | None:
+    normalized_sections = [
+        context.strip() for context in contexts if isinstance(context, str) and context.strip()
+    ]
+    if not normalized_sections:
+        return None
+    return "\n\n".join(normalized_sections)
+
+
 async def stream_remote_chat_completion(
     request: ChatStreamRequest,
     upload_files: list[UploadFile] | None = None,
@@ -286,13 +300,35 @@ async def stream_remote_chat_completion(
         return
 
     try:
-        uploaded_files_context = await build_uploaded_files_context(upload_files or [])
+        prepared_uploaded_files, new_uploaded_files_context = await prepare_uploaded_files(
+            upload_files=upload_files or [],
+            conversation_id=request.conversation_id,
+            skill_id=request.skill_id,
+        )
+        persisted_uploaded_files_context = build_persisted_uploaded_files_context(
+            request.attachment_ids
+        )
+        uploaded_files_context = merge_uploaded_files_context(
+            persisted_uploaded_files_context,
+            new_uploaded_files_context,
+        )
         state, _ = await ensure_skill_context_for_request(request)
     except ValueError as exc:
         yield format_sse_event({"type": "error", "message": str(exc)})
         return
 
     try:
+        for prepared_uploaded_file in prepared_uploaded_files:
+            yield format_sse_event(
+                {
+                    "type": "uploaded-attachment",
+                    "attachment": prepared_uploaded_file.attachment.model_dump(
+                        mode="json",
+                        by_alias=True,
+                    ),
+                }
+            )
+
         tool_trace_messages: list[dict[str, Any]] = []
         final_finish_reason = "stop"
         executed_tool_calls: dict[str, dict[str, Any]] = {}
@@ -400,7 +436,7 @@ async def stream_remote_chat_completion(
                     cached_execution = executed_tool_calls[tool_call_signature]
                     tool_result = deepcopy(cached_execution["tool_result"])
                     tool_result["reused"] = True
-                    next_artifacts = []
+                    next_attachments = []
                 else:
                     before_loaded_chunk_ids = set(state.loaded_chunk_ids)
                     execution_result = execute_skill_tool_call(
@@ -409,34 +445,34 @@ async def stream_remote_chat_completion(
                         tool_call=tool_call,
                     )
                     if len(execution_result) == 3:
-                        tool_result, next_artifacts, _legacy_status_message = execution_result
+                        tool_result, next_attachments, _legacy_status_message = execution_result
                     else:
-                        tool_result, next_artifacts = execution_result
+                        tool_result, next_attachments = execution_result
                     after_loaded_chunk_ids = set(state.loaded_chunk_ids)
                     if detect_tool_call_progress(
                         tool_name=tool_name,
                         before_loaded_chunk_ids=before_loaded_chunk_ids,
                         after_loaded_chunk_ids=after_loaded_chunk_ids,
                         tool_result=tool_result,
-                        next_artifacts=next_artifacts,
+                        next_attachments=next_attachments,
                     ):
                         round_made_progress = True
                     executed_tool_calls[tool_call_signature] = {
                         "tool_result": deepcopy(tool_result),
                     }
 
-                for artifact in next_artifacts:
+                for attachment in next_attachments:
                     yield format_sse_event(
                         {
-                            "type": "artifact",
-                            "artifact": artifact.model_dump(
+                            "type": "attachment",
+                            "attachment": attachment.model_dump(
                                 mode="json",
                                 by_alias=True,
                         ),
                     }
                 )
 
-                if next_artifacts:
+                if next_attachments:
                     round_made_progress = True
 
                 tool_trace_messages.append(
@@ -456,7 +492,7 @@ async def stream_remote_chat_completion(
                             state=state,
                             tool_call=tool_call,
                             tool_result=tool_result,
-                            artifacts=next_artifacts,
+                            attachments=next_attachments,
                         ),
                     }
                 )

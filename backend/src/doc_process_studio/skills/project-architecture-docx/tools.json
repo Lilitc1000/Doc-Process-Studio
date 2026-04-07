@@ -62,10 +62,10 @@
           },
           "output_name": {
             "flag": "--output",
-            "serializer": "artifact_output_name"
+            "serializer": "attachment_output_name"
           }
         },
-        "artifact": {
+        "attachment": {
           "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "default_name_template": "{document_title}.docx"
         }
