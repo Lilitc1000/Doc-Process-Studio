@@ -47,7 +47,9 @@ class Settings(BaseSettings):
     skill_chunk_max_characters: int = 1_800
     skill_compact_summary_max_characters: int = 2_400
     skill_context_search_limit: int = 4
-    skill_tool_max_iterations: int = 2
+    skill_tool_max_iterations: int = 12
+    generated_artifacts_dir: str = str(BACKEND_DIR / "generated-artifacts")
+    generated_artifact_ttl_seconds: int = 60 * 60 * 24 * 7
 
     model_config = SettingsConfigDict(extra="ignore")
 

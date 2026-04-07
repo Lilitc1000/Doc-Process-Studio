@@ -2,13 +2,23 @@ import { ref } from 'vue';
 import { streamChatReply } from '../api/chat';
 import type {
   ActiveGenerationState,
+  ChatAttachment,
   ChatMessageNode,
   ChatRequestSnapshot,
+  ChatToolStatus,
 } from '../types/chat';
 
 interface UseChatStreamingOptions {
   createAssistantVariant: (userMessageId: string) => ChatMessageNode;
   appendMessageContent: (messageId: string, chunk: string) => void;
+  appendMessageAttachment: (
+    messageId: string,
+    attachment: ChatAttachment,
+  ) => void;
+  appendMessageToolStatus: (
+    messageId: string,
+    toolStatus: ChatToolStatus,
+  ) => void;
   updateMessageContent: (messageId: string, content: string) => void;
   findMessageById: (messageId: string) => ChatMessageNode | null;
   scrollToBottom: () => void;
@@ -84,6 +94,22 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
             options.appendMessageContent(assistantNode.id, payload.content);
             options.scrollToBottom();
           }
+
+          if (payload.type === 'artifact' && payload.artifact) {
+            options.appendMessageAttachment(assistantNode.id, payload.artifact);
+            options.scrollToBottom();
+          }
+
+          if (payload.type === 'tool-status' && payload.message) {
+            options.appendMessageToolStatus(assistantNode.id, {
+              id: `${assistantNode.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              toolName: payload.tool_name,
+              label: payload.label,
+              message: payload.message,
+              phase: payload.phase,
+              createdAt: new Date().toISOString(),
+            });
+          }
         },
       );
 
@@ -96,7 +122,9 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
       ) {
         options.updateMessageContent(
           assistantNode.id,
-          '模型已完成响应，但没有返回可显示的文本内容。',
+          streamedAssistantMessage.files?.length
+            ? '已生成文件，请下载查看。'
+            : '模型已完成响应，但没有返回可显示的文本内容。',
         );
       }
     } catch (error) {

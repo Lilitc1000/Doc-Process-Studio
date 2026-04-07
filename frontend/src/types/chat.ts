@@ -3,6 +3,19 @@ export type ChatMessageRole = 'user' | 'assistant' | 'system';
 export interface ChatAttachment {
   name: string;
   sizeLabel: string;
+  artifactId?: string;
+  downloadUrl?: string;
+  expiresAt?: string;
+  mimeType?: string;
+}
+
+export interface ChatToolStatus {
+  id: string;
+  toolName?: string;
+  label?: string;
+  message: string;
+  phase?: string;
+  createdAt: string;
 }
 
 export interface ChatMessageNode {
@@ -11,6 +24,7 @@ export interface ChatMessageNode {
   content: string;
   apiContent?: string;
   files?: ChatAttachment[];
+  toolStatuses?: ChatToolStatus[];
   requestFiles?: File[];
   timestamp: Date;
   parentId: string | null;
@@ -19,7 +33,7 @@ export interface ChatMessageNode {
 
 export type ChatMessageDisplay = Pick<
   ChatMessageNode,
-  'id' | 'role' | 'content' | 'files' | 'timestamp'
+  'id' | 'role' | 'content' | 'files' | 'toolStatuses' | 'timestamp'
 >;
 
 export interface ApiChatMessage {
@@ -47,4 +61,8 @@ export interface ChatStreamEvent {
   content?: string;
   message?: string;
   finish_reason?: string;
+  phase?: string;
+  tool_name?: string;
+  label?: string;
+  artifact?: ChatAttachment;
 }

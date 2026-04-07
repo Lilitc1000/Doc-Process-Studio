@@ -63,21 +63,81 @@
           ></textarea>
         </div>
         <template v-else>
+          <details
+            v-if="message.role === 'assistant' && toolStatuses.length > 0"
+            class="message-tool-status"
+            :open="isThinking"
+          >
+            <summary class="message-tool-status-summary">
+              <span class="message-tool-status-title">处理过程</span>
+              <span class="message-tool-status-count">
+                {{ toolStatuses.length }} 条
+              </span>
+            </summary>
+            <div class="message-tool-status-list">
+              <div
+                v-for="toolStatus in toolStatuses"
+                :key="toolStatus.id"
+                class="message-tool-status-item"
+                :class="{
+                  'is-running': toolStatus.phase === 'start',
+                  'is-finished': toolStatus.phase === 'finish',
+                }"
+              >
+                <span class="message-tool-status-dot" aria-hidden="true"></span>
+                <div class="message-tool-status-body">
+                  <span class="message-tool-status-message">
+                    {{ toolStatus.message }}
+                  </span>
+                  <span
+                    v-if="
+                      toolStatus.label ||
+                      toolStatus.toolName ||
+                      toolStatus.createdAt
+                    "
+                    class="message-tool-status-meta"
+                  >
+                    <template v-if="toolStatus.label || toolStatus.toolName">
+                      {{
+                        toolStatus.label ||
+                        formatFallbackToolName(toolStatus.toolName)
+                      }}
+                    </template>
+                    <template
+                      v-if="
+                        (toolStatus.label || toolStatus.toolName) &&
+                        toolStatus.createdAt
+                      "
+                    >
+                      <span class="message-tool-status-separator">·</span>
+                    </template>
+                    <template v-if="toolStatus.createdAt">
+                      {{ formatStatusTime(toolStatus.createdAt) }}
+                    </template>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </details>
           <div
             v-if="message.files && message.files.length > 0"
             class="message-files"
           >
-            <div
+            <button
               v-for="file in message.files"
-              :key="`${file.name}-${file.sizeLabel}`"
+              :key="`${file.name}-${file.sizeLabel}-${file.artifactId ?? 'plain'}`"
               class="message-file-item"
+              :class="{ 'is-downloadable': Boolean(file.artifactId) }"
+              type="button"
+              :disabled="!file.artifactId"
+              @click="onMessageFileClick(file)"
             >
               <span class="message-file-icon">📄</span>
               <div class="message-file-meta">
                 <span class="message-file-name">{{ file.name }}</span>
                 <span class="message-file-size">{{ file.sizeLabel }}</span>
               </div>
-            </div>
+            </button>
           </div>
           <!-- eslint-disable vue/no-v-html -->
           <div
@@ -377,7 +437,11 @@ import {
   watch,
   watchEffect,
 } from 'vue';
-import type { ChatMessageDisplay } from '../types/chat';
+import type {
+  ChatAttachment,
+  ChatMessageDisplay,
+  ChatToolStatus,
+} from '../types/chat';
 import { formatFileSize } from '../utils/file';
 import {
   getCachedRenderedContent,
@@ -420,6 +484,7 @@ const emit = defineEmits<{
   (e: 'regenerate'): void;
   (e: 'copy'): void;
   (e: 'download'): void;
+  (e: 'download-file', file: ChatAttachment): void;
 }>();
 
 const renderedContent = ref('');
@@ -465,6 +530,9 @@ const showToolbarByDefault = computed(
   () => props.showToolbarByDefault ?? false,
 );
 const canConfirmEdit = computed(() => props.canConfirmEdit ?? false);
+const toolStatuses = computed<ChatToolStatus[]>(() => {
+  return props.message.toolStatuses ?? [];
+});
 const shouldRenderMarkdownContent = computed(() => {
   return shouldUseMarkdownRendering(props.message.content, props.message.role);
 });
@@ -528,6 +596,36 @@ const onEditFileSelect = (event: Event) => {
     emit('upload-edit-files', Array.from(input.files));
     input.value = '';
   }
+};
+
+const onMessageFileClick = (file: ChatAttachment) => {
+  if (!file.artifactId) {
+    return;
+  }
+
+  emit('download-file', file);
+};
+
+const formatFallbackToolName = (toolName?: string) => {
+  const normalizedToolName = toolName?.trim() ?? '';
+  if (!normalizedToolName) {
+    return '';
+  }
+
+  return normalizedToolName.replaceAll('_', ' ');
+};
+
+const formatStatusTime = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 };
 
 const resizeEditTextarea = () => {

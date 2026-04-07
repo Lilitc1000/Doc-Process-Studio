@@ -154,6 +154,93 @@
   gap: 0.6rem;
 }
 
+.message-tool-status {
+  margin-bottom: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+.message-tool-status-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.72rem 0.9rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.message-tool-status-summary::-webkit-details-marker {
+  display: none;
+}
+
+.message-tool-status-title {
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.message-tool-status-count {
+  font-size: 0.74rem;
+  color: #64748b;
+}
+
+.message-tool-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.58rem;
+  padding: 0 0.9rem 0.85rem;
+}
+
+.message-tool-status-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.message-tool-status-dot {
+  width: 0.52rem;
+  height: 0.52rem;
+  margin-top: 0.38rem;
+  border-radius: 999px;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.message-tool-status-item.is-running .message-tool-status-dot {
+  background: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.message-tool-status-item.is-finished .message-tool-status-dot {
+  background: #16a34a;
+}
+
+.message-tool-status-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.message-tool-status-message {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.message-tool-status-meta {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.message-tool-status-separator {
+  margin: 0 0.22rem;
+}
+
 .message-edit-panel {
   display: flex;
   flex-direction: column;
@@ -243,8 +330,11 @@
   gap: 0.45rem;
   width: min(100%, 250px);
   padding: 0.45rem 0.75rem;
+  border: none;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
+  text-align: left;
+  cursor: default;
 }
 
 .chat-message.role-user .message-file-item,
@@ -258,6 +348,18 @@
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.24);
   background: rgba(255, 255, 255, 0.16);
+}
+
+.message-file-item:disabled {
+  opacity: 1;
+}
+
+.message-file-item.is-downloadable {
+  cursor: pointer;
+}
+
+.message-file-item.is-downloadable:hover {
+  transform: translateY(-1px);
 }
 
 .chat-message.role-assistant .message-edit-file-item {

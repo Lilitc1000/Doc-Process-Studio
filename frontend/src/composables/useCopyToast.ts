@@ -1,11 +1,18 @@
 import { onBeforeUnmount, ref } from 'vue';
 
 export const useCopyToast = () => {
+  const copyToastTitle = ref('复制成功');
   const copyToastMessage = ref('复制成功');
   const isCopyToastVisible = ref(false);
   let copyToastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const showCopyToast = (message: string) => {
+  const showCopyToast = (
+    message: string,
+    options?: {
+      title?: string;
+    },
+  ) => {
+    copyToastTitle.value = options?.title?.trim() || '复制成功';
     copyToastMessage.value = message;
     isCopyToastVisible.value = true;
 
@@ -25,6 +32,7 @@ export const useCopyToast = () => {
   });
 
   return {
+    copyToastTitle,
     copyToastMessage,
     isCopyToastVisible,
     showCopyToast,

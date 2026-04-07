@@ -8,7 +8,7 @@ from doc_process_studio.models.skill.runtime import (
 )
 from doc_process_studio.services.skill.context_packer import (
     _build_local_compact_summary,
-    _build_skill_context_budget_text,
+    build_skill_context_budget_text,
 )
 
 
@@ -127,7 +127,7 @@ def test_compact_summary_excludes_compacted_chunks_from_full_injection() -> None
         ),
     ]
 
-    budget_text = _build_skill_context_budget_text(state, loaded_chunks)
+    budget_text = build_skill_context_budget_text(state, loaded_chunks)
 
     assert budget_text is not None
     assert "保留摘要" in budget_text

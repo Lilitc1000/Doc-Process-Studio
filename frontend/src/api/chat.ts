@@ -1,14 +1,10 @@
-import type { ChatRequestSnapshot } from '../types/chat';
+import type { ChatRequestSnapshot, ChatStreamEvent } from '../types/chat';
 import { parseStreamEvents } from '../utils/chat-stream';
 
 export const streamChatReply = async (
   requestSnapshot: ChatRequestSnapshot,
   signal: AbortSignal,
-  onEvent: (event: {
-    type?: string;
-    content?: string;
-    message?: string;
-  }) => void,
+  onEvent: (event: ChatStreamEvent) => void,
 ) => {
   const formData = new FormData();
   formData.append(

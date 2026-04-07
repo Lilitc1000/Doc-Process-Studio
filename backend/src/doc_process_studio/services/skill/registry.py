@@ -1,7 +1,8 @@
+import json
 from functools import lru_cache
 from pathlib import Path
 
-from ...models.skill.catalog import SkillInterfaceConfig
+from ...models.skill.catalog import SkillInterfaceConfig, SkillToolConfig
 
 SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
 DEFAULT_SKILL_ID = "document-assistant"
@@ -51,6 +52,42 @@ def _resolve_agent_config_path(skill_dir: Path) -> Path | None:
     return None
 
 
+def _resolve_tools_config_path(skill_dir: Path) -> Path | None:
+    candidate_paths = [
+        skill_dir / "tools.json",
+        skill_dir / "agents" / "tools.json",
+    ]
+    for candidate in candidate_paths:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _load_declared_tools(skill_dir: Path) -> list[SkillToolConfig]:
+    config_path = _resolve_tools_config_path(skill_dir)
+    if config_path is None:
+        return []
+
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    raw_tools = payload.get("tools") if isinstance(payload, dict) else None
+    if not isinstance(raw_tools, list):
+        return []
+
+    declared_tools: list[SkillToolConfig] = []
+    for raw_tool in raw_tools:
+        if not isinstance(raw_tool, dict):
+            continue
+        try:
+            declared_tools.append(SkillToolConfig.model_validate(raw_tool))
+        except Exception:
+            continue
+    return declared_tools
+
+
 def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | None:
     config_path = _resolve_agent_config_path(skill_dir)
     if config_path is None:
@@ -68,6 +105,7 @@ def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | Non
         display_name=display_name,
         short_description=interface_values.get("short_description", "").strip(),
         default_prompt=default_prompt,
+        tools=_load_declared_tools(skill_dir),
     )
 
 
@@ -112,3 +150,15 @@ def get_skill_interface(skill_id: str) -> SkillInterfaceConfig:
         f"未找到 skill `{normalized_skill_id}`。当前可用 skills: {available_skill_ids}"
     )
 
+
+def get_skill_tool_config(skill_id: str, tool_name: str) -> SkillToolConfig:
+    skill_interface = get_skill_interface(skill_id)
+    normalized_tool_name = tool_name.strip()
+    for tool in skill_interface.tools:
+        if tool.name == normalized_tool_name:
+            return tool
+
+    available_tool_names = ", ".join(tool.name for tool in skill_interface.tools)
+    raise ValueError(
+        f"未找到 skill `{skill_id}` 的工具 `{normalized_tool_name}`。当前可用工具: {available_tool_names}"
+    )

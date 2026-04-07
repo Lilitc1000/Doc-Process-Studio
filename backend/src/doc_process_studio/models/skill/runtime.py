@@ -17,18 +17,6 @@ class SkillContextChunkSummary(BaseModel):
     preview: str = Field(..., description="chunk 预览")
 
 
-class SkillContextPlannerDecision(BaseModel):
-    should_load_more: bool = Field(
-        default=False,
-        description="是否需要加载更多 skill 正文片段",
-    )
-    chunk_ids: list[str] = Field(
-        default_factory=list,
-        description="推荐加载的 chunk 列表",
-    )
-    reason: str = Field(default="", description="决策原因")
-
-
 class SkillConversationState(BaseModel):
     conversation_id: str = Field(..., description="会话标识")
     skill_id: str = Field(..., description="当前 skill 标识")
@@ -45,4 +33,3 @@ class SkillConversationState(BaseModel):
         default_factory=list,
         description="已经被压缩进 compact_summary 的 chunk 列表",
     )
-

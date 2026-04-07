@@ -59,6 +59,7 @@
             @regenerate="onRegenerate(message.id)"
             @copy="copyMessage(message.id)"
             @download="downloadAssistantMessage(message.id)"
+            @download-file="downloadMessageFile"
           />
         </div>
       </Transition>
@@ -77,7 +78,7 @@
             </svg>
           </div>
           <div class="copy-toast-content">
-            <span class="copy-toast-title">复制成功</span>
+            <span class="copy-toast-title">{{ copyToastTitle }}</span>
             <span class="copy-toast-description">{{ copyToastMessage }}</span>
           </div>
         </div>
@@ -98,6 +99,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
+import { downloadGeneratedArtifact } from '../api/artifacts';
 import {
   fetchAvailableModels,
   fetchAvailableSkills,
@@ -110,6 +112,7 @@ import type {
   ChatAttachment,
   ChatMessageNode,
   ChatRequestSnapshot,
+  ChatToolStatus,
 } from '../types/chat';
 import type { SkillOption } from '../types/skill';
 import { formatFileSize } from '../utils/file';
@@ -161,7 +164,8 @@ const selectedChildIdByParent = ref<Record<string, string>>({});
 const editingMessageId = ref<string | null>(null);
 const editingDraftText = ref('');
 const editingDraftFiles = ref<File[]>([]);
-const { copyToastMessage, isCopyToastVisible, showCopyToast } = useCopyToast();
+const { copyToastMessage, copyToastTitle, isCopyToastVisible, showCopyToast } =
+  useCopyToast();
 
 const messageContainerRef = ref<HTMLElement | null>(null);
 
@@ -439,6 +443,50 @@ const appendMessageContent = (messageId: string, chunk: string) => {
   }
 };
 
+const appendMessageAttachment = (
+  messageId: string,
+  attachment: ChatAttachment,
+) => {
+  const targetMessage = findMessageById(messageId);
+  if (!targetMessage) {
+    return;
+  }
+
+  const nextFiles = [...(targetMessage.files ?? [])];
+  const duplicateIndex = nextFiles.findIndex((file) => {
+    if (file.artifactId && attachment.artifactId) {
+      return file.artifactId === attachment.artifactId;
+    }
+
+    return (
+      file.name === attachment.name && file.sizeLabel === attachment.sizeLabel
+    );
+  });
+
+  if (duplicateIndex >= 0) {
+    nextFiles[duplicateIndex] = attachment;
+  } else {
+    nextFiles.push(attachment);
+  }
+
+  targetMessage.files = nextFiles;
+};
+
+const appendMessageToolStatus = (
+  messageId: string,
+  toolStatus: ChatToolStatus,
+) => {
+  const targetMessage = findMessageById(messageId);
+  if (!targetMessage) {
+    return;
+  }
+
+  targetMessage.toolStatuses = [
+    ...(targetMessage.toolStatuses ?? []),
+    toolStatus,
+  ];
+};
+
 const getMessageSiblingIds = (messageId: string) => {
   const messageNode = getNodeById(messageId);
   if (!messageNode) {
@@ -520,6 +568,8 @@ const {
 } = useChatStreaming({
   createAssistantVariant,
   appendMessageContent,
+  appendMessageAttachment,
+  appendMessageToolStatus,
   updateMessageContent,
   findMessageById,
   scrollToBottom,
@@ -569,6 +619,20 @@ const downloadAssistantMessage = (assistantMessageId: string) => {
   link.download = `assistant-reply-${safeTimestamp}.md`;
   link.click();
   URL.revokeObjectURL(url);
+};
+
+const downloadMessageFile = async (file: ChatAttachment) => {
+  if (!file.artifactId) {
+    return;
+  }
+
+  try {
+    await downloadGeneratedArtifact(file.artifactId);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : '下载文件失败，请稍后重试。';
+    showCopyToast(errorMessage, { title: '下载失败' });
+  }
 };
 
 const onSelectModel = (model: string) => {

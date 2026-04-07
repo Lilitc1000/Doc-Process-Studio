@@ -8,7 +8,6 @@ from .catalog import (
 from .runtime import (
     SkillContextChunk,
     SkillContextChunkSummary,
-    SkillContextPlannerDecision,
     SkillConversationState,
 )
 
@@ -16,7 +15,6 @@ __all__ = [
     "SkillCacheStatusResponse",
     "SkillContextChunk",
     "SkillContextChunkSummary",
-    "SkillContextPlannerDecision",
     "SkillContextSearchResponse",
     "SkillConversationCacheResponse",
     "SkillConversationState",

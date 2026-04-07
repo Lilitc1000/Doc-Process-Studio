@@ -59,7 +59,9 @@ def test_build_upstream_messages_prepends_skill_system_prompt() -> None:
 
     assert upstream_messages[0]["role"] == "system"
     assert "$document-assistant" in upstream_messages[0]["content"]
-    assert upstream_messages[1] == {
+    assert upstream_messages[1]["role"] == "system"
+    assert "渐进式披露" in upstream_messages[1]["content"]
+    assert upstream_messages[2] == {
         "role": "user",
         "content": "请解释这份文档",
     }

@@ -157,6 +157,7 @@ def search_skill_context_chunks(
     query: str,
     exclude_chunk_ids: set[str] | None = None,
     limit: int | None = None,
+    source_path_contains: str | None = None,
 ) -> list[SkillContextChunk]:
     normalized_excludes = exclude_chunk_ids or set()
     query_tokens = _extract_query_tokens(query)
@@ -168,6 +169,9 @@ def search_skill_context_chunks(
         if chunk.id in normalized_excludes:
             continue
 
+        if source_path_contains and source_path_contains.lower() not in chunk.source_path.lower():
+            continue
+
         haystack = "\n".join(
             [
                 chunk.title.lower(),
@@ -176,11 +180,22 @@ def search_skill_context_chunks(
                 chunk.content.lower(),
             ]
         )
-        score = sum(
-            3 if token in chunk.title.lower() else 1
-            for token in query_tokens
-            if token in haystack
-        )
+        score = 0
+        title_lower = chunk.title.lower()
+        source_path_lower = chunk.source_path.lower()
+        preview_lower = chunk.preview.lower()
+        content_lower = chunk.content.lower()
+
+        for token in query_tokens:
+            if token in source_path_lower:
+                score += 5
+            if token in title_lower:
+                score += 4
+            if token in preview_lower:
+                score += 2
+            if token in content_lower:
+                score += 1
+
         if score > 0:
             scored_chunks.append((score, chunk))
 
@@ -189,4 +204,3 @@ def search_skill_context_chunks(
     )
     final_limit = limit or settings.skill_context_search_limit
     return [chunk for _, chunk in scored_chunks[:final_limit]]
-

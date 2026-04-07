@@ -1,11 +1,40 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class ChatSessionAttachment(BaseModel):
     name: str = Field(..., description="附件名称")
-    size_label: str = Field(..., description="附件大小显示文本")
+    size_label: str = Field(
+        ...,
+        description="附件大小显示文本",
+        validation_alias=AliasChoices("size_label", "sizeLabel"),
+        serialization_alias="sizeLabel",
+    )
+    artifact_id: str | None = Field(
+        default=None,
+        description="可下载产物标识",
+        validation_alias=AliasChoices("artifact_id", "artifactId"),
+        serialization_alias="artifactId",
+    )
+    download_url: str | None = Field(
+        default=None,
+        description="下载地址",
+        validation_alias=AliasChoices("download_url", "downloadUrl"),
+        serialization_alias="downloadUrl",
+    )
+    expires_at: datetime | None = Field(
+        default=None,
+        description="过期时间",
+        validation_alias=AliasChoices("expires_at", "expiresAt"),
+        serialization_alias="expiresAt",
+    )
+    mime_type: str | None = Field(
+        default=None,
+        description="文件 MIME 类型",
+        validation_alias=AliasChoices("mime_type", "mimeType"),
+        serialization_alias="mimeType",
+    )
 
 
 class ChatSessionMessageNode(BaseModel):
@@ -16,6 +45,10 @@ class ChatSessionMessageNode(BaseModel):
     files: list[ChatSessionAttachment] = Field(
         default_factory=list,
         description="仅用于展示的附件信息",
+    )
+    tool_statuses: list[dict[str, str | None]] = Field(
+        default_factory=list,
+        description="工具调用状态记录",
     )
     timestamp: datetime = Field(..., description="消息时间")
     parent_id: str | None = Field(default=None, description="父消息标识")
@@ -74,4 +107,3 @@ class ChatSessionUpsertRequest(BaseModel):
 
 class ChatSessionTitleUpdateRequest(BaseModel):
     title: str = Field(..., min_length=1, description="新的会话标题")
-

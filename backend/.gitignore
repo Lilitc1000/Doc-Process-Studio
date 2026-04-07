@@ -149,6 +149,9 @@ cython_debug/
 logs/
 *.log
 
+# Generated artifacts
+generated-artifacts/
+
 # OS files
 .DS_Store
 Thumbs.db

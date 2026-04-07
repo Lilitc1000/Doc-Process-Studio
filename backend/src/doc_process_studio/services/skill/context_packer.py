@@ -94,7 +94,7 @@ async def ensure_compact_summary(
     state.compacted_chunk_ids = next_compacted_chunk_ids
 
 
-def _build_skill_context_budget_text(
+def build_skill_context_budget_text(
     state: SkillConversationState,
     loaded_chunks: list[SkillContextChunk],
 ) -> str | None:

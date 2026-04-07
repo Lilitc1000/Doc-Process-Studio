@@ -1,0 +1,81 @@
+{
+  "tools": [
+    {
+      "name": "generate_document",
+      "description": "根据已整理好的 doc_plan 生成文件产物，并返回可下载文件信息。",
+      "kind": "script",
+      "path": "scripts/generate_architecture_doc.py",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "system_name": {
+            "type": "string",
+            "description": "文档封面上的系统名称。"
+          },
+          "document_title": {
+            "type": "string",
+            "description": "文档标题。"
+          },
+          "version": {
+            "type": "string",
+            "description": "版本号，默认 1.0。"
+          },
+          "output_name": {
+            "type": "string",
+            "description": "期望生成的文件名。"
+          },
+          "doc_plan": {
+            "type": "object",
+            "description": "完整文档结构对象，至少包含 chapters 数组。"
+          }
+        },
+        "required": [
+          "system_name",
+          "document_title",
+          "doc_plan"
+        ],
+        "additionalProperties": false
+      },
+      "execution": {
+        "runtime": "python",
+        "fixed_args": [
+          "--project-root",
+          "{project_root}",
+          "--no-refresh-with-word"
+        ],
+        "arg_bindings": {
+          "system_name": {
+            "flag": "--system-name",
+            "serializer": "string"
+          },
+          "document_title": {
+            "flag": "--document-title",
+            "serializer": "string"
+          },
+          "version": {
+            "flag": "--version",
+            "serializer": "string"
+          },
+          "doc_plan": {
+            "flag": "--doc-plan",
+            "serializer": "json_file"
+          },
+          "output_name": {
+            "flag": "--output",
+            "serializer": "artifact_output_name"
+          }
+        },
+        "artifact": {
+          "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "default_name_template": "{document_title}.docx"
+        }
+      },
+      "status": {
+        "label": "生成文档文件",
+        "start": "正在根据已整理的文档结构生成可下载文件。",
+        "success": "文档文件已生成，可直接下载。",
+        "failure": "文档文件生成失败。"
+      }
+    }
+  ]
+}

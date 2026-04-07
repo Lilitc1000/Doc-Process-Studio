@@ -44,31 +44,46 @@ def build_timeout(*, stream: bool = False) -> httpx.Timeout:
 def build_chat_payload(
     *,
     model: str,
-    messages: list[ChatMessageInput] | list[dict[str, str]],
+    messages: list[ChatMessageInput] | list[dict[str, Any]],
     stream: bool,
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """统一聊天补全 payload，减少各业务层重复拼装。"""
-    normalized_messages: list[dict[str, str]] = []
+    normalized_messages: list[dict[str, Any]] = []
     for message in messages:
         if isinstance(message, ChatMessageInput):
             normalized_messages.append(message.model_dump())
             continue
         normalized_messages.append(message)
 
-    return {
+    payload: dict[str, Any] = {
         "model": model,
         "stream": stream,
         "messages": normalized_messages,
     }
+    if tools:
+        payload["tools"] = tools
+    if tool_choice is not None:
+        payload["tool_choice"] = tool_choice
+    return payload
 
 
 async def post_chat_completion(
     *,
     model: str,
-    messages: list[ChatMessageInput] | list[dict[str, str]],
+    messages: list[ChatMessageInput] | list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """发送一次非流式聊天补全请求并返回 JSON。"""
-    payload = build_chat_payload(model=model, messages=messages, stream=False)
+    payload = build_chat_payload(
+        model=model,
+        messages=messages,
+        stream=False,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
     async with httpx.AsyncClient(timeout=build_timeout()) as client:
         response = await client.post(
             build_chat_completion_url(),
@@ -81,10 +96,18 @@ async def post_chat_completion(
 async def stream_chat_completion(
     *,
     model: str,
-    messages: list[ChatMessageInput] | list[dict[str, str]],
+    messages: list[ChatMessageInput] | list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | dict[str, Any] | None = None,
 ) -> AsyncIterator[dict[str, Any] | None]:
     """统一处理远端 SSE，返回解码后的 chunk，DONE 用 None 表示。"""
-    payload = build_chat_payload(model=model, messages=messages, stream=True)
+    payload = build_chat_payload(
+        model=model,
+        messages=messages,
+        stream=True,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
     async with httpx.AsyncClient(timeout=build_timeout(stream=True)) as client:
         async with client.stream(
             "POST",
@@ -126,4 +149,3 @@ def extract_first_message_content(response_payload: dict[str, Any]) -> str:
         return ""
 
     return str(message.get("content", "")).strip()
-
