@@ -63,72 +63,72 @@ frontend/
 
 ### 1. 组件层
 
-- [ChatLayout.vue](/workspace/frontend/src/components/ChatLayout.vue)
+- [ChatLayout.vue](/frontend/src/components/ChatLayout.vue)
   页面主控组件，负责消息树、版本切换、输入区、历史会话视图编排。
-- [ChatMessage.vue](/workspace/frontend/src/components/ChatMessage.vue)
+- [ChatMessage.vue](/frontend/src/components/ChatMessage.vue)
   单条消息渲染，包含编辑态、版本切换区、工具栏、Markdown 渲染入口。
-- [ChatInput.vue](/workspace/frontend/src/components/ChatInput.vue)
+- [ChatInput.vue](/frontend/src/components/ChatInput.vue)
   底部输入区与文件选择。
-- [ChatSidebar.vue](/workspace/frontend/src/components/ChatSidebar.vue)
+- [ChatSidebar.vue](/frontend/src/components/ChatSidebar.vue)
   左侧历史会话与模型 / skill 选择区域。
 
 ### 2. 组合式逻辑
 
-- [useChatSessions.ts](/workspace/frontend/src/composables/useChatSessions.ts)
+- [useChatSessions.ts](/frontend/src/composables/useChatSessions.ts)
   历史会话加载、保存、重命名、删除、会话切换后的状态恢复。
-- [useChatStreaming.ts](/workspace/frontend/src/composables/useChatStreaming.ts)
+- [useChatStreaming.ts](/frontend/src/composables/useChatStreaming.ts)
   流式生成、停止生成、流式内容回填。
-- [useCopyToast.ts](/workspace/frontend/src/composables/useCopyToast.ts)
+- [useCopyToast.ts](/frontend/src/composables/useCopyToast.ts)
   顶部复制成功提示。
 
 ### 3. 请求层
 
-- [api/client.ts](/workspace/frontend/src/api/client.ts)
+- [api/client.ts](/frontend/src/api/client.ts)
   `axios` 实例。
-- [api/catalog.ts](/workspace/frontend/src/api/catalog.ts)
+- [api/catalog.ts](/frontend/src/api/catalog.ts)
   模型列表、skill 列表请求。
-- [api/sessions.ts](/workspace/frontend/src/api/sessions.ts)
+- [api/sessions.ts](/frontend/src/api/sessions.ts)
   历史会话接口。
-- [api/chat.ts](/workspace/frontend/src/api/chat.ts)
+- [api/chat.ts](/frontend/src/api/chat.ts)
   聊天流式请求封装。
-- [api/attachments.ts](/workspace/frontend/src/api/attachments.ts)
+- [api/attachments.ts](/frontend/src/api/attachments.ts)
   附件下载接口封装（统一使用 `attachment` 语义）。
 
 ### 4. 类型层
 
-- [types/chat.ts](/workspace/frontend/src/types/chat.ts)
+- [types/chat.ts](/frontend/src/types/chat.ts)
   消息节点、聊天请求、流式事件等类型。
-- [types/session.ts](/workspace/frontend/src/types/session.ts)
+- [types/session.ts](/frontend/src/types/session.ts)
   历史会话与快照结构。
-- [types/skill.ts](/workspace/frontend/src/types/skill.ts)
+- [types/skill.ts](/frontend/src/types/skill.ts)
   skill 选项与 catalog 结构。
 
 ### 5. 工具层
 
-- [utils/render-markdown.ts](/workspace/frontend/src/utils/render-markdown.ts)
+- [utils/render-markdown.ts](/frontend/src/utils/render-markdown.ts)
   Markdown 渲染、高亮语言按需加载、消息渲染缓存、预热逻辑。
-- [utils/chat-stream.ts](/workspace/frontend/src/utils/chat-stream.ts)
+- [utils/chat-stream.ts](/frontend/src/utils/chat-stream.ts)
   SSE 数据解析。
-- [utils/session-groups.ts](/workspace/frontend/src/utils/session-groups.ts)
+- [utils/session-groups.ts](/frontend/src/utils/session-groups.ts)
   历史会话分组。
-- [utils/catalog.ts](/workspace/frontend/src/utils/catalog.ts)
+- [utils/catalog.ts](/frontend/src/utils/catalog.ts)
   模型和 skill 响应归一化。
-- [utils/file.ts](/workspace/frontend/src/utils/file.ts)
+- [utils/file.ts](/frontend/src/utils/file.ts)
   文件大小格式化。
-- [utils/ids.ts](/workspace/frontend/src/utils/ids.ts)
+- [utils/ids.ts](/frontend/src/utils/ids.ts)
   前端会话 ID / 消息 ID 生成。
 
 ## TypeScript 配置说明
 
 当前有 4 个 TS 配置文件，这属于正常拆分：
 
-- [tsconfig.base.json](/workspace/frontend/tsconfig.base.json)
+- [tsconfig.base.json](/frontend/tsconfig.base.json)
   公共编译选项。
-- [tsconfig.json](/workspace/frontend/tsconfig.json)
+- [tsconfig.json](/frontend/tsconfig.json)
   前端应用默认配置，编辑器主要吃这个。
-- [tsconfig.app.json](/workspace/frontend/tsconfig.app.json)
+- [tsconfig.app.json](/frontend/tsconfig.app.json)
   应用代码入口别名，和当前项目结构保持一致。
-- [tsconfig.node.json](/workspace/frontend/tsconfig.node.json)
+- [tsconfig.node.json](/frontend/tsconfig.node.json)
   给 `vite.config.mts`、`vitest.config.ts` 这类 Node 侧配置文件使用。
 
 如果后续出现“命令行没报错，但编辑器局部红线”的情况，优先检查：
@@ -141,11 +141,11 @@ frontend/
 
 当前样式已经从大部分组件里拆出，放在：
 
-- [base.css](/workspace/frontend/src/styles/base.css)
-- [chat-layout.css](/workspace/frontend/src/styles/components/chat-layout.css)
-- [chat-message.css](/workspace/frontend/src/styles/components/chat-message.css)
-- [chat-input.css](/workspace/frontend/src/styles/components/chat-input.css)
-- [chat-sidebar.css](/workspace/frontend/src/styles/components/chat-sidebar.css)
+- [base.css](/frontend/src/styles/base.css)
+- [chat-layout.css](/frontend/src/styles/components/chat-layout.css)
+- [chat-message.css](/frontend/src/styles/components/chat-message.css)
+- [chat-input.css](/frontend/src/styles/components/chat-input.css)
+- [chat-sidebar.css](/frontend/src/styles/components/chat-sidebar.css)
 
 后续样式维护建议：
 
@@ -229,7 +229,7 @@ cacheScopeId + messageId + role + contentHash
 - `@vue/test-utils`
 - `happy-dom`
 
-测试目录在 [tests](/workspace/frontend/tests)。
+测试目录在 [tests](/frontend/tests)。
 
 目前已经覆盖的方向包括：
 

@@ -119,8 +119,8 @@ backend/src/doc_process_studio
 路由不是在 `main.py` 里手动逐个导入，而是走聚合注册。
 
 - 每个路由子包在自己的 `__init__.py` 中维护 `routers`
-- 总入口 [routers/__init__.py](/workspace/backend/src/doc_process_studio/routers/__init__.py) 统一汇总
-- [main.py](/workspace/backend/src/doc_process_studio/main.py) 只负责遍历注册
+- 总入口 [routers/__init__.py](/backend/src/doc_process_studio/routers/__init__.py) 统一汇总
+- [main.py](/backend/src/doc_process_studio/main.py) 只负责遍历注册
 
 如果你要新增一个路由模块，建议按下面步骤做：
 
@@ -203,7 +203,7 @@ from doc_process_studio.services.skill.runtime import ensure_skill_context_for_r
 - 前端对应的会话保存/恢复逻辑
 
 ## Skill 开发约定
-Skill 内容来自 [skills](/workspace/backend/src/doc_process_studio/skills) 目录。
+Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 
 每个 skill 至少应包含：
 
