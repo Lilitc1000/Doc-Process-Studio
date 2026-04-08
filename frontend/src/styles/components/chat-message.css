@@ -831,26 +831,26 @@
   font-size: 0.64rem;
 }
 
-.chat-message.role-system .message-content :deep(h3) {
+.chat-message.role-system .message-content h3 {
   margin: 0 0 0.7rem 0;
   font-size: 1.15rem;
   line-height: 1.25;
   color: #4d3c1e;
 }
 
-.chat-message.role-system .message-content :deep(strong) {
+.chat-message.role-system .message-content strong {
   color: #7a4f16;
 }
 
-.chat-message.role-system .message-content :deep(ul) {
+.chat-message.role-system .message-content ul {
   margin-top: 0.75rem;
 }
 
-.chat-message.role-system .message-content :deep(li) {
+.chat-message.role-system .message-content li {
   margin-bottom: 0.45rem;
 }
 
-.chat-message.role-system .message-content :deep(li::marker) {
+.chat-message.role-system .message-content li::marker {
   color: #d29b2f;
 }
 
@@ -909,21 +909,21 @@
   justify-self: end;
 }
 
-.chat-message.role-user .message-content :deep(a) {
+.chat-message.role-user .message-content a {
   color: rgba(255, 255, 255, 0.96);
 }
 
-.chat-message.role-user .message-content :deep(code) {
+.chat-message.role-user .message-content code {
   background: rgba(255, 255, 255, 0.15);
 }
 
-.chat-message.role-user .message-content :deep(blockquote) {
+.chat-message.role-user .message-content blockquote {
   border-left-color: rgba(255, 255, 255, 0.55);
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.92);
 }
 
-.chat-message.role-assistant .message-content :deep(blockquote) {
+.chat-message.role-assistant .message-content blockquote {
   background: #f8fbff;
   border-left-color: #60a5fa;
 }
@@ -1022,25 +1022,25 @@
   display: none;
 }
 
-.message-content :deep(p) {
+.message-content p {
   margin: 0 0 0.5rem 0;
 }
 
-.message-content :deep(p:last-child) {
+.message-content p:last-child {
   margin: 0;
 }
 
-.message-content :deep(ul),
-.message-content :deep(ol) {
+.message-content ul,
+.message-content ol {
   margin: 0 0 0.5rem 0;
   padding-left: 1.5rem;
 }
 
-.message-content :deep(li) {
+.message-content li {
   margin-bottom: 0.25rem;
 }
 
-.message-content :deep(code) {
+.message-content code {
   font-family: 'Courier New', monospace;
   font-size: 0.85em;
   background: rgba(0, 0, 0, 0.1);
@@ -1048,7 +1048,7 @@
   border-radius: 3px;
 }
 
-.message-content :deep(pre) {
+.message-content pre {
   background: #1e1e1e;
   color: #d4d4d4;
   padding: 1rem;
@@ -1057,13 +1057,13 @@
   margin: 0.5rem 0;
 }
 
-.message-content :deep(pre code) {
+.message-content pre code {
   background: transparent;
   padding: 0;
   color: inherit;
 }
 
-.message-content :deep(blockquote) {
+.message-content blockquote {
   border-left: 4px solid #007acc;
   padding-left: 1rem;
   margin: 0.5rem 0;
@@ -1073,20 +1073,20 @@
   border-radius: 4px;
 }
 
-.message-content :deep(a) {
+.message-content a {
   color: #007acc;
   text-decoration: none;
 }
 
-.message-content :deep(a:hover) {
+.message-content a:hover {
   text-decoration: underline;
 }
 
-.message-content :deep(strong) {
+.message-content strong {
   font-weight: 600;
 }
 
-.message-content :deep(em) {
+.message-content em {
   font-style: italic;
 }
 

@@ -64,9 +64,11 @@ frontend/
 ### 1. 组件层
 
 - [ChatLayout.vue](/frontend/src/components/ChatLayout.vue)
-  页面主控组件，负责消息树、版本切换、输入区、历史会话视图编排。
+  页面主控组件，负责页面编排与事件串联，重逻辑已下沉到 composables/utils。
 - [ChatMessage.vue](/frontend/src/components/ChatMessage.vue)
-  单条消息渲染，包含编辑态、版本切换区、工具栏、Markdown 渲染入口。
+  单条消息装配组件，负责拼装消息子组件与事件透传。
+- [components/message/*](/frontend/src/components/message)
+  消息子组件集合：`MessageHeader`、`MessageFiles`、`MessageToolbar`、`MessageToolTimeline`、`MessageInteractionCard`、`MessageLiveToolStatus`。
 - [ChatInput.vue](/frontend/src/components/ChatInput.vue)
   底部输入区与文件选择。
 - [ChatSidebar.vue](/frontend/src/components/ChatSidebar.vue)
@@ -80,6 +82,12 @@ frontend/
   流式生成、停止生成、流式内容回填。
 - [useCopyToast.ts](/frontend/src/composables/useCopyToast.ts)
   顶部复制成功提示。
+- [useCatalogLoader.ts](/frontend/src/composables/useCatalogLoader.ts)
+  模型与 skill 列表加载，负责 catalog 拉取与默认值回填。
+- [useMessageActions.ts](/frontend/src/composables/useMessageActions.ts)
+  发送、编辑、重生、附件下载、复制等消息操作聚合。
+- [composables/message/*](/frontend/src/composables/message)
+  消息局部逻辑：`useMessageRender`（懒渲染/缓存）、`useMessageEdit`（编辑态自适应输入）、`useMessageInteraction`（交互卡片提交流程）。
 
 ### 3. 请求层
 
@@ -117,6 +125,8 @@ frontend/
   文件大小格式化。
 - [utils/ids.ts](/frontend/src/utils/ids.ts)
   前端会话 ID / 消息 ID 生成。
+- [utils/message-tree.ts](/frontend/src/utils/message-tree.ts)
+  消息树纯函数（可见路径、版本切换、路径回溯、附件 ID 收集）。
 
 ## TypeScript 配置说明
 

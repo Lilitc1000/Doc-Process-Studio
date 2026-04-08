@@ -1,314 +1,38 @@
 import json
-from copy import deepcopy
 from collections.abc import AsyncIterator
+from copy import deepcopy
 from typing import Any
 
 import httpx
 from fastapi import UploadFile
 
-from ...models.conversation.stream import ChatMessageInput, ChatStreamRequest
+from ...models.conversation.stream import ChatStreamRequest
 from ...settings import settings
-from ..infra.ollama_client import (
-    OllamaNotConfiguredError,
-    stream_chat_completion,
-)
-from ..skill.registry import get_skill_interface
-from ..skill.runtime import ensure_skill_context_for_request, sync_skill_context_state
-from ..skill.interaction_flow import (
-    start_or_resume_interaction,
-    submit_interaction_answer,
-)
+from ..infra.ollama_client import OllamaNotConfiguredError, stream_chat_completion
+from ..skill.interaction_flow import start_or_resume_interaction, submit_interaction_answer
 from ..skill.registry import get_skill_interaction_config
+from ..skill.runtime import ensure_skill_context_for_request, sync_skill_context_state
 from ..skill.tool_loop import (
     build_skill_tools,
     build_tool_status_finish,
     build_tool_status_start,
     execute_skill_tool_call,
 )
-from .file_context import (
-    build_persisted_uploaded_files_context,
-    prepare_uploaded_files,
+from .file_context import build_persisted_uploaded_files_context, prepare_uploaded_files
+from .streaming import (
+    build_skill_prompt,
+    build_tool_call_signature,
+    build_upstream_messages,
+    detect_tool_call_progress,
+    extract_delta_text,
+    extract_delta_tool_calls,
+    extract_finish_reason,
+    format_output_name_from_template,
+    format_sse_event,
+    get_tool_call_name,
+    merge_stream_tool_calls,
+    merge_uploaded_files_context,
 )
-
-
-def format_sse_event(payload: dict[str, Any]) -> str:
-    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-
-def extract_delta_text(chunk_payload: dict[str, Any]) -> str:
-    choices = chunk_payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        return ""
-
-    first_choice = choices[0]
-    if not isinstance(first_choice, dict):
-        return ""
-
-    delta = first_choice.get("delta")
-    if not isinstance(delta, dict):
-        return ""
-
-    content = delta.get("content")
-    if isinstance(content, str):
-        return content
-
-    if isinstance(content, list):
-        text_parts: list[str] = []
-        for item in content:
-            if not isinstance(item, dict):
-                continue
-
-            item_text = item.get("text")
-            if isinstance(item_text, str):
-                text_parts.append(item_text)
-
-        return "".join(text_parts)
-
-    return ""
-
-
-def extract_finish_reason(chunk_payload: dict[str, Any]) -> str | None:
-    choices = chunk_payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        return None
-
-    first_choice = choices[0]
-    if not isinstance(first_choice, dict):
-        return None
-
-    finish_reason = first_choice.get("finish_reason")
-    if isinstance(finish_reason, str) and finish_reason:
-        return finish_reason
-    return None
-
-
-def extract_delta_tool_calls(chunk_payload: dict[str, Any]) -> list[dict[str, Any]]:
-    choices = chunk_payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        return []
-
-    first_choice = choices[0]
-    if not isinstance(first_choice, dict):
-        return []
-
-    delta = first_choice.get("delta")
-    if not isinstance(delta, dict):
-        return []
-
-    tool_calls = delta.get("tool_calls")
-    if not isinstance(tool_calls, list):
-        return []
-
-    return [tool_call for tool_call in tool_calls if isinstance(tool_call, dict)]
-
-
-def merge_stream_tool_calls(
-    merged_tool_calls: dict[int, dict[str, Any]],
-    delta_tool_calls: list[dict[str, Any]],
-) -> None:
-    """聚合流式返回中的 tool_calls 片段。"""
-    for tool_call in delta_tool_calls:
-        raw_index = tool_call.get("index", len(merged_tool_calls))
-        index = raw_index if isinstance(raw_index, int) and raw_index >= 0 else len(
-            merged_tool_calls
-        )
-        current = merged_tool_calls.setdefault(
-            index,
-            {
-                "id": "",
-                "type": "function",
-                "function": {
-                    "name": "",
-                    "arguments": "",
-                },
-            },
-        )
-
-        tool_call_id = tool_call.get("id")
-        if isinstance(tool_call_id, str) and tool_call_id.strip():
-            current["id"] = tool_call_id
-
-        tool_type = tool_call.get("type")
-        if isinstance(tool_type, str) and tool_type.strip():
-            current["type"] = tool_type
-
-        function_payload = tool_call.get("function")
-        if not isinstance(function_payload, dict):
-            continue
-
-        function_name = function_payload.get("name")
-        if isinstance(function_name, str) and function_name:
-            current["function"]["name"] += function_name
-
-        function_arguments = function_payload.get("arguments")
-        if isinstance(function_arguments, str) and function_arguments:
-            current["function"]["arguments"] += function_arguments
-
-
-def parse_tool_call_arguments(tool_call: dict[str, Any]) -> dict[str, Any]:
-    function_payload = tool_call.get("function")
-    if not isinstance(function_payload, dict):
-        return {}
-
-    raw_arguments = function_payload.get("arguments")
-    if isinstance(raw_arguments, dict):
-        return raw_arguments
-
-    if not isinstance(raw_arguments, str) or not raw_arguments.strip():
-        return {}
-
-    try:
-        parsed_arguments = json.loads(raw_arguments)
-    except json.JSONDecodeError:
-        return {}
-
-    return parsed_arguments if isinstance(parsed_arguments, dict) else {}
-
-
-def get_tool_call_name(tool_call: dict[str, Any]) -> str:
-    function_payload = tool_call.get("function")
-    if not isinstance(function_payload, dict):
-        return ""
-
-    raw_tool_name = function_payload.get("name")
-    if isinstance(raw_tool_name, str):
-        return raw_tool_name.strip()
-    return ""
-
-
-def build_tool_call_signature(tool_call: dict[str, Any]) -> str:
-    tool_name = get_tool_call_name(tool_call)
-    arguments = parse_tool_call_arguments(tool_call)
-    return json.dumps(
-        {
-            "tool_name": tool_name,
-            "arguments": arguments,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-
-
-def detect_tool_call_progress(
-    *,
-    tool_name: str,
-    before_loaded_chunk_ids: set[str],
-    after_loaded_chunk_ids: set[str],
-    tool_result: dict[str, Any],
-    next_attachments: list[dict[str, Any]] | list[Any],
-) -> bool:
-    if not tool_result.get("ok"):
-        return False
-
-    if next_attachments:
-        return True
-
-    if tool_name == "read_skill_context":
-        return bool(after_loaded_chunk_ids - before_loaded_chunk_ids)
-
-    if tool_name == "search_skill_context":
-        raw_chunks = tool_result.get("chunks")
-        return isinstance(raw_chunks, list) and len(raw_chunks) > 0
-
-    if tool_name == "list_skill_directory":
-        raw_entries = tool_result.get("entries")
-        return isinstance(raw_entries, list) and len(raw_entries) > 0
-
-    if tool_name == "read_skill_file":
-        return bool(tool_result.get("content") or tool_result.get("message"))
-
-    return True
-
-
-def build_skill_prompt(skill_id: str) -> str:
-    return get_skill_interface(skill_id).default_prompt
-
-
-def build_skill_runtime_instructions(skill_id: str) -> str:
-    skill_interface = get_skill_interface(skill_id)
-    declared_tool_names = ", ".join(tool.name for tool in skill_interface.tools) or "无声明式工具"
-
-    return "\n".join(
-        [
-            "你当前正在使用一个本地 skill。",
-            f"当前 skill_id: {skill_interface.id}",
-            f"当前 skill 名称: {skill_interface.display_name}",
-            f"skill 简介: {skill_interface.short_description or '无'}",
-            f"已声明工具: {declared_tool_names}",
-            "请遵循渐进式披露：先查看技能目录，再优先读取 SKILL.md；若 SKILL.md 引用了 references、scripts 或 assets，再按需继续读取。",
-            "不要一次性读取整个 skill 目录。",
-            "如果 skill 中已经声明了可执行工具，应优先调用这些声明式工具，而不是在回答里手写脚本让用户自己运行。",
-            "若工具已返回附件，请直接说明可从附件下载，不要输出 file:// 或 /tmp 等本地临时路径。",
-        ]
-    )
-
-
-def build_upstream_messages(
-    request: ChatStreamRequest,
-    skill_context: str | None = None,
-    uploaded_files_context: str | None = None,
-    extra_messages: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    system_message = ChatMessageInput(
-        role="system",
-        content=build_skill_prompt(request.skill_id),
-    )
-    upstream_messages: list[dict[str, Any]] = [system_message.model_dump()]
-    upstream_messages.append(
-        ChatMessageInput(
-            role="system",
-            content=build_skill_runtime_instructions(request.skill_id),
-        ).model_dump()
-    )
-    if skill_context:
-        upstream_messages.append(
-            ChatMessageInput(
-                role="system",
-                content=skill_context,
-            ).model_dump()
-        )
-    if uploaded_files_context:
-        upstream_messages.append(
-            ChatMessageInput(
-                role="user",
-                content=uploaded_files_context,
-            ).model_dump()
-        )
-
-    upstream_messages.extend([message.model_dump() for message in request.messages])
-    if extra_messages:
-        upstream_messages.extend(extra_messages)
-    return upstream_messages
-
-
-def _format_output_name_from_template(
-    template: str | None,
-    payload: dict[str, Any],
-) -> str | None:
-    if not template:
-        return None
-
-    format_payload = {
-        key: value
-        for key, value in payload.items()
-        if isinstance(value, (str, int, float))
-    }
-    try:
-        rendered_name = template.format(**format_payload).strip()
-    except Exception:
-        return None
-    return rendered_name or None
-
-
-def merge_uploaded_files_context(
-    *contexts: str | None,
-) -> str | None:
-    normalized_sections = [
-        context.strip() for context in contexts if isinstance(context, str) and context.strip()
-    ]
-    if not normalized_sections:
-        return None
-    return "\n\n".join(normalized_sections)
 
 
 async def stream_remote_chat_completion(
@@ -416,7 +140,7 @@ async def stream_remote_chat_completion(
                     final_tool.argument_name: completed_payload,
                     **final_tool.static_arguments,
                 }
-                rendered_output_name = _format_output_name_from_template(
+                rendered_output_name = format_output_name_from_template(
                     final_tool.output_name_template,
                     completed_payload,
                 )
@@ -547,8 +271,7 @@ async def stream_remote_chat_completion(
                     final_finish_reason = finish_reason
 
             normalized_tool_calls = [
-                merged_tool_calls[index]
-                for index in sorted(merged_tool_calls.keys())
+                merged_tool_calls[index] for index in sorted(merged_tool_calls.keys())
             ]
 
             if assistant_content_parts or normalized_tool_calls:
@@ -638,9 +361,9 @@ async def stream_remote_chat_completion(
                             "attachment": attachment.model_dump(
                                 mode="json",
                                 by_alias=True,
-                        ),
-                    }
-                )
+                            ),
+                        }
+                    )
 
                 if next_attachments:
                     round_made_progress = True
@@ -682,9 +405,7 @@ async def stream_remote_chat_completion(
     except OllamaNotConfiguredError as exc:
         yield format_sse_event({"type": "error", "message": str(exc)})
     except httpx.HTTPStatusError as exc:
-        error_message = (
-            f"远程 Ollama 接口返回错误状态：{exc.response.status_code}"
-        )
+        error_message = f"远程 Ollama 接口返回错误状态：{exc.response.status_code}"
         try:
             error_payload = exc.response.json()
             if isinstance(error_payload, dict):

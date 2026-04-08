@@ -132,7 +132,7 @@ backend/src/doc_process_studio
 负责聊天主链路：
 
 - 上传文件内容抽取
-- 聊天流式编排
+- 聊天流式编排（入口在 `services/chat/stream.py`，子模块在 `services/chat/streaming/`）
 - 历史会话读写
 - 标题生成
 - 生成文件产物保存与下载

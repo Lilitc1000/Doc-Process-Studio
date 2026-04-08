@@ -108,25 +108,34 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { downloadAttachment } from '../api/attachments';
-import {
-  fetchAvailableModels,
-  fetchAvailableSkills,
-  fallbackModels,
-} from '../api/catalog';
+import { fallbackModels } from '../api/catalog';
+import { useCatalogLoader } from '../composables/useCatalogLoader';
 import { useChatSessions } from '../composables/useChatSessions';
 import { useChatStreaming } from '../composables/useChatStreaming';
 import { useCopyToast } from '../composables/useCopyToast';
+import { useMessageActions } from '../composables/useMessageActions';
 import type {
   ChatAttachment,
   ChatEditAttachment,
-  ChatInteractionAnswer,
   ChatMessageNode,
   ChatRequestSnapshot,
   ChatToolStatus,
 } from '../types/chat';
 import type { SkillOption } from '../types/skill';
-import { formatFileSize } from '../utils/file';
 import { createMessageId } from '../utils/ids';
+import {
+  buildDisplayedMessages,
+  canSwitchMessageVersion as canSwitchMessageVersionInTree,
+  collectPersistedUploadedAttachmentIdsFromPath,
+  findAdjacentVersionNodes,
+  getMessagePathToNode,
+  getMessageVersionCount as getMessageVersionCountInTree,
+  getMessageVersionIndex as getMessageVersionIndexInTree,
+  getNodeById as getNodeByIdInTree,
+  resolveCurrentLeafMessageId,
+  resolveLastRoleMessageId,
+  resolveTargetVersionMessageId,
+} from '../utils/message-tree';
 import { prewarmRenderedContentCache } from '../utils/render-markdown';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
@@ -186,41 +195,17 @@ const resetEditingState = () => {
 };
 
 const getNodeById = (messageId: string) => {
-  return messageNodes.value[messageId] ?? null;
-};
-
-const getSelectedChildId = (messageId: string) => {
-  const currentNode = getNodeById(messageId);
-  if (!currentNode || currentNode.childIds.length === 0) {
-    return null;
-  }
-
-  return (
-    selectedChildIdByParent.value[messageId] ?? currentNode.childIds[0] ?? null
-  );
+  return getNodeByIdInTree(messageNodes.value, messageId);
 };
 
 const displayedMessages = computed(() => {
-  const rootMessageId =
-    selectedRootChildId.value ?? rootChildIds.value[0] ?? null;
-  if (!rootMessageId) {
-    return welcomeMessages;
-  }
-
-  const visibleMessages: ChatMessageNode[] = [];
-  let currentMessageId: string | null = rootMessageId;
-
-  while (currentMessageId) {
-    const currentNode = getNodeById(currentMessageId);
-    if (!currentNode) {
-      break;
-    }
-
-    visibleMessages.push(currentNode);
-    currentMessageId = getSelectedChildId(currentNode.id);
-  }
-
-  return visibleMessages;
+  return buildDisplayedMessages({
+    messageNodes: messageNodes.value,
+    rootChildIds: rootChildIds.value,
+    selectedRootChildId: selectedRootChildId.value,
+    selectedChildIdByParent: selectedChildIdByParent.value,
+    fallbackMessages: welcomeMessages,
+  });
 });
 
 const prewarmDisplayedMessagesCache = (cacheScopeId: string) => {
@@ -235,32 +220,11 @@ const prewarmDisplayedMessagesCache = (cacheScopeId: string) => {
 };
 
 const prewarmAdjacentVersionsCache = (cacheScopeId: string) => {
-  const versionCandidates: ChatMessageNode[] = [];
-
-  for (const message of displayedMessages.value) {
-    const siblingIds = getMessageSiblingIds(message.id);
-    const currentIndex = siblingIds.indexOf(message.id);
-
-    if (currentIndex < 0) {
-      continue;
-    }
-
-    const adjacentSiblingIds = [
-      siblingIds[currentIndex - 1] ?? null,
-      siblingIds[currentIndex + 1] ?? null,
-    ];
-
-    for (const siblingId of adjacentSiblingIds) {
-      if (!siblingId) {
-        continue;
-      }
-
-      const siblingNode = getNodeById(siblingId);
-      if (siblingNode) {
-        versionCandidates.push(siblingNode);
-      }
-    }
-  }
+  const versionCandidates = findAdjacentVersionNodes({
+    displayedMessages: displayedMessages.value,
+    messageNodes: messageNodes.value,
+    rootChildIds: rootChildIds.value,
+  });
 
   prewarmRenderedContentCache(
     versionCandidates.map((message) => ({
@@ -277,68 +241,19 @@ const prewarmVisibleConversationCache = (cacheScopeId: string) => {
   prewarmAdjacentVersionsCache(cacheScopeId);
 };
 
-const {
-  activeSessionId,
-  conversationId,
-  deleteChatSession,
-  loadChatSession,
-  loadSessionSummaries,
-  persistCurrentSession,
-  renameChatSession,
-  resetConversationState,
-  sessionSummaries,
-  sessionViewKey,
-} = useChatSessions({
-  messageNodes,
-  rootChildIds,
-  selectedRootChildId,
-  selectedChildIdByParent,
-  selectedProcessingMode,
-  selectedModel,
-  isChatLocked: () => isLoading.value,
-  getDisplayedMessages: () => displayedMessages.value,
-  resetEditingState: () => {
-    inputText.value = '';
-    selectedFiles.value = [];
-    resetEditingState();
-  },
-  afterSessionLoaded: async () => {
-    inputText.value = '';
-    selectedFiles.value = [];
-    await nextTick();
-    prewarmVisibleConversationCache(
-      activeSessionId.value ?? conversationId.value,
-    );
-    scrollToBottom();
-  },
-  onDeleteActiveSession: () => {
-    onClearChat();
-  },
-});
-
 const messagesCount = computed(() => {
   return rootChildIds.value.length > 0 ? displayedMessages.value.length : 0;
 });
 
 const currentLeafMessageId = computed(() => {
-  if (rootChildIds.value.length === 0) {
-    return null;
-  }
-
-  const lastMessage =
-    displayedMessages.value[displayedMessages.value.length - 1] ?? null;
-  return lastMessage?.id ?? null;
+  return resolveCurrentLeafMessageId(
+    rootChildIds.value,
+    displayedMessages.value,
+  );
 });
 
 const lastAssistantMessageId = computed(() => {
-  for (let index = displayedMessages.value.length - 1; index >= 0; index -= 1) {
-    const message = displayedMessages.value[index];
-    if (message?.role === 'assistant') {
-      return message.id;
-    }
-  }
-
-  return null;
+  return resolveLastRoleMessageId(displayedMessages.value, 'assistant');
 });
 
 const scrollToBottom = () => {
@@ -348,43 +263,6 @@ const scrollToBottom = () => {
         messageContainerRef.value.scrollHeight;
     }
   });
-};
-
-const createAttachmentPreview = (files: File[]): ChatAttachment[] => {
-  return files.map((file) => ({
-    name: file.name,
-    sizeLabel: formatFileSize(file),
-    mimeType: file.type,
-    source: 'uploaded',
-  }));
-};
-
-const createEditableAttachmentPreview = (
-  files: File[],
-): ChatEditAttachment[] => {
-  return files.map((file) => ({
-    name: file.name,
-    sizeLabel: formatFileSize(file),
-    mimeType: file.type,
-    source: 'uploaded',
-    requestFile: file,
-  }));
-};
-
-const createUserApiContent = (text: string, files: Array<{ name: string }>) => {
-  const trimmedText = text.trim();
-  if (files.length === 0) {
-    return trimmedText;
-  }
-
-  const fileNames = files.map((file) => file.name).join('、');
-  const fileSummary = `[用户上传了 ${files.length} 个文件：${fileNames}]`;
-
-  if (!trimmedText) {
-    return `请结合我上传的文件进行处理。\n${fileSummary}`;
-  }
-
-  return `${trimmedText}\n${fileSummary}`;
 };
 
 const createMessageNode = (
@@ -413,49 +291,8 @@ const createMessageNode = (
   return newNode;
 };
 
-const getMessagePathToNode = (messageId: string) => {
-  const path: ChatMessageNode[] = [];
-  let currentMessageId: string | null = messageId;
-
-  while (currentMessageId !== null) {
-    const currentNode = getNodeById(currentMessageId);
-    if (!currentNode) {
-      break;
-    }
-
-    path.push(currentNode);
-    currentMessageId = currentNode.parentId;
-  }
-
-  return path.reverse();
-};
-
-const collectPersistedUploadedAttachmentIdsFromPath = (
-  path: ChatMessageNode[],
-) => {
-  const attachmentIds: string[] = [];
-
-  for (const message of path) {
-    for (const file of message.files ?? []) {
-      const normalizedAttachmentId = file.attachmentId?.trim();
-      const isUploadedAttachment =
-        file.source === 'uploaded' || (!file.source && message.role === 'user');
-
-      if (
-        normalizedAttachmentId &&
-        isUploadedAttachment &&
-        !attachmentIds.includes(normalizedAttachmentId)
-      ) {
-        attachmentIds.push(normalizedAttachmentId);
-      }
-    }
-  }
-
-  return attachmentIds;
-};
-
 const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
-  const path = getMessagePathToNode(userMessageId);
+  const path = getMessagePathToNode(messageNodes.value, userMessageId);
   const currentUserMessage = getNodeById(userMessageId);
   return {
     userMessageId,
@@ -541,72 +378,64 @@ const updateMessageInteraction = (
   if (!targetMessage) {
     return;
   }
-
   targetMessage.interaction = interaction ?? null;
 };
 
-const getMessageSiblingIds = (messageId: string) => {
-  const messageNode = getNodeById(messageId);
-  if (!messageNode) {
-    return [];
-  }
-
-  const siblingSourceIds = messageNode.parentId
-    ? (getNodeById(messageNode.parentId)?.childIds ?? [])
-    : rootChildIds.value;
-
-  return siblingSourceIds.filter((childId) => {
-    return getNodeById(childId)?.role === messageNode.role;
+const getMessageVersionIndex = (messageId: string) => {
+  return getMessageVersionIndexInTree({
+    messageNodes: messageNodes.value,
+    rootChildIds: rootChildIds.value,
+    messageId,
   });
 };
 
-const getMessageVersionIndex = (messageId: string) => {
-  const siblingIds = getMessageSiblingIds(messageId);
-  const currentIndex = siblingIds.indexOf(messageId);
-  return currentIndex >= 0 ? currentIndex + 1 : 1;
-};
-
 const getMessageVersionCount = (messageId: string) => {
-  return getMessageSiblingIds(messageId).length;
+  return getMessageVersionCountInTree({
+    messageNodes: messageNodes.value,
+    rootChildIds: rootChildIds.value,
+    messageId,
+  });
 };
 
 const canSwitchMessageVersion = (messageId: string, direction: -1 | 1) => {
-  const messageNode = getNodeById(messageId);
-  if (!messageNode) {
-    return false;
-  }
-
-  const siblingIds = getMessageSiblingIds(messageId);
-  const currentIndex = siblingIds.indexOf(messageId);
-  const targetIndex = currentIndex + direction;
-
-  return targetIndex >= 0 && targetIndex < siblingIds.length;
+  return canSwitchMessageVersionInTree({
+    messageNodes: messageNodes.value,
+    rootChildIds: rootChildIds.value,
+    messageId,
+    direction,
+  });
 };
 
 const switchMessageVersion = (messageId: string, direction: -1 | 1) => {
-  const messageNode = getNodeById(messageId);
-  if (!messageNode || isLoading.value) {
+  if (isLoading.value) {
     return;
   }
 
-  const siblingIds = getMessageSiblingIds(messageId);
-  const currentIndex = siblingIds.indexOf(messageId);
-  const targetMessageId = siblingIds[currentIndex + direction];
-
-  if (targetMessageId) {
-    if (messageNode.parentId) {
-      selectedChildIdByParent.value[messageNode.parentId] = targetMessageId;
-      prewarmVisibleConversationCache(
-        activeSessionId.value ?? conversationId.value,
-      );
-      return;
-    }
-
-    selectedRootChildId.value = targetMessageId;
-    prewarmVisibleConversationCache(
-      activeSessionId.value ?? conversationId.value,
-    );
+  const messageNode = getNodeById(messageId);
+  if (!messageNode) {
+    return;
   }
+
+  const targetMessageId = resolveTargetVersionMessageId({
+    messageNodes: messageNodes.value,
+    rootChildIds: rootChildIds.value,
+    messageId,
+    direction,
+  });
+
+  if (!targetMessageId) {
+    return;
+  }
+
+  if (messageNode.parentId) {
+    selectedChildIdByParent.value[messageNode.parentId] = targetMessageId;
+  } else {
+    selectedRootChildId.value = targetMessageId;
+  }
+
+  prewarmVisibleConversationCache(
+    activeSessionId.value ?? conversationId.value,
+  );
 };
 
 const createAssistantVariant = (userMessageId: string) => {
@@ -639,6 +468,45 @@ const {
   },
 });
 
+const {
+  activeSessionId,
+  conversationId,
+  deleteChatSession,
+  loadChatSession,
+  loadSessionSummaries,
+  persistCurrentSession,
+  renameChatSession,
+  resetConversationState,
+  sessionSummaries,
+  sessionViewKey,
+} = useChatSessions({
+  messageNodes,
+  rootChildIds,
+  selectedRootChildId,
+  selectedChildIdByParent,
+  selectedProcessingMode,
+  selectedModel,
+  isChatLocked: () => isLoading.value,
+  getDisplayedMessages: () => displayedMessages.value,
+  resetEditingState: () => {
+    inputText.value = '';
+    selectedFiles.value = [];
+    resetEditingState();
+  },
+  afterSessionLoaded: async () => {
+    inputText.value = '';
+    selectedFiles.value = [];
+    await nextTick();
+    prewarmVisibleConversationCache(
+      activeSessionId.value ?? conversationId.value,
+    );
+    scrollToBottom();
+  },
+  onDeleteActiveSession: () => {
+    onClearChat();
+  },
+});
+
 const isMessageStreaming = (message: ChatMessageNode) => {
   return (
     isLoading.value &&
@@ -652,7 +520,6 @@ const activeStreamingAssistantMessage = computed(() => {
   if (!activeAssistantId) {
     return null;
   }
-
   return getNodeById(activeAssistantId);
 });
 
@@ -671,66 +538,56 @@ const latestLiveToolStatus = computed<ChatToolStatus | null>(() => {
       return status;
     }
   }
-
   return liveToolStatuses.value[liveToolStatuses.value.length - 1] ?? null;
 });
 
-const canConfirmEdit = computed(() => {
-  return (
-    !isLoading.value &&
-    (editingDraftText.value.trim().length > 0 ||
-      editingDraftFiles.value.length > 0)
-  );
+const {
+  canConfirmEdit,
+  onFilesSelect,
+  onRemoveFile,
+  onClearAllFiles,
+  onClearChat,
+  startEditingMessage,
+  updateEditingText,
+  appendEditingFiles,
+  removeEditingFile,
+  cancelEditingMessage,
+  confirmEditingMessage,
+  onSendMessage,
+  onRegenerate,
+  submitMessageInteraction,
+  copyMessage,
+  downloadAssistantMessage,
+  downloadMessageFile,
+} = useMessageActions({
+  inputText,
+  selectedFiles,
+  editingMessageId,
+  editingDraftText,
+  editingDraftFiles,
+  isLoading,
+  activeSessionId,
+  conversationId,
+  rootChildIds,
+  messageNodes,
+  selectedRootChildId,
+  selectedChildIdByParent,
+  currentLeafMessageId,
+  getNodeById,
+  createMessageNode,
+  buildRequestSnapshotForUserMessage,
+  executeAssistantGeneration,
+  executeAssistantInteraction,
+  persistCurrentSession: async () => {
+    await persistCurrentSession();
+  },
+  resetEditingState,
+  scrollToBottom,
+  onStopGeneration,
+  resetConversationState,
+  showCopyToast,
+  downloadAttachment,
 });
-
-const copyMessage = async (messageId: string) => {
-  const messageNode = getNodeById(messageId);
-  if (!messageNode?.content.trim() || !navigator.clipboard) {
-    return;
-  }
-
-  try {
-    await navigator.clipboard.writeText(messageNode.content);
-    showCopyToast('内容已复制到剪贴板');
-  } catch (error) {
-    console.error('复制消息失败。', error);
-  }
-};
-
-const downloadAssistantMessage = (assistantMessageId: string) => {
-  const assistantNode = getNodeById(assistantMessageId);
-  if (!assistantNode?.content.trim()) {
-    return;
-  }
-
-  const blob = new Blob([assistantNode.content], {
-    type: 'text/markdown;charset=utf-8',
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  const safeTimestamp = assistantNode.timestamp
-    .toISOString()
-    .replace(/[:.]/g, '-');
-
-  link.href = url;
-  link.download = `assistant-reply-${safeTimestamp}.md`;
-  link.click();
-  URL.revokeObjectURL(url);
-};
-
-const downloadMessageFile = async (file: ChatAttachment) => {
-  if (!file.attachmentId) {
-    return;
-  }
-
-  try {
-    await downloadAttachment(file.attachmentId);
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : '下载文件失败，请稍后重试。';
-    showCopyToast(errorMessage, { title: '下载失败' });
-  }
-};
 
 const onSelectModel = (model: string) => {
   selectedModel.value = model;
@@ -744,29 +601,6 @@ const onSelectProcessingMode = (mode: string) => {
   if (activeSessionId.value && rootChildIds.value.length > 0) {
     void persistCurrentSession();
   }
-};
-
-const onFilesSelect = (files: File[]) => {
-  selectedFiles.value = [...selectedFiles.value, ...files];
-};
-
-const onRemoveFile = (index: number) => {
-  selectedFiles.value.splice(index, 1);
-};
-
-const onClearAllFiles = () => {
-  selectedFiles.value = [];
-};
-
-const onClearChat = () => {
-  onStopGeneration();
-  messageNodes.value = {};
-  rootChildIds.value = [];
-  selectedRootChildId.value = null;
-  selectedChildIdByParent.value = {};
-  selectedFiles.value = [];
-  resetConversationState();
-  resetEditingState();
 };
 
 const onLoadSession = async (sessionId: string) => {
@@ -784,201 +618,12 @@ const onDeleteSession = async (sessionId: string) => {
   await deleteChatSession(sessionId);
 };
 
-const startEditingMessage = (messageId: string) => {
-  if (isLoading.value) {
-    return;
-  }
-
-  const messageNode = getNodeById(messageId);
-  if (!messageNode || messageNode.role !== 'user') {
-    return;
-  }
-
-  editingMessageId.value = messageId;
-  editingDraftText.value = messageNode.content;
-  const requestFileEntries: Array<[string, File]> = (
-    messageNode.requestFiles ?? []
-  ).map((file) => [`${file.name}::${formatFileSize(file)}`, file]);
-  const requestFileMap = new Map<string, File>(requestFileEntries);
-  const sourceFiles =
-    messageNode.files && messageNode.files.length > 0
-      ? messageNode.files
-      : createAttachmentPreview(messageNode.requestFiles ?? []);
-
-  editingDraftFiles.value = sourceFiles.map<ChatEditAttachment>((file) => ({
-    ...file,
-    requestFile: requestFileMap.get(`${file.name}::${file.sizeLabel}`) ?? null,
-  }));
-};
-
-const updateEditingText = (value: string) => {
-  editingDraftText.value = value;
-};
-
-const appendEditingFiles = (files: File[]) => {
-  editingDraftFiles.value = [
-    ...editingDraftFiles.value,
-    ...createEditableAttachmentPreview(files),
-  ];
-};
-
-const removeEditingFile = (index: number) => {
-  editingDraftFiles.value.splice(index, 1);
-};
-
-const cancelEditingMessage = () => {
-  resetEditingState();
-};
-
-const confirmEditingMessage = async () => {
-  if (!editingMessageId.value || !canConfirmEdit.value) {
-    return;
-  }
-
-  const sourceMessage = getNodeById(editingMessageId.value);
-  if (!sourceMessage || sourceMessage.role !== 'user') {
-    resetEditingState();
-    return;
-  }
-
-  const nextText = editingDraftText.value.trim();
-  const nextFiles = editingDraftFiles.value.flatMap((file) => {
-    return file.requestFile ? [file.requestFile] : [];
-  });
-  const nextAttachments = editingDraftFiles.value.map((file) => ({
-    name: file.name,
-    sizeLabel: file.sizeLabel,
-    attachmentId: file.attachmentId,
-    downloadUrl: file.downloadUrl,
-    expiresAt: file.expiresAt,
-    mimeType: file.mimeType,
-    source: file.source,
-  }));
-
-  const editedUserMessage = createMessageNode({
-    role: 'user',
-    content: nextText,
-    apiContent: createUserApiContent(nextText, nextAttachments),
-    files: nextAttachments,
-    requestFiles: nextFiles,
-    timestamp: new Date(),
-    parentId: sourceMessage.parentId,
-  });
-
-  resetEditingState();
-  scrollToBottom();
-  await persistCurrentSession();
-
-  await executeAssistantGeneration(
-    buildRequestSnapshotForUserMessage(editedUserMessage.id),
-  );
-};
-
-const onSendMessage = async () => {
-  const text = inputText.value.trim();
-  if ((!text && selectedFiles.value.length === 0) || isLoading.value) {
-    return;
-  }
-
-  const currentRequestFiles = [...selectedFiles.value];
-  const userMessage = createMessageNode({
-    role: 'user',
-    content: text,
-    apiContent: createUserApiContent(text, currentRequestFiles),
-    files: createAttachmentPreview(currentRequestFiles),
-    requestFiles: currentRequestFiles,
-    timestamp: new Date(),
-    parentId: currentLeafMessageId.value,
-  });
-  scrollToBottom();
-
-  inputText.value = '';
-  selectedFiles.value = [];
-  activeSessionId.value = conversationId.value;
-  await persistCurrentSession();
-
-  await executeAssistantGeneration(
-    buildRequestSnapshotForUserMessage(userMessage.id),
-  );
-};
-
-const onRegenerate = async (assistantMessageId: string) => {
-  if (isLoading.value) {
-    return;
-  }
-
-  const assistantNode = getNodeById(assistantMessageId);
-  if (!assistantNode?.parentId || assistantNode.role !== 'assistant') {
-    return;
-  }
-
-  await persistCurrentSession();
-  await executeAssistantGeneration(
-    buildRequestSnapshotForUserMessage(assistantNode.parentId),
-  );
-};
-
-const submitMessageInteraction = async (
-  assistantMessageId: string,
-  interactionAnswer: ChatInteractionAnswer,
-) => {
-  if (isLoading.value) {
-    return;
-  }
-
-  const assistantNode = getNodeById(assistantMessageId);
-  if (
-    !assistantNode ||
-    assistantNode.role !== 'assistant' ||
-    !assistantNode.parentId
-  ) {
-    return;
-  }
-
-  await executeAssistantInteraction(
-    buildRequestSnapshotForUserMessage(assistantNode.parentId),
-    assistantMessageId,
-    interactionAnswer,
-  );
-};
-
-const loadAvailableModels = async () => {
-  try {
-    const modelNames = await fetchAvailableModels();
-    if (modelNames.length === 0) {
-      return;
-    }
-
-    availableModels.value = modelNames;
-    if (!modelNames.includes(selectedModel.value)) {
-      selectedModel.value = modelNames[0];
-    }
-  } catch (error) {
-    console.error('加载远程模型列表失败，继续使用前端兜底模型列表。', error);
-  }
-};
-
-const loadAvailableSkills = async () => {
-  try {
-    const { skills: nextSkills, defaultSkillId } = await fetchAvailableSkills();
-    if (nextSkills.length === 0) {
-      return;
-    }
-
-    processingModes.value = nextSkills;
-    const resolvedSkillId = nextSkills.some((skill) => {
-      return skill.id === selectedProcessingMode.value;
-    })
-      ? selectedProcessingMode.value
-      : nextSkills.some((skill) => skill.id === defaultSkillId)
-        ? defaultSkillId
-        : nextSkills[0].id;
-
-    selectedProcessingMode.value = resolvedSkillId;
-  } catch (error) {
-    console.error('加载 skill 列表失败，继续使用前端兜底选项。', error);
-  }
-};
+const { loadAvailableModels, loadAvailableSkills } = useCatalogLoader({
+  availableModels,
+  selectedModel,
+  processingModes,
+  selectedProcessingMode,
+});
 
 onMounted(() => {
   scrollToBottom();
@@ -990,4 +635,5 @@ onMounted(() => {
   );
 });
 </script>
+
 <style scoped src="../styles/components/chat-layout.css"></style>
