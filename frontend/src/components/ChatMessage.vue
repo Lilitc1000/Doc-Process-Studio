@@ -32,7 +32,33 @@
               :key="`${file.name}-${file.sizeLabel}-${index}`"
               class="message-edit-file-item"
             >
-              <span class="message-file-icon">📄</span>
+              <span
+                class="message-file-icon"
+                :style="getFileIconStyle(file.name, file.mimeType)"
+                :title="getFileIconLabel(file.name, file.mimeType)"
+                aria-hidden="true"
+              >
+                <svg viewBox="0 0 20 20" class="message-file-icon-svg">
+                  <path
+                    d="M6 2.75H10.6L14.75 6.9V15a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 15V5A2.25 2.25 0 016 2.75z"
+                    fill="var(--file-icon-bg)"
+                    stroke="var(--file-icon-border)"
+                    stroke-linejoin="round"
+                    stroke-width="1.2"
+                  />
+                  <path
+                    d="M10.5 2.75V6.25H14"
+                    fill="none"
+                    stroke="var(--file-icon-border)"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.2"
+                  />
+                </svg>
+                <span class="message-file-icon-badge">
+                  {{ getFileIconBadge(file.name, file.mimeType) }}
+                </span>
+              </span>
               <div class="message-edit-file-meta">
                 <span class="message-file-name">{{ file.name }}</span>
                 <span class="message-file-size">
@@ -186,7 +212,33 @@
                 type="button"
                 @click="onMessageFileClick(file)"
               >
-                <span class="message-file-icon">📄</span>
+                <span
+                  class="message-file-icon"
+                  :style="getFileIconStyle(file.name, file.mimeType)"
+                  :title="getFileIconLabel(file.name, file.mimeType)"
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 20 20" class="message-file-icon-svg">
+                    <path
+                      d="M6 2.75H10.6L14.75 6.9V15a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 15V5A2.25 2.25 0 016 2.75z"
+                      fill="var(--file-icon-bg)"
+                      stroke="var(--file-icon-border)"
+                      stroke-linejoin="round"
+                      stroke-width="1.2"
+                    />
+                    <path
+                      d="M10.5 2.75V6.25H14"
+                      fill="none"
+                      stroke="var(--file-icon-border)"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.2"
+                    />
+                  </svg>
+                  <span class="message-file-icon-badge">
+                    {{ getFileIconBadge(file.name, file.mimeType) }}
+                  </span>
+                </span>
                 <div class="message-file-meta">
                   <span class="message-file-name">{{ file.name }}</span>
                   <span class="message-file-size">{{ file.sizeLabel }}</span>
@@ -210,7 +262,33 @@
                 type="button"
                 @click="onMessageFileClick(file)"
               >
-                <span class="message-file-icon">📄</span>
+                <span
+                  class="message-file-icon"
+                  :style="getFileIconStyle(file.name, file.mimeType)"
+                  :title="getFileIconLabel(file.name, file.mimeType)"
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 20 20" class="message-file-icon-svg">
+                    <path
+                      d="M6 2.75H10.6L14.75 6.9V15a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 15V5A2.25 2.25 0 016 2.75z"
+                      fill="var(--file-icon-bg)"
+                      stroke="var(--file-icon-border)"
+                      stroke-linejoin="round"
+                      stroke-width="1.2"
+                    />
+                    <path
+                      d="M10.5 2.75V6.25H14"
+                      fill="none"
+                      stroke="var(--file-icon-border)"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.2"
+                    />
+                  </svg>
+                  <span class="message-file-icon-badge">
+                    {{ getFileIconBadge(file.name, file.mimeType) }}
+                  </span>
+                </span>
                 <div class="message-file-meta">
                   <span class="message-file-name">{{ file.name }}</span>
                   <span class="message-file-size">{{ file.sizeLabel }}</span>
@@ -522,6 +600,7 @@ import type {
   ChatMessageDisplay,
   ChatToolStatus,
 } from '../types/chat';
+import { getFileTypeVisual } from '../utils/file';
 import {
   getCachedRenderedContent,
   renderMarkdown,
@@ -574,6 +653,23 @@ const editTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const messageContentRef = ref<HTMLElement | null>(null);
 const hasEnteredViewport = ref(false);
 let messageViewportObserver: IntersectionObserver | null = null;
+
+const getFileIconStyle = (fileName: string, mimeType?: string) => {
+  const visual = getFileTypeVisual(fileName, mimeType);
+  return {
+    '--file-icon-fg': visual.color,
+    '--file-icon-bg': visual.background,
+    '--file-icon-border': visual.border,
+  };
+};
+
+const getFileIconBadge = (fileName: string, mimeType?: string) => {
+  return getFileTypeVisual(fileName, mimeType).badge;
+};
+
+const getFileIconLabel = (fileName: string, mimeType?: string) => {
+  return getFileTypeVisual(fileName, mimeType).label;
+};
 
 const formattedTime = computed(() => {
   const date = props.message.timestamp;

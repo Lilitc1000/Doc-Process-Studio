@@ -3,7 +3,33 @@
     <div v-if="files.length > 0" class="files-preview">
       <div ref="filesContainerRef" class="files-list">
         <div v-for="(file, index) in files" :key="index" class="file-item">
-          <span class="file-icon">📄</span>
+          <span
+            class="file-icon"
+            :style="getFileIconStyle(file.name, file.type)"
+            :title="getFileIconLabel(file.name, file.type)"
+            aria-hidden="true"
+          >
+            <svg viewBox="0 0 20 20" class="file-icon-svg">
+              <path
+                d="M6 2.75H10.6L14.75 6.9V15a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 15V5A2.25 2.25 0 016 2.75z"
+                fill="var(--file-icon-bg)"
+                stroke="var(--file-icon-border)"
+                stroke-linejoin="round"
+                stroke-width="1.2"
+              />
+              <path
+                d="M10.5 2.75V6.25H14"
+                fill="none"
+                stroke="var(--file-icon-border)"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.2"
+              />
+            </svg>
+            <span class="file-icon-badge">
+              {{ getFileIconBadge(file.name, file.type) }}
+            </span>
+          </span>
           <div class="file-details">
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formatFileSize(file) }}</span>
@@ -105,7 +131,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { formatFileSize } from '../utils/file';
+import { formatFileSize, getFileTypeVisual } from '../utils/file';
 
 const props = defineProps<{
   text: string;
@@ -125,6 +151,23 @@ const emit = defineEmits<{
 
 const localText = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+
+const getFileIconStyle = (fileName: string, mimeType?: string) => {
+  const visual = getFileTypeVisual(fileName, mimeType);
+  return {
+    '--file-icon-fg': visual.color,
+    '--file-icon-bg': visual.background,
+    '--file-icon-border': visual.border,
+  };
+};
+
+const getFileIconBadge = (fileName: string, mimeType?: string) => {
+  return getFileTypeVisual(fileName, mimeType).badge;
+};
+
+const getFileIconLabel = (fileName: string, mimeType?: string) => {
+  return getFileTypeVisual(fileName, mimeType).label;
+};
 
 const resizeTextarea = () => {
   if (!textareaRef.value) {

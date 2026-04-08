@@ -21,8 +21,9 @@
 
 .files-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 250px));
   gap: 0.5rem;
+  justify-content: start;
 }
 
 .file-item {
@@ -30,7 +31,7 @@
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
-  width: 100%;
+  width: 250px;
   padding: 0.5rem 2.2rem 0.5rem 0.9rem;
   background: #f8fafc;
   border-radius: 18px;
@@ -104,7 +105,39 @@
 }
 
 .file-icon {
-  font-size: 1.25rem;
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--file-icon-fg, #475467);
+}
+
+.file-icon-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.file-icon-badge {
+  position: absolute;
+  bottom: -0.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 1.45rem;
+  height: 0.9rem;
+  padding: 0 0.22rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--file-icon-fg, #475467) 92%, white 8%);
+  color: white;
+  font-size: 0.5rem;
+  font-weight: 700;
+  line-height: 0.9rem;
+  text-align: center;
+  letter-spacing: 0.02em;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
 }
 
 .file-details {

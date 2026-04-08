@@ -351,6 +351,7 @@ const createAttachmentPreview = (files: File[]): ChatAttachment[] => {
   return files.map((file) => ({
     name: file.name,
     sizeLabel: formatFileSize(file),
+    mimeType: file.type,
     source: 'uploaded',
   }));
 };
@@ -361,6 +362,7 @@ const createEditableAttachmentPreview = (
   return files.map((file) => ({
     name: file.name,
     sizeLabel: formatFileSize(file),
+    mimeType: file.type,
     source: 'uploaded',
     requestFile: file,
   }));
