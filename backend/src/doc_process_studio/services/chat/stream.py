@@ -233,6 +233,7 @@ def build_skill_runtime_instructions(skill_id: str) -> str:
             "请遵循渐进式披露：先查看技能目录，再优先读取 SKILL.md；若 SKILL.md 引用了 references、scripts 或 assets，再按需继续读取。",
             "不要一次性读取整个 skill 目录。",
             "如果 skill 中已经声明了可执行工具，应优先调用这些声明式工具，而不是在回答里手写脚本让用户自己运行。",
+            "若工具已返回附件，请直接说明可从附件下载，不要输出 file:// 或 /tmp 等本地临时路径。",
         ]
     )
 

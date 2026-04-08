@@ -25,11 +25,7 @@
         class="message-content"
         :class="{ thinking: isThinking }"
       >
-        <div v-if="isThinking" class="thinking-state">
-          <span class="thinking-spinner"></span>
-          <span>思考中...</span>
-        </div>
-        <div v-else-if="isEditing" class="message-edit-panel">
+        <div v-if="isEditing" class="message-edit-panel">
           <div v-if="editingFiles.length > 0" class="message-edit-files">
             <div
               v-for="(file, index) in editingFiles"
@@ -63,13 +59,50 @@
           ></textarea>
         </div>
         <template v-else>
+          <div
+            v-if="showInlineLiveToolStatus"
+            class="message-live-tool-status"
+            aria-live="polite"
+          >
+            <div class="message-live-tool-status-leading" aria-hidden="true">
+              <span class="message-live-tool-status-orbit"></span>
+              <span class="message-live-tool-status-core"></span>
+            </div>
+            <div class="message-live-tool-status-content">
+              <div class="message-live-tool-status-headline">
+                <span class="message-live-tool-status-title">
+                  {{ liveToolStatusLabel }}
+                </span>
+                <span class="message-live-tool-status-phase">
+                  {{ liveToolStatusPhase }}
+                </span>
+              </div>
+              <div class="message-live-tool-status-message">
+                {{ liveToolStatusMessage }}
+              </div>
+            </div>
+          </div>
+          <div
+            v-if="
+              isThinking &&
+              !normalizedDisplayContent.trim().length &&
+              !(message.files && message.files.length > 0)
+            "
+            class="thinking-state"
+          >
+            <span class="thinking-spinner"></span>
+            <span>思考中...</span>
+          </div>
           <details
-            v-if="message.role === 'assistant' && toolStatuses.length > 0"
+            v-if="showHistoricalToolStatuses"
             class="message-tool-status"
-            :open="isThinking"
+            :open="isToolStatusPanelOpen"
+            :class="{ 'is-processing': isToolStatusPanelOpen }"
           >
             <summary class="message-tool-status-summary">
-              <span class="message-tool-status-title">处理过程</span>
+              <span class="message-tool-status-title">
+                {{ isToolStatusPanelOpen ? '处理中' : '处理过程' }}
+              </span>
               <span class="message-tool-status-count">
                 {{ toolStatuses.length }} 条
               </span>
@@ -86,9 +119,20 @@
               >
                 <span class="message-tool-status-dot" aria-hidden="true"></span>
                 <div class="message-tool-status-body">
-                  <span class="message-tool-status-message">
-                    {{ toolStatus.message }}
-                  </span>
+                  <div class="message-tool-status-headline">
+                    <span class="message-tool-status-message">
+                      {{ toolStatus.message }}
+                    </span>
+                    <span
+                      class="message-tool-status-phase"
+                      :class="{
+                        'is-running': toolStatus.phase === 'start',
+                        'is-finished': toolStatus.phase === 'finish',
+                      }"
+                    >
+                      {{ formatToolPhase(toolStatus.phase) }}
+                    </span>
+                  </div>
                   <span
                     v-if="
                       toolStatus.label ||
@@ -119,35 +163,68 @@
               </div>
             </div>
           </details>
-          <div
-            v-if="message.files && message.files.length > 0"
-            class="message-files"
-          >
-            <button
-              v-for="file in message.files"
-              :key="`${file.name}-${file.sizeLabel}-${file.attachmentId ?? 'plain'}`"
-              class="message-file-item"
-              :class="{
-                'is-downloadable': Boolean(file.attachmentId),
-                'is-static': !file.attachmentId,
-              }"
-              type="button"
-              @click="onMessageFileClick(file)"
+          <template v-if="message.role === 'assistant'">
+            <!-- eslint-disable vue/no-v-html -->
+            <div
+              v-if="normalizedDisplayContent.trim().length > 0"
+              class="message-text"
+              v-html="renderedContent"
+            ></div>
+            <!-- eslint-enable vue/no-v-html -->
+            <div
+              v-if="message.files && message.files.length > 0"
+              class="message-files"
             >
-              <span class="message-file-icon">📄</span>
-              <div class="message-file-meta">
-                <span class="message-file-name">{{ file.name }}</span>
-                <span class="message-file-size">{{ file.sizeLabel }}</span>
-              </div>
-            </button>
-          </div>
-          <!-- eslint-disable vue/no-v-html -->
-          <div
-            v-if="message.content.trim().length > 0"
-            class="message-text"
-            v-html="renderedContent"
-          ></div>
-          <!-- eslint-enable vue/no-v-html -->
+              <button
+                v-for="file in message.files"
+                :key="`${file.name}-${file.sizeLabel}-${file.attachmentId ?? 'plain'}`"
+                class="message-file-item"
+                :class="{
+                  'is-downloadable': Boolean(file.attachmentId),
+                  'is-static': !file.attachmentId,
+                }"
+                type="button"
+                @click="onMessageFileClick(file)"
+              >
+                <span class="message-file-icon">📄</span>
+                <div class="message-file-meta">
+                  <span class="message-file-name">{{ file.name }}</span>
+                  <span class="message-file-size">{{ file.sizeLabel }}</span>
+                </div>
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <div
+              v-if="message.files && message.files.length > 0"
+              class="message-files"
+            >
+              <button
+                v-for="file in message.files"
+                :key="`${file.name}-${file.sizeLabel}-${file.attachmentId ?? 'plain'}`"
+                class="message-file-item"
+                :class="{
+                  'is-downloadable': Boolean(file.attachmentId),
+                  'is-static': !file.attachmentId,
+                }"
+                type="button"
+                @click="onMessageFileClick(file)"
+              >
+                <span class="message-file-icon">📄</span>
+                <div class="message-file-meta">
+                  <span class="message-file-name">{{ file.name }}</span>
+                  <span class="message-file-size">{{ file.sizeLabel }}</span>
+                </div>
+              </button>
+            </div>
+            <!-- eslint-disable vue/no-v-html -->
+            <div
+              v-if="normalizedDisplayContent.trim().length > 0"
+              class="message-text"
+              v-html="renderedContent"
+            ></div>
+            <!-- eslint-enable vue/no-v-html -->
+          </template>
         </template>
       </div>
       <div
@@ -457,6 +534,8 @@ const props = defineProps<{
   message: ChatMessageDisplay;
   cacheScopeId: string;
   isThinking?: boolean;
+  isStreaming?: boolean;
+  liveToolStatus?: ChatToolStatus | null;
   showVersionSwitcher?: boolean;
   versionIndex?: number;
   versionCount?: number;
@@ -536,7 +615,90 @@ const toolStatuses = computed<ChatToolStatus[]>(() => {
   return props.message.toolStatuses ?? [];
 });
 const shouldRenderMarkdownContent = computed(() => {
-  return shouldUseMarkdownRendering(props.message.content, props.message.role);
+  return shouldUseMarkdownRendering(
+    normalizedDisplayContent.value,
+    props.message.role,
+  );
+});
+
+const normalizedDisplayContent = computed(() => {
+  const rawContent = props.message.content;
+  if (
+    props.message.role !== 'assistant' ||
+    (props.message.files?.length ?? 0) === 0
+  ) {
+    return rawContent;
+  }
+
+  const cleanedLines = rawContent.split('\n').filter((line) => {
+    const normalizedLine = line.trim();
+    if (!normalizedLine) {
+      return true;
+    }
+
+    if (normalizedLine.includes('file://')) {
+      return false;
+    }
+
+    return !(
+      normalizedLine.includes('复制到浏览器') ||
+      normalizedLine.includes('点击下载')
+    );
+  });
+
+  return cleanedLines.join('\n').trim();
+});
+
+const hasRunningToolStatus = computed(() => {
+  const lastToolStatus = toolStatuses.value[toolStatuses.value.length - 1];
+  return lastToolStatus?.phase === 'start';
+});
+
+const showInlineLiveToolStatus = computed(() => {
+  return props.message.role === 'assistant' && Boolean(props.liveToolStatus);
+});
+
+const showHistoricalToolStatuses = computed(() => {
+  return (
+    props.message.role === 'assistant' &&
+    toolStatuses.value.length > 0 &&
+    !(props.isStreaming ?? false)
+  );
+});
+
+const isToolStatusPanelOpen = computed(() => {
+  return (props.isStreaming ?? false) || hasRunningToolStatus.value;
+});
+
+const formatFallbackToolName = (toolName?: string) => {
+  const normalizedToolName = toolName?.trim() ?? '';
+  if (!normalizedToolName) {
+    return '';
+  }
+
+  return normalizedToolName.replaceAll('_', ' ');
+};
+
+const liveToolStatusLabel = computed(() => {
+  const status = props.liveToolStatus;
+  if (!status) {
+    return '';
+  }
+
+  return status.label || formatFallbackToolName(status.toolName) || '工具执行';
+});
+
+const liveToolStatusPhase = computed(() => {
+  const status = props.liveToolStatus;
+  if (!status) {
+    return '';
+  }
+
+  return status.phase === 'finish' ? '已完成' : '进行中';
+});
+
+const liveToolStatusMessage = computed(() => {
+  return props.liveToolStatus?.message ?? '';
 });
 
 const activateLazyMarkdownRendering = () => {
@@ -608,15 +770,6 @@ const onMessageFileClick = (file: ChatAttachment) => {
   emit('download-file', file);
 };
 
-const formatFallbackToolName = (toolName?: string) => {
-  const normalizedToolName = toolName?.trim() ?? '';
-  if (!normalizedToolName) {
-    return '';
-  }
-
-  return normalizedToolName.replaceAll('_', ' ');
-};
-
 const formatStatusTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -628,6 +781,18 @@ const formatStatusTime = (value: string) => {
     minute: '2-digit',
     second: '2-digit',
   });
+};
+
+const formatToolPhase = (phase?: string) => {
+  if (phase === 'start') {
+    return '进行中';
+  }
+
+  if (phase === 'finish') {
+    return '已完成';
+  }
+
+  return '处理中';
 };
 
 const resizeEditTextarea = () => {
@@ -654,20 +819,20 @@ watch(
 
 watchEffect((onCleanup) => {
   let cancelled = false;
-  const currentContent = props.message.content;
+  const displayContent = normalizedDisplayContent.value;
   const currentRole = props.message.role;
   const currentCacheScopeId = props.cacheScopeId;
   const currentMessageId = props.message.id;
 
   if (!shouldRenderMarkdownContent.value || !hasEnteredViewport.value) {
-    const plainTextContent = renderPlainText(currentContent);
+    const plainTextContent = renderPlainText(displayContent);
     renderedContent.value = plainTextContent;
 
     if (!shouldRenderMarkdownContent.value) {
       setCachedRenderedContent(
         currentCacheScopeId,
         currentMessageId,
-        currentContent,
+        displayContent,
         currentRole,
         plainTextContent,
       );
@@ -679,7 +844,7 @@ watchEffect((onCleanup) => {
   const cachedRenderedContent = getCachedRenderedContent(
     currentCacheScopeId,
     currentMessageId,
-    currentContent,
+    displayContent,
     currentRole,
   );
   if (cachedRenderedContent) {
@@ -687,14 +852,14 @@ watchEffect((onCleanup) => {
     return;
   }
 
-  renderMarkdown(currentContent)
+  renderMarkdown(displayContent)
     .then((renderedHtml) => {
       if (!cancelled) {
         renderedContent.value = renderedHtml;
         setCachedRenderedContent(
           currentCacheScopeId,
           currentMessageId,
-          currentContent,
+          displayContent,
           currentRole,
           renderedHtml,
         );
@@ -702,12 +867,12 @@ watchEffect((onCleanup) => {
     })
     .catch(() => {
       if (!cancelled) {
-        const fallbackContent = renderPlainText(currentContent);
+        const fallbackContent = renderPlainText(displayContent);
         renderedContent.value = fallbackContent;
         setCachedRenderedContent(
           currentCacheScopeId,
           currentMessageId,
-          currentContent,
+          displayContent,
           currentRole,
           fallbackContent,
         );

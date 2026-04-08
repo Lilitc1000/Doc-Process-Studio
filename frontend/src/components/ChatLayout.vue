@@ -28,6 +28,7 @@
             :key="message.id"
             :message="message"
             :is-thinking="isMessageThinking(message)"
+            :is-streaming="isMessageStreaming(message)"
             :version-index="getMessageVersionIndex(message.id)"
             :version-count="getMessageVersionCount(message.id)"
             :show-version-switcher="getMessageVersionCount(message.id) > 1"
@@ -48,6 +49,11 @@
             :can-confirm-edit="canConfirmEdit"
             :show-toolbar-by-default="message.id === lastAssistantMessageId"
             :cache-scope-id="activeSessionId ?? conversationId"
+            :live-tool-status="
+              message.id === activeGeneration?.assistantId
+                ? latestLiveToolStatus
+                : null
+            "
             @prev-version="switchMessageVersion(message.id, -1)"
             @next-version="switchMessageVersion(message.id, 1)"
             @start-edit="startEditingMessage(message.id)"
@@ -596,6 +602,7 @@ const createAssistantVariant = (userMessageId: string) => {
 };
 
 const {
+  activeGeneration,
   executeAssistantGeneration,
   isLoading,
   isMessageThinking,
@@ -611,6 +618,42 @@ const {
   persistCurrentSession: async () => {
     await persistCurrentSession();
   },
+});
+
+const isMessageStreaming = (message: ChatMessageNode) => {
+  return (
+    isLoading.value &&
+    message.role === 'assistant' &&
+    message.id === activeGeneration.value?.assistantId
+  );
+};
+
+const activeStreamingAssistantMessage = computed(() => {
+  const activeAssistantId = activeGeneration.value?.assistantId;
+  if (!activeAssistantId) {
+    return null;
+  }
+
+  return getNodeById(activeAssistantId);
+});
+
+const liveToolStatuses = computed<ChatToolStatus[]>(() => {
+  return activeStreamingAssistantMessage.value?.toolStatuses ?? [];
+});
+
+const latestLiveToolStatus = computed<ChatToolStatus | null>(() => {
+  if (!isLoading.value || liveToolStatuses.value.length === 0) {
+    return null;
+  }
+
+  for (let index = liveToolStatuses.value.length - 1; index >= 0; index -= 1) {
+    const status = liveToolStatuses.value[index];
+    if (status?.phase === 'start') {
+      return status;
+    }
+  }
+
+  return liveToolStatuses.value[liveToolStatuses.value.length - 1] ?? null;
 });
 
 const canConfirmEdit = computed(() => {

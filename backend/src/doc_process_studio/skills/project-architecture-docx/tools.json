@@ -25,8 +25,18 @@
             "description": "期望生成的文件名。"
           },
           "doc_plan": {
-            "type": "object",
-            "description": "完整文档结构对象，至少包含 chapters 数组。"
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "array"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "完整文档结构。优先传对象或数组；若暂时只能生成字符串，也可传 JSON / YAML / Markdown 结构稿或正文草稿。"
           }
         },
         "required": [

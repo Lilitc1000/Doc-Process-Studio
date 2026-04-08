@@ -228,3 +228,35 @@ def load_uploaded_attachment_context(
         return metadata, context_path.read_text(encoding="utf-8"), False
     except OSError:
         return metadata, None, False
+
+
+def delete_attachments_for_conversation(conversation_id: str) -> int:
+    """删除指定会话关联的全部附件目录，返回删除数量。"""
+    cleanup_expired_attachments()
+    root = get_generated_attachments_root()
+    deleted_count = 0
+
+    for attachment_dir in root.iterdir():
+        if not attachment_dir.is_dir():
+            continue
+
+        metadata_path = attachment_dir / "metadata.json"
+        if not metadata_path.is_file():
+            shutil.rmtree(attachment_dir, ignore_errors=True)
+            continue
+
+        try:
+            metadata = ChatAttachmentMetadata.model_validate_json(
+                metadata_path.read_text(encoding="utf-8")
+            )
+        except Exception:
+            shutil.rmtree(attachment_dir, ignore_errors=True)
+            continue
+
+        if metadata.conversation_id != conversation_id:
+            continue
+
+        shutil.rmtree(attachment_dir, ignore_errors=True)
+        deleted_count += 1
+
+    return deleted_count

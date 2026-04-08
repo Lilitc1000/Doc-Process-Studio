@@ -5,6 +5,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover
+    yaml = None
+
 from ...models.conversation.attachments import ChatAttachment
 from ...models.conversation.stream import ChatStreamRequest
 from ...models.skill.catalog import SkillToolConfig
@@ -42,6 +47,8 @@ TEXT_FILE_EXTENSIONS = {
     ".sql",
     ".csv",
 }
+
+DOC_PLAN_FALLBACK_TITLE = "文档内容"
 
 
 def _get_skill_root(skill_id: str) -> Path:
@@ -569,6 +576,115 @@ def _format_declared_tool_default_name(
         return f"{tool.name}-output.bin"
 
 
+def _strip_wrapped_code_fence(value: str) -> str:
+    """移除模型常见的 ```json / ```yaml 包裹。"""
+    stripped_value = value.strip()
+    if not stripped_value.startswith("```"):
+        return stripped_value
+
+    lines = stripped_value.splitlines()
+    if len(lines) < 2:
+        return stripped_value
+
+    first_line = lines[0].strip()
+    last_line = lines[-1].strip()
+    if first_line.startswith("```") and last_line == "```":
+        return "\n".join(lines[1:-1]).strip()
+    return stripped_value
+
+
+def _parse_doc_plan_markdown(value: str) -> dict[str, Any] | None:
+    """把 Markdown/纯文本结构稿尽量规整成脚本可消费的 doc_plan。"""
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    lines = normalized.splitlines()
+    root_sections: list[dict[str, Any]] = []
+    stack: list[tuple[int, dict[str, Any]]] = []
+    current_buffer: list[str] = []
+
+    def flush_buffer_to(node: dict[str, Any] | None) -> None:
+        nonlocal current_buffer
+        if not current_buffer:
+            return
+
+        content = "\n".join(line.rstrip() for line in current_buffer).strip()
+        current_buffer = []
+        if not content:
+            return
+
+        if node is None:
+            if root_sections:
+                first_section = root_sections[0]
+                existing = str(first_section.get("content", "")).strip()
+                first_section["content"] = (
+                    f"{content}\n\n{existing}".strip() if existing else content
+                )
+            else:
+                root_sections.append(
+                    {
+                        "title": DOC_PLAN_FALLBACK_TITLE,
+                        "content": content,
+                        "sections": [],
+                    }
+                )
+            return
+
+        existing = str(node.get("content", "")).strip()
+        node["content"] = f"{existing}\n\n{content}".strip() if existing else content
+
+    for raw_line in lines:
+        stripped_line = raw_line.strip()
+        if not stripped_line:
+            current_buffer.append("")
+            continue
+
+        if stripped_line.startswith("#"):
+            heading_level = len(stripped_line) - len(stripped_line.lstrip("#"))
+            heading_title = stripped_line[heading_level:].strip()
+            if not heading_title:
+                current_buffer.append(raw_line)
+                continue
+
+            current_node = stack[-1][1] if stack else None
+            flush_buffer_to(current_node)
+
+            section_node: dict[str, Any] = {
+                "title": heading_title,
+                "content": "",
+                "sections": [],
+            }
+
+            while stack and stack[-1][0] >= heading_level:
+                stack.pop()
+
+            if stack:
+                stack[-1][1].setdefault("sections", []).append(section_node)
+            else:
+                root_sections.append(section_node)
+
+            stack.append((heading_level, section_node))
+            continue
+
+        current_buffer.append(raw_line)
+
+    flush_buffer_to(stack[-1][1] if stack else None)
+
+    if root_sections:
+        return {"chapters": root_sections}
+
+    return {
+        "chapters": [
+            {
+                "title": DOC_PLAN_FALLBACK_TITLE,
+                "content": normalized,
+                "sections": [],
+            }
+        ]
+    }
+
+
 def _coerce_json_file_argument(argument_name: str, argument_value: Any) -> dict | list:
     """把 json_file 入参规整成可序列化的对象/数组。"""
     if isinstance(argument_value, (dict, list)):
@@ -579,6 +695,7 @@ def _coerce_json_file_argument(argument_name: str, argument_value: Any) -> dict 
         if not normalized:
             raise ValueError(f"参数 `{argument_name}` 不能为空字符串。")
 
+        normalized = _strip_wrapped_code_fence(normalized)
         parsed_value: Any = normalized
         # 兼容模型把 JSON 对象当字符串、甚至双层字符串传回来的情况。
         for _ in range(2):
@@ -592,8 +709,21 @@ def _coerce_json_file_argument(argument_name: str, argument_value: Any) -> dict 
         if isinstance(parsed_value, (dict, list)):
             return parsed_value
 
+        if yaml is not None:
+            try:
+                parsed_yaml = yaml.safe_load(normalized)
+            except Exception:
+                parsed_yaml = None
+            if isinstance(parsed_yaml, (dict, list)):
+                return parsed_yaml
+
+        if argument_name == "doc_plan":
+            parsed_doc_plan = _parse_doc_plan_markdown(normalized)
+            if parsed_doc_plan is not None:
+                return parsed_doc_plan
+
         raise ValueError(
-            f"参数 `{argument_name}` 需要是对象或数组。当前收到字符串，且无法解析为 JSON。"
+            f"参数 `{argument_name}` 需要是对象或数组。当前收到字符串，且无法解析为 JSON/YAML。"
         )
 
     raise ValueError(
@@ -746,7 +876,8 @@ def _execute_declared_script_tool(
         return {
             "ok": True,
             "attachment": attachment.model_dump(mode="json", by_alias=True),
-            "stdout": completed.stdout.strip(),
+            # 附件型工具只返回结构化结果，避免把本地临时路径日志暴露给模型后再回显给用户。
+            "message": "文件已生成，请通过附件信息下载。",
         }, [attachment]
 
 
