@@ -110,3 +110,4 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
 
     all_paragraph_text = "\n".join(paragraph.text for paragraph in document.paragraphs)
     assert '{"process_gap"' not in all_paragraph_text
+

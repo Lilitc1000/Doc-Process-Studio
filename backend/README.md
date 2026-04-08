@@ -40,6 +40,48 @@ ENV=dev /workspace/backend/.venv/bin/python -m compileall /workspace/backend/src
 
 第一条用于回归行为，第二条用于快速发现导入错误和语法错误。
 
+## 测试文件开发指南
+为了保证后续维护可控，建议新增测试时遵循“通用能力优先、skill 专项最小化补充”的原则。
+
+### 目录与分层
+- `tests/test_*_api.py`
+  放接口行为测试（请求参数、状态码、返回结构、流式事件序列）。
+- `tests/test_*_service.py` / `tests/test_*_tool_loop.py`
+  放纯业务或工具循环逻辑测试，尽量避免走完整 HTTP。
+- `tests/test_skill_registry_smoke.py`
+  放全局 skill 冒烟校验（目录可发现、`openai.yml` 可读、`tools.json`/`interaction.json` 可解析）。
+- `tests/skills/<skill_id>/test_*_contract.py`
+  放单个 skill 的契约测试（脚本参数、工具链输入输出、关键产物结构）。
+
+### 命名建议
+- `*_api.py`：接口与流式链路。
+- `*_contract.py`：skill/tool/script 契约。
+- `*_smoke.py`：注册与基础可用性。
+
+### 编写约定
+- 优先复用 `tests/conftest.py` 的 fixture，不要在每个文件重复搭环境。
+- 外部依赖（远端 Ollama、真实 Redis、文件系统副作用）默认用可控替身或临时目录隔离。
+- 流式接口测试建议断言事件顺序和关键事件类型（如 `interaction`、`tool-status`、`attachment`、`done`），不要只断言最终文本。
+- skill 相关测试优先走真实 `tools.json` 声明链路，避免在测试里硬编码一套与生产不同的执行分支。
+
+### 新增 skill 时的最小测试清单
+1. 通过 `test_skill_registry_smoke.py`（无需特判即可被发现并解析配置）。
+2. 在 `tests/skills/<skill_id>/` 下至少增加 1 条工具链契约测试（输入 -> 工具调用 -> 输出结构）。
+3. 如果该 skill 启用交互式步骤（`interaction.json`），补 1 条“触发交互 + 提交答案后完成工具调用”的链路测试。
+
+### 推荐本地命令
+```bash
+cd backend
+ENV=dev /workspace/backend/.venv/bin/python -m pytest -q
+ENV=dev /workspace/backend/.venv/bin/python -m compileall /workspace/backend/src/doc_process_studio
+```
+
+如果本地环境会因为 `pyc` 写入权限导致报错，可临时加：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 ENV=dev /workspace/backend/.venv/bin/python -m pytest -q
+```
+
 ## 目录结构
 当前后端按职责分组，不再使用扁平目录。
 

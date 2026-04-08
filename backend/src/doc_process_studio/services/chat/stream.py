@@ -613,15 +613,11 @@ async def stream_remote_chat_completion(
                     next_attachments = []
                 else:
                     before_loaded_chunk_ids = set(state.loaded_chunk_ids)
-                    execution_result = execute_skill_tool_call(
+                    tool_result, next_attachments = execute_skill_tool_call(
                         request=request,
                         state=state,
                         tool_call=tool_call,
                     )
-                    if len(execution_result) == 3:
-                        tool_result, next_attachments, _legacy_status_message = execution_result
-                    else:
-                        tool_result, next_attachments = execution_result
                     after_loaded_chunk_ids = set(state.loaded_chunk_ids)
                     if detect_tool_call_progress(
                         tool_name=tool_name,

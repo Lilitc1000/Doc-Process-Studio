@@ -25,7 +25,6 @@ interface UseChatStreamingOptions {
   updateMessageInteraction: (
     messageId: string,
     interaction: ChatInteractionCard | null,
-    status?: string,
   ) => void;
   updateMessageContent: (messageId: string, content: string) => void;
   findMessageById: (messageId: string) => ChatMessageNode | null;
@@ -141,11 +140,7 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
           payload.status === 'completed'
             ? null
             : normalizeInteractionCard(payload.interaction);
-        options.updateMessageInteraction(
-          assistantMessageId,
-          nextInteraction,
-          payload.status,
-        );
+        options.updateMessageInteraction(assistantMessageId, nextInteraction);
         options.scrollToBottom();
       }
     });
