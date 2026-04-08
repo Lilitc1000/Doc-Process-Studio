@@ -48,7 +48,7 @@ TEXT_FILE_EXTENSIONS = {
     ".csv",
 }
 
-DOC_PLAN_FALLBACK_TITLE = "文档内容"
+DEFAULT_STRUCTURED_TEXT_TITLE = "文档内容"
 
 
 def _get_skill_root(skill_id: str) -> Path:
@@ -593,8 +593,8 @@ def _strip_wrapped_code_fence(value: str) -> str:
     return stripped_value
 
 
-def _parse_doc_plan_markdown(value: str) -> dict[str, Any] | None:
-    """把 Markdown/纯文本结构稿尽量规整成脚本可消费的 doc_plan。"""
+def _normalize_text_to_chaptered_document(value: str) -> dict[str, Any] | None:
+    """把 Markdown/纯文本结构稿规整成通用的章节树结构。"""
     normalized = value.strip()
     if not normalized:
         return None
@@ -624,7 +624,7 @@ def _parse_doc_plan_markdown(value: str) -> dict[str, Any] | None:
             else:
                 root_sections.append(
                     {
-                        "title": DOC_PLAN_FALLBACK_TITLE,
+                        "title": DEFAULT_STRUCTURED_TEXT_TITLE,
                         "content": content,
                         "sections": [],
                     }
@@ -677,7 +677,7 @@ def _parse_doc_plan_markdown(value: str) -> dict[str, Any] | None:
     return {
         "chapters": [
             {
-                "title": DOC_PLAN_FALLBACK_TITLE,
+                "title": DEFAULT_STRUCTURED_TEXT_TITLE,
                 "content": normalized,
                 "sections": [],
             }
@@ -685,7 +685,30 @@ def _parse_doc_plan_markdown(value: str) -> dict[str, Any] | None:
     }
 
 
-def _coerce_json_file_argument(argument_name: str, argument_value: Any) -> dict | list:
+def _apply_json_file_text_normalizer(
+    *,
+    argument_name: str,
+    normalized_text: str,
+    text_normalizer: str | None,
+) -> dict | list | None:
+    """按声明式策略把文本规整成可序列化结构。"""
+    if not text_normalizer:
+        return None
+
+    if text_normalizer == "chaptered_document":
+        return _normalize_text_to_chaptered_document(normalized_text)
+
+    raise ValueError(
+        f"参数 `{argument_name}` 配置了不支持的 text_normalizer：{text_normalizer}。"
+    )
+
+
+def _coerce_json_file_argument(
+    argument_name: str,
+    argument_value: Any,
+    *,
+    text_normalizer: str | None = None,
+) -> dict | list:
     """把 json_file 入参规整成可序列化的对象/数组。"""
     if isinstance(argument_value, (dict, list)):
         return argument_value
@@ -717,13 +740,17 @@ def _coerce_json_file_argument(argument_name: str, argument_value: Any) -> dict 
             if isinstance(parsed_yaml, (dict, list)):
                 return parsed_yaml
 
-        if argument_name == "doc_plan":
-            parsed_doc_plan = _parse_doc_plan_markdown(normalized)
-            if parsed_doc_plan is not None:
-                return parsed_doc_plan
+        normalized_value = _apply_json_file_text_normalizer(
+            argument_name=argument_name,
+            normalized_text=normalized,
+            text_normalizer=text_normalizer,
+        )
+        if isinstance(normalized_value, (dict, list)):
+            return normalized_value
 
         raise ValueError(
-            f"参数 `{argument_name}` 需要是对象或数组。当前收到字符串，且无法解析为 JSON/YAML。"
+            f"参数 `{argument_name}` 需要是对象或数组。当前收到字符串，且无法解析为 JSON/YAML"
+            + (" 或当前声明的文本规整格式。" if text_normalizer else "。")
         )
 
     raise ValueError(
@@ -775,6 +802,7 @@ def _build_declared_tool_command(
             normalized_json_value = _coerce_json_file_argument(
                 argument_name,
                 argument_value,
+                text_normalizer=binding.text_normalizer,
             )
             json_file_path = temp_dir_path / f"{argument_name}.json"
             json_file_path.write_text(

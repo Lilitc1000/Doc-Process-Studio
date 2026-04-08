@@ -301,6 +301,27 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 - 如果要改流式编排，优先看 `services/chat/stream.py`
 - 不要在路由层直接操作这些缓存和工具细节
 
+另外当前的声明式工具参数还有一条重要约定：
+
+- `tools.json` 中声明为 `json_file` 的参数，后端会先做规整再交给脚本执行。
+- 默认情况下，`json_file` 支持模型直接传：
+  - JSON 对象
+  - JSON 数组
+  - JSON / YAML 字符串
+- 如果某个参数在 `execution.arg_bindings` 里额外声明了 `text_normalizer`，后端还会按该策略继续把 Markdown 结构稿或纯文本草稿规整成结构化对象，再写入临时文件。
+- 当前这种做法的目的，是把“文本到结构化入参”的容错能力做成声明式能力，而不是在 Python 业务代码里为单个 skill 或单个参数名写特判。
+
+这样可以降低模型工具调用时对“严格 JSON 格式”的依赖，也能让不同 skill 在需要时复用同一套参数规整机制。
+
+当前 `text_normalizer` 的使用约定也建议一并记住：
+
+- `text_normalizer` 只在 `serializer=json_file` 且模型实际传入的是字符串时生效。
+- 如果模型本来就传了对象或数组，后端会直接使用，不会再额外做文本规整。
+- 当前已支持的值只有：
+  - `chaptered_document`
+    用于把 Markdown 标题结构稿或纯文本草稿规整成通用章节树结构，输出形态类似 `{"chapters": [...]}`，每个章节节点包含 `title`、`content`、`sections`。
+- 新增新的 `text_normalizer` 时，优先抽象成可复用的通用结构转换，不要为了单个 skill 的私有格式继续堆专用分支。
+
 ## 生成文件与下载
 当前 backend 已支持 skill 在工具调用中生成受控附件，也支持把用户上传文件统一落成会话附件：
 
@@ -310,6 +331,9 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 - 过期文件会在启动时、生成新文件时、下载文件前自动清理
 - 当前统一下载接口为：
   - `GET /api/attachments/{attachment_id}/download`
+- 同一 `conversation_id` 内，用户再次上传内容完全相同的文件时，会按文件内容哈希复用已有 `attachment_id`，避免重复存储。
+- 删除历史会话时，后端会同步清理该会话关联的附件目录，避免遗留无主文件。
+
 前端收到流式附件事件后，应把它展示成文件框或下载入口，而不是把文件路径写进模型正文。
 
 ## 提交改动前建议自查

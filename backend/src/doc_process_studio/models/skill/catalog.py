@@ -15,6 +15,10 @@ class SkillToolArgBinding(BaseModel):
         default="string",
         description="参数序列化方式，如 string/json_file/attachment_output_name",
     )
+    text_normalizer: str | None = Field(
+        default=None,
+        description="当 serializer=json_file 且模型传入字符串时，可选的文本规整策略",
+    )
 
 
 class SkillToolExecutionConfig(BaseModel):

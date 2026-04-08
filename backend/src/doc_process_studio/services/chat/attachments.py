@@ -1,3 +1,4 @@
+import hashlib
 import mimetypes
 import shutil
 from datetime import UTC, datetime, timedelta
@@ -45,6 +46,23 @@ def _build_size_label(size_bytes: int) -> str:
     return f"{size:.1f} {units[unit_index]}"
 
 
+def _build_content_hash(raw_bytes: bytes) -> str:
+    return hashlib.sha256(raw_bytes).hexdigest()
+
+
+def _build_chat_attachment_from_metadata(metadata: ChatAttachmentMetadata) -> ChatAttachment:
+    return ChatAttachment(
+        attachment_id=metadata.attachment_id,
+        name=metadata.name,
+        source=metadata.source,
+        mime_type=metadata.mime_type,
+        size_bytes=metadata.size_bytes,
+        size_label=_build_size_label(metadata.size_bytes),
+        download_url=f"/api/attachments/{metadata.attachment_id}/download",
+        expires_at=metadata.expires_at,
+    )
+
+
 def cleanup_expired_attachments() -> None:
     """清理已过期或损坏的附件目录。"""
     now = _utcnow()
@@ -79,6 +97,7 @@ def _save_session_attachment(
     output_name: str,
     mime_type: str | None,
     source: str,
+    content_hash: str | None = None,
     extracted_text: str | None = None,
 ) -> ChatAttachment:
     """保存会话附件到受控目录，并返回前端可直接消费的信息。"""
@@ -107,6 +126,7 @@ def _save_session_attachment(
         conversation_id=conversation_id,
         skill_id=skill_id,
         source=source,
+        content_hash=content_hash,
         name=resolved_name,
         mime_type=resolved_mime_type,
         size_bytes=stat_result.st_size,
@@ -155,6 +175,49 @@ def save_generated_attachment(
     )
 
 
+def _find_reusable_uploaded_attachment(
+    *,
+    conversation_id: str,
+    content_hash: str,
+) -> ChatAttachment | None:
+    root = get_generated_attachments_root()
+
+    for attachment_dir in root.iterdir():
+        if not attachment_dir.is_dir():
+            continue
+
+        metadata_path = attachment_dir / "metadata.json"
+        if not metadata_path.is_file():
+            continue
+
+        try:
+            metadata = ChatAttachmentMetadata.model_validate_json(
+                metadata_path.read_text(encoding="utf-8")
+            )
+        except Exception:
+            continue
+
+        if metadata.expires_at <= _utcnow():
+            continue
+
+        if metadata.source != "uploaded":
+            continue
+
+        if metadata.conversation_id != conversation_id:
+            continue
+
+        if metadata.content_hash != content_hash:
+            continue
+
+        attachment_path = attachment_dir / metadata.name
+        if not attachment_path.is_file():
+            continue
+
+        return _build_chat_attachment_from_metadata(metadata)
+
+    return None
+
+
 def save_uploaded_attachment(
     *,
     raw_bytes: bytes,
@@ -165,6 +228,14 @@ def save_uploaded_attachment(
     extracted_text: str | None = None,
 ) -> ChatAttachment:
     """保存用户上传文件到受控目录，并返回统一附件信息。"""
+    content_hash = _build_content_hash(raw_bytes)
+    reusable_attachment = _find_reusable_uploaded_attachment(
+        conversation_id=conversation_id,
+        content_hash=content_hash,
+    )
+    if reusable_attachment is not None:
+        return reusable_attachment
+
     return _save_session_attachment(
         raw_bytes=raw_bytes,
         conversation_id=conversation_id,
@@ -172,6 +243,7 @@ def save_uploaded_attachment(
         output_name=file_name,
         mime_type=mime_type,
         source="uploaded",
+        content_hash=content_hash,
         extracted_text=extracted_text,
     )
 

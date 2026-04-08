@@ -68,7 +68,8 @@
           },
           "doc_plan": {
             "flag": "--doc-plan",
-            "serializer": "json_file"
+            "serializer": "json_file",
+            "text_normalizer": "chaptered_document"
           },
           "output_name": {
             "flag": "--output",

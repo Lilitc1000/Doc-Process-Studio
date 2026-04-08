@@ -56,3 +56,65 @@ def test_delete_attachments_for_conversation_removes_only_target(tmp_path, monke
     assert deleted_count == 1
     assert not (tmp_path / "attachment-a").exists()
     assert (tmp_path / "attachment-b").exists()
+
+
+def test_save_uploaded_attachment_reuses_same_content_in_same_conversation(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        attachments_module.settings,
+        "generated_attachments_dir",
+        str(tmp_path),
+    )
+
+    first_attachment = attachments_module.save_uploaded_attachment(
+        raw_bytes=b"same-content",
+        conversation_id="conversation-a",
+        skill_id="document-assistant",
+        file_name="first.txt",
+        mime_type="text/plain",
+        extracted_text="same-content",
+    )
+    second_attachment = attachments_module.save_uploaded_attachment(
+        raw_bytes=b"same-content",
+        conversation_id="conversation-a",
+        skill_id="document-assistant",
+        file_name="first.txt",
+        mime_type="text/plain",
+        extracted_text="same-content",
+    )
+
+    assert first_attachment.attachment_id == second_attachment.attachment_id
+    attachment_dirs = [path for path in tmp_path.iterdir() if path.is_dir()]
+    assert len(attachment_dirs) == 1
+
+
+def test_save_uploaded_attachment_does_not_reuse_across_conversations(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        attachments_module.settings,
+        "generated_attachments_dir",
+        str(tmp_path),
+    )
+
+    first_attachment = attachments_module.save_uploaded_attachment(
+        raw_bytes=b"same-content",
+        conversation_id="conversation-a",
+        skill_id="document-assistant",
+        file_name="shared.txt",
+        mime_type="text/plain",
+        extracted_text="same-content",
+    )
+    second_attachment = attachments_module.save_uploaded_attachment(
+        raw_bytes=b"same-content",
+        conversation_id="conversation-b",
+        skill_id="document-assistant",
+        file_name="shared.txt",
+        mime_type="text/plain",
+        extracted_text="same-content",
+    )
+
+    assert first_attachment.attachment_id != second_attachment.attachment_id

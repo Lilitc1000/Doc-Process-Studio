@@ -54,6 +54,10 @@ class ChatAttachmentMetadata(BaseModel):
     conversation_id: str = Field(..., description="所属会话标识")
     skill_id: str = Field(..., description="所属 skill 标识")
     source: str = Field(..., description="附件来源，如 uploaded/generated")
+    content_hash: str | None = Field(
+        default=None,
+        description="附件内容哈希，用于同会话内复用相同上传文件",
+    )
     name: str = Field(..., description="附件文件名")
     mime_type: str = Field(..., description="文件 MIME 类型")
     size_bytes: int = Field(..., description="文件大小")
