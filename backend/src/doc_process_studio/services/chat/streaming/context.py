@@ -1,7 +1,7 @@
 from typing import Any
 
 from ....models.conversation.stream import ChatMessageInput, ChatStreamRequest
-from ...skill.registry import get_skill_interface
+from ...skill.registry import get_skill_interface, get_skill_interaction_config
 
 
 def build_skill_prompt(skill_id: str) -> str:
@@ -10,8 +10,15 @@ def build_skill_prompt(skill_id: str) -> str:
 
 def build_skill_runtime_instructions(skill_id: str) -> str:
     skill_interface = get_skill_interface(skill_id)
+    interaction_config = get_skill_interaction_config(skill_id)
     declared_tool_names = (
         ", ".join(tool.name for tool in skill_interface.tools) or "无声明式工具"
+    )
+    interaction_instruction = (
+        "当任务需要补充结构化信息时，可调用 start_skill_interaction 启动分步向导；"
+        "若用户信息已经完整，直接调用生成/处理工具。"
+        if interaction_config is not None
+        else "当前 skill 未启用交互向导。"
     )
 
     return "\n".join(
@@ -21,6 +28,7 @@ def build_skill_runtime_instructions(skill_id: str) -> str:
             f"当前 skill 名称: {skill_interface.display_name}",
             f"skill 简介: {skill_interface.short_description or '无'}",
             f"已声明工具: {declared_tool_names}",
+            interaction_instruction,
             "请遵循渐进式披露：先查看技能目录，再优先读取 SKILL.md；若 SKILL.md 引用了 references、scripts 或 assets，再按需继续读取。",
             "不要一次性读取整个 skill 目录。",
             "如果 skill 中已经声明了可执行工具，应优先调用这些声明式工具，而不是在回答里手写脚本让用户自己运行。",
@@ -95,4 +103,3 @@ def merge_uploaded_files_context(
     if not normalized_sections:
         return None
     return "\n\n".join(normalized_sections)
-

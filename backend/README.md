@@ -311,6 +311,8 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 新增了一套通用交互式采集链路，可供任意 skill 按声明启用，不再是单一 skill 特化逻辑。
 
 - skill 可在 `agents/interaction.json` 声明分步采集（single/multi/text）。
+- 交互向导默认是“可调用能力”而不是入口强制流程：模型可通过 `start_skill_interaction` 工具在信息不足时主动进入向导；信息充足时可直接调用生成工具。
+- 若某个会话已处于进行中的向导状态，后端会优先恢复当前步骤，避免状态丢失。
 - 后端流式接口会按步骤返回 `interaction` 事件，步骤完成后继续执行声明式工具并返回 `tool-status`、`attachment`、`done`。
 - 交互状态默认走 Redis，会话维度缓存；测试时可用内存替身避免环境依赖。
 

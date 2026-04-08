@@ -10,6 +10,7 @@ from ...models.conversation.stream import ChatStreamRequest
 from ...settings import settings
 from ..infra.ollama_client import OllamaNotConfiguredError, stream_chat_completion
 from ..skill.interaction_flow import start_or_resume_interaction, submit_interaction_answer
+from ..skill.interaction_store import load_interaction_state
 from ..skill.registry import get_skill_interaction_config
 from ..skill.runtime import ensure_skill_context_for_request, sync_skill_context_state
 from ..skill.tool_loop import (
@@ -83,147 +84,149 @@ async def stream_remote_chat_completion(
 
         if interaction_config is not None:
             if request.interaction_answer is None:
-                _, interaction_step = await start_or_resume_interaction(
-                    request=request,
-                    config=interaction_config,
+                current_interaction_state = await load_interaction_state(
+                    request.conversation_id,
+                    request.skill_id,
                 )
-                if interaction_config.intro_message:
-                    yield format_sse_event(
-                        {"type": "delta", "content": interaction_config.intro_message}
+                if current_interaction_state is not None:
+                    _, interaction_step = await start_or_resume_interaction(
+                        request=request,
+                        config=interaction_config,
                     )
-                yield format_sse_event(
-                    {
-                        "type": "interaction",
-                        "status": "required",
-                        "interaction": interaction_step,
-                    }
-                )
-                yield format_sse_event(
-                    {
-                        "type": "done",
-                        "finish_reason": "interaction_required",
-                    }
-                )
-                return
-
-            try:
-                next_interaction_step, completed_payload = await submit_interaction_answer(
-                    request=request,
-                    config=interaction_config,
-                    answer=request.interaction_answer,
-                )
-            except ValueError as exc:
-                yield format_sse_event({"type": "error", "message": str(exc)})
-                return
-
-            if next_interaction_step is not None:
-                yield format_sse_event(
-                    {
-                        "type": "interaction",
-                        "status": "required",
-                        "interaction": next_interaction_step,
-                    }
-                )
-                yield format_sse_event(
-                    {
-                        "type": "done",
-                        "finish_reason": "interaction_required",
-                    }
-                )
-                return
-
-            yield format_sse_event({"type": "interaction", "status": "completed"})
-
-            if completed_payload is not None and interaction_config.final_tool is not None:
-                final_tool = interaction_config.final_tool
-                tool_arguments = {
-                    final_tool.argument_name: completed_payload,
-                    **final_tool.static_arguments,
-                }
-                rendered_output_name = format_output_name_from_template(
-                    final_tool.output_name_template,
-                    completed_payload,
-                )
-                if rendered_output_name:
-                    tool_arguments["output_name"] = rendered_output_name
-
-                tool_call = {
-                    "id": "interaction-final-tool",
-                    "type": "function",
-                    "function": {
-                        "name": final_tool.name,
-                        "arguments": json.dumps(tool_arguments, ensure_ascii=False),
-                    },
-                }
-                tool_name = final_tool.name
-
-                yield format_sse_event(
-                    {
-                        "type": "tool-status",
-                        "phase": "start",
-                        "tool_name": tool_name,
-                        **build_tool_status_start(
-                            skill_id=request.skill_id,
-                            tool_call=tool_call,
-                        ),
-                    }
-                )
-
-                tool_result, next_attachments = execute_skill_tool_call(
-                    request=request,
-                    state=state,
-                    tool_call=tool_call,
-                )
-
-                for attachment in next_attachments:
                     yield format_sse_event(
                         {
-                            "type": "attachment",
-                            "attachment": attachment.model_dump(
-                                mode="json",
-                                by_alias=True,
+                            "type": "interaction",
+                            "status": "required",
+                            "interaction": interaction_step,
+                        }
+                    )
+                    yield format_sse_event(
+                        {
+                            "type": "done",
+                            "finish_reason": "interaction_required",
+                        }
+                    )
+                    return
+
+            else:
+                try:
+                    next_interaction_step, completed_payload = await submit_interaction_answer(
+                        request=request,
+                        config=interaction_config,
+                        answer=request.interaction_answer,
+                    )
+                except ValueError as exc:
+                    yield format_sse_event({"type": "error", "message": str(exc)})
+                    return
+
+                if next_interaction_step is not None:
+                    yield format_sse_event(
+                        {
+                            "type": "interaction",
+                            "status": "required",
+                            "interaction": next_interaction_step,
+                        }
+                    )
+                    yield format_sse_event(
+                        {
+                            "type": "done",
+                            "finish_reason": "interaction_required",
+                        }
+                    )
+                    return
+
+                yield format_sse_event({"type": "interaction", "status": "completed"})
+
+                if completed_payload is not None and interaction_config.final_tool is not None:
+                    final_tool = interaction_config.final_tool
+                    tool_arguments = {
+                        final_tool.argument_name: completed_payload,
+                        **final_tool.static_arguments,
+                    }
+                    rendered_output_name = format_output_name_from_template(
+                        final_tool.output_name_template,
+                        completed_payload,
+                    )
+                    if rendered_output_name:
+                        tool_arguments["output_name"] = rendered_output_name
+
+                    tool_call = {
+                        "id": "interaction-final-tool",
+                        "type": "function",
+                        "function": {
+                            "name": final_tool.name,
+                            "arguments": json.dumps(tool_arguments, ensure_ascii=False),
+                        },
+                    }
+                    tool_name = final_tool.name
+
+                    yield format_sse_event(
+                        {
+                            "type": "tool-status",
+                            "phase": "start",
+                            "tool_name": tool_name,
+                            **build_tool_status_start(
+                                skill_id=request.skill_id,
+                                tool_call=tool_call,
                             ),
                         }
                     )
 
-                yield format_sse_event(
-                    {
-                        "type": "tool-status",
-                        "phase": "finish",
-                        "tool_name": tool_name,
-                        **build_tool_status_finish(
-                            request=request,
-                            state=state,
-                            tool_call=tool_call,
-                            tool_result=tool_result,
-                            attachments=next_attachments,
-                        ),
-                    }
-                )
+                    tool_result, next_attachments = execute_skill_tool_call(
+                        request=request,
+                        state=state,
+                        tool_call=tool_call,
+                    )
 
-                if not tool_result.get("ok"):
-                    error_message = str(tool_result.get("error", "工具执行失败。"))
-                    yield format_sse_event({"type": "error", "message": error_message})
+                    for attachment in next_attachments:
+                        yield format_sse_event(
+                            {
+                                "type": "attachment",
+                                "attachment": attachment.model_dump(
+                                    mode="json",
+                                    by_alias=True,
+                                ),
+                            }
+                        )
+
+                    yield format_sse_event(
+                        {
+                            "type": "tool-status",
+                            "phase": "finish",
+                            "tool_name": tool_name,
+                            **build_tool_status_finish(
+                                request=request,
+                                state=state,
+                                tool_call=tool_call,
+                                tool_result=tool_result,
+                                attachments=next_attachments,
+                            ),
+                        }
+                    )
+
+                    if not tool_result.get("ok"):
+                        error_message = str(tool_result.get("error", "工具执行失败。"))
+                        yield format_sse_event({"type": "error", "message": error_message})
+                        return
+
+                    completion_text = interaction_config.completion_message or "已根据你的选择生成报告。"
+                    yield format_sse_event({"type": "delta", "content": completion_text})
+                    yield format_sse_event(
+                        {
+                            "type": "done",
+                            "finish_reason": "stop",
+                        }
+                    )
                     return
 
-                completion_text = interaction_config.completion_message or "已根据你的选择生成报告。"
-                yield format_sse_event({"type": "delta", "content": completion_text})
-                yield format_sse_event(
-                    {
-                        "type": "done",
-                        "finish_reason": "stop",
+                if completed_payload is not None:
+                    interaction_context_message = {
+                        "role": "system",
+                        "content": (
+                            "以下是用户通过交互步骤确认的结构化信息，请直接基于它完成任务，不要再次向用户提问：\n"
+                            + json.dumps(completed_payload, ensure_ascii=False, indent=2)
+                        ),
                     }
-                )
-                return
-
-            if completed_payload is not None:
-                interaction_context_message = {
-                    "role": "system",
-                    "content": (
-                        "以下是用户通过交互步骤确认的结构化信息，请直接基于它完成任务，不要再次向用户提问：\n"
-                        + json.dumps(completed_payload, ensure_ascii=False, indent=2)
-                    ),
-                }
 
         tool_trace_messages: list[dict[str, Any]] = (
             [interaction_context_message] if interaction_context_message is not None else []
@@ -327,6 +330,77 @@ async def stream_remote_chat_completion(
                         ),
                     }
                 )
+
+                if tool_name == "start_skill_interaction":
+                    interaction_step: dict[str, Any] | None = None
+                    should_emit_intro = False
+                    if interaction_config is None:
+                        tool_result = {
+                            "ok": False,
+                            "error": "当前 skill 未配置交互向导。",
+                        }
+                    else:
+                        existing_state = await load_interaction_state(
+                            request.conversation_id,
+                            request.skill_id,
+                        )
+                        _, interaction_step = await start_or_resume_interaction(
+                            request=request,
+                            config=interaction_config,
+                        )
+                        tool_result = {
+                            "ok": True,
+                            "interaction": interaction_step,
+                            "message": "已启动交互向导。",
+                        }
+                        should_emit_intro = (
+                            existing_state is None and bool(interaction_config.intro_message)
+                        )
+                    next_attachments: list[Any] = []
+
+                    yield format_sse_event(
+                        {
+                            "type": "tool-status",
+                            "phase": "finish",
+                            "tool_name": tool_name,
+                            **build_tool_status_finish(
+                                request=request,
+                                state=state,
+                                tool_call=tool_call,
+                                tool_result=tool_result,
+                                attachments=[],
+                            ),
+                        }
+                    )
+
+                    if tool_result.get("ok") and interaction_step is not None:
+                        if should_emit_intro and interaction_config and interaction_config.intro_message:
+                            yield format_sse_event(
+                                {"type": "delta", "content": interaction_config.intro_message}
+                            )
+                        yield format_sse_event(
+                            {
+                                "type": "interaction",
+                                "status": "required",
+                                "interaction": interaction_step,
+                            }
+                        )
+                        yield format_sse_event(
+                            {
+                                "type": "done",
+                                "finish_reason": "interaction_required",
+                            }
+                        )
+                        return
+
+                    tool_trace_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_name": tool_name,
+                            "content": json.dumps(tool_result, ensure_ascii=False),
+                        }
+                    )
+                    continue
 
                 tool_call_signature = build_tool_call_signature(tool_call)
                 if tool_call_signature in executed_tool_calls:
