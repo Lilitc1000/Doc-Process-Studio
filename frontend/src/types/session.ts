@@ -1,4 +1,9 @@
-import type { ChatAttachment, ChatMessageRole, ChatToolStatus } from './chat';
+import type {
+  ChatAttachment,
+  ChatInteractionCard,
+  ChatMessageRole,
+  ChatToolStatus,
+} from './chat';
 
 export interface ChatSessionNodePayload {
   id: string;
@@ -7,6 +12,7 @@ export interface ChatSessionNodePayload {
   api_content?: string | null;
   files?: ChatAttachment[];
   tool_statuses?: ChatToolStatus[];
+  interaction?: ChatInteractionCard | null;
   timestamp: string;
   parent_id: string | null;
   child_ids: string[];

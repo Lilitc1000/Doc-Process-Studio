@@ -1,0 +1,390 @@
+{
+  "enabled": true,
+  "intro_message": "已进入事故报告向导。请按步骤选择或填写信息，完成后我会自动生成英文报告文档。",
+  "completion_message": "事故报告已按你的选择生成完成，请在附件区下载。",
+  "defaults": {
+    "impact": {
+      "users": "N/A",
+      "region": "N/A"
+    },
+    "materials_used": "Nil",
+    "status": "Fault has been Cleared",
+    "comments": "N/A",
+    "event_sequence": [
+      {
+        "time": "N/A",
+        "event": "Incident details collected through interactive wizard",
+        "evidence": "User confirmation"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "incident_type",
+      "title": "Step 1/16 事故类型",
+      "prompt": "请选择事故类型：",
+      "field_path": "detailed_description",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "System outage - Complete service interruption",
+          "label": "系统中断（服务完全不可用）"
+        },
+        {
+          "value": "Performance degradation - Slow response time",
+          "label": "性能下降（响应缓慢）"
+        },
+        {
+          "value": "Data processing error - Transaction failure",
+          "label": "数据处理异常（交易失败）"
+        },
+        {
+          "value": "Network connectivity issue - Connection timeout",
+          "label": "网络连接问题（超时）"
+        }
+      ]
+    },
+    {
+      "id": "affected_system",
+      "title": "Step 2/16 受影响系统",
+      "prompt": "请选择受影响系统：",
+      "field_path": "key_facts.system",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "DAS Central",
+          "label": "DAS Central"
+        },
+        {
+          "value": "LRT System",
+          "label": "LRT System"
+        },
+        {
+          "value": "Payment Gateway",
+          "label": "Payment Gateway"
+        },
+        {
+          "value": "Database Server",
+          "label": "Database Server"
+        }
+      ]
+    },
+    {
+      "id": "detection_method",
+      "title": "Step 3/16 发现方式",
+      "prompt": "请选择发现方式：",
+      "field_path": "key_facts.detection_method",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "Monitoring alert",
+          "label": "监控告警"
+        },
+        {
+          "value": "User report",
+          "label": "用户反馈"
+        },
+        {
+          "value": "Operator observation",
+          "label": "人工巡检发现"
+        },
+        {
+          "value": "Automated system check",
+          "label": "自动化检查发现"
+        }
+      ]
+    },
+    {
+      "id": "symptoms",
+      "title": "Step 4/16 故障现象",
+      "prompt": "请选择主要故障现象：",
+      "field_path": "key_facts.symptoms",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "Service unavailable / Connection timeout",
+          "label": "服务不可用 / 连接超时"
+        },
+        {
+          "value": "Slow response / High latency",
+          "label": "响应慢 / 延迟高"
+        },
+        {
+          "value": "Error messages / Failed transactions",
+          "label": "报错信息 / 交易失败"
+        },
+        {
+          "value": "Data inconsistency / Missing records",
+          "label": "数据不一致 / 记录缺失"
+        }
+      ]
+    },
+    {
+      "id": "start_time",
+      "title": "Step 5/16 事故开始时间",
+      "prompt": "请输入事故开始时间（建议格式：DD/MM/YYYY HH:MM）：",
+      "field_path": "start_time",
+      "kind": "text",
+      "placeholder": "例如：08/04/2026 09:10"
+    },
+    {
+      "id": "detected_time",
+      "title": "Step 6/16 发现时间",
+      "prompt": "请输入发现时间（建议格式：DD/MM/YYYY HH:MM）：",
+      "field_path": "detection_time",
+      "kind": "text",
+      "placeholder": "例如：08/04/2026 09:12"
+    },
+    {
+      "id": "resolved_time",
+      "title": "Step 7/16 恢复时间",
+      "prompt": "请输入恢复时间（建议格式：DD/MM/YYYY HH:MM）：",
+      "field_path": "resolution_time",
+      "kind": "text",
+      "placeholder": "例如：08/04/2026 09:40"
+    },
+    {
+      "id": "duration",
+      "title": "Step 8/16 持续时长",
+      "prompt": "请选择总持续时长：",
+      "field_path": "total_duration",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "15 minutes",
+          "label": "15 分钟"
+        },
+        {
+          "value": "30 minutes",
+          "label": "30 分钟"
+        },
+        {
+          "value": "1 hour",
+          "label": "1 小时"
+        },
+        {
+          "value": "2 hours",
+          "label": "2 小时"
+        }
+      ]
+    },
+    {
+      "id": "impact_scope",
+      "title": "Step 9/16 影响系统范围",
+      "prompt": "请选择受影响系统范围：",
+      "field_path": "impact.systems",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "DAS Central",
+          "label": "DAS Central"
+        },
+        {
+          "value": "LRT Transaction System",
+          "label": "LRT Transaction System"
+        },
+        {
+          "value": "Payment Processing",
+          "label": "Payment Processing"
+        },
+        {
+          "value": "Database Cluster",
+          "label": "Database Cluster"
+        }
+      ]
+    },
+    {
+      "id": "severity",
+      "title": "Step 10/16 严重级别",
+      "prompt": "请选择严重级别：",
+      "field_path": "impact.severity",
+      "kind": "single_select",
+      "options": [
+        {
+          "value": "Critical",
+          "label": "Critical（完全中断）"
+        },
+        {
+          "value": "High",
+          "label": "High（核心功能受损）"
+        },
+        {
+          "value": "Medium",
+          "label": "Medium（部分降级）"
+        },
+        {
+          "value": "Low",
+          "label": "Low（轻微影响）"
+        }
+      ]
+    },
+    {
+      "id": "business_impact",
+      "title": "Step 11/16 业务影响",
+      "prompt": "请选择业务影响（可多选）：",
+      "field_path": "impact.business_impact",
+      "kind": "multi_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "Service disruption - users unable to complete transactions",
+          "label": "服务中断，用户无法完成交易"
+        },
+        {
+          "value": "Data delay - processing backlog accumulated",
+          "label": "数据延迟，处理积压"
+        },
+        {
+          "value": "Revenue impact - potential financial loss",
+          "label": "收入影响，可能产生损失"
+        },
+        {
+          "value": "No data loss - all transactions recovered",
+          "label": "无数据丢失，交易可恢复"
+        }
+      ]
+    },
+    {
+      "id": "trigger",
+      "title": "Step 12/16 直接触发原因",
+      "prompt": "请选择直接触发原因：",
+      "field_path": "trigger",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "Network connectivity interruption",
+          "label": "网络连接中断"
+        },
+        {
+          "value": "Hardware failure - component malfunction",
+          "label": "硬件故障"
+        },
+        {
+          "value": "Software bug - unexpected error condition",
+          "label": "软件缺陷"
+        },
+        {
+          "value": "Configuration error - incorrect settings",
+          "label": "配置错误"
+        }
+      ]
+    },
+    {
+      "id": "root_cause",
+      "title": "Step 13/16 根因",
+      "prompt": "请选择根因：",
+      "field_path": "root_cause",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "Hardware degradation - aging equipment",
+          "label": "硬件老化"
+        },
+        {
+          "value": "Software defect - unhandled exception",
+          "label": "软件缺陷（异常未处理）"
+        },
+        {
+          "value": "Insufficient monitoring - late detection",
+          "label": "监控不足导致发现延迟"
+        },
+        {
+          "value": "Configuration mismatch - deployment error",
+          "label": "配置不一致 / 发布错误"
+        }
+      ]
+    },
+    {
+      "id": "root_cause_evidence",
+      "title": "Step 14/16 根因证据",
+      "prompt": "请选择根因证据类型：",
+      "field_path": "root_cause_evidence",
+      "kind": "single_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "System logs and monitoring data",
+          "label": "系统日志与监控数据"
+        },
+        {
+          "value": "Hardware diagnostic report",
+          "label": "硬件诊断报告"
+        },
+        {
+          "value": "Code review findings",
+          "label": "代码审查结论"
+        },
+        {
+          "value": "Configuration audit results",
+          "label": "配置审计结果"
+        }
+      ]
+    },
+    {
+      "id": "immediate_actions",
+      "title": "Step 15/16 即时处置动作",
+      "prompt": "请选择已执行的即时处置动作（可多选）：",
+      "field_path": "immediate_actions",
+      "kind": "multi_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "Restarted failed service/component",
+          "label": "重启故障服务/组件"
+        },
+        {
+          "value": "Applied emergency patch/fix",
+          "label": "应用紧急补丁"
+        },
+        {
+          "value": "Switched to backup system",
+          "label": "切换到备系统"
+        },
+        {
+          "value": "Cleared data backlog",
+          "label": "清理数据积压"
+        }
+      ]
+    },
+    {
+      "id": "preventive_actions",
+      "title": "Step 16/16 预防动作",
+      "prompt": "请选择计划中的预防动作（可多选）：",
+      "field_path": "preventive_actions",
+      "kind": "multi_select",
+      "allow_custom": true,
+      "options": [
+        {
+          "value": "Replace faulty hardware component",
+          "label": "替换故障硬件"
+        },
+        {
+          "value": "Implement redundant system/path",
+          "label": "增加冗余系统/链路"
+        },
+        {
+          "value": "Update monitoring and alerting",
+          "label": "更新监控与告警策略"
+        },
+        {
+          "value": "Review and update procedures",
+          "label": "复盘并更新流程规范"
+        }
+      ]
+    }
+  ],
+  "final_tool": {
+    "name": "generate_incident_report",
+    "argument_name": "report_data",
+    "output_name_template": "incident-report-{reference_no}.docx",
+    "static_arguments": {}
+  }
+}

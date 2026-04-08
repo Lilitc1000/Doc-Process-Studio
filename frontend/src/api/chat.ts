@@ -16,6 +16,16 @@ export const streamChatReply = async (
       skill_id: requestSnapshot.skillId,
       messages: requestSnapshot.messages,
       attachment_ids: requestSnapshot.attachmentIds,
+      interaction_answer: requestSnapshot.interactionAnswer
+        ? {
+            session_id: requestSnapshot.interactionAnswer.sessionId,
+            step_id: requestSnapshot.interactionAnswer.stepId,
+            value: requestSnapshot.interactionAnswer.value,
+            custom_value: requestSnapshot.interactionAnswer.customValue,
+            use_defaults_for_missing:
+              requestSnapshot.interactionAnswer.useDefaultsForMissing ?? false,
+          }
+        : undefined,
     }),
   );
 

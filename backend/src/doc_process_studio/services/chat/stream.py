@@ -14,6 +14,11 @@ from ..infra.ollama_client import (
 )
 from ..skill.registry import get_skill_interface
 from ..skill.runtime import ensure_skill_context_for_request, sync_skill_context_state
+from ..skill.interaction_flow import (
+    start_or_resume_interaction,
+    submit_interaction_answer,
+)
+from ..skill.registry import get_skill_interaction_config
 from ..skill.tool_loop import (
     build_skill_tools,
     build_tool_status_finish,
@@ -276,6 +281,25 @@ def build_upstream_messages(
     return upstream_messages
 
 
+def _format_output_name_from_template(
+    template: str | None,
+    payload: dict[str, Any],
+) -> str | None:
+    if not template:
+        return None
+
+    format_payload = {
+        key: value
+        for key, value in payload.items()
+        if isinstance(value, (str, int, float))
+    }
+    try:
+        rendered_name = template.format(**format_payload).strip()
+    except Exception:
+        return None
+    return rendered_name or None
+
+
 def merge_uploaded_files_context(
     *contexts: str | None,
 ) -> str | None:
@@ -318,6 +342,9 @@ async def stream_remote_chat_completion(
         yield format_sse_event({"type": "error", "message": str(exc)})
         return
 
+    interaction_config = get_skill_interaction_config(request.skill_id)
+    interaction_context_message: dict[str, Any] | None = None
+
     try:
         for prepared_uploaded_file in prepared_uploaded_files:
             yield format_sse_event(
@@ -330,7 +357,153 @@ async def stream_remote_chat_completion(
                 }
             )
 
-        tool_trace_messages: list[dict[str, Any]] = []
+        if interaction_config is not None:
+            if request.interaction_answer is None:
+                _, interaction_step = await start_or_resume_interaction(
+                    request=request,
+                    config=interaction_config,
+                )
+                if interaction_config.intro_message:
+                    yield format_sse_event(
+                        {"type": "delta", "content": interaction_config.intro_message}
+                    )
+                yield format_sse_event(
+                    {
+                        "type": "interaction",
+                        "status": "required",
+                        "interaction": interaction_step,
+                    }
+                )
+                yield format_sse_event(
+                    {
+                        "type": "done",
+                        "finish_reason": "interaction_required",
+                    }
+                )
+                return
+
+            try:
+                next_interaction_step, completed_payload = await submit_interaction_answer(
+                    request=request,
+                    config=interaction_config,
+                    answer=request.interaction_answer,
+                )
+            except ValueError as exc:
+                yield format_sse_event({"type": "error", "message": str(exc)})
+                return
+
+            if next_interaction_step is not None:
+                yield format_sse_event(
+                    {
+                        "type": "interaction",
+                        "status": "required",
+                        "interaction": next_interaction_step,
+                    }
+                )
+                yield format_sse_event(
+                    {
+                        "type": "done",
+                        "finish_reason": "interaction_required",
+                    }
+                )
+                return
+
+            yield format_sse_event({"type": "interaction", "status": "completed"})
+
+            if completed_payload is not None and interaction_config.final_tool is not None:
+                final_tool = interaction_config.final_tool
+                tool_arguments = {
+                    final_tool.argument_name: completed_payload,
+                    **final_tool.static_arguments,
+                }
+                rendered_output_name = _format_output_name_from_template(
+                    final_tool.output_name_template,
+                    completed_payload,
+                )
+                if rendered_output_name:
+                    tool_arguments["output_name"] = rendered_output_name
+
+                tool_call = {
+                    "id": "interaction-final-tool",
+                    "type": "function",
+                    "function": {
+                        "name": final_tool.name,
+                        "arguments": json.dumps(tool_arguments, ensure_ascii=False),
+                    },
+                }
+                tool_name = final_tool.name
+
+                yield format_sse_event(
+                    {
+                        "type": "tool-status",
+                        "phase": "start",
+                        "tool_name": tool_name,
+                        **build_tool_status_start(
+                            skill_id=request.skill_id,
+                            tool_call=tool_call,
+                        ),
+                    }
+                )
+
+                tool_result, next_attachments = execute_skill_tool_call(
+                    request=request,
+                    state=state,
+                    tool_call=tool_call,
+                )
+
+                for attachment in next_attachments:
+                    yield format_sse_event(
+                        {
+                            "type": "attachment",
+                            "attachment": attachment.model_dump(
+                                mode="json",
+                                by_alias=True,
+                            ),
+                        }
+                    )
+
+                yield format_sse_event(
+                    {
+                        "type": "tool-status",
+                        "phase": "finish",
+                        "tool_name": tool_name,
+                        **build_tool_status_finish(
+                            request=request,
+                            state=state,
+                            tool_call=tool_call,
+                            tool_result=tool_result,
+                            attachments=next_attachments,
+                        ),
+                    }
+                )
+
+                if not tool_result.get("ok"):
+                    error_message = str(tool_result.get("error", "工具执行失败。"))
+                    yield format_sse_event({"type": "error", "message": error_message})
+                    return
+
+                completion_text = interaction_config.completion_message or "已根据你的选择生成报告。"
+                yield format_sse_event({"type": "delta", "content": completion_text})
+                yield format_sse_event(
+                    {
+                        "type": "done",
+                        "finish_reason": "stop",
+                    }
+                )
+                return
+
+            if completed_payload is not None:
+                interaction_context_message = {
+                    "role": "system",
+                    "content": (
+                        "以下是用户通过交互步骤确认的结构化信息，请直接基于它完成任务，不要再次向用户提问：\n"
+                        + json.dumps(completed_payload, ensure_ascii=False, indent=2)
+                    ),
+                }
+
+        tool_trace_messages: list[dict[str, Any]] = (
+            [interaction_context_message] if interaction_context_message is not None else []
+        )
         final_finish_reason = "stop"
         executed_tool_calls: dict[str, dict[str, Any]] = {}
         tools_enabled = True

@@ -265,6 +265,16 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 
 不要继续在 Python 业务代码里为单个 skill 手写专用工具链路。
 
+## 交互式 Skill
+新增了一套通用交互式采集链路，可供任意 skill 按声明启用，不再是单一 skill 特化逻辑。
+
+- skill 可在 `agents/interaction.json` 声明分步采集（single/multi/text）。
+- 后端流式接口会按步骤返回 `interaction` 事件，步骤完成后继续执行声明式工具并返回 `tool-status`、`attachment`、`done`。
+- 交互状态默认走 Redis，会话维度缓存；测试时可用内存替身避免环境依赖。
+
+推荐在改动交互链路后至少做一次完整回归：  
+`发起请求 -> 收到步骤 -> 提交全部步骤 -> 返回附件 -> 验证附件可下载`。
+
 ## Tool Calling 与 Skill 上下文
 当前 skill 主链已经改成“流式 tool calling + Redis 会话缓存”，不再使用旧版“先 planner 再一次性补 chunk”的思路。
 

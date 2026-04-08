@@ -5,6 +5,13 @@ from .catalog import (
     SkillInterfaceConfig,
     SkillListResponse,
 )
+from .interaction import (
+    SkillInteractionConfig,
+    SkillInteractionFinalToolConfig,
+    SkillInteractionOption,
+    SkillInteractionState,
+    SkillInteractionStep,
+)
 from .runtime import (
     SkillContextChunk,
     SkillContextChunkSummary,
@@ -19,5 +26,10 @@ __all__ = [
     "SkillConversationCacheResponse",
     "SkillConversationState",
     "SkillInterfaceConfig",
+    "SkillInteractionConfig",
+    "SkillInteractionFinalToolConfig",
+    "SkillInteractionOption",
+    "SkillInteractionState",
+    "SkillInteractionStep",
     "SkillListResponse",
 ]

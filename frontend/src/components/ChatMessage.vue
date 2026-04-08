@@ -190,6 +190,115 @@
             </div>
           </details>
           <template v-if="message.role === 'assistant'">
+            <div
+              v-if="activeInteraction"
+              class="message-interaction-card"
+              aria-live="polite"
+            >
+              <div class="message-interaction-header">
+                <span class="message-interaction-step">
+                  第 {{ activeInteraction.currentStep }}/{{
+                    activeInteraction.totalSteps
+                  }}
+                  步
+                </span>
+                <h4 class="message-interaction-title">
+                  {{ activeInteraction.title }}
+                </h4>
+              </div>
+              <p class="message-interaction-prompt">
+                {{ activeInteraction.prompt }}
+              </p>
+
+              <div
+                v-if="activeInteraction.kind === 'single_select'"
+                class="message-interaction-options"
+              >
+                <button
+                  v-for="option in activeInteraction.options"
+                  :key="option.value"
+                  class="message-interaction-option"
+                  :class="{
+                    'is-selected': interactionSingleValue === option.value,
+                  }"
+                  type="button"
+                  :disabled="!canSubmitInteraction || interactionSubmitting"
+                  @click="onSelectSingleOption(option.value)"
+                >
+                  <span class="message-interaction-option-label">
+                    {{ option.label }}
+                  </span>
+                  <span
+                    v-if="option.description"
+                    class="message-interaction-option-description"
+                  >
+                    {{ option.description }}
+                  </span>
+                </button>
+              </div>
+
+              <div
+                v-else-if="activeInteraction.kind === 'multi_select'"
+                class="message-interaction-options"
+              >
+                <button
+                  v-for="option in activeInteraction.options"
+                  :key="option.value"
+                  class="message-interaction-option"
+                  :class="{
+                    'is-selected': interactionMultiValue.includes(option.value),
+                  }"
+                  type="button"
+                  :disabled="!canSubmitInteraction || interactionSubmitting"
+                  @click="onToggleMultiOption(option.value)"
+                >
+                  <span class="message-interaction-option-label">
+                    {{ option.label }}
+                  </span>
+                  <span
+                    v-if="option.description"
+                    class="message-interaction-option-description"
+                  >
+                    {{ option.description }}
+                  </span>
+                </button>
+              </div>
+
+              <textarea
+                v-else
+                v-model.trim="interactionTextValue"
+                class="message-interaction-textarea"
+                rows="2"
+                :placeholder="activeInteraction.placeholder || '请输入内容...'"
+                :disabled="!canSubmitInteraction || interactionSubmitting"
+              ></textarea>
+
+              <input
+                v-if="activeInteraction.allowCustom"
+                v-model.trim="interactionCustomValue"
+                class="message-interaction-custom-input"
+                type="text"
+                :placeholder="
+                  activeInteraction.placeholder || '输入自定义内容...'
+                "
+                :disabled="!canSubmitInteraction || interactionSubmitting"
+              />
+
+              <div class="message-interaction-actions">
+                <button
+                  class="message-interaction-submit"
+                  type="button"
+                  :disabled="
+                    !canSubmitInteraction ||
+                    interactionSubmitting ||
+                    !canSubmitCurrentInteraction
+                  "
+                  @click="submitInteractionAnswer"
+                >
+                  {{ interactionSubmitting ? '提交中...' : '确认并继续' }}
+                </button>
+              </div>
+            </div>
             <!-- eslint-disable vue/no-v-html -->
             <div
               v-if="normalizedDisplayContent.trim().length > 0"
@@ -597,6 +706,8 @@ import {
 import type {
   ChatAttachment,
   ChatEditAttachment,
+  ChatInteractionAnswer,
+  ChatInteractionCard,
   ChatMessageDisplay,
   ChatToolStatus,
 } from '../types/chat';
@@ -630,6 +741,7 @@ const props = defineProps<{
   editingFiles?: ChatEditAttachment[];
   canConfirmEdit?: boolean;
   showToolbarByDefault?: boolean;
+  canSubmitInteraction?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -645,6 +757,7 @@ const emit = defineEmits<{
   (e: 'copy'): void;
   (e: 'download'): void;
   (e: 'download-file', file: ChatAttachment): void;
+  (e: 'submit-interaction', answer: ChatInteractionAnswer): void;
 }>();
 
 const renderedContent = ref('');
@@ -707,6 +820,105 @@ const showToolbarByDefault = computed(
   () => props.showToolbarByDefault ?? false,
 );
 const canConfirmEdit = computed(() => props.canConfirmEdit ?? false);
+const canSubmitInteraction = computed(
+  () => props.canSubmitInteraction ?? false,
+);
+const activeInteraction = computed<ChatInteractionCard | null>(() => {
+  if (props.message.role !== 'assistant') {
+    return null;
+  }
+  return props.message.interaction ?? null;
+});
+const interactionSingleValue = ref('');
+const interactionMultiValue = ref<string[]>([]);
+const interactionTextValue = ref('');
+const interactionCustomValue = ref('');
+const interactionSubmitting = ref(false);
+
+const resetInteractionDraft = () => {
+  interactionSingleValue.value = '';
+  interactionMultiValue.value = [];
+  interactionTextValue.value = '';
+  interactionCustomValue.value = '';
+  interactionSubmitting.value = false;
+};
+
+const canSubmitCurrentInteraction = computed(() => {
+  const interaction = activeInteraction.value;
+  if (!interaction) {
+    return false;
+  }
+
+  const customValue = interactionCustomValue.value.trim();
+  if (interaction.kind === 'text') {
+    if (!interaction.required) {
+      return true;
+    }
+    return interactionTextValue.value.trim().length > 0;
+  }
+
+  if (interaction.kind === 'single_select') {
+    if (!interaction.required) {
+      return true;
+    }
+    return (
+      interactionSingleValue.value.trim().length > 0 || customValue.length > 0
+    );
+  }
+
+  if (!interaction.required) {
+    return true;
+  }
+  return interactionMultiValue.value.length > 0 || customValue.length > 0;
+});
+
+const onSelectSingleOption = (value: string) => {
+  interactionSingleValue.value = value;
+};
+
+const onToggleMultiOption = (value: string) => {
+  const existed = interactionMultiValue.value.includes(value);
+  interactionMultiValue.value = existed
+    ? interactionMultiValue.value.filter((item) => item !== value)
+    : [...interactionMultiValue.value, value];
+};
+
+const submitInteractionAnswer = () => {
+  if (
+    !activeInteraction.value ||
+    !canSubmitInteraction.value ||
+    interactionSubmitting.value ||
+    !canSubmitCurrentInteraction.value
+  ) {
+    return;
+  }
+
+  const answer: ChatInteractionAnswer = {
+    sessionId: activeInteraction.value.sessionId,
+    stepId: activeInteraction.value.stepId,
+  };
+
+  if (activeInteraction.value.kind === 'text') {
+    answer.value = interactionTextValue.value.trim();
+  } else if (activeInteraction.value.kind === 'single_select') {
+    if (interactionSingleValue.value.trim()) {
+      answer.value = interactionSingleValue.value.trim();
+    }
+  } else {
+    answer.value = [...interactionMultiValue.value];
+  }
+
+  if (
+    activeInteraction.value.allowCustom &&
+    interactionCustomValue.value.trim().length > 0
+  ) {
+    answer.customValue = interactionCustomValue.value.trim();
+  }
+
+  interactionSubmitting.value = true;
+  emit('submit-interaction', answer);
+};
+
 const toolStatuses = computed<ChatToolStatus[]>(() => {
   return props.message.toolStatuses ?? [];
 });
@@ -899,6 +1111,23 @@ const resizeEditTextarea = () => {
   editTextareaRef.value.style.height = 'auto';
   editTextareaRef.value.style.height = `${editTextareaRef.value.scrollHeight}px`;
 };
+
+watch(
+  () => activeInteraction.value?.stepId ?? null,
+  () => {
+    resetInteractionDraft();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => canSubmitInteraction.value,
+  (enabled) => {
+    if (enabled) {
+      interactionSubmitting.value = false;
+    }
+  },
+);
 
 watch(
   [isEditing, editingText],

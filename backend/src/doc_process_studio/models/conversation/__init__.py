@@ -10,10 +10,11 @@ from .sessions import (
     ChatSessionTitleUpdateRequest,
     ChatSessionUpsertRequest,
 )
-from .stream import ChatMessageInput, ChatStreamRequest
+from .stream import ChatInteractionAnswer, ChatMessageInput, ChatStreamRequest
 
 __all__ = [
     "ChatMessageInput",
+    "ChatInteractionAnswer",
     "ChatSessionAttachment",
     "ChatSessionDetail",
     "ChatSessionListResponse",

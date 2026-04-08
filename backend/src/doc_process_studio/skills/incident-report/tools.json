@@ -1,0 +1,56 @@
+{
+  "tools": [
+    {
+      "name": "generate_incident_report",
+      "description": "根据已整理完整的事故信息生成 DAS 故障报告文档，并返回可下载附件。仅在 6 个必填章节信息齐全后调用。",
+      "kind": "script",
+      "path": "scripts/generate_incident_report.py",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "report_data": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "事故报告结构化数据。优先传对象；也可传 JSON/YAML 字符串。字段尽量严格对齐 examples/incident_data.json，关键键位缺失时请填 N/A 或空数组。若用户明确接受缺省项，可在 report_data 中设置 allow_incomplete=true。"
+          },
+          "output_name": {
+            "type": "string",
+            "description": "期望生成的输出文件名，例如 incident-report.docx。"
+          }
+        },
+        "required": ["report_data"],
+        "additionalProperties": false
+      },
+      "execution": {
+        "runtime": "python",
+        "fixed_args": [],
+        "arg_bindings": {
+          "report_data": {
+            "flag": "--json",
+            "serializer": "json_file"
+          },
+          "output_name": {
+            "flag": "--output",
+            "serializer": "attachment_output_name"
+          }
+        },
+        "attachment": {
+          "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "default_name_template": "{tool_name}.docx"
+        }
+      },
+      "status": {
+        "label": "生成事故报告",
+        "start": "正在根据已确认的事故信息生成报告文档。",
+        "success": "事故报告已生成，可直接下载。",
+        "failure": "事故报告生成失败。"
+      }
+    }
+  ]
+}

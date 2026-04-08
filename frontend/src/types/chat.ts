@@ -1,5 +1,7 @@
 export type ChatMessageRole = 'user' | 'assistant' | 'system';
 
+export type ChatInteractionKind = 'single_select' | 'multi_select' | 'text';
+
 export interface ChatAttachment {
   name: string;
   sizeLabel: string;
@@ -23,6 +25,34 @@ export interface ChatToolStatus {
   createdAt: string;
 }
 
+export interface ChatInteractionOption {
+  value: string;
+  label: string;
+  description?: string | null;
+}
+
+export interface ChatInteractionCard {
+  sessionId: string;
+  stepId: string;
+  title: string;
+  prompt: string;
+  kind: ChatInteractionKind;
+  allowCustom: boolean;
+  required: boolean;
+  placeholder?: string | null;
+  currentStep: number;
+  totalSteps: number;
+  options: ChatInteractionOption[];
+}
+
+export interface ChatInteractionAnswer {
+  sessionId?: string;
+  stepId: string;
+  value?: string | string[];
+  customValue?: string;
+  useDefaultsForMissing?: boolean;
+}
+
 export interface ChatMessageNode {
   id: string;
   role: ChatMessageRole;
@@ -30,6 +60,7 @@ export interface ChatMessageNode {
   apiContent?: string;
   files?: ChatAttachment[];
   toolStatuses?: ChatToolStatus[];
+  interaction?: ChatInteractionCard | null;
   requestFiles?: File[];
   timestamp: Date;
   parentId: string | null;
@@ -38,7 +69,13 @@ export interface ChatMessageNode {
 
 export type ChatMessageDisplay = Pick<
   ChatMessageNode,
-  'id' | 'role' | 'content' | 'files' | 'toolStatuses' | 'timestamp'
+  | 'id'
+  | 'role'
+  | 'content'
+  | 'files'
+  | 'toolStatuses'
+  | 'interaction'
+  | 'timestamp'
 >;
 
 export interface ApiChatMessage {
@@ -54,6 +91,7 @@ export interface ChatRequestSnapshot {
   messages: ApiChatMessage[];
   files: File[];
   attachmentIds: string[];
+  interactionAnswer?: ChatInteractionAnswer;
 }
 
 export interface ActiveGenerationState {
@@ -71,4 +109,6 @@ export interface ChatStreamEvent {
   tool_name?: string;
   label?: string;
   attachment?: ChatAttachment;
+  status?: string;
+  interaction?: ChatInteractionCard;
 }

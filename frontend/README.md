@@ -220,6 +220,12 @@ cacheScopeId + messageId + role + contentHash
 - 例如 `md`、`vue`、`ts`、`js`、`py`、`json`、`yaml`、`pdf`、`docx` 会显示各自更具体的 badge。
 - 这套规则统一收敛在 `src/utils/file.ts`，后续如果要补新的文件类型，优先改这里，不要在组件里各自写判断。
 
+## 交互式消息卡片
+
+- assistant 消息支持显示交互步骤卡片（single / multi / text），由后端 `interaction` 流事件驱动。
+- 前端会兼容 `snake_case` 与 `camelCase` 的交互字段，避免历史会话回放时因字段风格不同导致卡片丢失。
+- 交互提交流程保持在同一条 assistant 消息内继续流式更新，直到工具完成并返回附件。
+
 ## 新功能开发建议
 
 ### 新增接口

@@ -1,0 +1,112 @@
+import json
+
+from docx import Document
+
+from doc_process_studio.models.conversation.stream import ChatStreamRequest
+from doc_process_studio.models.skill.runtime import SkillConversationState
+from doc_process_studio.services.chat import attachments as attachments_module
+from doc_process_studio.services.skill.tool_loop import execute_skill_tool_call
+
+
+def _build_tool_call(arguments: dict) -> dict:
+    return {
+        "id": "tool-call-incident-report",
+        "type": "function",
+        "function": {
+            "name": "generate_incident_report",
+            "arguments": json.dumps(arguments, ensure_ascii=False),
+        },
+    }
+
+
+def _read_cell(table, row_index: int, cell_index: int) -> str:
+    return table.rows[row_index].cells[cell_index].text.strip()
+
+
+def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        attachments_module.settings,
+        "generated_attachments_dir",
+        str(tmp_path),
+    )
+
+    request = ChatStreamRequest(
+        user_message_id="msg-user-incident-1",
+        conversation_id="conv-incident-1",
+        model="qwen3-coder-next:latest",
+        skill_id="incident-report",
+        messages=[],
+        attachment_ids=[],
+    )
+    state = SkillConversationState(
+        conversation_id=request.conversation_id,
+        skill_id=request.skill_id,
+        system_prompt="",
+    )
+
+    # 故意传入“半结构化”数据，验证真实 tools.json 调用链下脚本仍能补齐模板关键字段。
+    report_data = {
+        "reference_no": "DAS-20260408-777",
+        "detailed_description": "Payment service outage",
+        "key_facts": {
+            "system": "Payment Gateway",
+            "detection_method": "Monitoring alert",
+            "symptoms": "Transaction timeout",
+        },
+        "start_time": "08/04/2026 09:10",
+        "detection_time": "08/04/2026 09:12",
+        "resolution_time": "08/04/2026 09:40",
+        "severity": "P2",
+        "impact": "Users cannot complete payment transactions",
+        "event_sequence": ["09:12 Monitoring alert triggered"],
+        "root_cause": {
+            "technical": "Missing DB index caused full table scan",
+            "proximate_cause": "SQL deployed without pre-release benchmark",
+            "process_gap": "Release checklist missing DBA review",
+        },
+        "immediate_actions": ["Restarted payment service"],
+        "preventive_actions": ["Add payment timeout alert rule"],
+    }
+    tool_call = _build_tool_call(
+        {
+            "report_data": report_data,
+            "output_name": "incident-report-integration.docx",
+        }
+    )
+
+    tool_result, attachments = execute_skill_tool_call(
+        request=request,
+        state=state,
+        tool_call=tool_call,
+    )
+
+    assert tool_result.get("ok") is True
+    assert len(attachments) == 1
+
+    attachment = attachments[0]
+    metadata, attachment_path, is_expired = attachments_module.resolve_attachment_path(
+        attachment.attachment_id
+    )
+
+    assert metadata is not None
+    assert is_expired is False
+    assert attachment_path is not None
+    assert attachment_path.suffix.lower() == ".docx"
+    assert attachment_path.is_file()
+
+    document = Document(str(attachment_path))
+    assert len(document.tables) >= 4
+
+    reference_table = document.tables[0]
+    section_a_table = document.tables[1]
+    section_c_table = document.tables[3]
+
+    # 断言 Page 1 关键字段单元格不是空字符串，避免“模板区域空白”回归。
+    assert _read_cell(reference_table, 0, 1) != ""
+    assert _read_cell(section_a_table, 3, 1) != ""  # Site ID
+    assert _read_cell(section_a_table, 4, 1) != ""  # Location of Fault
+    assert _read_cell(section_a_table, 5, 1) != ""  # Details of Fault Symptom
+    assert _read_cell(section_c_table, 1, 1) != ""  # Status
+
+    all_paragraph_text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+    assert '{"process_gap"' not in all_paragraph_text

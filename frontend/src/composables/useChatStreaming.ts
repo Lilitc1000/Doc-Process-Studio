@@ -3,10 +3,13 @@ import { streamChatReply } from '../api/chat';
 import type {
   ActiveGenerationState,
   ChatAttachment,
+  ChatInteractionAnswer,
+  ChatInteractionCard,
   ChatMessageNode,
   ChatRequestSnapshot,
   ChatToolStatus,
 } from '../types/chat';
+import { normalizeInteractionCard } from '../utils/interaction';
 
 interface UseChatStreamingOptions {
   createAssistantVariant: (userMessageId: string) => ChatMessageNode;
@@ -18,6 +21,11 @@ interface UseChatStreamingOptions {
   appendMessageToolStatus: (
     messageId: string,
     toolStatus: ChatToolStatus,
+  ) => void;
+  updateMessageInteraction: (
+    messageId: string,
+    interaction: ChatInteractionCard | null,
+    status?: string,
   ) => void;
   updateMessageContent: (messageId: string, content: string) => void;
   findMessageById: (messageId: string) => ChatMessageNode | null;
@@ -69,6 +77,80 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
     }
   };
 
+  const finalizeAssistantFallback = (assistantId: string) => {
+    const streamedAssistantMessage = options.findMessageById(assistantId);
+    if (!streamedAssistantMessage) {
+      return;
+    }
+
+    if (streamedAssistantMessage.content.trim()) {
+      return;
+    }
+
+    if (streamedAssistantMessage.files?.length) {
+      options.updateMessageContent(assistantId, '已生成文件，请下载查看。');
+      return;
+    }
+
+    if (streamedAssistantMessage.interaction) {
+      return;
+    }
+
+    options.updateMessageContent(
+      assistantId,
+      '模型已完成响应，但没有返回可显示的文本内容。',
+    );
+  };
+
+  const streamIntoAssistantMessage = async (
+    requestSnapshot: ChatRequestSnapshot,
+    assistantMessageId: string,
+    signal: AbortSignal,
+  ) => {
+    await streamChatReply(requestSnapshot, signal, (payload) => {
+      if (payload.type === 'delta' && payload.content) {
+        options.appendMessageContent(assistantMessageId, payload.content);
+        options.scrollToBottom();
+      }
+
+      if (payload.type === 'attachment' && payload.attachment) {
+        options.appendMessageAttachment(assistantMessageId, payload.attachment);
+        options.scrollToBottom();
+      }
+
+      if (payload.type === 'uploaded-attachment' && payload.attachment) {
+        options.appendMessageAttachment(
+          requestSnapshot.userMessageId,
+          payload.attachment,
+        );
+      }
+
+      if (payload.type === 'tool-status' && payload.message) {
+        options.appendMessageToolStatus(assistantMessageId, {
+          id: `${assistantMessageId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          toolName: payload.tool_name,
+          label: payload.label,
+          message: payload.message,
+          phase: payload.phase,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      if (payload.type === 'interaction') {
+        const nextInteraction =
+          payload.status === 'completed'
+            ? null
+            : normalizeInteractionCard(payload.interaction);
+        options.updateMessageInteraction(
+          assistantMessageId,
+          nextInteraction,
+          payload.status,
+        );
+        options.scrollToBottom();
+      }
+    });
+  };
+
   const executeAssistantGeneration = async (
     requestSnapshot: ChatRequestSnapshot,
   ) => {
@@ -86,57 +168,12 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
     options.scrollToBottom();
 
     try {
-      await streamChatReply(
+      await streamIntoAssistantMessage(
         requestSnapshot,
-        abortController.signal,
-        (payload) => {
-          if (payload.type === 'delta' && payload.content) {
-            options.appendMessageContent(assistantNode.id, payload.content);
-            options.scrollToBottom();
-          }
-
-          if (payload.type === 'attachment' && payload.attachment) {
-            options.appendMessageAttachment(
-              assistantNode.id,
-              payload.attachment,
-            );
-            options.scrollToBottom();
-          }
-
-          if (payload.type === 'uploaded-attachment' && payload.attachment) {
-            options.appendMessageAttachment(
-              requestSnapshot.userMessageId,
-              payload.attachment,
-            );
-          }
-
-          if (payload.type === 'tool-status' && payload.message) {
-            options.appendMessageToolStatus(assistantNode.id, {
-              id: `${assistantNode.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              toolName: payload.tool_name,
-              label: payload.label,
-              message: payload.message,
-              phase: payload.phase,
-              createdAt: new Date().toISOString(),
-            });
-          }
-        },
-      );
-
-      const streamedAssistantMessage = options.findMessageById(
         assistantNode.id,
+        abortController.signal,
       );
-      if (
-        streamedAssistantMessage &&
-        !streamedAssistantMessage.content.trim()
-      ) {
-        options.updateMessageContent(
-          assistantNode.id,
-          streamedAssistantMessage.files?.length
-            ? '已生成文件，请下载查看。'
-            : '模型已完成响应，但没有返回可显示的文本内容。',
-        );
-      }
+      finalizeAssistantFallback(assistantNode.id);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
@@ -155,9 +192,60 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
     }
   };
 
+  const executeAssistantInteraction = async (
+    baseRequestSnapshot: ChatRequestSnapshot,
+    assistantMessageId: string,
+    interactionAnswer: ChatInteractionAnswer,
+  ) => {
+    const assistantNode = options.findMessageById(assistantMessageId);
+    if (!assistantNode || assistantNode.role !== 'assistant') {
+      return;
+    }
+
+    const abortController = new AbortController();
+    isLoading.value = true;
+    activeGeneration.value = {
+      assistantId: assistantMessageId,
+      userMessageId: baseRequestSnapshot.userMessageId,
+      controller: abortController,
+    };
+
+    const requestSnapshot: ChatRequestSnapshot = {
+      ...baseRequestSnapshot,
+      interactionAnswer,
+    };
+
+    try {
+      await streamIntoAssistantMessage(
+        requestSnapshot,
+        assistantMessageId,
+        abortController.signal,
+      );
+      finalizeAssistantFallback(assistantMessageId);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+      const errorMessage =
+        error instanceof Error ? error.message : '交互提交失败，请稍后重试。';
+      options.appendMessageToolStatus(assistantMessageId, {
+        id: `${assistantMessageId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        label: '交互步骤',
+        message: `提交失败：${errorMessage}`,
+        phase: 'finish',
+        createdAt: new Date().toISOString(),
+      });
+    } finally {
+      activeGeneration.value = null;
+      isLoading.value = false;
+      await options.persistCurrentSession();
+    }
+  };
+
   return {
     activeGeneration,
     executeAssistantGeneration,
+    executeAssistantInteraction,
     isLoading,
     isMessageThinking,
     onStopGeneration,

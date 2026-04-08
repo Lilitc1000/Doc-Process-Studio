@@ -49,6 +49,7 @@
             :can-confirm-edit="canConfirmEdit"
             :show-toolbar-by-default="message.id === lastAssistantMessageId"
             :cache-scope-id="activeSessionId ?? conversationId"
+            :can-submit-interaction="!isLoading"
             :live-tool-status="
               message.id === activeGeneration?.assistantId
                 ? latestLiveToolStatus
@@ -66,6 +67,7 @@
             @copy="copyMessage(message.id)"
             @download="downloadAssistantMessage(message.id)"
             @download-file="downloadMessageFile"
+            @submit-interaction="submitMessageInteraction(message.id, $event)"
           />
         </div>
       </Transition>
@@ -117,6 +119,7 @@ import { useCopyToast } from '../composables/useCopyToast';
 import type {
   ChatAttachment,
   ChatEditAttachment,
+  ChatInteractionAnswer,
   ChatMessageNode,
   ChatRequestSnapshot,
   ChatToolStatus,
@@ -530,6 +533,18 @@ const appendMessageToolStatus = (
   ];
 };
 
+const updateMessageInteraction = (
+  messageId: string,
+  interaction: ChatMessageNode['interaction'],
+) => {
+  const targetMessage = findMessageById(messageId);
+  if (!targetMessage) {
+    return;
+  }
+
+  targetMessage.interaction = interaction ?? null;
+};
+
 const getMessageSiblingIds = (messageId: string) => {
   const messageNode = getNodeById(messageId);
   if (!messageNode) {
@@ -606,6 +621,7 @@ const createAssistantVariant = (userMessageId: string) => {
 const {
   activeGeneration,
   executeAssistantGeneration,
+  executeAssistantInteraction,
   isLoading,
   isMessageThinking,
   onStopGeneration,
@@ -614,6 +630,7 @@ const {
   appendMessageContent,
   appendMessageAttachment,
   appendMessageToolStatus,
+  updateMessageInteraction,
   updateMessageContent,
   findMessageById,
   scrollToBottom,
@@ -898,6 +915,30 @@ const onRegenerate = async (assistantMessageId: string) => {
   await persistCurrentSession();
   await executeAssistantGeneration(
     buildRequestSnapshotForUserMessage(assistantNode.parentId),
+  );
+};
+
+const submitMessageInteraction = async (
+  assistantMessageId: string,
+  interactionAnswer: ChatInteractionAnswer,
+) => {
+  if (isLoading.value) {
+    return;
+  }
+
+  const assistantNode = getNodeById(assistantMessageId);
+  if (
+    !assistantNode ||
+    assistantNode.role !== 'assistant' ||
+    !assistantNode.parentId
+  ) {
+    return;
+  }
+
+  await executeAssistantInteraction(
+    buildRequestSnapshotForUserMessage(assistantNode.parentId),
+    assistantMessageId,
+    interactionAnswer,
   );
 };
 
