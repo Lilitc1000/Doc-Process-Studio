@@ -22,8 +22,9 @@ export const fetchAvailableModels = async () => {
 
 export const fetchAvailableSkills = async (): Promise<{
   skills: SkillOption[];
-  defaultSkillId: string;
 }> => {
   const response = await apiClient.get<SkillCatalogPayload>('/skills');
-  return normalizeSkillCatalog(response.data);
+  return {
+    skills: normalizeSkillCatalog(response.data),
+  };
 };

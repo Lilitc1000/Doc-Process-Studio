@@ -20,7 +20,6 @@ interface UseChatSessionsOptions {
   rootChildIds: Ref<string[]>;
   selectedRootChildId: Ref<string | null>;
   selectedChildIdByParent: Ref<Record<string, string>>;
-  selectedProcessingMode: Ref<string>;
   selectedModel: Ref<string>;
   isChatLocked: () => boolean;
   getDisplayedMessages: () => ChatMessageNode[];
@@ -47,7 +46,6 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
       title: session.title,
       created_at: session.created_at,
       updated_at: session.updated_at,
-      selected_processing_mode: session.selected_processing_mode,
       selected_model: session.selected_model,
     } satisfies ChatSessionSummary;
   };
@@ -76,6 +74,7 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
           role: message.role,
           content: message.content,
           api_content: message.apiContent ?? null,
+          request_skill_ids: message.requestSkillIds ?? [],
           files: message.files ?? [],
           tool_statuses: message.toolStatuses ?? [],
           interaction: message.interaction ?? null,
@@ -87,7 +86,6 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
       root_child_ids: [...options.rootChildIds.value],
       selected_root_child_id: options.selectedRootChildId.value,
       selected_child_id_by_parent: { ...options.selectedChildIdByParent.value },
-      selected_processing_mode: options.selectedProcessingMode.value,
       selected_model: options.selectedModel.value,
     };
   };
@@ -110,6 +108,7 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
         role: message.role,
         content: message.content,
         apiContent: message.api_content ?? undefined,
+        requestSkillIds: message.request_skill_ids ?? [],
         files: message.files ?? [],
         toolStatuses: message.tool_statuses ?? [],
         interaction: normalizeInteractionCard(message.interaction),
@@ -126,7 +125,6 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
     options.selectedChildIdByParent.value = {
       ...snapshot.selected_child_id_by_parent,
     };
-    options.selectedProcessingMode.value = snapshot.selected_processing_mode;
     options.selectedModel.value = snapshot.selected_model;
     options.resetEditingState();
   };

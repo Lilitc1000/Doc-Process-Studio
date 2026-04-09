@@ -47,6 +47,10 @@ class ChatSessionMessageNode(BaseModel):
     role: str = Field(..., description="消息角色")
     content: str = Field(..., description="消息文本")
     api_content: str | None = Field(default=None, description="发送给模型的内容")
+    request_skill_ids: list[str] = Field(
+        default_factory=list,
+        description="该用户消息显式选择的文档处理方式列表",
+    )
     files: list[ChatSessionAttachment] = Field(
         default_factory=list,
         description="仅用于展示的附件信息",
@@ -81,7 +85,6 @@ class ChatSessionSnapshot(BaseModel):
         default_factory=dict,
         description="各父节点当前选中的子节点",
     )
-    selected_processing_mode: str = Field(..., description="当前 skill 标识")
     selected_model: str = Field(..., description="当前模型名称")
 
 
@@ -90,7 +93,6 @@ class ChatSessionSummary(BaseModel):
     title: str = Field(..., description="会话标题")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
-    selected_processing_mode: str = Field(..., description="当前 skill 标识")
     selected_model: str = Field(..., description="当前模型名称")
 
 

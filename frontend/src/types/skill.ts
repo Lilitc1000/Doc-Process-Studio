@@ -12,6 +12,4 @@ export interface SkillCatalogPayload {
     short_description?: string;
     shortDescription?: string;
   }>;
-  default_skill_id?: string;
-  defaultSkillId?: string;
 }

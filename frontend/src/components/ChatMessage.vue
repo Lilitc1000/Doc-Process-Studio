@@ -18,20 +18,79 @@
         :class="{ thinking: isThinking }"
       >
         <div v-if="isEditing" class="message-edit-panel">
+          <div
+            v-if="editingSkillOptions.length > 0"
+            class="message-edit-skill-list"
+          >
+            <button
+              v-for="skill in editingSkillOptions"
+              :key="skill.id"
+              type="button"
+              class="message-edit-skill-chip"
+              :title="`移除文档处理方式：${skill.displayName}`"
+              @click="removeEditingSkill(skill.id)"
+            >
+              <span class="message-edit-skill-chip-name">
+                {{ skill.displayName }}
+              </span>
+              <span class="message-edit-skill-chip-remove" aria-hidden="true">
+                ×
+              </span>
+            </button>
+          </div>
+
           <MessageFiles
             v-if="editingFiles.length > 0"
             :files="editingFiles"
             editable
             @remove="$emit('remove-edit-file', $event)"
           />
-          <textarea
-            ref="editTextareaRef"
-            class="message-edit-textarea"
-            rows="1"
-            :value="editingText"
-            placeholder="编辑消息内容..."
-            @input="onEditTextInput"
-          ></textarea>
+
+          <div class="message-edit-textarea-wrapper">
+            <textarea
+              ref="editTextareaRef"
+              class="message-edit-textarea"
+              rows="1"
+              :value="editingText"
+              placeholder="编辑消息内容..."
+              @input="onEditTextInputWithCaret"
+              @keydown="onEditTextareaKeydown"
+              @click="updateEditCaret"
+              @keyup="updateEditCaret"
+              @focus="updateEditCaret"
+            ></textarea>
+
+            <Transition name="skill-suggestion-fade">
+              <div
+                v-if="showEditSkillSuggestions"
+                class="message-edit-skill-suggestion-panel"
+                role="listbox"
+              >
+                <button
+                  v-for="(skill, index) in filteredEditSkillSuggestions"
+                  :key="skill.id"
+                  type="button"
+                  class="message-edit-skill-suggestion-item"
+                  :class="{ active: index === activeEditSkillIndex }"
+                  :title="skill.shortDescription || skill.displayName"
+                  @mousedown.prevent="selectEditSkillSuggestion(skill.id)"
+                  @mouseenter="activeEditSkillIndex = index"
+                >
+                  <span class="message-edit-skill-suggestion-main">
+                    <span class="message-edit-skill-suggestion-name">
+                      {{ skill.displayName }}
+                    </span>
+                  </span>
+                  <span
+                    v-if="skill.shortDescription"
+                    class="message-edit-skill-suggestion-desc"
+                  >
+                    {{ skill.shortDescription }}
+                  </span>
+                </button>
+              </div>
+            </Transition>
+          </div>
         </div>
 
         <template v-else>
@@ -82,6 +141,17 @@
           </template>
 
           <template v-else>
+            <div v-if="displaySkillTags.length > 0" class="message-skill-list">
+              <span
+                v-for="skill in displaySkillTags"
+                :key="skill.id"
+                class="message-skill-chip"
+                :title="`文档处理方式：${skill.displayName}`"
+              >
+                {{ skill.displayName }}
+              </span>
+            </div>
+
             <MessageFiles
               v-if="message.files && message.files.length > 0"
               :files="message.files"
@@ -132,6 +202,7 @@
 import { computed, toRef } from 'vue';
 import { useMessageEdit } from '../composables/message/useMessageEdit';
 import { useMessageRender } from '../composables/message/useMessageRender';
+import { useSkillMentionSelector } from '../composables/useSkillMentionSelector';
 import type {
   ChatAttachment,
   ChatEditAttachment,
@@ -140,6 +211,7 @@ import type {
   ChatMessageDisplay,
   ChatToolStatus,
 } from '../types/chat';
+import type { SkillOption } from '../types/skill';
 import MessageFiles from './message/MessageFiles.vue';
 import MessageHeader from './message/MessageHeader.vue';
 import MessageInteractionCard from './message/MessageInteractionCard.vue';
@@ -166,6 +238,8 @@ const props = defineProps<{
   isEditing?: boolean;
   editingText?: string;
   editingFiles?: ChatEditAttachment[];
+  editingSkillIds?: string[];
+  availableSkills?: SkillOption[];
   canConfirmEdit?: boolean;
   showToolbarByDefault?: boolean;
   canSubmitInteraction?: boolean;
@@ -176,6 +250,7 @@ const emit = defineEmits<{
   (e: 'next-version'): void;
   (e: 'start-edit'): void;
   (e: 'update-edit-text', value: string): void;
+  (e: 'update-edit-skill-ids', skillIds: string[]): void;
   (e: 'upload-edit-files', files: File[]): void;
   (e: 'remove-edit-file', index: number): void;
   (e: 'cancel-edit'): void;
@@ -190,6 +265,8 @@ const emit = defineEmits<{
 const isEditing = computed(() => props.isEditing ?? false);
 const editingText = computed(() => props.editingText ?? '');
 const editingFiles = computed(() => props.editingFiles ?? []);
+const editingSkillIds = computed(() => props.editingSkillIds ?? []);
+const availableSkills = computed(() => props.availableSkills ?? []);
 const showToolbarByDefault = computed(
   () => props.showToolbarByDefault ?? false,
 );
@@ -216,6 +293,27 @@ const showInlineLiveToolStatus = computed(() => {
 const showHistoricalToolStatuses = computed(() => {
   return props.message.role === 'assistant' && toolStatuses.value.length > 0;
 });
+const displaySkillTags = computed(() => {
+  if (props.message.role !== 'user') {
+    return [];
+  }
+
+  const requestSkillIds = props.message.requestSkillIds ?? [];
+  if (requestSkillIds.length === 0) {
+    return [];
+  }
+
+  return requestSkillIds.map((skillId) => {
+    const matchedSkill = availableSkills.value.find((skill) => {
+      return skill.id === skillId;
+    });
+
+    return {
+      id: skillId,
+      displayName: matchedSkill?.displayName ?? skillId,
+    };
+  });
+});
 const activeInteraction = computed<ChatInteractionCard | null>(() => {
   if (props.message.role !== 'assistant') {
     return null;
@@ -231,6 +329,44 @@ const { editTextareaRef, onEditTextInput } = useMessageEdit({
     emit('update-edit-text', value);
   },
 });
+
+const {
+  activeSuggestionIndex: activeEditSkillIndex,
+  filteredSkillSuggestions: filteredEditSkillSuggestions,
+  selectedSkillOptions: editingSkillOptions,
+  showSkillSuggestions: showEditSkillSuggestions,
+  handleSuggestionKeydown,
+  onCaretChange: updateEditCaret,
+  onTextInput,
+  removeSelectedSkill: removeEditingSkill,
+  selectSkillSuggestion: selectEditSkillSuggestion,
+  tryRemoveLastSkillByBackspace,
+} = useSkillMentionSelector({
+  text: editingText,
+  selectedSkillIds: editingSkillIds,
+  availableSkills,
+  textareaRef: editTextareaRef,
+  updateText: (value) => {
+    emit('update-edit-text', value);
+  },
+  updateSelectedSkillIds: (skillIds) => {
+    emit('update-edit-skill-ids', [...skillIds]);
+  },
+});
+
+const onEditTextInputWithCaret = (event: Event) => {
+  onEditTextInput(event);
+  onTextInput(event.target as HTMLTextAreaElement);
+};
+
+const onEditTextareaKeydown = (event: KeyboardEvent) => {
+  if (handleSuggestionKeydown(event)) {
+    return;
+  }
+  if (event.key === 'Backspace' && tryRemoveLastSkillByBackspace()) {
+    event.preventDefault();
+  }
+};
 
 const { messageContentRef, normalizedDisplayContent, renderedContent } =
   useMessageRender({

@@ -14,6 +14,7 @@ export const streamChatReply = async (
       conversation_id: requestSnapshot.conversationId,
       model: requestSnapshot.model,
       skill_id: requestSnapshot.skillId,
+      selected_skill_ids: requestSnapshot.selectedSkillIds,
       messages: requestSnapshot.messages,
       attachment_ids: requestSnapshot.attachmentIds,
       interaction_answer: requestSnapshot.interactionAnswer

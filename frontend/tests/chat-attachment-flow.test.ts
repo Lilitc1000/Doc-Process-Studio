@@ -41,7 +41,6 @@ describe('chat attachment flow', () => {
           displayName: '项目架构文档',
         },
       ],
-      defaultSkillId: 'project-architecture-docx',
     });
     fetchSessionSummariesMock.mockResolvedValue([]);
     saveSessionMock.mockResolvedValue({
@@ -49,7 +48,6 @@ describe('chat attachment flow', () => {
       title: '测试会话',
       created_at: '2026-04-07T00:00:00Z',
       updated_at: '2026-04-07T00:00:00Z',
-      selected_processing_mode: 'project-architecture-docx',
       selected_model: 'qwen3-coder-next:latest',
     });
 

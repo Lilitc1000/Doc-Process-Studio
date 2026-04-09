@@ -25,10 +25,7 @@ export const extractModelNames = (payload: ModelCatalogPayload) => {
   return Array.from(uniqueModelNames);
 };
 
-export const normalizeSkillCatalog = (
-  payload: SkillCatalogPayload,
-  fallbackSkillId = 'document-assistant',
-) => {
+export const normalizeSkillCatalog = (payload: SkillCatalogPayload) => {
   const rawSkills = payload.skills ?? [];
   const skills: SkillOption[] = [];
 
@@ -57,11 +54,5 @@ export const normalizeSkillCatalog = (
     });
   }
 
-  return {
-    skills,
-    defaultSkillId:
-      payload.default_skill_id?.trim() ||
-      payload.defaultSkillId?.trim() ||
-      fallbackSkillId,
-  };
+  return skills;
 };

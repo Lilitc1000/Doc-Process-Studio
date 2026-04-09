@@ -45,6 +45,10 @@ class ChatStreamRequest(BaseModel):
         ...,
         description="当前选中的 skill 标识",
     )
+    selected_skill_ids: list[str] = Field(
+        default_factory=list,
+        description="本轮显式选择的 skill 列表；为空时由模型按任务在可用 skill 中隐式选择。",
+    )
     messages: list[ChatMessageInput] = Field(
         default_factory=list,
         description="对话消息列表",

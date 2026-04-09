@@ -70,9 +70,9 @@ frontend/
 - [components/message/*](/frontend/src/components/message)
   消息子组件集合：`MessageHeader`、`MessageFiles`、`MessageToolbar`、`MessageToolTimeline`、`MessageInteractionCard`、`MessageLiveToolStatus`。
 - [ChatInput.vue](/frontend/src/components/ChatInput.vue)
-  底部输入区与文件选择。
+  底部输入区、文件选择、`$skill` 多选输入。
 - [ChatSidebar.vue](/frontend/src/components/ChatSidebar.vue)
-  左侧历史会话与模型 / skill 选择区域。
+  左侧历史会话与模型选择区域。
 
 ### 2. 组合式逻辑
 
@@ -83,9 +83,11 @@ frontend/
 - [useCopyToast.ts](/frontend/src/composables/useCopyToast.ts)
   顶部复制成功提示。
 - [useCatalogLoader.ts](/frontend/src/composables/useCatalogLoader.ts)
-  模型与 skill 列表加载，负责 catalog 拉取与默认值回填。
+  模型与 skill 列表加载，负责 catalog 拉取与 system skill 过滤。
 - [useMessageActions.ts](/frontend/src/composables/useMessageActions.ts)
   发送、编辑、重生、附件下载、复制等消息操作聚合。
+- [useSkillMentionSelector.ts](/frontend/src/composables/useSkillMentionSelector.ts)
+  统一的 `$skill` 触发、候选过滤、键盘导航、token 删除逻辑，供输入框与编辑态复用。
 - [composables/message/*](/frontend/src/composables/message)
   消息局部逻辑：`useMessageRender`（懒渲染/缓存）、`useMessageEdit`（编辑态自适应输入）、`useMessageInteraction`（交互卡片提交流程）。
 
@@ -229,6 +231,17 @@ cacheScopeId + messageId + role + contentHash
 - 当前附件图标不是单一通用图标，而是优先按常见扩展名识别，再回退到 MIME 类型。
 - 例如 `md`、`vue`、`ts`、`js`、`py`、`json`、`yaml`、`pdf`、`docx` 会显示各自更具体的 badge。
 - 这套规则统一收敛在 `src/utils/file.ts`，后续如果要补新的文件类型，优先改这里，不要在组件里各自写判断。
+
+## Skill 选择输入约定
+
+文档处理方式目前是在输入框内输入 `$` 来做触发式选择：
+
+- 在输入框或用户消息编辑态输入 `$`，会弹出可选 skill 列表
+- 支持方向键、`Enter`、`Tab`、鼠标点击选择
+- 选中的 skill 会显示为 token，`Backspace` 在文本为空时可整块删除最后一个 token
+- 一条用户消息可绑定多个 skill（`requestSkillIds`），后端按该条消息快照执行
+
+`document-assistant` 是 system skill，不会出现在前端候选里。
 
 ## 交互式消息卡片
 

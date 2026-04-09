@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import AsyncIterator
 from copy import deepcopy
 from typing import Any
@@ -7,23 +8,30 @@ import httpx
 from fastapi import UploadFile
 
 from ...models.conversation.stream import ChatStreamRequest
+from ...models.skill.runtime import SkillConversationState
 from ...settings import settings
 from ..infra.ollama_client import OllamaNotConfiguredError, stream_chat_completion
 from ..skill.interaction_flow import start_or_resume_interaction, submit_interaction_answer
 from ..skill.interaction_store import load_interaction_state
-from ..skill.registry import get_skill_interaction_config
+from ..skill.context import get_skill_context_chunks_by_ids
+from ..skill.registry import (
+    get_skill_interface,
+    get_skill_interaction_config,
+    list_skill_interfaces,
+)
 from ..skill.runtime import ensure_skill_context_for_request, sync_skill_context_state
 from ..skill.tool_loop import (
     build_skill_tools,
+    build_skill_tools_for_skills,
     build_tool_status_finish,
     build_tool_status_start,
+    execute_scoped_skill_tool_call,
     execute_skill_tool_call,
 )
 from .file_context import build_persisted_uploaded_files_context, prepare_uploaded_files
 from .streaming import (
-    build_skill_prompt,
     build_tool_call_signature,
-    build_upstream_messages,
+    build_upstream_messages_for_skills,
     detect_tool_call_progress,
     extract_delta_text,
     extract_delta_tool_calls,
@@ -34,6 +42,159 @@ from .streaming import (
     merge_stream_tool_calls,
     merge_uploaded_files_context,
 )
+
+SYSTEM_DOCUMENT_SKILL_ID = "document-assistant"
+
+
+def _normalize_skill_ids(raw_skill_ids: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for raw_skill_id in raw_skill_ids:
+        skill_id = raw_skill_id.strip()
+        if skill_id and skill_id not in normalized:
+            normalized.append(skill_id)
+    return normalized
+
+
+def _extract_skill_ids_from_messages(
+    *,
+    messages: list[Any],
+    available_skills: list[Any],
+) -> tuple[list[str], list[str]]:
+    """从用户消息中提取显式提及（`$skill-id` 或文本直提）。"""
+    mentioned_skill_ids: list[str] = []
+    missing_skill_ids: list[str] = []
+    pattern = re.compile(r"\$([A-Za-z0-9._-]+)")
+    available_skill_ids = {str(skill.id).strip() for skill in available_skills}
+    skill_keywords: list[tuple[str, list[str]]] = []
+    for skill in available_skills:
+        skill_id = str(skill.id).strip()
+        display_name = str(getattr(skill, "display_name", "")).strip()
+        keywords = [skill_id.lower()]
+        if display_name:
+            keywords.append(display_name.lower())
+        skill_keywords.append((skill_id, keywords))
+
+    for message in messages:
+        if getattr(message, "role", None) != "user":
+            continue
+        content = str(getattr(message, "content", "") or "")
+        for matched_skill_id in pattern.findall(content):
+            skill_id = matched_skill_id.strip()
+            if not skill_id:
+                continue
+            if skill_id in available_skill_ids:
+                if skill_id not in mentioned_skill_ids:
+                    mentioned_skill_ids.append(skill_id)
+            elif skill_id not in missing_skill_ids:
+                missing_skill_ids.append(skill_id)
+
+        normalized_content = content.lower()
+        for skill_id, keywords in skill_keywords:
+            if skill_id in mentioned_skill_ids:
+                continue
+            if any(keyword and keyword in normalized_content for keyword in keywords):
+                mentioned_skill_ids.append(skill_id)
+
+    return mentioned_skill_ids, missing_skill_ids
+
+
+def _resolve_active_skill_ids(
+    request: ChatStreamRequest,
+) -> tuple[list[str], list[str], list[str], str]:
+    available_skills = list_skill_interfaces()
+    available_skill_ids = [skill.id for skill in available_skills]
+    available_skill_id_set = set(available_skill_ids)
+    explicit_skill_ids = _normalize_skill_ids(request.selected_skill_ids)
+    mentioned_skill_ids, missing_mentioned_skill_ids = _extract_skill_ids_from_messages(
+        messages=request.messages,
+        available_skills=available_skills,
+    )
+    for mentioned_skill_id in mentioned_skill_ids:
+        if mentioned_skill_id not in explicit_skill_ids:
+            explicit_skill_ids.append(mentioned_skill_id)
+    missing_explicit_skill_ids = [
+        skill_id for skill_id in explicit_skill_ids if skill_id not in available_skill_ids
+    ]
+    for missing_skill_id in missing_mentioned_skill_ids:
+        if missing_skill_id not in missing_explicit_skill_ids:
+            missing_explicit_skill_ids.append(missing_skill_id)
+    valid_explicit_skill_ids = [
+        skill_id for skill_id in explicit_skill_ids if skill_id in available_skill_ids
+    ]
+
+    request_skill_id = request.skill_id.strip()
+    has_system_skill = SYSTEM_DOCUMENT_SKILL_ID in available_skill_ids
+    active_skill_ids: list[str] = []
+
+    # 决策顺序：显式 selected_skill_ids > 文本中 $skill 提及 > system skill 基线。
+    if valid_explicit_skill_ids:
+        primary_skill_id = valid_explicit_skill_ids[0]
+        active_skill_ids.append(primary_skill_id)
+        if has_system_skill and SYSTEM_DOCUMENT_SKILL_ID not in active_skill_ids:
+            active_skill_ids.append(SYSTEM_DOCUMENT_SKILL_ID)
+        for skill_id in valid_explicit_skill_ids[1:]:
+            if skill_id not in active_skill_ids:
+                active_skill_ids.append(skill_id)
+    else:
+        if has_system_skill:
+            primary_skill_id = SYSTEM_DOCUMENT_SKILL_ID
+        elif request_skill_id and request_skill_id in available_skill_ids:
+            primary_skill_id = request_skill_id
+        else:
+            primary_skill_id = next(iter(available_skill_ids), SYSTEM_DOCUMENT_SKILL_ID)
+
+        active_skill_ids.append(primary_skill_id)
+        # 未显式指定时，以 system skill 为主，再按需开放其余技能给模型隐式选择。
+        if primary_skill_id == SYSTEM_DOCUMENT_SKILL_ID:
+            for skill_id in available_skill_ids:
+                if skill_id == SYSTEM_DOCUMENT_SKILL_ID:
+                    continue
+                active_skill_ids.append(skill_id)
+        elif has_system_skill:
+            active_skill_ids.append(SYSTEM_DOCUMENT_SKILL_ID)
+
+    return (
+        active_skill_ids,
+        valid_explicit_skill_ids,
+        missing_explicit_skill_ids,
+        primary_skill_id,
+    )
+
+
+def _build_ephemeral_skill_context(state: SkillConversationState) -> str | None:
+    loaded_chunks = get_skill_context_chunks_by_ids(state.skill_id, state.loaded_chunk_ids)
+    if not loaded_chunks:
+        return None
+
+    sections = [
+        (
+            "你已经读取了该文档处理方式的以下内容片段，请优先基于这些信息回答：\n\n"
+            + "\n\n".join(
+                [
+                    "\n".join(
+                        [
+                            f"来源：{chunk.source_path}",
+                            f"标题：{chunk.title}",
+                            "内容：",
+                            chunk.content,
+                        ]
+                    )
+                    for chunk in loaded_chunks
+                ]
+            )
+        )
+    ]
+    return "\n\n".join(sections).strip() or None
+
+
+def _collect_loaded_chunk_signatures(
+    states_by_skill: dict[str, SkillConversationState],
+) -> set[str]:
+    signatures: set[str] = set()
+    for skill_id, state in states_by_skill.items():
+        for chunk_id in state.loaded_chunk_ids:
+            signatures.add(f"{skill_id}::{chunk_id}")
+    return signatures
 
 
 async def stream_remote_chat_completion(
@@ -50,10 +211,17 @@ async def stream_remote_chat_completion(
         return
 
     try:
+        (
+            active_skill_ids,
+            explicit_skill_ids,
+            missing_explicit_skill_ids,
+            primary_skill_id,
+        ) = _resolve_active_skill_ids(request)
+        primary_request = request.model_copy(update={"skill_id": primary_skill_id})
         prepared_uploaded_files, new_uploaded_files_context = await prepare_uploaded_files(
             upload_files=upload_files or [],
             conversation_id=request.conversation_id,
-            skill_id=request.skill_id,
+            skill_id=primary_skill_id,
         )
         persisted_uploaded_files_context = build_persisted_uploaded_files_context(
             request.attachment_ids
@@ -62,12 +230,23 @@ async def stream_remote_chat_completion(
             persisted_uploaded_files_context,
             new_uploaded_files_context,
         )
-        state, _ = await ensure_skill_context_for_request(request)
+        primary_state, _ = await ensure_skill_context_for_request(primary_request)
+        states_by_skill: dict[str, SkillConversationState] = {
+            primary_skill_id: primary_state
+        }
+        for skill_id in active_skill_ids[1:]:
+            skill_interface = get_skill_interface(skill_id)
+            states_by_skill[skill_id] = SkillConversationState(
+                conversation_id=request.conversation_id,
+                skill_id=skill_id,
+                system_prompt=skill_interface.default_prompt,
+                loaded_chunk_ids=[],
+            )
     except ValueError as exc:
         yield format_sse_event({"type": "error", "message": str(exc)})
         return
 
-    interaction_config = get_skill_interaction_config(request.skill_id)
+    interaction_config = get_skill_interaction_config(primary_skill_id)
     interaction_context_message: dict[str, Any] | None = None
 
     try:
@@ -86,11 +265,11 @@ async def stream_remote_chat_completion(
             if request.interaction_answer is None:
                 current_interaction_state = await load_interaction_state(
                     request.conversation_id,
-                    request.skill_id,
+                    primary_skill_id,
                 )
                 if current_interaction_state is not None:
                     _, interaction_step = await start_or_resume_interaction(
-                        request=request,
+                        request=primary_request,
                         config=interaction_config,
                     )
                     yield format_sse_event(
@@ -111,7 +290,7 @@ async def stream_remote_chat_completion(
             else:
                 try:
                     next_interaction_step, completed_payload = await submit_interaction_answer(
-                        request=request,
+                        request=primary_request,
                         config=interaction_config,
                         answer=request.interaction_answer,
                     )
@@ -166,15 +345,15 @@ async def stream_remote_chat_completion(
                             "phase": "start",
                             "tool_name": tool_name,
                             **build_tool_status_start(
-                                skill_id=request.skill_id,
+                                skill_id=primary_skill_id,
                                 tool_call=tool_call,
                             ),
                         }
                     )
 
                     tool_result, next_attachments = execute_skill_tool_call(
-                        request=request,
-                        state=state,
+                        request=primary_request,
+                        state=states_by_skill[primary_skill_id],
                         tool_call=tool_call,
                     )
 
@@ -195,8 +374,8 @@ async def stream_remote_chat_completion(
                             "phase": "finish",
                             "tool_name": tool_name,
                             **build_tool_status_finish(
-                                request=request,
-                                state=state,
+                                request=primary_request,
+                                state=states_by_skill[primary_skill_id],
                                 tool_call=tool_call,
                                 tool_result=tool_result,
                                 attachments=next_attachments,
@@ -237,13 +416,35 @@ async def stream_remote_chat_completion(
         tool_round_count = 0
 
         while True:
-            skill_context = await sync_skill_context_state(
+            tooling_skill_ids = [
+                skill_id
+                for skill_id in active_skill_ids
+                if skill_id != SYSTEM_DOCUMENT_SKILL_ID
+            ]
+            if not tooling_skill_ids:
+                tooling_skill_ids = [primary_skill_id]
+
+            skill_context_by_skill: dict[str, str] = {}
+            primary_context = await sync_skill_context_state(
                 model=request.model,
-                state=state,
+                state=states_by_skill[primary_skill_id],
             )
-            upstream_messages = build_upstream_messages(
-                request,
-                skill_context=skill_context,
+            if primary_context:
+                skill_context_by_skill[primary_skill_id] = primary_context
+
+            for skill_id, skill_state in states_by_skill.items():
+                if skill_id == primary_skill_id:
+                    continue
+                ephemeral_context = _build_ephemeral_skill_context(skill_state)
+                if ephemeral_context:
+                    skill_context_by_skill[skill_id] = ephemeral_context
+
+            upstream_messages = build_upstream_messages_for_skills(
+                request=request,
+                active_skill_ids=active_skill_ids,
+                explicit_skill_ids=explicit_skill_ids,
+                missing_skill_ids=missing_explicit_skill_ids,
+                skill_context_by_skill=skill_context_by_skill,
                 uploaded_files_context=uploaded_files_context,
                 extra_messages=tool_trace_messages,
             )
@@ -254,7 +455,15 @@ async def stream_remote_chat_completion(
             async for chunk_payload in stream_chat_completion(
                 model=request.model,
                 messages=upstream_messages,
-                tools=build_skill_tools(request.skill_id) if tools_enabled else None,
+                tools=(
+                    (
+                        build_skill_tools(tooling_skill_ids[0])
+                        if len(tooling_skill_ids) == 1
+                        else build_skill_tools_for_skills(tooling_skill_ids)
+                    )
+                    if tools_enabled
+                    else None
+                ),
                 tool_choice="auto" if tools_enabled else None,
             ):
                 if chunk_payload is None:
@@ -325,7 +534,7 @@ async def stream_remote_chat_completion(
                         "phase": "start",
                         "tool_name": tool_name,
                         **build_tool_status_start(
-                            skill_id=request.skill_id,
+                            skill_id=primary_skill_id,
                             tool_call=tool_call,
                         ),
                     }
@@ -334,7 +543,15 @@ async def stream_remote_chat_completion(
                 if tool_name == "start_skill_interaction":
                     interaction_step: dict[str, Any] | None = None
                     should_emit_intro = False
-                    if interaction_config is None:
+                    if len(tooling_skill_ids) != 1:
+                        tool_result = {
+                            "ok": False,
+                            "error": (
+                                "当前同时激活了多个文档处理方式，已禁用交互向导。"
+                                "请仅选择一个处理方式后再发起向导。"
+                            ),
+                        }
+                    elif interaction_config is None:
                         tool_result = {
                             "ok": False,
                             "error": "当前 skill 未配置交互向导。",
@@ -342,10 +559,10 @@ async def stream_remote_chat_completion(
                     else:
                         existing_state = await load_interaction_state(
                             request.conversation_id,
-                            request.skill_id,
+                            primary_skill_id,
                         )
                         _, interaction_step = await start_or_resume_interaction(
-                            request=request,
+                            request=primary_request,
                             config=interaction_config,
                         )
                         tool_result = {
@@ -364,8 +581,8 @@ async def stream_remote_chat_completion(
                             "phase": "finish",
                             "tool_name": tool_name,
                             **build_tool_status_finish(
-                                request=request,
-                                state=state,
+                                request=primary_request,
+                                state=states_by_skill[primary_skill_id],
                                 tool_call=tool_call,
                                 tool_result=tool_result,
                                 attachments=[],
@@ -409,13 +626,29 @@ async def stream_remote_chat_completion(
                     tool_result["reused"] = True
                     next_attachments = []
                 else:
-                    before_loaded_chunk_ids = set(state.loaded_chunk_ids)
-                    tool_result, next_attachments = execute_skill_tool_call(
-                        request=request,
-                        state=state,
-                        tool_call=tool_call,
+                    before_loaded_chunk_ids = _collect_loaded_chunk_signatures(
+                        states_by_skill
                     )
-                    after_loaded_chunk_ids = set(state.loaded_chunk_ids)
+                    if len(tooling_skill_ids) == 1:
+                        single_skill_id = tooling_skill_ids[0]
+                        scoped_request = request.model_copy(
+                            update={"skill_id": single_skill_id}
+                        )
+                        tool_result, next_attachments = execute_skill_tool_call(
+                            request=scoped_request,
+                            state=states_by_skill[single_skill_id],
+                            tool_call=tool_call,
+                        )
+                    else:
+                        tool_result, next_attachments = execute_scoped_skill_tool_call(
+                            request=request,
+                            states_by_skill=states_by_skill,
+                            default_skill_id=primary_skill_id,
+                            tool_call=tool_call,
+                        )
+                    after_loaded_chunk_ids = _collect_loaded_chunk_signatures(
+                        states_by_skill
+                    )
                     if detect_tool_call_progress(
                         tool_name=tool_name,
                         before_loaded_chunk_ids=before_loaded_chunk_ids,
@@ -455,8 +688,8 @@ async def stream_remote_chat_completion(
                         "phase": "finish",
                         "tool_name": tool_name,
                         **build_tool_status_finish(
-                            request=request,
-                            state=state,
+                            request=primary_request,
+                            state=states_by_skill[primary_skill_id],
                             tool_call=tool_call,
                             tool_result=tool_result,
                             attachments=next_attachments,

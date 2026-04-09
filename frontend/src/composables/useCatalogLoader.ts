@@ -6,7 +6,6 @@ interface UseCatalogLoaderOptions {
   availableModels: Ref<string[]>;
   selectedModel: Ref<string>;
   processingModes: Ref<SkillOption[]>;
-  selectedProcessingMode: Ref<string>;
 }
 
 export const useCatalogLoader = (options: UseCatalogLoaderOptions) => {
@@ -28,22 +27,14 @@ export const useCatalogLoader = (options: UseCatalogLoaderOptions) => {
 
   const loadAvailableSkills = async () => {
     try {
-      const { skills: nextSkills, defaultSkillId } =
-        await fetchAvailableSkills();
+      const { skills: nextSkills } = await fetchAvailableSkills();
       if (nextSkills.length === 0) {
         return;
       }
-
-      options.processingModes.value = nextSkills;
-      const resolvedSkillId = nextSkills.some((skill) => {
-        return skill.id === options.selectedProcessingMode.value;
-      })
-        ? options.selectedProcessingMode.value
-        : nextSkills.some((skill) => skill.id === defaultSkillId)
-          ? defaultSkillId
-          : nextSkills[0].id;
-
-      options.selectedProcessingMode.value = resolvedSkillId;
+      const filteredSkills = nextSkills.filter((skill) => {
+        return skill.id !== 'document-assistant';
+      });
+      options.processingModes.value = filteredSkills;
     } catch (error) {
       console.error('加载 skill 列表失败，继续使用前端兜底选项。', error);
     }

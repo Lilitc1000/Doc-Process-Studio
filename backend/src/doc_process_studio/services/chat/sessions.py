@@ -133,7 +133,6 @@ async def upsert_chat_session(
         title=normalized_title,
         created_at=created_at,
         updated_at=now,
-        selected_processing_mode=snapshot.selected_processing_mode,
         selected_model=snapshot.selected_model,
     )
 

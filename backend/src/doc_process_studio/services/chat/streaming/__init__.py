@@ -1,6 +1,6 @@
 from .context import (
     build_skill_prompt,
-    build_upstream_messages,
+    build_upstream_messages_for_skills,
     format_output_name_from_template,
     merge_uploaded_files_context,
 )
@@ -20,7 +20,7 @@ from .tooling import (
 __all__ = [
     "build_tool_call_signature",
     "build_skill_prompt",
-    "build_upstream_messages",
+    "build_upstream_messages_for_skills",
     "detect_tool_call_progress",
     "extract_delta_text",
     "extract_delta_tool_calls",

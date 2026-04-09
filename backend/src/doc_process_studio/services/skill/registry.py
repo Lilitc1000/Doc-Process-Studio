@@ -53,6 +53,39 @@ def _resolve_agent_config_path(skill_dir: Path) -> Path | None:
     return None
 
 
+def _read_skill_markdown_metadata(skill_dir: Path) -> dict[str, str]:
+    """读取 SKILL.md 的 frontmatter 元数据（name/description 等）。"""
+    skill_markdown_path = skill_dir / "SKILL.md"
+    if not skill_markdown_path.is_file():
+        return {}
+
+    try:
+        lines = skill_markdown_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+
+    if not lines or lines[0].strip() != "---":
+        return {}
+
+    metadata: dict[str, str] = {}
+    for raw_line in lines[1:]:
+        stripped_line = raw_line.strip()
+        if stripped_line == "---":
+            break
+        if not stripped_line or stripped_line.startswith("#"):
+            continue
+        if ":" not in stripped_line:
+            continue
+
+        key, raw_value = stripped_line.split(":", 1)
+        normalized_key = key.strip()
+        normalized_value = _strip_wrapped_text(raw_value)
+        if normalized_key:
+            metadata[normalized_key] = normalized_value.strip()
+
+    return metadata
+
+
 def _resolve_tools_config_path(skill_dir: Path) -> Path | None:
     candidate_paths = [
         skill_dir / "tools.json",
@@ -129,8 +162,16 @@ def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | Non
         return None
 
     interface_values = _read_yaml_interface_block(config_path)
-    display_name = interface_values.get("display_name", "").strip()
+    skill_markdown_metadata = _read_skill_markdown_metadata(skill_dir)
+    display_name = (
+        interface_values.get("display_name", "").strip()
+        or skill_markdown_metadata.get("name", "").strip()
+    )
     default_prompt = interface_values.get("default_prompt", "").strip()
+    short_description = (
+        interface_values.get("short_description", "").strip()
+        or skill_markdown_metadata.get("description", "").strip()
+    )
 
     if not display_name or not default_prompt:
         return None
@@ -138,7 +179,7 @@ def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | Non
     return SkillInterfaceConfig(
         id=skill_dir.name,
         display_name=display_name,
-        short_description=interface_values.get("short_description", "").strip(),
+        short_description=short_description,
         default_prompt=default_prompt,
         tools=_load_declared_tools(skill_dir),
     )

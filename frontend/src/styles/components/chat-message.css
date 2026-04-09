@@ -153,6 +153,30 @@
   gap: 0.6rem;
 }
 
+.message-skill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+}
+
+.message-skill-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.58rem;
+  padding: 0 0.54rem;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.88);
+  color: #1d4ed8;
+  font-size: 0.73rem;
+  font-weight: 600;
+  line-height: 1;
+  max-width: min(13rem, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .message-interaction-card {
   margin-bottom: 0.85rem;
   padding: 0.9rem;
@@ -565,6 +589,48 @@
   gap: 0.8rem;
 }
 
+.message-edit-skill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+}
+
+.message-edit-skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-height: 1.7rem;
+  padding: 0 0.56rem;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.88);
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.message-edit-skill-chip:hover {
+  background: rgba(219, 234, 254, 0.96);
+  border-color: rgba(37, 99, 235, 0.36);
+}
+
+.message-edit-skill-chip-name {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.message-edit-skill-chip-remove {
+  font-size: 0.9rem;
+  line-height: 1;
+  opacity: 0.72;
+}
+
 .message-edit-files {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 250px));
@@ -635,11 +701,76 @@
   opacity: 0.6;
 }
 
+.message-edit-textarea-wrapper {
+  position: relative;
+}
+
+.message-edit-skill-suggestion-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 0.46rem);
+  max-height: 14.5rem;
+  overflow-y: auto;
+  padding: 0.35rem;
+  border-radius: 12px;
+  border: 1px solid #dbe6f5;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+  z-index: 12;
+}
+
+.message-edit-skill-suggestion-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.14rem;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #1e293b;
+  text-align: left;
+  padding: 0.5rem 0.58rem;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.message-edit-skill-suggestion-item:hover,
+.message-edit-skill-suggestion-item.active {
+  background: rgba(239, 246, 255, 0.96);
+  color: #1d4ed8;
+}
+
+.message-edit-skill-suggestion-main {
+  display: inline-flex;
+  align-items: center;
+}
+
+.message-edit-skill-suggestion-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.message-edit-skill-suggestion-desc {
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
 .message-text {
   min-width: 0;
 }
 
 .message-files + .message-text {
+  margin-top: 0.85rem;
+}
+
+.message-skill-list + .message-files,
+.message-skill-list + .message-text {
   margin-top: 0.85rem;
 }
 

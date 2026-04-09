@@ -10,6 +10,7 @@ export interface ChatSessionNodePayload {
   role: ChatMessageRole;
   content: string;
   api_content?: string | null;
+  request_skill_ids?: string[] | null;
   files?: ChatAttachment[];
   tool_statuses?: ChatToolStatus[];
   interaction?: ChatInteractionCard | null;
@@ -23,7 +24,6 @@ export interface ChatSessionSnapshotPayload {
   root_child_ids: string[];
   selected_root_child_id: string | null;
   selected_child_id_by_parent: Record<string, string>;
-  selected_processing_mode: string;
   selected_model: string;
 }
 
@@ -32,7 +32,6 @@ export interface ChatSessionSummary {
   title: string;
   created_at: string;
   updated_at: string;
-  selected_processing_mode: string;
   selected_model: string;
 }
 

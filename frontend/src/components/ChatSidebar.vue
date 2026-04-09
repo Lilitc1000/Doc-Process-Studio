@@ -86,66 +86,6 @@
       </section>
 
       <section class="settings-section">
-        <div ref="processingModeSelectorRef" class="selector-group">
-          <label id="processing-mode-label">文档处理方式</label>
-          <button
-            type="button"
-            class="selector-trigger"
-            :class="{ open: isProcessingModeOpen }"
-            :aria-expanded="isProcessingModeOpen"
-            aria-haspopup="listbox"
-            aria-labelledby="processing-mode-label"
-            :disabled="props.isLocked"
-            @click="toggleProcessingModeDropdown"
-            @keydown.enter.prevent="toggleProcessingModeDropdown"
-            @keydown.space.prevent="toggleProcessingModeDropdown"
-            @keydown.esc.prevent="closeAllDropdowns"
-          >
-            <span class="selector-trigger-text">
-              {{ selectedProcessingModeLabel }}
-            </span>
-            <span class="selector-trigger-icon" aria-hidden="true">
-              <svg viewBox="0 0 16 16" class="selector-trigger-icon-svg">
-                <path
-                  d="M3.5 6.25L8 10.75L12.5 6.25"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                />
-              </svg>
-            </span>
-          </button>
-
-          <Transition name="dropdown">
-            <div
-              v-if="isProcessingModeOpen"
-              class="selector-dropdown"
-              role="listbox"
-              aria-labelledby="processing-mode-label"
-            >
-              <button
-                v-for="mode in processingModes"
-                :key="mode.id"
-                type="button"
-                class="selector-option"
-                :class="{ active: mode.id === selectedProcessingMode }"
-                :disabled="props.isLocked"
-                @click="onSelectProcessingMode(mode)"
-              >
-                <span>{{ mode.displayName }}</span>
-                <span
-                  v-if="mode.id === selectedProcessingMode"
-                  class="selector-option-tag"
-                >
-                  当前
-                </span>
-              </button>
-            </div>
-          </Transition>
-        </div>
-
         <div ref="modelSelectorRef" class="selector-group">
           <label id="model-select-label">选择模型</label>
           <button
@@ -271,22 +211,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { ChatSessionSummary, SessionGroup } from '../types/session';
-import type { SkillOption } from '../types/skill';
 import { groupSessionsByDate } from '../utils/session-groups';
 
 const props = defineProps<{
-  processingModes: readonly SkillOption[];
-  selectedProcessingMode: string;
   models: readonly string[];
   selectedModel: string;
-  messagesCount: number;
   sessions: readonly ChatSessionSummary[];
   activeSessionId: string | null;
   isLocked?: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: 'select-processing-mode', mode: string): void;
   (e: 'select-model', model: string): void;
   (e: 'clear-chat'): void;
   (e: 'load-session', sessionId: string): void;
@@ -294,27 +229,17 @@ const emit = defineEmits<{
   (e: 'delete-session', sessionId: string): void;
 }>();
 
-const isProcessingModeOpen = ref(false);
 const isModelDropdownOpen = ref(false);
 const openSessionMenuId = ref<string | null>(null);
 const renameDialogSession = ref<ChatSessionSummary | null>(null);
 const renameInput = ref('');
-const processingModeSelectorRef = ref<HTMLElement | null>(null);
 const modelSelectorRef = ref<HTMLElement | null>(null);
-
-const selectedProcessingModeLabel = computed(() => {
-  const selectedOption = props.processingModes.find((mode) => {
-    return mode.id === props.selectedProcessingMode;
-  });
-  return selectedOption?.displayName ?? props.selectedProcessingMode;
-});
 
 const sessionGroups = computed<SessionGroup[]>(() => {
   return groupSessionsByDate(props.sessions);
 });
 
 const closeAllDropdowns = () => {
-  isProcessingModeOpen.value = false;
   isModelDropdownOpen.value = false;
 };
 
@@ -327,24 +252,12 @@ const closeRenameDialog = () => {
   renameInput.value = '';
 };
 
-const toggleProcessingModeDropdown = () => {
-  if (props.isLocked) {
-    return;
-  }
-  isProcessingModeOpen.value = !isProcessingModeOpen.value;
-  if (isProcessingModeOpen.value) {
-    isModelDropdownOpen.value = false;
-    closeSessionMenu();
-  }
-};
-
 const toggleModelDropdown = () => {
   if (props.isLocked) {
     return;
   }
   isModelDropdownOpen.value = !isModelDropdownOpen.value;
   if (isModelDropdownOpen.value) {
-    isProcessingModeOpen.value = false;
     closeSessionMenu();
   }
 };
@@ -381,14 +294,6 @@ const deleteSession = (sessionId: string) => {
   closeSessionMenu();
 };
 
-const onSelectProcessingMode = (mode: SkillOption) => {
-  if (props.isLocked) {
-    return;
-  }
-  emit('select-processing-mode', mode.id);
-  closeAllDropdowns();
-};
-
 const onSelectModel = (model: string) => {
   if (props.isLocked) {
     return;
@@ -400,11 +305,7 @@ const onSelectModel = (model: string) => {
 const handleClickOutside = (event: MouseEvent) => {
   const target = event.target as HTMLElement | null;
 
-  if (
-    target &&
-    !processingModeSelectorRef.value?.contains(target) &&
-    !modelSelectorRef.value?.contains(target)
-  ) {
+  if (target && !modelSelectorRef.value?.contains(target)) {
     closeAllDropdowns();
   }
 

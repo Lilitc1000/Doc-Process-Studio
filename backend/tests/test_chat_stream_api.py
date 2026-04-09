@@ -166,6 +166,7 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
                 '{"user_message_id":"user-1","conversation_id":"conversation-1",'
                 '"model":"qwen3-coder-next:latest",'
                 '"skill_id":"project-architecture-docx",'
+                '"selected_skill_ids":["project-architecture-docx"],'
                 '"messages":[{"role":"user","content":"请生成架构设计文档"}],'
                 '"attachment_ids":[]}'
             )

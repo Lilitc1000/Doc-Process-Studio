@@ -54,6 +54,19 @@ TEXT_FILE_EXTENSIONS = {
 }
 
 DEFAULT_STRUCTURED_TEXT_TITLE = "文档内容"
+SCOPED_TOOL_SEPARATOR = "::"
+
+
+def compose_scoped_tool_name(skill_id: str, tool_name: str) -> str:
+    return f"{skill_id}{SCOPED_TOOL_SEPARATOR}{tool_name}"
+
+
+def split_scoped_tool_name(tool_name: str) -> tuple[str | None, str]:
+    normalized_name = tool_name.strip()
+    if SCOPED_TOOL_SEPARATOR not in normalized_name:
+        return None, normalized_name
+    skill_id, base_tool_name = normalized_name.split(SCOPED_TOOL_SEPARATOR, 1)
+    return skill_id.strip() or None, base_tool_name.strip()
 
 
 def _get_skill_root(skill_id: str) -> Path:
@@ -212,7 +225,10 @@ def build_tool_status_start(
     tool_call: dict[str, Any],
 ) -> dict[str, str]:
     """根据工具调用上下文生成更业务化的开始状态。"""
-    tool_name = _get_tool_name(tool_call)
+    resolved_skill_id, tool_name = _resolve_tool_scope(
+        default_skill_id=skill_id,
+        tool_call=tool_call,
+    )
     arguments = _parse_tool_arguments(tool_call)
 
     if tool_name == "start_skill_interaction":
@@ -266,7 +282,7 @@ def build_tool_status_start(
         }
 
     try:
-        declared_tool = get_skill_tool_config(skill_id, tool_name)
+        declared_tool = get_skill_tool_config(resolved_skill_id, tool_name)
     except ValueError:
         return {
             "label": "执行工具",
@@ -299,7 +315,10 @@ def build_tool_status_finish(
 ) -> dict[str, str]:
     """根据工具执行结果生成更业务化的完成状态。"""
     del state
-    tool_name = _get_tool_name(tool_call)
+    resolved_skill_id, tool_name = _resolve_tool_scope(
+        default_skill_id=request.skill_id,
+        tool_call=tool_call,
+    )
     arguments = _parse_tool_arguments(tool_call)
     if tool_name == "start_skill_interaction":
         if tool_result.get("ok"):
@@ -382,7 +401,7 @@ def build_tool_status_finish(
         }
 
     try:
-        declared_tool = get_skill_tool_config(request.skill_id, tool_name)
+        declared_tool = get_skill_tool_config(resolved_skill_id, tool_name)
     except ValueError:
         error_message = str(tool_result.get("error", "未知错误"))
         return {
@@ -565,6 +584,137 @@ def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
     return [*builtin_tools, *declared_tools]
 
 
+def build_skill_tools_for_skills(skill_ids: list[str]) -> list[dict[str, Any]]:
+    """构造多 skill 联合工具集：内置检索工具共享，声明式工具按 skill 名称空间隔离。"""
+    normalized_skill_ids: list[str] = []
+    for skill_id in skill_ids:
+        normalized_skill_id = skill_id.strip()
+        if normalized_skill_id and normalized_skill_id not in normalized_skill_ids:
+            normalized_skill_ids.append(normalized_skill_id)
+
+    if not normalized_skill_ids:
+        return []
+
+    builtin_tools: list[dict[str, Any]] = [
+        {
+            "type": "function",
+            "function": {
+                "name": "list_skill_directory",
+                "description": "列出指定文档处理方式(skill)目录下的文件和子目录。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "skill_id": {
+                            "type": "string",
+                            "description": "目标文档处理方式标识；不传时默认当前主处理方式。",
+                        },
+                        "relative_path": {
+                            "type": "string",
+                            "description": "相对于 skill 根目录的路径，默认根目录。",
+                        },
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_skill_file",
+                "description": "读取指定文档处理方式(skill)内某个具体文本文件内容。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "skill_id": {
+                            "type": "string",
+                            "description": "目标文档处理方式标识；不传时默认当前主处理方式。",
+                        },
+                        "relative_path": {
+                            "type": "string",
+                            "description": "相对于 skill 根目录的文件路径。",
+                        },
+                    },
+                    "required": ["relative_path"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "search_skill_context",
+                "description": "按问题检索指定文档处理方式(skill)的上下文片段。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "skill_id": {
+                            "type": "string",
+                            "description": "目标文档处理方式标识；不传时默认当前主处理方式。",
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "检索关键词或自然语言问题。",
+                        },
+                        "source_path": {
+                            "type": "string",
+                            "description": "可选。限定搜索的相对路径。",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 8,
+                            "description": "最多返回多少条结果。",
+                        },
+                    },
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_skill_context",
+                "description": "读取指定 chunk 正文并加入该 skill 的会话上下文。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "skill_id": {
+                            "type": "string",
+                            "description": "目标文档处理方式标识；不传时默认当前主处理方式。",
+                        },
+                        "chunk_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 1,
+                            "maxItems": 6,
+                        },
+                    },
+                    "required": ["chunk_ids"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+    ]
+
+    declared_tools: list[dict[str, Any]] = []
+    for skill_id in normalized_skill_ids:
+        skill_interface = get_skill_interface(skill_id)
+        for tool in skill_interface.tools:
+            declared_tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": compose_scoped_tool_name(skill_id, tool.name),
+                        "description": f"[{skill_interface.display_name}] {tool.description}",
+                        "parameters": tool.parameters,
+                    },
+                }
+            )
+
+    return [*builtin_tools, *declared_tools]
+
+
 def _parse_tool_arguments(tool_call: dict[str, Any]) -> dict[str, Any]:
     function_payload = tool_call.get("function")
     if not isinstance(function_payload, dict):
@@ -596,6 +746,19 @@ def _get_tool_name(tool_call: dict[str, Any]) -> str:
     if isinstance(name, str):
         return name.strip()
     return ""
+
+
+def _resolve_tool_scope(
+    *,
+    default_skill_id: str,
+    tool_call: dict[str, Any],
+) -> tuple[str, str]:
+    raw_tool_name = _get_tool_name(tool_call)
+    scoped_skill_id, base_tool_name = split_scoped_tool_name(raw_tool_name)
+    arguments = _parse_tool_arguments(tool_call)
+    argument_skill_id = str(arguments.get("skill_id", "")).strip()
+    resolved_skill_id = scoped_skill_id or argument_skill_id or default_skill_id
+    return resolved_skill_id, base_tool_name
 
 
 def _format_declared_tool_default_name(
@@ -1090,3 +1253,47 @@ def execute_skill_tool_call(
             "ok": False,
             "error": str(exc),
         }, []
+
+
+def execute_scoped_skill_tool_call(
+    *,
+    request: ChatStreamRequest,
+    states_by_skill: dict[str, SkillConversationState],
+    default_skill_id: str,
+    tool_call: dict[str, Any],
+) -> tuple[dict[str, Any], list[ChatAttachment]]:
+    """在多 skill 场景下执行工具调用，支持 `skill_id::tool_name` 名称空间。"""
+    resolved_skill_id, base_tool_name = _resolve_tool_scope(
+        default_skill_id=default_skill_id,
+        tool_call=tool_call,
+    )
+    if resolved_skill_id not in states_by_skill:
+        return {
+            "ok": False,
+            "error": f"未知或未激活的 skill：{resolved_skill_id}",
+        }, []
+
+    arguments = _parse_tool_arguments(tool_call)
+    normalized_arguments = {
+        key: value for key, value in arguments.items() if key != "skill_id"
+    }
+    function_payload = tool_call.get("function")
+    normalized_tool_call = {
+        "id": tool_call.get("id"),
+        "type": tool_call.get("type"),
+        "function": {
+            "name": base_tool_name,
+            "arguments": json.dumps(normalized_arguments, ensure_ascii=False),
+        },
+    }
+    if isinstance(function_payload, dict):
+        if "id" in function_payload:
+            normalized_tool_call["function"]["id"] = function_payload["id"]  # pragma: no cover
+
+    scoped_request = request.model_copy(update={"skill_id": resolved_skill_id})
+    scoped_state = states_by_skill[resolved_skill_id]
+    return execute_skill_tool_call(
+        request=scoped_request,
+        state=scoped_state,
+        tool_call=normalized_tool_call,
+    )

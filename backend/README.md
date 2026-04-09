@@ -312,6 +312,7 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 
 - skill 可在 `agents/interaction.json` 声明分步采集（single/multi/text）。
 - 交互向导默认是“可调用能力”而不是入口强制流程：模型可通过 `start_skill_interaction` 工具在信息不足时主动进入向导；信息充足时可直接调用生成工具。
+- 交互向导当前只支持“单一目标 skill”模式；当本轮同时激活多个 skill 时，后端会拒绝 `start_skill_interaction` 并提示用户缩小到单 skill。
 - 若某个会话已处于进行中的向导状态，后端会优先恢复当前步骤，避免状态丢失。
 - 后端流式接口会按步骤返回 `interaction` 事件，步骤完成后继续执行声明式工具并返回 `tool-status`、`attachment`、`done`。
 - 交互状态默认走 Redis，会话维度缓存；测试时可用内存替身避免环境依赖。
@@ -324,8 +325,11 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 
 一次 `/api/chat/stream` 请求的大致流程如下：
 
-1. 读取当前会话绑定的 `skill_id`
-2. 注入该 skill 的 `default_prompt`
+1. 解析本轮 skill 决策：
+   - 先看 `selected_skill_ids`（前端 `$skill` 选择结果）
+   - 再看用户消息里的 `$skill-id` 文本提及
+   - 若都没有，则以 `document-assistant` 作为 system skill 基线
+2. 注入主 skill 的 `default_prompt`，并注入可用 skill 清单与渐进式披露规则
 3. 从 Redis 读取当前会话已经加载过的 skill chunk 状态
 4. 使用 `stream=true + tools` 调远端 Ollama
 5. 如果模型在流中返回 `tool_calls`
@@ -347,6 +351,7 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 - 重复的相同工具调用会被后端自动去重，避免模型反复读取同一文件或同一批 chunk
 - 如果某一轮工具调用没有带来任何新信息，后端会自动收束到“直接回答”，而不是继续空转
 - 生成类 skill 可以通过 `tools.json` 声明的脚本型工具产出可下载附件
+- 当本轮并行激活多个 skill 时，后端不会启用 `start_skill_interaction`（交互向导仅支持单一目标 skill）
 
 因此在维护时要注意：
 

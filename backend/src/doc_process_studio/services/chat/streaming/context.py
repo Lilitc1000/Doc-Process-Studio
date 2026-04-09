@@ -1,66 +1,111 @@
 from typing import Any
 
 from ....models.conversation.stream import ChatMessageInput, ChatStreamRequest
-from ...skill.registry import get_skill_interface, get_skill_interaction_config
+from ...skill.registry import (
+    SKILLS_DIR,
+    get_skill_interface,
+    list_skill_interfaces,
+)
 
 
 def build_skill_prompt(skill_id: str) -> str:
     return get_skill_interface(skill_id).default_prompt
 
 
-def build_skill_runtime_instructions(skill_id: str) -> str:
-    skill_interface = get_skill_interface(skill_id)
-    interaction_config = get_skill_interaction_config(skill_id)
-    declared_tool_names = (
-        ", ".join(tool.name for tool in skill_interface.tools) or "无声明式工具"
+def _build_skills_catalog_lines(active_skill_ids: list[str]) -> list[str]:
+    interfaces = {
+        skill.id: skill
+        for skill in list_skill_interfaces()
+        if skill.id in set(active_skill_ids)
+    }
+    lines: list[str] = []
+    for skill_id in active_skill_ids:
+        skill = interfaces.get(skill_id)
+        if skill is None:
+            continue
+        skill_path = (SKILLS_DIR / skill_id / "SKILL.md").as_posix()
+        lines.append(
+            f"- {skill.id}: {skill.short_description or '无描述'} (file: {skill_path})"
+        )
+    return lines
+
+
+def build_multi_skill_runtime_instructions(
+    *,
+    active_skill_ids: list[str],
+    explicit_skill_ids: list[str],
+    missing_skill_ids: list[str] | None = None,
+) -> str:
+    catalog_lines = _build_skills_catalog_lines(active_skill_ids)
+    missing_lines = (
+        [
+            "缺失/受阻：以下文档处理方式当前不可用，请简要说明后继续执行最佳备选方案："
+        ]
+        + [f"- {skill_id}" for skill_id in missing_skill_ids]
+        if missing_skill_ids
+        else []
     )
-    interaction_instruction = (
-        "当任务需要补充结构化信息时，可调用 start_skill_interaction 启动分步向导；"
-        "若用户信息已经完整，直接调用生成/处理工具。"
-        if interaction_config is not None
-        else "当前 skill 未启用交互向导。"
+    explicit_line = (
+        "本轮用户显式选择了以下文档处理方式，必须优先使用："
+        + ", ".join(explicit_skill_ids)
+        if explicit_skill_ids
+        else "本轮用户未显式选择文档处理方式，你可以根据任务描述从可用方式中选择最小集合隐式调用。"
     )
 
     return "\n".join(
         [
-            "你当前正在使用一个本地 skill。",
-            f"当前 skill_id: {skill_interface.id}",
-            f"当前 skill 名称: {skill_interface.display_name}",
-            f"skill 简介: {skill_interface.short_description or '无'}",
-            f"已声明工具: {declared_tool_names}",
-            interaction_instruction,
-            "请遵循渐进式披露：先查看技能目录，再优先读取 SKILL.md；若 SKILL.md 引用了 references、scripts 或 assets，再按需继续读取。",
-            "不要一次性读取整个 skill 目录。",
-            "如果 skill 中已经声明了可执行工具，应优先调用这些声明式工具，而不是在回答里手写脚本让用户自己运行。",
-            "若工具已返回附件，请直接说明可从附件下载，不要输出 file:// 或 /tmp 等本地临时路径。",
+            "你当前正在使用本地文档处理方式（skills）系统。",
+            "发现：以下是本轮可用文档处理方式（名称、描述、SKILL.md 路径）：",
+            *catalog_lines,
+            explicit_line,
+            "系统级文档处理方式 document-assistant 始终启用，优先级最高。",
+            "触发规则：若用户以 $SkillName 或纯文本明确提及某方式，当前轮必须使用；若提及多个，必须全部使用；除非再次提及，不跨轮沿用。",
+            "技能使用方法（渐进式披露）：先读 SKILL.md 必要部分；若引用 references/，仅按需读取必要文件；优先复用 scripts/ 与 assets/。",
+            "交互向导策略：当本轮同时激活多个文档处理方式时，不启用 start_skill_interaction；如需向导，请在下一轮只保留一个目标处理方式。",
+            "上下文管理：只摘要必要内容，不要全文粘贴；非阻塞时不要深挖多级引用链。",
+            "安全与回退：若某方式文件缺失或不可读，明确说明问题并切换到次优方案继续完成任务。",
+            *missing_lines,
         ]
     )
 
 
-def build_upstream_messages(
+def build_upstream_messages_for_skills(
+    *,
     request: ChatStreamRequest,
-    skill_context: str | None = None,
+    active_skill_ids: list[str],
+    explicit_skill_ids: list[str],
+    skill_context_by_skill: dict[str, str] | None = None,
     uploaded_files_context: str | None = None,
     extra_messages: list[dict[str, Any]] | None = None,
+    missing_skill_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    system_message = ChatMessageInput(
-        role="system",
-        content=build_skill_prompt(request.skill_id),
-    )
+    primary_skill_id = active_skill_ids[0] if active_skill_ids else request.skill_id
+    primary_prompt = build_skill_prompt(primary_skill_id)
+    system_message = ChatMessageInput(role="system", content=primary_prompt)
     upstream_messages: list[dict[str, Any]] = [system_message.model_dump()]
     upstream_messages.append(
         ChatMessageInput(
             role="system",
-            content=build_skill_runtime_instructions(request.skill_id),
+            content=build_multi_skill_runtime_instructions(
+                active_skill_ids=active_skill_ids,
+                explicit_skill_ids=explicit_skill_ids,
+                missing_skill_ids=missing_skill_ids or [],
+            ),
         ).model_dump()
     )
-    if skill_context:
-        upstream_messages.append(
-            ChatMessageInput(
-                role="system",
-                content=skill_context,
-            ).model_dump()
-        )
+
+    if skill_context_by_skill:
+        for skill_id in active_skill_ids:
+            skill_context = skill_context_by_skill.get(skill_id, "").strip()
+            if not skill_context:
+                continue
+            upstream_messages.append(
+                ChatMessageInput(
+                    role="system",
+                    content=f"[{skill_id}] 上下文：\n{skill_context}",
+                ).model_dump()
+            )
+
     if uploaded_files_context:
         upstream_messages.append(
             ChatMessageInput(

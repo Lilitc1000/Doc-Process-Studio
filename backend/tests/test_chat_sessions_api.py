@@ -19,7 +19,6 @@ def _build_summary(session_id: str, title: str) -> ChatSessionSummary:
         title=title,
         created_at=now,
         updated_at=now,
-        selected_processing_mode="document-assistant",
         selected_model="qwen2.5:7b",
     )
 
@@ -30,7 +29,6 @@ def _build_snapshot() -> ChatSessionSnapshot:
         root_child_ids=[],
         selected_root_child_id=None,
         selected_child_id_by_parent={},
-        selected_processing_mode="document-assistant",
         selected_model="qwen2.5:7b",
     )
 

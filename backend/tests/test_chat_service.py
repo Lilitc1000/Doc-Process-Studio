@@ -1,6 +1,6 @@
-from doc_process_studio.services.chat.stream import (
+from doc_process_studio.services.chat.streaming import (
     build_skill_prompt,
-    build_upstream_messages,
+    build_upstream_messages_for_skills,
     extract_delta_text,
     extract_finish_reason,
 )
@@ -45,7 +45,7 @@ def test_build_skill_prompt_returns_skill_default_prompt() -> None:
     assert "$document-assistant" in prompt
 
 
-def test_build_upstream_messages_prepends_skill_system_prompt() -> None:
+def test_build_upstream_messages_for_skills_prepends_system_prompt() -> None:
     request = ChatStreamRequest(
         user_message_id="user-1",
         conversation_id="conversation-1",
@@ -57,7 +57,11 @@ def test_build_upstream_messages_prepends_skill_system_prompt() -> None:
         attachment_ids=[],
     )
 
-    upstream_messages = build_upstream_messages(request)
+    upstream_messages = build_upstream_messages_for_skills(
+        request=request,
+        active_skill_ids=["document-assistant"],
+        explicit_skill_ids=["document-assistant"],
+    )
 
     assert upstream_messages[0]["role"] == "system"
     assert "$document-assistant" in upstream_messages[0]["content"]

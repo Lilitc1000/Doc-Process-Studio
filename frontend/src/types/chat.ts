@@ -62,6 +62,7 @@ export interface ChatMessageNode {
   toolStatuses?: ChatToolStatus[];
   interaction?: ChatInteractionCard | null;
   requestFiles?: File[];
+  requestSkillIds?: string[];
   timestamp: Date;
   parentId: string | null;
   childIds: string[];
@@ -73,6 +74,7 @@ export type ChatMessageDisplay = Pick<
   | 'role'
   | 'content'
   | 'files'
+  | 'requestSkillIds'
   | 'toolStatuses'
   | 'interaction'
   | 'timestamp'
@@ -88,6 +90,7 @@ export interface ChatRequestSnapshot {
   conversationId: string;
   model: string;
   skillId: string;
+  selectedSkillIds: string[];
   messages: ApiChatMessage[];
   files: File[];
   attachmentIds: string[];

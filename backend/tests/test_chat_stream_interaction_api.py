@@ -182,6 +182,7 @@ def test_api_chat_stream_returns_interaction_required_when_model_calls_wizard_to
                     "conversation_id": "conv-1",
                     "model": "qwen3-coder-next:latest",
                     "skill_id": "incident-report",
+                    "selected_skill_ids": ["incident-report"],
                     "messages": [{"role": "user", "content": "请生成事故报告"}],
                     "attachment_ids": [],
                 },
@@ -318,6 +319,7 @@ def test_api_chat_stream_interaction_completion_runs_final_tool(monkeypatch) -> 
                     "conversation_id": "conv-1",
                     "model": "qwen3-coder-next:latest",
                     "skill_id": "incident-report",
+                    "selected_skill_ids": ["incident-report"],
                     "messages": [{"role": "user", "content": "请生成事故报告"}],
                     "attachment_ids": [],
                     "interaction_answer": {
@@ -428,6 +430,7 @@ def test_api_chat_stream_no_forced_interaction_when_model_not_call_wizard_tool(
                     "conversation_id": "conv-1",
                     "model": "qwen3-coder-next:latest",
                     "skill_id": "incident-report",
+                    "selected_skill_ids": ["incident-report"],
                     "messages": [
                         {
                             "role": "user",
@@ -537,6 +540,7 @@ def test_api_chat_stream_resumes_existing_interaction_state(monkeypatch) -> None
                     "conversation_id": "conv-1",
                     "model": "qwen3-coder-next:latest",
                     "skill_id": "incident-report",
+                    "selected_skill_ids": ["incident-report"],
                     "messages": [{"role": "user", "content": "继续"}],
                     "attachment_ids": [],
                 },

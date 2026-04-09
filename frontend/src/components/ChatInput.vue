@@ -52,13 +52,65 @@
       </button>
     </div>
     <div class="input-area">
-      <textarea
-        ref="textareaRef"
-        v-model="localText"
-        placeholder="输入消息... (支持 Markdown)"
-        @input="onInput"
-        @keydown="onKeydown"
-      ></textarea>
+      <div class="editor-area">
+        <div v-if="selectedSkillOptions.length > 0" class="skill-chip-list">
+          <button
+            v-for="skill in selectedSkillOptions"
+            :key="skill.id"
+            type="button"
+            class="skill-chip"
+            :title="`移除文档处理方式：${skill.displayName}`"
+            @click="removeSelectedSkill(skill.id)"
+          >
+            <span class="skill-chip-name">{{ skill.displayName }}</span>
+            <span class="skill-chip-remove" aria-hidden="true">×</span>
+          </button>
+        </div>
+
+        <div class="textarea-wrapper">
+          <textarea
+            ref="textareaRef"
+            v-model="localText"
+            placeholder="输入消息... (支持 Markdown)"
+            @input="onInput"
+            @keydown="onKeydown"
+            @click="onCaretChange"
+            @keyup="onCaretChange"
+            @focus="onCaretChange"
+          ></textarea>
+
+          <Transition name="skill-suggestion-fade">
+            <div
+              v-if="showSkillSuggestions"
+              class="skill-suggestion-panel"
+              role="listbox"
+            >
+              <button
+                v-for="(skill, index) in filteredSkillSuggestions"
+                :key="skill.id"
+                type="button"
+                class="skill-suggestion-item"
+                :class="{ active: index === activeSuggestionIndex }"
+                :title="skill.shortDescription || skill.displayName"
+                @mousedown.prevent="selectSkillSuggestion(skill.id)"
+                @mouseenter="activeSuggestionIndex = index"
+              >
+                <span class="skill-suggestion-main">
+                  <span class="skill-suggestion-name">{{
+                    skill.displayName
+                  }}</span>
+                </span>
+                <span
+                  v-if="skill.shortDescription"
+                  class="skill-suggestion-desc"
+                >
+                  {{ skill.shortDescription }}
+                </span>
+              </button>
+            </div>
+          </Transition>
+        </div>
+      </div>
 
       <div class="input-actions">
         <label class="file-input-label" title="上传文件">
@@ -131,17 +183,22 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useSkillMentionSelector } from '../composables/useSkillMentionSelector';
+import type { SkillOption } from '../types/skill';
 import { formatFileSize, getFileTypeVisual } from '../utils/file';
 
 const props = defineProps<{
   text: string;
   files: File[];
+  availableSkills?: SkillOption[];
+  selectedSkillIds?: string[];
   accept?: string;
   isLoading?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'update:text', value: string): void;
+  (e: 'update:selected-skill-ids', skillIds: string[]): void;
   (e: 'upload-files', files: File[]): void;
   (e: 'clear-all-files'): void;
   (e: 'remove-file', index: number): void;
@@ -150,6 +207,7 @@ const emit = defineEmits<{
 }>();
 
 const localText = ref('');
+const localSelectedSkillIds = ref<string[]>([]);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
 const getFileIconStyle = (fileName: string, mimeType?: string) => {
@@ -177,6 +235,33 @@ const resizeTextarea = () => {
   textareaRef.value.style.height = 'auto';
   textareaRef.value.style.height = `${textareaRef.value.scrollHeight}px`;
 };
+const availableSkills = computed(() => props.availableSkills ?? []);
+const {
+  activeSuggestionIndex,
+  filteredSkillSuggestions,
+  selectedSkillOptions,
+  showSkillSuggestions,
+  handleSuggestionKeydown,
+  onCaretChange,
+  onTextInput,
+  removeSelectedSkill,
+  selectSkillSuggestion,
+  tryRemoveLastSkillByBackspace,
+} = useSkillMentionSelector({
+  text: localText,
+  selectedSkillIds: localSelectedSkillIds,
+  availableSkills,
+  textareaRef,
+  updateText: (value) => {
+    localText.value = value;
+    emit('update:text', value);
+    resizeTextarea();
+  },
+  updateSelectedSkillIds: (skillIds) => {
+    localSelectedSkillIds.value = [...skillIds];
+    emit('update:selected-skill-ids', [...skillIds]);
+  },
+});
 
 const canSend = computed(() => {
   return (localText.value.trim() || props.files.length > 0) && !props.isLoading;
@@ -190,7 +275,16 @@ watch(
   { immediate: true },
 );
 
+watch(
+  () => props.selectedSkillIds,
+  (newSkillIds) => {
+    localSelectedSkillIds.value = [...(newSkillIds ?? [])];
+  },
+  { immediate: true },
+);
+
 const onInput = () => {
+  onTextInput(textareaRef.value);
   resizeTextarea();
   emit('update:text', localText.value);
 };
@@ -206,6 +300,15 @@ const onStop = () => {
 };
 
 const onKeydown = (e: KeyboardEvent) => {
+  if (handleSuggestionKeydown(e)) {
+    return;
+  }
+
+  if (e.key === 'Backspace' && tryRemoveLastSkillByBackspace()) {
+    e.preventDefault();
+    return;
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     onSend();

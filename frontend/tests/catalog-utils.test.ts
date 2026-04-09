@@ -15,29 +15,26 @@ describe('catalog utils', () => {
     expect(modelNames).toEqual(['qwen3:8b', 'deepseek-r1:14b']);
   });
 
-  it('规范化 skill 列表并回退默认 skill', () => {
-    const catalog = normalizeSkillCatalog(
-      {
-        skills: [
-          {
-            id: 'document-assistant',
-            display_name: '文档助手',
-            short_description: '通用文档处理',
-          },
-          {
-            id: 'resume-review',
-            displayName: '简历筛选',
-          },
-          {
-            id: '',
-            display_name: '无效 skill',
-          },
-        ],
-      },
-      'document-assistant',
-    );
+  it('规范化 skill 列表', () => {
+    const skills = normalizeSkillCatalog({
+      skills: [
+        {
+          id: 'document-assistant',
+          display_name: '文档助手',
+          short_description: '通用文档处理',
+        },
+        {
+          id: 'resume-review',
+          displayName: '简历筛选',
+        },
+        {
+          id: '',
+          display_name: '无效 skill',
+        },
+      ],
+    });
 
-    expect(catalog.skills).toEqual([
+    expect(skills).toEqual([
       {
         id: 'document-assistant',
         displayName: '文档助手',
@@ -49,6 +46,5 @@ describe('catalog utils', () => {
         shortDescription: '',
       },
     ]);
-    expect(catalog.defaultSkillId).toBe('document-assistant');
   });
 });

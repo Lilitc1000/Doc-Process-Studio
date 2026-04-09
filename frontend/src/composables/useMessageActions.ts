@@ -11,9 +11,11 @@ import { formatFileSize } from '../utils/file';
 interface UseMessageActionsOptions {
   inputText: Ref<string>;
   selectedFiles: Ref<File[]>;
+  selectedSkillIds: Ref<string[]>;
   editingMessageId: Ref<string | null>;
   editingDraftText: Ref<string>;
   editingDraftFiles: Ref<ChatEditAttachment[]>;
+  editingDraftSkillIds: Ref<string[]>;
   isLoading: Ref<boolean>;
   canSubmitInteractionRequest: () => boolean;
   activeSessionId: Ref<string | null>;
@@ -115,6 +117,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     options.selectedRootChildId.value = null;
     options.selectedChildIdByParent.value = {};
     options.selectedFiles.value = [];
+    options.selectedSkillIds.value = [];
     options.resetConversationState();
     options.resetEditingState();
   };
@@ -131,6 +134,9 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
 
     options.editingMessageId.value = messageId;
     options.editingDraftText.value = messageNode.content;
+    options.editingDraftSkillIds.value = [
+      ...(messageNode.requestSkillIds ?? []),
+    ];
     const requestFileEntries: Array<[string, File]> = (
       messageNode.requestFiles ?? []
     ).map((file) => [`${file.name}::${formatFileSize(file)}`, file]);
@@ -183,6 +189,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     const nextFiles = options.editingDraftFiles.value.flatMap((file) => {
       return file.requestFile ? [file.requestFile] : [];
     });
+    const nextSkillIds = [...options.editingDraftSkillIds.value];
     const nextAttachments = options.editingDraftFiles.value.map((file) => ({
       name: file.name,
       sizeLabel: file.sizeLabel,
@@ -199,6 +206,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       apiContent: createUserApiContent(nextText, nextAttachments),
       files: nextAttachments,
       requestFiles: nextFiles,
+      requestSkillIds: nextSkillIds,
       timestamp: new Date(),
       parentId: sourceMessage.parentId,
     });
@@ -222,12 +230,14 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     }
 
     const currentRequestFiles = [...options.selectedFiles.value];
+    const currentRequestSkillIds = [...options.selectedSkillIds.value];
     const userMessage = options.createMessageNode({
       role: 'user',
       content: text,
       apiContent: createUserApiContent(text, currentRequestFiles),
       files: createAttachmentPreview(currentRequestFiles),
       requestFiles: currentRequestFiles,
+      requestSkillIds: currentRequestSkillIds,
       timestamp: new Date(),
       parentId: options.currentLeafMessageId.value,
     });
@@ -235,6 +245,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
 
     options.inputText.value = '';
     options.selectedFiles.value = [];
+    options.selectedSkillIds.value = [];
     options.activeSessionId.value = options.conversationId.value;
     await options.persistCurrentSession();
 

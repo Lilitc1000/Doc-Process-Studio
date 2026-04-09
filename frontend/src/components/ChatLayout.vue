@@ -1,15 +1,11 @@
 <template>
   <div class="chat-layout">
     <ChatSidebar
-      :processing-modes="processingModes"
-      :selected-processing-mode="selectedProcessingMode"
       :models="availableModels"
       :selected-model="selectedModel"
-      :messages-count="messagesCount"
       :sessions="sessionSummaries"
       :active-session-id="activeSessionId"
       :is-locked="isLoading"
-      @select-processing-mode="onSelectProcessingMode"
       @select-model="onSelectModel"
       @clear-chat="onClearChat"
       @load-session="onLoadSession"
@@ -46,6 +42,10 @@
             :editing-files="
               editingMessageId === message.id ? editingDraftFiles : []
             "
+            :editing-skill-ids="
+              editingMessageId === message.id ? editingDraftSkillIds : []
+            "
+            :available-skills="processingModes"
             :can-confirm-edit="canConfirmEdit"
             :show-toolbar-by-default="message.id === lastAssistantMessageId"
             :cache-scope-id="activeSessionId ?? conversationId"
@@ -59,6 +59,7 @@
             @next-version="switchMessageVersion(message.id, 1)"
             @start-edit="startEditingMessage(message.id)"
             @update-edit-text="updateEditingText"
+            @update-edit-skill-ids="updateEditingSkillIds"
             @upload-edit-files="appendEditingFiles"
             @remove-edit-file="removeEditingFile"
             @cancel-edit="cancelEditingMessage"
@@ -94,7 +95,10 @@
       <ChatInput
         v-model:text="inputText"
         :files="selectedFiles"
+        :available-skills="processingModes"
+        :selected-skill-ids="selectedSkillIds"
         :is-loading="isLoading"
+        @update:selected-skill-ids="updateSelectedSkillIds"
         @upload-files="onFilesSelect"
         @send="onSendMessage"
         @stop="onStopGeneration"
@@ -167,13 +171,9 @@ const welcomeMessages: ChatMessageNode[] = [
 
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
-const processingModes = ref<SkillOption[]>([
-  {
-    id: 'document-assistant',
-    displayName: '文档助手',
-  },
-]);
-const selectedProcessingMode = ref('document-assistant');
+const selectedSkillIds = ref<string[]>([]);
+const SYSTEM_DOCUMENT_SKILL_ID = 'document-assistant';
+const processingModes = ref<SkillOption[]>([]);
 const selectedModel = ref(fallbackModels[0]);
 const availableModels = ref(fallbackModels);
 const messageNodes = ref<Record<string, ChatMessageNode>>({});
@@ -183,6 +183,7 @@ const selectedChildIdByParent = ref<Record<string, string>>({});
 const editingMessageId = ref<string | null>(null);
 const editingDraftText = ref('');
 const editingDraftFiles = ref<ChatEditAttachment[]>([]);
+const editingDraftSkillIds = ref<string[]>([]);
 const { copyToastMessage, copyToastTitle, isCopyToastVisible, showCopyToast } =
   useCopyToast();
 
@@ -192,6 +193,7 @@ const resetEditingState = () => {
   editingMessageId.value = null;
   editingDraftText.value = '';
   editingDraftFiles.value = [];
+  editingDraftSkillIds.value = [];
 };
 
 const getNodeById = (messageId: string) => {
@@ -240,10 +242,6 @@ const prewarmVisibleConversationCache = (cacheScopeId: string) => {
   prewarmDisplayedMessagesCache(cacheScopeId);
   prewarmAdjacentVersionsCache(cacheScopeId);
 };
-
-const messagesCount = computed(() => {
-  return rootChildIds.value.length > 0 ? displayedMessages.value.length : 0;
-});
 
 const currentLeafMessageId = computed(() => {
   return resolveCurrentLeafMessageId(
@@ -294,11 +292,17 @@ const createMessageNode = (
 const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
   const path = getMessagePathToNode(messageNodes.value, userMessageId);
   const currentUserMessage = getNodeById(userMessageId);
+  const selectedSkillIdsFromMessage = Array.from(
+    new Set(currentUserMessage?.requestSkillIds ?? []),
+  );
+  const resolvedPrimarySkillId =
+    selectedSkillIdsFromMessage[0] ?? SYSTEM_DOCUMENT_SKILL_ID;
   return {
     userMessageId,
     conversationId: conversationId.value,
     model: selectedModel.value,
-    skillId: selectedProcessingMode.value,
+    skillId: resolvedPrimarySkillId,
+    selectedSkillIds: selectedSkillIdsFromMessage,
     messages: path.map((message) => ({
       role: message.role,
       content: message.apiContent ?? message.content,
@@ -485,18 +489,19 @@ const {
   rootChildIds,
   selectedRootChildId,
   selectedChildIdByParent,
-  selectedProcessingMode,
   selectedModel,
   isChatLocked: () => isLoading.value,
   getDisplayedMessages: () => displayedMessages.value,
   resetEditingState: () => {
     inputText.value = '';
     selectedFiles.value = [];
+    selectedSkillIds.value = [];
     resetEditingState();
   },
   afterSessionLoaded: async () => {
     inputText.value = '';
     selectedFiles.value = [];
+    selectedSkillIds.value = [];
     await nextTick();
     prewarmVisibleConversationCache(
       activeSessionId.value ?? conversationId.value,
@@ -563,9 +568,11 @@ const {
 } = useMessageActions({
   inputText,
   selectedFiles,
+  selectedSkillIds,
   editingMessageId,
   editingDraftText,
   editingDraftFiles,
+  editingDraftSkillIds,
   isLoading,
   canSubmitInteractionRequest: () => canSubmitInteraction.value,
   activeSessionId,
@@ -598,11 +605,12 @@ const onSelectModel = (model: string) => {
   }
 };
 
-const onSelectProcessingMode = (mode: string) => {
-  selectedProcessingMode.value = mode;
-  if (activeSessionId.value && rootChildIds.value.length > 0) {
-    void persistCurrentSession();
-  }
+const updateSelectedSkillIds = (skillIds: string[]) => {
+  selectedSkillIds.value = [...skillIds];
+};
+
+const updateEditingSkillIds = (skillIds: string[]) => {
+  editingDraftSkillIds.value = [...skillIds];
 };
 
 const onLoadSession = async (sessionId: string) => {
@@ -624,7 +632,6 @@ const { loadAvailableModels, loadAvailableSkills } = useCatalogLoader({
   availableModels,
   selectedModel,
   processingModes,
-  selectedProcessingMode,
 });
 
 onMounted(() => {

@@ -2,6 +2,12 @@ import json
 from typing import Any
 
 
+def _normalize_tool_name(tool_name: str) -> str:
+    if "::" in tool_name:
+        return tool_name.split("::", 1)[1].strip()
+    return tool_name
+
+
 def parse_tool_call_arguments(tool_call: dict[str, Any]) -> dict[str, Any]:
     function_payload = tool_call.get("function")
     if not isinstance(function_payload, dict):
@@ -54,6 +60,7 @@ def detect_tool_call_progress(
     tool_result: dict[str, Any],
     next_attachments: list[dict[str, Any]] | list[Any],
 ) -> bool:
+    tool_name = _normalize_tool_name(tool_name)
     if not tool_result.get("ok"):
         return False
 
@@ -75,4 +82,3 @@ def detect_tool_call_progress(
         return bool(tool_result.get("content") or tool_result.get("message"))
 
     return True
-
