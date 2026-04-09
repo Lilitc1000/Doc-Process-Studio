@@ -317,6 +317,9 @@
 .message-live-tool-status {
   margin-bottom: 0.85rem;
   padding: 0.72rem 0.85rem;
+  width: clamp(22rem, 62vw, 38rem);
+  max-width: 100%;
+  box-sizing: border-box;
   border-radius: 14px;
   border: 1px solid rgba(59, 130, 246, 0.2);
   background: linear-gradient(180deg, #f8fbff, #f2f7ff);
@@ -393,6 +396,9 @@
 
 .message-tool-status {
   margin-bottom: 0.85rem;
+  width: clamp(22rem, 62vw, 38rem);
+  max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.5);

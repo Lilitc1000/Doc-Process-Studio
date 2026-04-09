@@ -47,6 +47,7 @@ export const streamChatReply = async (
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
   let isDone = false;
+  let finishReason: string | undefined;
 
   while (!isDone) {
     const { value, done } = await reader.read();
@@ -67,8 +68,15 @@ export const streamChatReply = async (
       }
 
       if (event.type === 'done') {
-        return;
+        finishReason = event.finish_reason;
+        return {
+          finishReason,
+        };
       }
     }
   }
+
+  return {
+    finishReason,
+  };
 };

@@ -49,7 +49,7 @@
             :can-confirm-edit="canConfirmEdit"
             :show-toolbar-by-default="message.id === lastAssistantMessageId"
             :cache-scope-id="activeSessionId ?? conversationId"
-            :can-submit-interaction="!isLoading"
+            :can-submit-interaction="canSubmitInteraction"
             :live-tool-status="
               message.id === activeGeneration?.assistantId
                 ? latestLiveToolStatus
@@ -449,6 +449,7 @@ const createAssistantVariant = (userMessageId: string) => {
 
 const {
   activeGeneration,
+  canSubmitInteraction,
   executeAssistantGeneration,
   executeAssistantInteraction,
   isLoading,
@@ -566,6 +567,7 @@ const {
   editingDraftText,
   editingDraftFiles,
   isLoading,
+  canSubmitInteractionRequest: () => canSubmitInteraction.value,
   activeSessionId,
   conversationId,
   rootChildIds,

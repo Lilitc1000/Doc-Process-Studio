@@ -15,6 +15,7 @@ interface UseMessageActionsOptions {
   editingDraftText: Ref<string>;
   editingDraftFiles: Ref<ChatEditAttachment[]>;
   isLoading: Ref<boolean>;
+  canSubmitInteractionRequest: () => boolean;
   activeSessionId: Ref<string | null>;
   conversationId: Ref<string>;
   rootChildIds: Ref<string[]>;
@@ -262,7 +263,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     assistantMessageId: string,
     interactionAnswer: ChatInteractionAnswer,
   ) => {
-    if (options.isLoading.value) {
+    if (!options.canSubmitInteractionRequest()) {
       return;
     }
 
