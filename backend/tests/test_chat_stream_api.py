@@ -32,63 +32,54 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
 
     call_counter = {"value": 0}
 
-    async def fake_stream_chat_completion(*, model, messages, tools=None, tool_choice=None):
+    async def fake_stream_chat_completion(*, model, messages, tools=None):
         assert model == "qwen3-coder-next:latest"
         assert tools
-        assert tool_choice == "auto"
         call_counter["value"] += 1
 
         if call_counter["value"] == 1:
             yield {
-                "choices": [
-                    {
-                        "delta": {
-                            "tool_calls": [
-                                {
-                                    "index": 0,
-                                    "id": "call-1",
-                                    "type": "function",
-                                    "function": {
-                                        "name": "generate_architecture_doc",
-                                        "arguments": (
-                                            '{"system_name":"交通系统","document_title":"系统设计文档","doc_plan":{"chapters":[]}}'
-                                        ),
-                                    },
-                                }
-                            ]
-                        },
-                        "finish_reason": None,
-                    }
-                ]
+                "model": model,
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "generate_architecture_doc",
+                                "arguments": {
+                                    "system_name": "交通系统",
+                                    "document_title": "系统设计文档",
+                                    "doc_plan": {"chapters": []},
+                                },
+                            }
+                        }
+                    ],
+                },
+                "done": False,
             }
             yield {
-                "choices": [
-                    {
-                        "delta": {},
-                        "finish_reason": "tool_calls",
-                    }
-                ]
+                "model": model,
+                "message": {"role": "assistant", "content": ""},
+                "done": True,
+                "done_reason": "tool_calls",
             }
             yield None
             return
 
         yield {
-            "choices": [
-                {
-                    "delta": {
-                        "content": "文件已生成，可直接下载。",
-                    },
-                    "finish_reason": None,
-                }
-            ]
+            "model": model,
+            "message": {
+                "role": "assistant",
+                "content": "文件已生成，可直接下载。",
+            },
+            "done": False,
         }
         yield {
-            "choices": [
-                {
-                    "delta": {},
-                    "finish_reason": "stop",
-                }
-            ]
+            "model": model,
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "done_reason": "stop",
         }
         yield None
 
@@ -179,4 +170,4 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
     assert '"type": "attachment"' in response_text
     assert '"downloadUrl": "/api/attachments/attachment-1/download"' in response_text
     assert "文件已生成，可直接下载。" in response_text
-    assert '"type": "done"' in response_text
+    assert '"done": true' in response_text

@@ -68,9 +68,14 @@ describe('chat attachment flow', () => {
           },
         });
         onEvent({
-          type: 'delta',
-          content: '文件已生成，可直接下载。',
+          model: 'qwen3-coder-next:latest',
+          message: {
+            role: 'assistant',
+            content: '文件已生成，可直接下载。',
+          },
+          done: false,
         });
+        return { finishReason: 'stop' };
       },
     );
 

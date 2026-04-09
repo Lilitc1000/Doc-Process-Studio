@@ -1,8 +1,8 @@
 from doc_process_studio.services.chat.streaming import (
     build_skill_prompt,
     build_upstream_messages_for_skills,
+    extract_done_reason,
     extract_delta_text,
-    extract_finish_reason,
 )
 from doc_process_studio.models.conversation.stream import (
     ChatMessageInput,
@@ -10,33 +10,28 @@ from doc_process_studio.models.conversation.stream import (
 )
 
 
-def test_extract_delta_text_reads_openai_compatible_chunk() -> None:
+def test_extract_delta_text_reads_ollama_native_chunk() -> None:
     payload = {
-        "choices": [
-            {
-                "delta": {
-                    "role": "assistant",
-                    "content": "你好，",
-                },
-                "finish_reason": None,
-            }
-        ]
+        "model": "qwen3-coder-next:latest",
+        "message": {
+            "role": "assistant",
+            "content": "你好，",
+        },
+        "done": False,
     }
 
     assert extract_delta_text(payload) == "你好，"
 
 
-def test_extract_finish_reason_reads_done_signal() -> None:
+def test_extract_done_reason_reads_done_signal() -> None:
     payload = {
-        "choices": [
-            {
-                "delta": {},
-                "finish_reason": "stop",
-            }
-        ]
+        "model": "qwen3-coder-next:latest",
+        "message": {"role": "assistant", "content": ""},
+        "done": True,
+        "done_reason": "stop",
     }
 
-    assert extract_finish_reason(payload) == "stop"
+    assert extract_done_reason(payload) == "stop"
 
 
 def test_build_skill_prompt_returns_skill_default_prompt() -> None:

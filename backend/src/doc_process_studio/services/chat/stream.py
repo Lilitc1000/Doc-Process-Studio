@@ -30,12 +30,14 @@ from ..skill.tool_loop import (
 )
 from .file_context import build_persisted_uploaded_files_context, prepare_uploaded_files
 from .streaming import (
+    build_ollama_assistant_chunk,
+    build_ollama_done_chunk,
     build_tool_call_signature,
     build_upstream_messages_for_skills,
     detect_tool_call_progress,
+    extract_done_reason,
     extract_delta_text,
     extract_delta_tool_calls,
-    extract_finish_reason,
     format_output_name_from_template,
     format_sse_event,
     get_tool_call_name,
@@ -44,6 +46,59 @@ from .streaming import (
 )
 
 SYSTEM_DOCUMENT_SKILL_ID = "document-assistant"
+
+
+def _format_assistant_delta_event(*, model: str, content: str) -> str:
+    return format_sse_event(
+        build_ollama_assistant_chunk(
+            model=model,
+            content=content,
+        )
+    )
+
+
+def _format_done_event(*, model: str, done_reason: str) -> str:
+    return format_sse_event(
+        build_ollama_done_chunk(
+            model=model,
+            done_reason=done_reason,
+        )
+    )
+
+
+def _build_native_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized_calls: list[dict[str, Any]] = []
+    for tool_call in tool_calls:
+        function_payload = tool_call.get("function")
+        if not isinstance(function_payload, dict):
+            continue
+
+        tool_name = function_payload.get("name")
+        if not isinstance(tool_name, str) or not tool_name.strip():
+            continue
+
+        raw_arguments = function_payload.get("arguments")
+        if isinstance(raw_arguments, dict):
+            arguments: dict[str, Any] | str = raw_arguments
+        elif isinstance(raw_arguments, str):
+            try:
+                parsed_arguments = json.loads(raw_arguments)
+            except json.JSONDecodeError:
+                arguments = raw_arguments
+            else:
+                arguments = parsed_arguments if isinstance(parsed_arguments, dict) else raw_arguments
+        else:
+            arguments = {}
+
+        normalized_calls.append(
+            {
+                "function": {
+                    "name": tool_name.strip(),
+                    "arguments": arguments,
+                }
+            }
+        )
+    return normalized_calls
 
 
 def _normalize_skill_ids(raw_skill_ids: list[str]) -> list[str]:
@@ -279,11 +334,9 @@ async def stream_remote_chat_completion(
                             "interaction": interaction_step,
                         }
                     )
-                    yield format_sse_event(
-                        {
-                            "type": "done",
-                            "finish_reason": "interaction_required",
-                        }
+                    yield _format_done_event(
+                        model=request.model,
+                        done_reason="interaction_required",
                     )
                     return
 
@@ -306,11 +359,9 @@ async def stream_remote_chat_completion(
                             "interaction": next_interaction_step,
                         }
                     )
-                    yield format_sse_event(
-                        {
-                            "type": "done",
-                            "finish_reason": "interaction_required",
-                        }
+                    yield _format_done_event(
+                        model=request.model,
+                        done_reason="interaction_required",
                     )
                     return
 
@@ -389,13 +440,11 @@ async def stream_remote_chat_completion(
                         return
 
                     completion_text = interaction_config.completion_message or "已根据你的选择生成报告。"
-                    yield format_sse_event({"type": "delta", "content": completion_text})
-                    yield format_sse_event(
-                        {
-                            "type": "done",
-                            "finish_reason": "stop",
-                        }
+                    yield _format_assistant_delta_event(
+                        model=request.model,
+                        content=completion_text,
                     )
+                    yield _format_done_event(model=request.model, done_reason="stop")
                     return
 
                 if completed_payload is not None:
@@ -410,7 +459,7 @@ async def stream_remote_chat_completion(
         tool_trace_messages: list[dict[str, Any]] = (
             [interaction_context_message] if interaction_context_message is not None else []
         )
-        final_finish_reason = "stop"
+        final_done_reason = "stop"
         executed_tool_calls: dict[str, dict[str, Any]] = {}
         tools_enabled = True
         tool_round_count = 0
@@ -464,7 +513,6 @@ async def stream_remote_chat_completion(
                     if tools_enabled
                     else None
                 ),
-                tool_choice="auto" if tools_enabled else None,
             ):
                 if chunk_payload is None:
                     break
@@ -472,15 +520,18 @@ async def stream_remote_chat_completion(
                 delta_text = extract_delta_text(chunk_payload)
                 if delta_text:
                     assistant_content_parts.append(delta_text)
-                    yield format_sse_event({"type": "delta", "content": delta_text})
+                    yield _format_assistant_delta_event(
+                        model=request.model,
+                        content=delta_text,
+                    )
 
                 delta_tool_calls = extract_delta_tool_calls(chunk_payload)
                 if delta_tool_calls:
                     merge_stream_tool_calls(merged_tool_calls, delta_tool_calls)
 
-                finish_reason = extract_finish_reason(chunk_payload)
-                if finish_reason:
-                    final_finish_reason = finish_reason
+                done_reason = extract_done_reason(chunk_payload)
+                if done_reason:
+                    final_done_reason = done_reason
 
             normalized_tool_calls = [
                 merged_tool_calls[index] for index in sorted(merged_tool_calls.keys())
@@ -491,25 +542,21 @@ async def stream_remote_chat_completion(
                     {
                         "role": "assistant",
                         "content": "".join(assistant_content_parts),
-                        "tool_calls": normalized_tool_calls,
+                        "tool_calls": _build_native_tool_calls(normalized_tool_calls),
                     }
                 )
 
             if not normalized_tool_calls:
-                yield format_sse_event(
-                    {
-                        "type": "done",
-                        "finish_reason": final_finish_reason,
-                    }
+                yield _format_done_event(
+                    model=request.model,
+                    done_reason=final_done_reason,
                 )
                 return
 
             if not tools_enabled:
-                yield format_sse_event(
-                    {
-                        "type": "done",
-                        "finish_reason": final_finish_reason,
-                    }
+                yield _format_done_event(
+                    model=request.model,
+                    done_reason=final_done_reason,
                 )
                 return
 
@@ -592,8 +639,9 @@ async def stream_remote_chat_completion(
 
                     if tool_result.get("ok") and interaction_step is not None:
                         if should_emit_intro and interaction_config and interaction_config.intro_message:
-                            yield format_sse_event(
-                                {"type": "delta", "content": interaction_config.intro_message}
+                            yield _format_assistant_delta_event(
+                                model=request.model,
+                                content=interaction_config.intro_message,
                             )
                         yield format_sse_event(
                             {
@@ -602,18 +650,16 @@ async def stream_remote_chat_completion(
                                 "interaction": interaction_step,
                             }
                         )
-                        yield format_sse_event(
-                            {
-                                "type": "done",
-                                "finish_reason": "interaction_required",
-                            }
+                        yield _format_done_event(
+                            model=request.model,
+                            done_reason="interaction_required",
                         )
                         return
 
                     tool_trace_messages.append(
                         {
                             "role": "tool",
-                            "tool_name": tool_name,
+                            "name": tool_name,
                             "content": json.dumps(tool_result, ensure_ascii=False),
                         }
                     )
@@ -678,7 +724,7 @@ async def stream_remote_chat_completion(
                 tool_trace_messages.append(
                     {
                         "role": "tool",
-                        "tool_name": tool_name,
+                        "name": tool_name,
                         "content": json.dumps(tool_result, ensure_ascii=False),
                     }
                 )

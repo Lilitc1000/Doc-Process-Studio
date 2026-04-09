@@ -61,7 +61,7 @@ class SkillToolConfig(BaseModel):
     description: str = Field(..., description="工具说明")
     kind: str = Field(default="script", description="工具类型")
     path: str = Field(..., description="skill 内相对路径")
-    parameters: dict = Field(..., description="OpenAI tool JSON Schema")
+    parameters: dict = Field(..., description="工具参数 JSON Schema")
     execution: SkillToolExecutionConfig = Field(..., description="执行配置")
     status: SkillToolStatusConfig | None = Field(
         default=None,

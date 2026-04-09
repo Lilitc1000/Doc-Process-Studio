@@ -22,13 +22,13 @@ def get_ollama_base_url() -> str:
 
 
 def build_chat_completion_url() -> str:
-    """返回聊天补全接口地址。"""
-    return f"{get_ollama_base_url()}/v1/chat/completions"
+    """返回 Ollama 原生聊天接口地址。"""
+    return f"{get_ollama_base_url()}/api/chat"
 
 
 def build_models_url() -> str:
-    """返回模型列表接口地址。"""
-    return f"{get_ollama_base_url()}/v1/models"
+    """返回 Ollama 原生模型列表接口地址。"""
+    return f"{get_ollama_base_url()}/api/tags"
 
 
 def build_timeout(*, stream: bool = False) -> httpx.Timeout:
@@ -47,9 +47,8 @@ def build_chat_payload(
     messages: list[ChatMessageInput] | list[dict[str, Any]],
     stream: bool,
     tools: list[dict[str, Any]] | None = None,
-    tool_choice: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """统一聊天补全 payload，减少各业务层重复拼装。"""
+    """统一 Ollama 原生 /api/chat payload，减少各业务层重复拼装。"""
     normalized_messages: list[dict[str, Any]] = []
     for message in messages:
         if isinstance(message, ChatMessageInput):
@@ -64,8 +63,6 @@ def build_chat_payload(
     }
     if tools:
         payload["tools"] = tools
-    if tool_choice is not None:
-        payload["tool_choice"] = tool_choice
     return payload
 
 
@@ -74,7 +71,6 @@ async def post_chat_completion(
     model: str,
     messages: list[ChatMessageInput] | list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
-    tool_choice: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """发送一次非流式聊天补全请求并返回 JSON。"""
     payload = build_chat_payload(
@@ -82,7 +78,6 @@ async def post_chat_completion(
         messages=messages,
         stream=False,
         tools=tools,
-        tool_choice=tool_choice,
     )
     async with httpx.AsyncClient(timeout=build_timeout()) as client:
         response = await client.post(
@@ -98,35 +93,28 @@ async def stream_chat_completion(
     model: str,
     messages: list[ChatMessageInput] | list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
-    tool_choice: str | dict[str, Any] | None = None,
 ) -> AsyncIterator[dict[str, Any] | None]:
-    """统一处理远端 SSE，返回解码后的 chunk，DONE 用 None 表示。"""
+    """统一处理 Ollama 原生流式响应，返回解码后的 JSON chunk。"""
     payload = build_chat_payload(
         model=model,
         messages=messages,
         stream=True,
         tools=tools,
-        tool_choice=tool_choice,
     )
     async with httpx.AsyncClient(timeout=build_timeout(stream=True)) as client:
         async with client.stream(
             "POST",
             build_chat_completion_url(),
             json=payload,
-            headers={"Accept": "text/event-stream"},
         ) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
-                if not line or not line.startswith("data:"):
+                if not line:
                     continue
 
-                raw_data = line[5:].strip()
+                raw_data = line.strip()
                 if not raw_data:
                     continue
-
-                if raw_data == "[DONE]":
-                    yield None
-                    return
 
                 try:
                     yield json.loads(raw_data)
@@ -135,17 +123,10 @@ async def stream_chat_completion(
 
 
 def extract_first_message_content(response_payload: dict[str, Any]) -> str:
-    """读取聊天补全首条消息正文。"""
-    choices = response_payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        return ""
-
-    first_choice = choices[0]
-    if not isinstance(first_choice, dict):
-        return ""
-
-    message = first_choice.get("message")
-    if not isinstance(message, dict):
-        return ""
-
-    return str(message.get("content", "")).strip()
+    """读取 Ollama 原生响应中的首条正文。"""
+    message = response_payload.get("message")
+    if isinstance(message, dict):
+        content = message.get("content")
+        if isinstance(content, str):
+            return content.strip()
+    return ""

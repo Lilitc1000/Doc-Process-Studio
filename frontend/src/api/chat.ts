@@ -65,11 +65,15 @@ export const streamChatReply = async (
       onEvent(event);
 
       if (event.type === 'error') {
-        throw new Error(event.message || '聊天流返回了错误事件');
+        const errorMessage =
+          typeof event.message === 'string'
+            ? event.message
+            : '聊天流返回了错误事件';
+        throw new Error(errorMessage);
       }
 
-      if (event.type === 'done') {
-        finishReason = event.finish_reason;
+      if (event.done === true) {
+        finishReason = event.done_reason;
         return {
           finishReason,
         };

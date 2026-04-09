@@ -103,11 +103,25 @@ export interface ActiveGenerationState {
   controller: AbortController;
 }
 
+export interface OllamaStreamMessage {
+  role?: ChatMessageRole | string;
+  content?: string;
+  tool_calls?: Array<{
+    function?: {
+      name?: string;
+      arguments?: unknown;
+    };
+  }>;
+}
+
 export interface ChatStreamEvent {
+  model?: string;
+  created_at?: string;
+  message?: OllamaStreamMessage | string;
+  done?: boolean;
+  done_reason?: string;
   type?: string;
   content?: string;
-  message?: string;
-  finish_reason?: string;
   phase?: string;
   tool_name?: string;
   label?: string;

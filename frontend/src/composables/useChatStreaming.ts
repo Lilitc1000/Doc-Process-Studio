@@ -124,8 +124,13 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
     signal: AbortSignal,
   ) => {
     return streamChatReply(requestSnapshot, signal, (payload) => {
-      if (payload.type === 'delta' && payload.content) {
-        options.appendMessageContent(assistantMessageId, payload.content);
+      const ollamaMessage =
+        payload.message && typeof payload.message === 'object'
+          ? payload.message
+          : null;
+
+      if (typeof ollamaMessage?.content === 'string' && ollamaMessage.content) {
+        options.appendMessageContent(assistantMessageId, ollamaMessage.content);
         options.scrollToBottom();
       }
 
@@ -141,7 +146,10 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
         );
       }
 
-      if (payload.type === 'tool-status' && payload.message) {
+      if (
+        payload.type === 'tool-status' &&
+        typeof payload.message === 'string'
+      ) {
         options.appendMessageToolStatus(assistantMessageId, {
           id: `${assistantMessageId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           toolName: payload.tool_name,

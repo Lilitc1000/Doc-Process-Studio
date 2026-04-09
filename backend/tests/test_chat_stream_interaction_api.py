@@ -23,6 +23,22 @@ def _parse_sse_events(response_text: str) -> list[dict]:
     return events
 
 
+def _collect_assistant_contents(events: list[dict]) -> list[str]:
+    contents: list[str] = []
+    for event in events:
+        message = event.get("message")
+        if not isinstance(message, dict):
+            continue
+        content = message.get("content")
+        if isinstance(content, str) and content:
+            contents.append(content)
+    return contents
+
+
+def _collect_done_events(events: list[dict]) -> list[dict]:
+    return [event for event in events if event.get("done") is True]
+
+
 def _patch_common_chat_stream_dependencies(monkeypatch) -> None:
     async def fake_prepare_uploaded_files(**_kwargs):
         return [], None
@@ -135,26 +151,27 @@ def test_api_chat_stream_returns_interaction_required_when_model_calls_wizard_to
 
     async def fake_stream_chat_completion(**_kwargs):
         yield {
-            "choices": [
-                {
-                    "delta": {
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": "call-1",
-                                "type": "function",
-                                "function": {
-                                    "name": "start_skill_interaction",
-                                    "arguments": "{}",
-                                },
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                }
-            ]
+            "model": "qwen3-coder-next:latest",
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "function": {
+                            "name": "start_skill_interaction",
+                            "arguments": {},
+                        }
+                    }
+                ],
+            },
+            "done": False,
         }
-        yield {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}
+        yield {
+            "model": "qwen3-coder-next:latest",
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "done_reason": "tool_calls",
+        }
 
     monkeypatch.setattr(
         chat_stream_module,
@@ -195,10 +212,7 @@ def test_api_chat_stream_returns_interaction_required_when_model_calls_wizard_to
     events = _parse_sse_events(response.text)
     assert all(event.get("type") != "error" for event in events)
 
-    assert {
-        "type": "delta",
-        "content": "进入交互向导。",
-    } in events
+    assert "进入交互向导。" in _collect_assistant_contents(events)
 
     interaction_events = [
         event
@@ -215,9 +229,9 @@ def test_api_chat_stream_returns_interaction_required_when_model_calls_wizard_to
     assert tool_status_events[0].get("phase") == "start"
     assert tool_status_events[1].get("phase") == "finish"
 
-    done_events = [event for event in events if event.get("type") == "done"]
+    done_events = _collect_done_events(events)
     assert len(done_events) == 1
-    assert done_events[0].get("finish_reason") == "interaction_required"
+    assert done_events[0].get("done_reason") == "interaction_required"
 
 
 def test_api_chat_stream_interaction_completion_runs_final_tool(monkeypatch) -> None:
@@ -353,11 +367,11 @@ def test_api_chat_stream_interaction_completion_runs_final_tool(monkeypatch) -> 
         == "/api/attachments/attachment-interaction-1/download"
     )
 
-    assert {"type": "delta", "content": "交互完成，已生成附件。"} in events
+    assert "交互完成，已生成附件。" in _collect_assistant_contents(events)
 
-    done_events = [event for event in events if event.get("type") == "done"]
+    done_events = _collect_done_events(events)
     assert len(done_events) == 1
-    assert done_events[0].get("finish_reason") == "stop"
+    assert done_events[0].get("done_reason") == "stop"
 
 
 def test_api_chat_stream_no_forced_interaction_when_model_not_call_wizard_tool(
@@ -395,14 +409,16 @@ def test_api_chat_stream_no_forced_interaction_when_model_not_call_wizard_tool(
 
     async def fake_stream_chat_completion(**_kwargs):
         yield {
-            "choices": [
-                {
-                    "delta": {"content": "已识别到完整信息，开始生成报告。"},
-                    "finish_reason": None,
-                }
-            ]
+            "model": "qwen3-coder-next:latest",
+            "message": {"role": "assistant", "content": "已识别到完整信息，开始生成报告。"},
+            "done": False,
         }
-        yield {"choices": [{"delta": {}, "finish_reason": "stop"}]}
+        yield {
+            "model": "qwen3-coder-next:latest",
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "done_reason": "stop",
+        }
 
     monkeypatch.setattr(
         chat_stream_module,
@@ -456,11 +472,11 @@ def test_api_chat_stream_no_forced_interaction_when_model_not_call_wizard_tool(
     assert all(event.get("type") != "error" for event in events)
     assert all(event.get("type") != "interaction" for event in events)
 
-    assert {"type": "delta", "content": "已识别到完整信息，开始生成报告。"} in events
+    assert "已识别到完整信息，开始生成报告。" in _collect_assistant_contents(events)
 
-    done_events = [event for event in events if event.get("type") == "done"]
+    done_events = _collect_done_events(events)
     assert len(done_events) == 1
-    assert done_events[0].get("finish_reason") == "stop"
+    assert done_events[0].get("done_reason") == "stop"
 
 
 def test_api_chat_stream_resumes_existing_interaction_state(monkeypatch) -> None:
@@ -561,6 +577,6 @@ def test_api_chat_stream_resumes_existing_interaction_state(monkeypatch) -> None
     assert len(interaction_events) == 1
     assert interaction_events[0]["interaction"]["sessionId"] == "sess-resume-1"
 
-    done_events = [event for event in events if event.get("type") == "done"]
+    done_events = _collect_done_events(events)
     assert len(done_events) == 1
-    assert done_events[0].get("finish_reason") == "interaction_required"
+    assert done_events[0].get("done_reason") == "interaction_required"
