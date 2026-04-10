@@ -12,23 +12,23 @@ from doc_process_studio.services.skill.registry import (
 
 
 def _resolve_tools_file(skill_dir: Path) -> Path | None:
-    for candidate in (skill_dir / "tools.json", skill_dir / "agents" / "tools.json"):
-        if candidate.is_file():
-            return candidate
+    candidate = skill_dir / "tools.json"
+    if candidate.is_file():
+        return candidate
     return None
 
 
 def _resolve_interaction_file(skill_dir: Path) -> Path | None:
-    for candidate in (skill_dir / "agents" / "interaction.json", skill_dir / "interaction.json"):
-        if candidate.is_file():
-            return candidate
+    candidate = skill_dir / "agents" / "interaction.json"
+    if candidate.is_file():
+        return candidate
     return None
 
 
 def _resolve_openai_file(skill_dir: Path) -> Path | None:
-    for candidate in (skill_dir / "agents" / "openai.yml", skill_dir / "agents" / "openai.yaml"):
-        if candidate.is_file():
-            return candidate
+    candidate = skill_dir / "agents" / "openai.yaml"
+    if candidate.is_file():
+        return candidate
     return None
 
 
@@ -44,7 +44,7 @@ def test_all_skill_dirs_are_registered_and_have_openai_config() -> None:
 
     for skill_dir in skill_dirs:
         openai_file = _resolve_openai_file(skill_dir)
-        assert openai_file is not None, f"{skill_dir.name} 缺少 agents/openai.yml(yaml)"
+        assert openai_file is not None, f"{skill_dir.name} 缺少 agents/openai.yaml"
 
         skill_interface = get_skill_interface(skill_dir.name)
         assert skill_interface.display_name.strip() != ""
@@ -71,4 +71,3 @@ def test_all_skill_declared_configs_are_valid() -> None:
                 assert runtime_config is not None
             else:
                 assert runtime_config is None
-

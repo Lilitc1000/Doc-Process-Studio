@@ -42,8 +42,8 @@ class ChatStreamRequest(BaseModel):
     )
     model: str = Field(..., description="要调用的模型名称")
     skill_id: str = Field(
-        ...,
-        description="当前选中的 skill 标识",
+        default="",
+        description="保留字段：兼容历史请求，不参与当前规划层主决策。",
     )
     selected_skill_ids: list[str] = Field(
         default_factory=list,

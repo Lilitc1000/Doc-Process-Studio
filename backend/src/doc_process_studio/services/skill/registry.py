@@ -6,7 +6,6 @@ from ...models.skill.catalog import SkillInterfaceConfig, SkillToolConfig
 from ...models.skill.interaction import SkillInteractionConfig
 
 SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
-DEFAULT_SKILL_ID = "document-assistant"
 
 
 def _strip_wrapped_text(value: str) -> str:
@@ -45,11 +44,9 @@ def _read_yaml_interface_block(config_path: Path) -> dict[str, str]:
 
 
 def _resolve_agent_config_path(skill_dir: Path) -> Path | None:
-    agents_dir = skill_dir / "agents"
-    for candidate_name in ("openai.yml", "openai.yaml"):
-        candidate = agents_dir / candidate_name
-        if candidate.is_file():
-            return candidate
+    candidate = skill_dir / "agents" / "openai.yaml"
+    if candidate.is_file():
+        return candidate
     return None
 
 
@@ -87,24 +84,16 @@ def _read_skill_markdown_metadata(skill_dir: Path) -> dict[str, str]:
 
 
 def _resolve_tools_config_path(skill_dir: Path) -> Path | None:
-    candidate_paths = [
-        skill_dir / "tools.json",
-        skill_dir / "agents" / "tools.json",
-    ]
-    for candidate in candidate_paths:
-        if candidate.is_file():
-            return candidate
+    candidate = skill_dir / "tools.json"
+    if candidate.is_file():
+        return candidate
     return None
 
 
 def _resolve_interaction_config_path(skill_dir: Path) -> Path | None:
-    candidate_paths = [
-        skill_dir / "agents" / "interaction.json",
-        skill_dir / "interaction.json",
-    ]
-    for candidate in candidate_paths:
-        if candidate.is_file():
-            return candidate
+    candidate = skill_dir / "agents" / "interaction.json"
+    if candidate.is_file():
+        return candidate
     return None
 
 
@@ -212,15 +201,6 @@ def load_skill_registry() -> list[SkillInterfaceConfig]:
 
 def list_skill_interfaces() -> list[SkillInterfaceConfig]:
     return list(load_skill_registry())
-
-
-def get_default_skill_id() -> str:
-    skill_ids = {skill.id for skill in load_skill_registry()}
-    if DEFAULT_SKILL_ID in skill_ids:
-        return DEFAULT_SKILL_ID
-    if skill_ids:
-        return load_skill_registry()[0].id
-    return DEFAULT_SKILL_ID
 
 
 def get_skill_interface(skill_id: str) -> SkillInterfaceConfig:

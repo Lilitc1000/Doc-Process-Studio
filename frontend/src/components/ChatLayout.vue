@@ -172,7 +172,6 @@ const welcomeMessages: ChatMessageNode[] = [
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
 const selectedSkillIds = ref<string[]>([]);
-const SYSTEM_DOCUMENT_SKILL_ID = 'document-assistant';
 const processingModes = ref<SkillOption[]>([]);
 const selectedModel = ref(fallbackModels[0]);
 const availableModels = ref(fallbackModels);
@@ -295,13 +294,10 @@ const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
   const selectedSkillIdsFromMessage = Array.from(
     new Set(currentUserMessage?.requestSkillIds ?? []),
   );
-  const resolvedPrimarySkillId =
-    selectedSkillIdsFromMessage[0] ?? SYSTEM_DOCUMENT_SKILL_ID;
   return {
     userMessageId,
     conversationId: conversationId.value,
     model: selectedModel.value,
-    skillId: resolvedPrimarySkillId,
     selectedSkillIds: selectedSkillIdsFromMessage,
     messages: path.map((message) => ({
       role: message.role,

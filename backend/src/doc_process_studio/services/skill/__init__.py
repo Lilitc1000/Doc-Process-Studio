@@ -20,7 +20,6 @@ from .interaction_store import (
     save_interaction_state,
 )
 from .registry import (
-    get_default_skill_id,
     get_skill_interface,
     get_skill_interaction_config,
     list_skill_interfaces,
@@ -42,7 +41,6 @@ __all__ = [
     "execute_skill_tool_call",
     "execute_scoped_skill_tool_call",
     "get_conversation_state_ttl_seconds",
-    "get_default_skill_id",
     "get_skill_context_chunks_by_ids",
     "get_skill_interface",
     "get_skill_interaction_config",

@@ -14,7 +14,6 @@ from ...services.skill.conversation_store import (
     refresh_conversation_state_ttl,
 )
 from ...services.skill.registry import (
-    get_default_skill_id,
     get_skill_interface,
     list_skill_interfaces,
 )
@@ -26,7 +25,6 @@ router = APIRouter(prefix="/api", tags=["skills"])
 async def list_skills() -> SkillListResponse:
     return SkillListResponse(
         skills=list_skill_interfaces(),
-        default_skill_id=get_default_skill_id(),
     )
 
 
@@ -115,4 +113,3 @@ async def delete_skill_conversation_cache(
             else "未找到该会话缓存，无需清理。"
         ),
     )
-

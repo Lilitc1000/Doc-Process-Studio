@@ -19,6 +19,7 @@ from ..skill.registry import (
     get_skill_interaction_config,
     list_skill_interfaces,
 )
+from ..skill.planner import plan_implicit_skill_ids_with_model
 from ..skill.runtime import ensure_skill_context_for_request, sync_skill_context_state
 from ..skill.tool_loop import (
     build_skill_tools,
@@ -101,6 +102,46 @@ def _build_native_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str,
     return normalized_calls
 
 
+async def _extract_http_status_error_message(exc: httpx.HTTPStatusError) -> str:
+    """安全提取上游错误信息，避免流式响应未读取时触发 ResponseNotRead。"""
+    base_message = f"远程 Ollama 接口返回错误状态：{exc.response.status_code}"
+    error_payload: Any | None = None
+
+    try:
+        error_payload = exc.response.json()
+    except httpx.ResponseNotRead:
+        try:
+            raw_body = await exc.response.aread()
+        except Exception:
+            raw_body = b""
+
+        if raw_body:
+            try:
+                error_payload = json.loads(raw_body.decode("utf-8", errors="ignore"))
+            except ValueError:
+                raw_text = raw_body.decode("utf-8", errors="ignore").strip()
+                if raw_text:
+                    return raw_text[:500]
+    except ValueError:
+        try:
+            raw_text = exc.response.text.strip()
+        except httpx.ResponseNotRead:
+            raw_text = ""
+        if raw_text:
+            return raw_text[:500]
+
+    if isinstance(error_payload, dict):
+        detail = (
+            error_payload.get("error")
+            or error_payload.get("message")
+            or error_payload.get("detail")
+        )
+        if isinstance(detail, str) and detail.strip():
+            return detail.strip()[:500]
+
+    return base_message
+
+
 def _normalize_skill_ids(raw_skill_ids: list[str]) -> list[str]:
     normalized: list[str] = []
     for raw_skill_id in raw_skill_ids:
@@ -115,19 +156,11 @@ def _extract_skill_ids_from_messages(
     messages: list[Any],
     available_skills: list[Any],
 ) -> tuple[list[str], list[str]]:
-    """从用户消息中提取显式提及（`$skill-id` 或文本直提）。"""
+    """从用户消息中提取显式提及（仅识别 `$skill-id`）。"""
     mentioned_skill_ids: list[str] = []
     missing_skill_ids: list[str] = []
     pattern = re.compile(r"\$([A-Za-z0-9._-]+)")
     available_skill_ids = {str(skill.id).strip() for skill in available_skills}
-    skill_keywords: list[tuple[str, list[str]]] = []
-    for skill in available_skills:
-        skill_id = str(skill.id).strip()
-        display_name = str(getattr(skill, "display_name", "")).strip()
-        keywords = [skill_id.lower()]
-        if display_name:
-            keywords.append(display_name.lower())
-        skill_keywords.append((skill_id, keywords))
 
     for message in messages:
         if getattr(message, "role", None) != "user":
@@ -143,22 +176,14 @@ def _extract_skill_ids_from_messages(
             elif skill_id not in missing_skill_ids:
                 missing_skill_ids.append(skill_id)
 
-        normalized_content = content.lower()
-        for skill_id, keywords in skill_keywords:
-            if skill_id in mentioned_skill_ids:
-                continue
-            if any(keyword and keyword in normalized_content for keyword in keywords):
-                mentioned_skill_ids.append(skill_id)
-
     return mentioned_skill_ids, missing_skill_ids
 
 
-def _resolve_active_skill_ids(
+async def _resolve_active_skill_ids(
     request: ChatStreamRequest,
-) -> tuple[list[str], list[str], list[str], str]:
+) -> tuple[list[str], list[str], list[str], list[str], str]:
     available_skills = list_skill_interfaces()
     available_skill_ids = [skill.id for skill in available_skills]
-    available_skill_id_set = set(available_skill_ids)
     explicit_skill_ids = _normalize_skill_ids(request.selected_skill_ids)
     mentioned_skill_ids, missing_mentioned_skill_ids = _extract_skill_ids_from_messages(
         messages=request.messages,
@@ -177,41 +202,51 @@ def _resolve_active_skill_ids(
         skill_id for skill_id in explicit_skill_ids if skill_id in available_skill_ids
     ]
 
-    request_skill_id = request.skill_id.strip()
+    implicit_skill_ids = await plan_implicit_skill_ids_with_model(
+        model=request.model,
+        messages=request.messages,
+        available_skills=available_skills,
+        explicit_skill_ids=valid_explicit_skill_ids,
+        system_skill_id=SYSTEM_DOCUMENT_SKILL_ID,
+    )
+    implicit_skill_ids = [
+        skill_id for skill_id in implicit_skill_ids if skill_id in available_skill_ids
+    ]
+
     has_system_skill = SYSTEM_DOCUMENT_SKILL_ID in available_skill_ids
     active_skill_ids: list[str] = []
 
-    # 决策顺序：显式 selected_skill_ids > 文本中 $skill 提及 > system skill 基线。
+    # 决策顺序：
+    # 1) 显式 skill（用户选择或消息明确提及）必须纳入；
+    # 2) 规划层可追加隐式 skill；
+    # 3) 都没有时回退到 system skill 基线。
     if valid_explicit_skill_ids:
         primary_skill_id = valid_explicit_skill_ids[0]
-        active_skill_ids.append(primary_skill_id)
-        if has_system_skill and SYSTEM_DOCUMENT_SKILL_ID not in active_skill_ids:
-            active_skill_ids.append(SYSTEM_DOCUMENT_SKILL_ID)
-        for skill_id in valid_explicit_skill_ids[1:]:
-            if skill_id not in active_skill_ids:
-                active_skill_ids.append(skill_id)
+    elif implicit_skill_ids:
+        primary_skill_id = implicit_skill_ids[0]
     else:
         if has_system_skill:
             primary_skill_id = SYSTEM_DOCUMENT_SKILL_ID
-        elif request_skill_id and request_skill_id in available_skill_ids:
-            primary_skill_id = request_skill_id
         else:
             primary_skill_id = next(iter(available_skill_ids), SYSTEM_DOCUMENT_SKILL_ID)
 
-        active_skill_ids.append(primary_skill_id)
-        # 未显式指定时，以 system skill 为主，再按需开放其余技能给模型隐式选择。
-        if primary_skill_id == SYSTEM_DOCUMENT_SKILL_ID:
-            for skill_id in available_skill_ids:
-                if skill_id == SYSTEM_DOCUMENT_SKILL_ID:
-                    continue
-                active_skill_ids.append(skill_id)
-        elif has_system_skill:
-            active_skill_ids.append(SYSTEM_DOCUMENT_SKILL_ID)
+    active_skill_ids.append(primary_skill_id)
+    if has_system_skill and SYSTEM_DOCUMENT_SKILL_ID not in active_skill_ids:
+        active_skill_ids.append(SYSTEM_DOCUMENT_SKILL_ID)
+
+    for skill_id in valid_explicit_skill_ids:
+        if skill_id not in active_skill_ids:
+            active_skill_ids.append(skill_id)
+
+    for skill_id in implicit_skill_ids:
+        if skill_id not in active_skill_ids:
+            active_skill_ids.append(skill_id)
 
     return (
         active_skill_ids,
         valid_explicit_skill_ids,
         missing_explicit_skill_ids,
+        implicit_skill_ids,
         primary_skill_id,
     )
 
@@ -270,8 +305,9 @@ async def stream_remote_chat_completion(
             active_skill_ids,
             explicit_skill_ids,
             missing_explicit_skill_ids,
+            implicit_skill_ids,
             primary_skill_id,
-        ) = _resolve_active_skill_ids(request)
+        ) = await _resolve_active_skill_ids(request)
         primary_request = request.model_copy(update={"skill_id": primary_skill_id})
         prepared_uploaded_files, new_uploaded_files_context = await prepare_uploaded_files(
             upload_files=upload_files or [],
@@ -492,6 +528,7 @@ async def stream_remote_chat_completion(
                 request=request,
                 active_skill_ids=active_skill_ids,
                 explicit_skill_ids=explicit_skill_ids,
+                implicit_skill_ids=implicit_skill_ids,
                 missing_skill_ids=missing_explicit_skill_ids,
                 skill_context_by_skill=skill_context_by_skill,
                 uploaded_files_context=uploaded_files_context,
@@ -758,16 +795,7 @@ async def stream_remote_chat_completion(
     except OllamaNotConfiguredError as exc:
         yield format_sse_event({"type": "error", "message": str(exc)})
     except httpx.HTTPStatusError as exc:
-        error_message = f"远程 Ollama 接口返回错误状态：{exc.response.status_code}"
-        try:
-            error_payload = exc.response.json()
-            if isinstance(error_payload, dict):
-                detail = error_payload.get("error") or error_payload.get("message")
-                if isinstance(detail, str) and detail.strip():
-                    error_message = detail.strip()
-        except ValueError:
-            pass
-
+        error_message = await _extract_http_status_error_message(exc)
         yield format_sse_event({"type": "error", "message": error_message})
     except httpx.HTTPError as exc:
         yield format_sse_event(

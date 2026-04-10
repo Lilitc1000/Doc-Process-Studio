@@ -88,10 +88,6 @@ class SkillListResponse(BaseModel):
         default_factory=list,
         description="当前可用的 skill 列表",
     )
-    default_skill_id: str = Field(
-        ...,
-        description="默认选中的 skill 标识",
-    )
 
 
 class SkillContextSearchResponse(BaseModel):

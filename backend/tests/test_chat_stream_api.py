@@ -31,10 +31,13 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
         return None
 
     call_counter = {"value": 0}
+    observed_tools: list[object] = []
 
     async def fake_stream_chat_completion(*, model, messages, tools=None):
         assert model == "qwen3-coder-next:latest"
-        assert tools
+        observed_tools.append(tools)
+        if call_counter["value"] == 0:
+            assert tools
         call_counter["value"] += 1
 
         if call_counter["value"] == 1:
@@ -143,6 +146,14 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
         "build_skill_tools",
         fake_build_skill_tools,
     )
+    async def fake_plan_implicit_skill_ids_with_model(**_kwargs):
+        return []
+
+    monkeypatch.setattr(
+        chat_stream_module,
+        "plan_implicit_skill_ids_with_model",
+        fake_plan_implicit_skill_ids_with_model,
+    )
     monkeypatch.setattr(
         chat_stream_module,
         "execute_skill_tool_call",
@@ -171,3 +182,5 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
     assert '"downloadUrl": "/api/attachments/attachment-1/download"' in response_text
     assert "文件已生成，可直接下载。" in response_text
     assert '"done": true' in response_text
+    assert observed_tools
+    assert observed_tools[0]

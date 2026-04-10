@@ -89,7 +89,6 @@ export interface ChatRequestSnapshot {
   userMessageId: string;
   conversationId: string;
   model: string;
-  skillId: string;
   selectedSkillIds: string[];
   messages: ApiChatMessage[];
   files: File[];

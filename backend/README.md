@@ -49,7 +49,7 @@ ENV=dev /workspace/backend/.venv/bin/python -m compileall /workspace/backend/src
 - `tests/test_*_service.py` / `tests/test_*_tool_loop.py`
   放纯业务或工具循环逻辑测试，尽量避免走完整 HTTP。
 - `tests/test_skill_registry_smoke.py`
-  放全局 skill 冒烟校验（目录可发现、`openai.yml` 可读、`tools.json`/`interaction.json` 可解析）。
+  放全局 skill 冒烟校验（目录可发现、`agents/openai.yaml` 可读、`tools.json`/`agents/interaction.json` 可解析）。
 - `tests/skills/<skill_id>/test_*_contract.py`
   放单个 skill 的契约测试（脚本参数、工具链输入输出、关键产物结构）。
 
@@ -249,7 +249,7 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 
 每个 skill 至少应包含：
 
-- `agents/openai.yml` 或 `agents/openai.yaml`
+- `agents/openai.yaml`
 - `interface.display_name`
 - `interface.default_prompt`
 
@@ -321,43 +321,57 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 `发起请求 -> 收到步骤 -> 提交全部步骤 -> 返回附件 -> 验证附件可下载`。
 
 ## Tool Calling 与 Skill 上下文
-当前 skill 主链已经改成“流式 tool calling + Redis 会话缓存”，不再使用旧版“先 planner 再一次性补 chunk”的思路。
+当前主链路采用“规划层 + 流式 tool calling + Redis 会话缓存”。
 
-一次 `/api/chat/stream` 请求的大致流程如下：
+### 规划层
+一次 `/api/chat/stream` 请求会先做 skill 规划，规则如下：
 
-1. 解析本轮 skill 决策：
-   - 先看 `selected_skill_ids`（前端 `$skill` 选择结果）
-   - 再看用户消息里的 `$skill-id` 文本提及
-   - 若都没有，则以 `document-assistant` 作为 system skill 基线
-2. 注入主 skill 的 `default_prompt`，并注入可用 skill 清单与渐进式披露规则
-3. 从 Redis 读取当前会话已经加载过的 skill chunk 状态
-4. 使用 `stream=true + tools` 调远端 Ollama
-5. 如果模型在流中返回 `tool_calls`
-6. 后端执行对应工具，例如：
-   - `list_skill_directory`
-   - `read_skill_file`
-   - `search_skill_context`
-   - `read_skill_context`
-   - skill 在 `tools.json` 中声明的脚本型工具，例如 `generate_document`
-7. 工具结果以 `assistant/tool` 消息形式回填，再继续下一轮流式请求
-8. 直到模型不再继续调工具，才自然结束这次回答
+1. 显式技能（mandatory）：
+   - 来自前端 `selected_skill_ids`（用户在输入框中显式选择的方式）
+   - 以及用户消息里显式提及的 `$skill-id`
+   - 这些 skill 必须进入本轮激活集合。
+2. 隐式技能（optional）：
+   - 第一层：词法召回（基于用户问题与 `display_name`/`short_description` 等字段打分）筛出候选 skill。
+   - 第二层：使用“当前聊天选择的模型”对候选做一次轻量重排，输出最小隐式技能集合。
+   - 若第二层失败（如远端不可用、返回非结构化结果），自动回退到第一层结果。
+3. 系统级技能：
+   - `document-assistant` 始终启用，作为 system skill 基线。
 
-也就是说：
+补充说明：
+- 聊天请求里的 `skill_id` 现为兼容保留字段，不参与主决策；主决策只看 `selected_skill_ids`、`$skill-id` 和隐式规划结果。
 
-- `SKILL.md` 和 `references/` 不会在每轮请求时被一次性全塞进提示词
-- 模型会按需读取 skill 片段
-- 模型也可以按需读取 skill 内的具体文件，如 `SKILL.md`、`references/*`、`scripts/*`
-- 已读取的 chunk 会缓存在 Redis 会话状态中
-- 重复的相同工具调用会被后端自动去重，避免模型反复读取同一文件或同一批 chunk
-- 如果某一轮工具调用没有带来任何新信息，后端会自动收束到“直接回答”，而不是继续空转
-- 生成类 skill 可以通过 `tools.json` 声明的脚本型工具产出可下载附件
-- 当本轮并行激活多个 skill 时，后端不会启用 `start_skill_interaction`（交互向导仅支持单一目标 skill）
+主 skill（`primary_skill_id`）优先级：
+- 有显式 skill 时，取首个显式 skill。
+- 否则取首个隐式命中 skill。
+- 都没有时回退到 `document-assistant`（或当前可用 skill 列表首项）。
 
-因此在维护时要注意：
+### 流式工具循环
+skill 规划完成后，后端会：
 
-- 如果要改 skill 渐进式读取逻辑，优先看 `services/skill/tool_loop.py`
-- 如果要改 skill 上下文压缩与注入策略，优先看 `services/skill/runtime.py` 和 `services/skill/context_packer.py`
-- 如果要改流式编排，优先看 `services/chat/stream.py`
+1. 注入主 skill 的 `default_prompt`，并注入：
+   - 本轮显式 skill 列表
+   - 规划层追加的隐式 skill 列表
+   - 可用 skill 清单与渐进式披露规则
+2. 从 Redis 读取/同步 skill 会话上下文状态。
+3. 使用 `stream=true + tools` 调远端 Ollama。
+4. 若模型返回 `tool_calls`，执行工具并把结果回填到消息流，再继续下一轮请求。
+5. 直到模型不再返回工具调用，输出最终回答并结束。
+
+支持的工具包含：
+- 内置渐进式披露工具：`list_skill_directory`、`read_skill_file`、`search_skill_context`、`read_skill_context`
+- skill 在 `tools.json` 声明的脚本型工具（如文档生成、文件产出）
+
+### 当前行为要点
+- `SKILL.md`/`references/` 不会每轮全量塞入上下文，而是按需读取。
+- 已读取 chunk 会写入 Redis 会话状态，后续轮次可复用。
+- 相同工具调用会自动去重，避免重复读取。
+- 当工具轮次没有新增信息时，后端会收束到直接回答，避免空转。
+- 并行激活多个 skill 时，不启用 `start_skill_interaction`（交互向导仍只支持单一目标 skill）。
+
+维护建议：
+- 渐进式读取与工具执行优先看 `services/skill/tool_loop.py`
+- 上下文压缩/注入优先看 `services/skill/runtime.py`、`services/skill/context_packer.py`
+- 流式编排优先看 `services/chat/stream.py`
 - 不要在路由层直接操作这些缓存和工具细节
 
 另外当前的声明式工具参数还有一条重要约定：
