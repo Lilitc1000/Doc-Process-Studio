@@ -7,6 +7,30 @@ cd "$LOCAL_WORKSPACE_FOLDER"
 
 echo "[startup] running in $LOCAL_WORKSPACE_FOLDER"
 
+start_ssh() {
+    echo "[startup] starting SSH server..."
+    
+    sudo mkdir -p /var/run/sshd
+    
+    if pgrep -x "sshd" > /dev/null; then
+        echo "[startup] SSH server already running, skipping"
+        return 0
+    fi
+    
+    sudo rm -f /var/run/sshd.pid
+    
+    sudo /usr/sbin/sshd
+    
+    sleep 0.5
+    if pgrep -x "sshd" > /dev/null; then
+        echo "[startup] SSH server ready on port 22 (host port 2222)"
+    else
+        echo "[startup] WARNING: SSH server failed to start"
+        return 1
+    fi
+}
+
+
 run_step() {
   local name="$1"; shift
   local workdir="$1"; shift
@@ -19,6 +43,8 @@ run_step() {
   }
   echo "[startup] $name ok"
 }
+
+start_ssh
 
 if [ -d backend ]; then
   run_step uv_sync backend "uv sync"
