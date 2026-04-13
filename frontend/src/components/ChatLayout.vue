@@ -52,6 +52,12 @@
             :show-toolbar-by-default="message.id === lastAssistantMessageId"
             :cache-scope-id="activeSessionId ?? conversationId"
             :can-submit-interaction="canSubmitInteraction"
+            :can-open-trace="
+              message.role === 'assistant' &&
+              typeof message.traceId === 'string' &&
+              message.traceId.trim().length > 0 &&
+              !isMessageStreaming(message)
+            "
             :live-tool-status="
               message.id === activeGeneration?.assistantId
                 ? latestLiveToolStatus
@@ -71,6 +77,7 @@
             @download="downloadAssistantMessage(message.id)"
             @download-file="downloadMessageFile"
             @submit-interaction="submitMessageInteraction(message.id, $event)"
+            @open-trace="openMessageTrace(message.id)"
           />
         </div>
       </Transition>
@@ -108,6 +115,16 @@
         @remove-file="onRemoveFile"
       />
     </div>
+    <TraceReplayModal
+      :visible="isTraceModalVisible"
+      :trace-id="activeTraceId"
+      :loading="isTraceModalLoading"
+      :error-message="traceModalErrorMessage"
+      :payload="activeTracePayload"
+      @close="closeTraceModal"
+      @retry="retryTraceModalLoad"
+      @copy-trace-id="copyTraceId"
+    />
   </div>
 </template>
 
@@ -115,6 +132,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { downloadAttachment } from '../api/attachments';
 import { fallbackModels } from '../api/catalog';
+import { fetchAgentTraceReplay } from '../api/trace';
 import { useCatalogLoader } from '../composables/useCatalogLoader';
 import { useChatSessions } from '../composables/useChatSessions';
 import { useChatStreaming } from '../composables/useChatStreaming';
@@ -128,6 +146,7 @@ import type {
   ChatToolStatus,
 } from '../types/chat';
 import type { SkillOption } from '../types/skill';
+import type { TraceReplayPayload } from '../types/trace';
 import { createMessageId } from '../utils/ids';
 import {
   buildDisplayedMessages,
@@ -146,6 +165,7 @@ import { prewarmRenderedContentCache } from '../utils/render-markdown';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatSidebar from './ChatSidebar.vue';
+import TraceReplayModal from './TraceReplayModal.vue';
 
 const welcomeMessages: ChatMessageNode[] = [
   {
@@ -190,6 +210,11 @@ const { copyToastMessage, copyToastTitle, isCopyToastVisible, showCopyToast } =
   useCopyToast();
 
 const messageContainerRef = ref<HTMLElement | null>(null);
+const isTraceModalVisible = ref(false);
+const activeTraceId = ref('');
+const activeTracePayload = ref<TraceReplayPayload | null>(null);
+const isTraceModalLoading = ref(false);
+const traceModalErrorMessage = ref('');
 
 const resetEditingState = () => {
   editingMessageId.value = null;
@@ -374,6 +399,14 @@ const appendMessageToolStatus = (
   ];
 };
 
+const updateMessageTraceId = (messageId: string, traceId: string) => {
+  const targetMessage = findMessageById(messageId);
+  if (!targetMessage || targetMessage.role !== 'assistant') {
+    return;
+  }
+  targetMessage.traceId = traceId;
+};
+
 const updateMessageInteraction = (
   messageId: string,
   interaction: ChatMessageNode['interaction'],
@@ -464,6 +497,7 @@ const {
   appendMessageContent,
   appendMessageAttachment,
   appendMessageToolStatus,
+  updateMessageTraceId,
   updateMessageInteraction,
   updateMessageContent,
   findMessageById,
@@ -547,6 +581,101 @@ const latestLiveToolStatus = computed<ChatToolStatus | null>(() => {
   }
   return liveToolStatuses.value[liveToolStatuses.value.length - 1] ?? null;
 });
+
+const waitFor = (delayMs: number) => {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(() => {
+      resolve();
+    }, delayMs);
+  });
+};
+
+const loadTracePayloadWithRetry = async (
+  traceId: string,
+  options?: {
+    maxAttempts?: number;
+    delayMs?: number;
+  },
+) => {
+  const maxAttempts = Math.max(1, options?.maxAttempts ?? 5);
+  const delayMs = Math.max(50, options?.delayMs ?? 300);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchAgentTraceReplay(traceId);
+      return response.payload;
+    } catch (error) {
+      const status = (error as { response?: { status?: number } } | null)
+        ?.response?.status;
+      const isLastAttempt = attempt >= maxAttempts;
+      if (status !== 404 || isLastAttempt) {
+        throw error;
+      }
+      await waitFor(delayMs);
+    }
+  }
+
+  return null;
+};
+
+const openTraceModalByTraceId = async (traceId: string) => {
+  const normalizedTraceId = traceId.trim();
+  if (!normalizedTraceId) {
+    return;
+  }
+
+  activeTraceId.value = normalizedTraceId;
+  activeTracePayload.value = null;
+  traceModalErrorMessage.value = '';
+  isTraceModalLoading.value = true;
+  isTraceModalVisible.value = true;
+
+  try {
+    const payload = await loadTracePayloadWithRetry(normalizedTraceId);
+    activeTracePayload.value = payload;
+  } catch (error) {
+    traceModalErrorMessage.value =
+      error instanceof Error ? error.message : '加载链路回放失败，请稍后重试。';
+  } finally {
+    isTraceModalLoading.value = false;
+  }
+};
+
+const openMessageTrace = async (messageId: string) => {
+  const targetMessage = findMessageById(messageId);
+  const traceId = targetMessage?.traceId?.trim() ?? '';
+  if (!traceId) {
+    showCopyToast({
+      title: '暂无链路信息',
+      message: '这条回复还没有可查看的 trace_id。',
+    });
+    return;
+  }
+  await openTraceModalByTraceId(traceId);
+};
+
+const closeTraceModal = () => {
+  isTraceModalVisible.value = false;
+};
+
+const retryTraceModalLoad = async () => {
+  if (!activeTraceId.value.trim()) {
+    return;
+  }
+  await openTraceModalByTraceId(activeTraceId.value);
+};
+
+const copyTraceId = async () => {
+  const traceId = activeTraceId.value.trim();
+  if (!traceId) {
+    return;
+  }
+  await navigator.clipboard.writeText(traceId);
+  showCopyToast({
+    title: 'Trace ID 已复制',
+    message: traceId,
+  });
+};
 
 const {
   canConfirmEdit,

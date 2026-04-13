@@ -13,7 +13,12 @@ from .quality_gate import (
     compute_tool_metrics_from_traces,
     evaluate_quality_gate,
 )
-from .trace_store import AgentTraceRecorder, load_agent_trace, save_agent_trace
+from .trace_store import (
+    AgentTraceRecorder,
+    delete_agent_traces_for_conversation,
+    load_agent_trace,
+    save_agent_trace,
+)
 
 __all__ = [
     "AgentTraceRecorder",
@@ -25,6 +30,7 @@ __all__ = [
     "QualityGateThresholds",
     "QualityMetrics",
     "compute_tool_metrics_from_traces",
+    "delete_agent_traces_for_conversation",
     "execute_tool_graph",
     "evaluate_quality_gate",
     "is_feature_enabled_for_key",

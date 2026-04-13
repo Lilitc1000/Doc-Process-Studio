@@ -48,7 +48,8 @@ class Settings(BaseSettings):
     skill_memory_short_term_max_characters: int = 1_200
     skill_memory_episodic_max_characters: int = 1_800
     skill_memory_long_term_max_characters: int = 2_400
-    skill_context_search_limit: int = 4
+    skill_context_search_limit: int = 6
+    skill_context_search_limit_max: int = 16
     skill_retrieval_lexical_candidate_limit: int = 24
     skill_retrieval_semantic_candidate_limit: int = 24
     skill_retrieval_rerank_candidate_limit: int = 12

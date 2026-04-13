@@ -368,6 +368,7 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 - 每次对话生成 trace 审计数据（规划结果、轮次、工具状态、错误、首包时延）。
 - 新增回放接口：
   - `GET /api/system/agent-traces/{trace_id}?tenant_id=...`
+- trace 会按 `conversation_id` 建立索引；删除历史会话时会同步清理该会话关联的 trace 回放数据。
 - 可用于线上问题排查、回归比对和质量评估。
 
 ### 灰度发布
@@ -402,7 +403,6 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 ### 测试与评估体系
 - 单测覆盖：
   - 规划器规则与灰度门控
-  - 状态迁移兼容（旧快照字段可读）
   - 工具签名并发去重
   - 工具参数白名单与敏感策略
   - 请求限流/队列保护

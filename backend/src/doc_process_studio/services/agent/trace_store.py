@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
+import json
 from typing import Any
 
 from ...settings import settings
-from ..infra.redis_store import build_cache_key, get_json, set_json
+from ..infra.redis_store import build_cache_key, get_json, get_redis_client, set_json
 
 
 def _utcnow_iso() -> str:
@@ -13,20 +14,70 @@ def build_agent_trace_key(*, tenant_id: str, trace_id: str) -> str:
     return build_cache_key("agent-trace", tenant_id.strip() or "default", trace_id.strip())
 
 
+def build_agent_trace_conversation_index_key(*, conversation_id: str) -> str:
+    return build_cache_key("agent-trace", "conversation", conversation_id.strip())
+
+
+def _normalize_tenant_id(tenant_id: str) -> str:
+    return tenant_id.strip() or "default"
+
+
+def _encode_trace_index_member(*, tenant_id: str, trace_id: str) -> str:
+    return json.dumps([_normalize_tenant_id(tenant_id), trace_id.strip()], ensure_ascii=False)
+
+
+def _decode_trace_index_member(member: str) -> tuple[str, str] | None:
+    try:
+        payload = json.loads(member)
+    except json.JSONDecodeError:
+        payload = None
+
+    if isinstance(payload, list) and len(payload) == 2:
+        tenant_id = str(payload[0]).strip() or "default"
+        trace_id = str(payload[1]).strip()
+        if trace_id:
+            return tenant_id, trace_id
+    return None
+
+
 async def save_agent_trace(
     *,
     tenant_id: str,
     trace_id: str,
+    conversation_id: str,
     payload: dict[str, Any],
 ) -> None:
     if not settings.agent_trace_store_enabled:
         return
+    normalized_tenant_id = _normalize_tenant_id(tenant_id)
+    normalized_trace_id = trace_id.strip()
+    normalized_conversation_id = conversation_id.strip()
+    if not normalized_trace_id or not normalized_conversation_id:
+        return
+
     ttl_seconds = settings.agent_trace_ttl_seconds if settings.agent_trace_ttl_seconds > 0 else None
+    trace_key = build_agent_trace_key(
+        tenant_id=normalized_tenant_id,
+        trace_id=normalized_trace_id,
+    )
     await set_json(
-        build_agent_trace_key(tenant_id=tenant_id, trace_id=trace_id),
+        trace_key,
         payload,
         ttl_seconds=ttl_seconds,
     )
+    index_key = build_agent_trace_conversation_index_key(
+        conversation_id=normalized_conversation_id
+    )
+    redis_client = get_redis_client()
+    await redis_client.sadd(
+        index_key,
+        _encode_trace_index_member(
+            tenant_id=normalized_tenant_id,
+            trace_id=normalized_trace_id,
+        ),
+    )
+    if ttl_seconds is not None:
+        await redis_client.expire(index_key, ttl_seconds)
 
 
 async def load_agent_trace(
@@ -38,6 +89,38 @@ async def load_agent_trace(
     if isinstance(payload, dict):
         return payload
     return None
+
+
+async def delete_agent_traces_for_conversation(
+    *,
+    conversation_id: str,
+) -> int:
+    normalized_conversation_id = conversation_id.strip()
+    if not normalized_conversation_id:
+        return 0
+
+    redis_client = get_redis_client()
+    index_key = build_agent_trace_conversation_index_key(
+        conversation_id=normalized_conversation_id
+    )
+    indexed_members = await redis_client.smembers(index_key)
+    trace_keys_to_delete: set[str] = set()
+
+    for member in indexed_members:
+        decoded = _decode_trace_index_member(member)
+        if decoded is None:
+            continue
+        tenant_id, trace_id = decoded
+        trace_keys_to_delete.add(
+            build_agent_trace_key(tenant_id=tenant_id, trace_id=trace_id)
+        )
+
+    deleted_trace_count = 0
+    if trace_keys_to_delete:
+        deleted_trace_count = int(await redis_client.delete(*trace_keys_to_delete))
+
+    await redis_client.delete(index_key)
+    return deleted_trace_count
 
 
 class AgentTraceRecorder:
@@ -55,6 +138,7 @@ class AgentTraceRecorder:
     ) -> None:
         self.trace_id = trace_id
         self.tenant_id = tenant_id
+        self.conversation_id = conversation_id
         self.payload: dict[str, Any] = {
             "trace_id": trace_id,
             "tenant_id": tenant_id,
@@ -101,6 +185,6 @@ class AgentTraceRecorder:
         await save_agent_trace(
             tenant_id=self.tenant_id,
             trace_id=self.trace_id,
+            conversation_id=self.conversation_id,
             payload=self.payload,
         )
-

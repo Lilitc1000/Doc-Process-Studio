@@ -103,6 +103,8 @@ frontend/
   聊天流式请求封装（透传 `model` 与 `reranker_model`）。
 - [api/attachments.ts](/frontend/src/api/attachments.ts)
   附件下载接口封装（统一使用 `attachment` 语义）。
+- [api/trace.ts](/frontend/src/api/trace.ts)
+  链路回放查询接口封装（`/api/system/agent-traces/{trace_id}`）。
 
 ### 4. 类型层
 
@@ -110,6 +112,8 @@ frontend/
   消息节点、聊天请求、流式事件等类型。
 - [types/session.ts](/frontend/src/types/session.ts)
   历史会话与快照结构。
+- [types/trace.ts](/frontend/src/types/trace.ts)
+  链路回放数据结构。
 - [types/skill.ts](/frontend/src/types/skill.ts)
   skill 选项与 catalog 结构。
 
@@ -231,6 +235,12 @@ cacheScopeId + messageId + role + contentHash
 - 当前附件图标不是单一通用图标，而是优先按常见扩展名识别，再回退到 MIME 类型。
 - 例如 `md`、`vue`、`ts`、`js`、`py`、`json`、`yaml`、`pdf`、`docx` 会显示各自更具体的 badge。
 - 这套规则统一收敛在 `src/utils/file.ts`，后续如果要补新的文件类型，优先改这里，不要在组件里各自写判断。
+
+### 4. 链路回放入口
+
+- assistant 消息在收到后端 `trace` 事件后会绑定 `trace_id`，并在该条消息流式结束后显示“查看链路”按钮。
+- 点击后会打开回放弹窗，调用 `api/trace.ts` 拉取详情；后端刚写入时若短暂 404，前端会做短轮询重试。
+- 会话快照中统一持久化 `trace_id`，切换历史会话后仍可查看对应链路。
 
 ## Skill 选择输入约定
 

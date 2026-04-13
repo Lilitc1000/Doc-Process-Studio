@@ -201,6 +201,31 @@
           </svg>
         </button>
         <button
+          v-if="canOpenTrace"
+          class="message-tool-btn"
+          title="查看链路"
+          @click="$emit('open-trace')"
+        >
+          <svg viewBox="0 0 16 16" class="message-tool-icon" aria-hidden="true">
+            <path
+              d="M2.5 4.5H6L7.5 7.5H13.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.4"
+            />
+            <path
+              d="M2.5 11.5H6L7.5 8.5H13.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.4"
+            />
+          </svg>
+        </button>
+        <button
           class="message-tool-btn"
           :disabled="!canDownload"
           title="下载为 Markdown"
@@ -253,6 +278,7 @@ const props = defineProps<{
   canRegenerate?: boolean;
   canCopy?: boolean;
   canDownload?: boolean;
+  canOpenTrace?: boolean;
   canConfirmEdit?: boolean;
 }>();
 
@@ -265,6 +291,7 @@ const emit = defineEmits<{
   (e: 'confirm-edit'): void;
   (e: 'regenerate'): void;
   (e: 'copy'): void;
+  (e: 'open-trace'): void;
   (e: 'download'): void;
 }>();
 
@@ -279,6 +306,7 @@ const canEdit = computed(() => props.canEdit ?? false);
 const canRegenerate = computed(() => props.canRegenerate ?? false);
 const canCopy = computed(() => props.canCopy ?? false);
 const canDownload = computed(() => props.canDownload ?? false);
+const canOpenTrace = computed(() => props.canOpenTrace ?? false);
 const canConfirmEdit = computed(() => props.canConfirmEdit ?? false);
 
 const onEditFileSelect = (event: Event) => {

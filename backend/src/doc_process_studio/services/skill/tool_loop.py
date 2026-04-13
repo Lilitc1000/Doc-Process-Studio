@@ -63,6 +63,12 @@ DEFAULT_STRUCTURED_TEXT_TITLE = "文档内容"
 SCOPED_TOOL_SEPARATOR = "::"
 
 
+def _resolve_search_limit_bounds() -> tuple[int, int]:
+    default_limit = max(1, int(settings.skill_context_search_limit))
+    max_limit = max(default_limit, int(settings.skill_context_search_limit_max))
+    return default_limit, max_limit
+
+
 def compose_scoped_tool_name(skill_id: str, tool_name: str) -> str:
     return f"{skill_id}{SCOPED_TOOL_SEPARATOR}{tool_name}"
 
@@ -464,6 +470,7 @@ def build_tool_status_finish(
 def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
     """构造当前 skill 对模型暴露的全部工具。"""
     skill_interface = get_skill_interface(skill_id)
+    _, max_search_limit = _resolve_search_limit_bounds()
     builtin_tools: list[dict[str, Any]] = [
         {
             "type": "function",
@@ -519,7 +526,7 @@ def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
                         "limit": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 8,
+                            "maximum": max_search_limit,
                             "description": "最多返回多少条结果。",
                         },
                     },
@@ -592,6 +599,7 @@ def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
 
 def build_skill_tools_for_skills(skill_ids: list[str]) -> list[dict[str, Any]]:
     """构造多 skill 联合工具集：内置检索工具共享，声明式工具按 skill 名称空间隔离。"""
+    _, max_search_limit = _resolve_search_limit_bounds()
     normalized_skill_ids: list[str] = []
     for skill_id in skill_ids:
         normalized_skill_id = skill_id.strip()
@@ -668,7 +676,7 @@ def build_skill_tools_for_skills(skill_ids: list[str]) -> list[dict[str, Any]]:
                         "limit": {
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 8,
+                            "maximum": max_search_limit,
                             "description": "最多返回多少条结果。",
                         },
                     },
@@ -849,6 +857,46 @@ def _validate_tool_arguments_schema(
                 )
 
 
+def _normalize_builtin_tool_arguments(
+    *,
+    tool_name: str,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    """对内置工具参数做温和规整，避免模型轻微越界直接失败。"""
+    normalized_arguments = dict(arguments)
+    if tool_name != "search_skill_context":
+        return normalized_arguments
+
+    default_search_limit, max_search_limit = _resolve_search_limit_bounds()
+    raw_limit = normalized_arguments.get("limit")
+    if raw_limit is None:
+        return normalized_arguments
+
+    parsed_limit: int | None = None
+    if isinstance(raw_limit, int) and not isinstance(raw_limit, bool):
+        parsed_limit = raw_limit
+    elif isinstance(raw_limit, str):
+        stripped_limit = raw_limit.strip()
+        if stripped_limit:
+            try:
+                parsed_limit = int(stripped_limit)
+            except ValueError:
+                parsed_limit = None
+
+    if parsed_limit is None:
+        normalized_arguments.pop("limit", None)
+        return normalized_arguments
+
+    if parsed_limit < 1:
+        normalized_arguments["limit"] = default_search_limit
+    elif parsed_limit > max_search_limit:
+        normalized_arguments["limit"] = max_search_limit
+    else:
+        normalized_arguments["limit"] = parsed_limit
+
+    return normalized_arguments
+
+
 def _build_builtin_tool_parameters(tool_name: str) -> dict[str, Any] | None:
     if tool_name == "list_skill_directory":
         return {
@@ -864,12 +912,17 @@ def _build_builtin_tool_parameters(tool_name: str) -> dict[str, Any] | None:
             "additionalProperties": False,
         }
     if tool_name == "search_skill_context":
+        _, max_search_limit = _resolve_search_limit_bounds()
         return {
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
                 "source_path": {"type": "string"},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 8},
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": max_search_limit,
+                },
             },
             "required": ["query"],
             "additionalProperties": False,
@@ -1333,7 +1386,11 @@ def execute_skill_tool_call(
 ) -> tuple[dict[str, Any], list[ChatAttachment]]:
     """执行单个 tool call，并返回工具结果与产物列表。"""
     tool_name = _get_tool_name(tool_call)
-    arguments = _parse_tool_arguments(tool_call)
+    raw_arguments = _parse_tool_arguments(tool_call)
+    arguments = _normalize_builtin_tool_arguments(
+        tool_name=tool_name,
+        arguments=raw_arguments,
+    )
 
     try:
         builtin_parameters = _build_builtin_tool_parameters(tool_name)
@@ -1376,11 +1433,12 @@ def execute_skill_tool_call(
                 }, []
 
             source_path = str(arguments.get("source_path", "")).strip() or None
-            raw_limit = arguments.get("limit", settings.skill_context_search_limit)
+            default_search_limit, max_search_limit = _resolve_search_limit_bounds()
+            raw_limit = arguments.get("limit", default_search_limit)
             limit = (
                 raw_limit
-                if isinstance(raw_limit, int) and 1 <= raw_limit <= 8
-                else settings.skill_context_search_limit
+                if isinstance(raw_limit, int) and 1 <= raw_limit <= max_search_limit
+                else default_search_limit
             )
             chunks = search_skill_context_chunks(
                 request.skill_id,
@@ -1395,6 +1453,7 @@ def execute_skill_tool_call(
                 "skill_id": request.skill_id,
                 "query": query,
                 "source_path": source_path,
+                "limit": limit,
                 "chunks": [
                     {
                         "id": chunk.id,

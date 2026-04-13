@@ -10,6 +10,7 @@ from ...models.conversation.sessions import (
 )
 from ...models.conversation.stream import ChatMessageInput
 from ...settings import settings
+from ..agent.trace_store import delete_agent_traces_for_conversation
 from ..infra.ollama_client import extract_first_message_content, post_chat_completion
 from .attachments import delete_attachments_for_conversation
 from .session_store import (
@@ -167,4 +168,7 @@ async def update_chat_session_title(
 async def delete_chat_session(session_id: str) -> bool:
     deleted_session = await delete_chat_session_records(session_id)
     deleted_attachments = delete_attachments_for_conversation(session_id)
-    return bool(deleted_session or deleted_attachments > 0)
+    deleted_traces = await delete_agent_traces_for_conversation(
+        conversation_id=session_id
+    )
+    return bool(deleted_session or deleted_attachments > 0 or deleted_traces > 0)

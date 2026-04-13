@@ -9,6 +9,7 @@ export interface ChatSessionNodePayload {
   id: string;
   role: ChatMessageRole;
   content: string;
+  trace_id?: string | null;
   api_content?: string | null;
   request_skill_ids?: string[] | null;
   files?: ChatAttachment[];

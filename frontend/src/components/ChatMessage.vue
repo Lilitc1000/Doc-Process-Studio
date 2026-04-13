@@ -183,6 +183,7 @@
         :can-regenerate="canRegenerate"
         :can-copy="canCopy"
         :can-download="canDownload"
+        :can-open-trace="canOpenTrace"
         :can-confirm-edit="canConfirmEdit"
         @prev-version="$emit('prev-version')"
         @next-version="$emit('next-version')"
@@ -192,6 +193,7 @@
         @confirm-edit="$emit('confirm-edit')"
         @regenerate="$emit('regenerate')"
         @copy="$emit('copy')"
+        @open-trace="$emit('open-trace')"
         @download="$emit('download')"
       />
     </div>
@@ -234,6 +236,7 @@ const props = defineProps<{
   canRegenerate?: boolean;
   canCopy?: boolean;
   canDownload?: boolean;
+  canOpenTrace?: boolean;
   isVersionLocked?: boolean;
   isEditing?: boolean;
   editingText?: string;
@@ -257,6 +260,7 @@ const emit = defineEmits<{
   (e: 'confirm-edit'): void;
   (e: 'regenerate'): void;
   (e: 'copy'): void;
+  (e: 'open-trace'): void;
   (e: 'download'): void;
   (e: 'download-file', file: ChatAttachment): void;
   (e: 'submit-interaction', answer: ChatInteractionAnswer): void;
@@ -279,6 +283,7 @@ const canEdit = computed(() => props.canEdit ?? false);
 const canRegenerate = computed(() => props.canRegenerate ?? false);
 const canCopy = computed(() => props.canCopy ?? false);
 const canDownload = computed(() => props.canDownload ?? false);
+const canOpenTrace = computed(() => props.canOpenTrace ?? false);
 const isVersionLocked = computed(() => props.isVersionLocked ?? false);
 const canConfirmEdit = computed(() => props.canConfirmEdit ?? false);
 const canSubmitInteraction = computed(

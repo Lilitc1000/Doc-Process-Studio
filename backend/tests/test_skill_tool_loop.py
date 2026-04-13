@@ -207,3 +207,67 @@ def test_builtin_tool_without_required_field_does_not_raise() -> None:
     )
     assert tool_result["ok"] is True
     assert isinstance(tool_result.get("entries"), list)
+
+
+def test_search_skill_context_limit_overflow_is_clamped(monkeypatch) -> None:
+    request = ChatStreamRequest(
+        user_message_id="u1",
+        conversation_id="c1",
+        model="qwen3-coder-next:latest",
+        messages=[ChatMessageInput(role="user", content="检索技能上下文")],
+        attachment_ids=[],
+        skill_id="document-assistant",
+    )
+    state = SkillConversationState(
+        conversation_id="c1",
+        skill_id="document-assistant",
+        system_prompt="test",
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_search_skill_context_chunks(
+        skill_id: str,
+        query: str,
+        *,
+        exclude_chunk_ids: set[str],
+        limit: int | None = None,
+        source_path_contains: str | None = None,
+        reranker_model: str | None = None,
+    ) -> list[object]:
+        captured["skill_id"] = skill_id
+        captured["query"] = query
+        captured["limit"] = limit
+        captured["source_path_contains"] = source_path_contains
+        captured["reranker_model"] = reranker_model
+        return []
+
+    monkeypatch.setattr(
+        tool_loop_module,
+        "search_skill_context_chunks",
+        fake_search_skill_context_chunks,
+    )
+    monkeypatch.setattr(
+        tool_loop_module.settings,
+        "skill_context_search_limit_max",
+        16,
+    )
+
+    tool_call = {
+        "function": {
+            "name": "search_skill_context",
+            "arguments": json.dumps(
+                {"query": "交通行业经验", "limit": 20},
+                ensure_ascii=False,
+            ),
+        }
+    }
+    tool_result, _attachments = tool_loop_module.execute_skill_tool_call(
+        request=request,
+        state=state,
+        tool_call=tool_call,
+    )
+
+    assert tool_result["ok"] is True
+    assert tool_result["limit"] == 16
+    assert captured["limit"] == 16

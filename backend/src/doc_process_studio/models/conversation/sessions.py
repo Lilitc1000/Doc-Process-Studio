@@ -46,6 +46,10 @@ class ChatSessionMessageNode(BaseModel):
     id: str = Field(..., description="消息节点标识")
     role: str = Field(..., description="消息角色")
     content: str = Field(..., description="消息文本")
+    trace_id: str | None = Field(
+        default=None,
+        description="本条 assistant 消息的链路追踪标识",
+    )
     api_content: str | None = Field(default=None, description="发送给模型的内容")
     request_skill_ids: list[str] = Field(
         default_factory=list,

@@ -22,6 +22,7 @@ interface UseChatStreamingOptions {
     messageId: string,
     toolStatus: ChatToolStatus,
   ) => void;
+  updateMessageTraceId: (messageId: string, traceId: string) => void;
   updateMessageInteraction: (
     messageId: string,
     interaction: ChatInteractionCard | null,
@@ -143,6 +144,18 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
         options.appendMessageAttachment(
           requestSnapshot.userMessageId,
           payload.attachment,
+        );
+      }
+
+      if (
+        payload.type === 'trace' &&
+        payload.phase === 'start' &&
+        typeof payload.trace_id === 'string' &&
+        payload.trace_id.trim().length > 0
+      ) {
+        options.updateMessageTraceId(
+          assistantMessageId,
+          payload.trace_id.trim(),
         );
       }
 

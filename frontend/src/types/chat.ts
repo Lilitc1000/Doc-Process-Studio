@@ -57,6 +57,7 @@ export interface ChatMessageNode {
   id: string;
   role: ChatMessageRole;
   content: string;
+  traceId?: string;
   apiContent?: string;
   files?: ChatAttachment[];
   toolStatuses?: ChatToolStatus[];
@@ -73,6 +74,7 @@ export type ChatMessageDisplay = Pick<
   | 'id'
   | 'role'
   | 'content'
+  | 'traceId'
   | 'files'
   | 'requestSkillIds'
   | 'toolStatuses'
@@ -120,6 +122,7 @@ export interface ChatStreamEvent {
   message?: OllamaStreamMessage | string;
   done?: boolean;
   done_reason?: string;
+  trace_id?: string;
   type?: string;
   content?: string;
   phase?: string;
