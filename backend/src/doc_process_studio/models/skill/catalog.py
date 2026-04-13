@@ -56,6 +56,17 @@ class SkillToolStatusConfig(BaseModel):
     )
 
 
+class SkillToolSecurityConfig(BaseModel):
+    risk_level: str = Field(
+        default="low",
+        description="风险等级：low/medium/high。",
+    )
+    requires_confirmation: bool = Field(
+        default=False,
+        description="是否要求调用方先确认后再执行。",
+    )
+
+
 class SkillToolConfig(BaseModel):
     name: str = Field(..., description="工具名称")
     description: str = Field(..., description="工具说明")
@@ -66,6 +77,10 @@ class SkillToolConfig(BaseModel):
     status: SkillToolStatusConfig | None = Field(
         default=None,
         description="工具状态文案配置",
+    )
+    security: SkillToolSecurityConfig | None = Field(
+        default=None,
+        description="工具安全策略配置",
     )
 
 

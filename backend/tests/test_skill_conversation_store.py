@@ -69,3 +69,18 @@ def test_save_conversation_state_serializes_datetime_fields(monkeypatch) -> None
     assert isinstance(tool_history, list) and tool_history
     assert isinstance(tool_history[0].get("created_at"), str)
 
+
+def test_skill_conversation_state_model_can_read_old_snapshot_payload() -> None:
+    legacy_payload = {
+        "conversation_id": "conv-legacy",
+        "skill_id": "document-assistant",
+        "system_prompt": "legacy",
+        "loaded_chunk_ids": ["chunk-1"],
+        "compact_summary": "旧版本摘要字段",
+        "compacted_chunk_ids": ["chunk-1"],
+    }
+    parsed = SkillConversationState.model_validate(legacy_payload)
+    assert parsed.short_term_memory == ""
+    assert parsed.episodic_memory == ""
+    assert parsed.skill_memory == ""
+    assert parsed.compacted_chunk_ids == ["chunk-1"]

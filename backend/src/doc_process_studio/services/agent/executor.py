@@ -396,6 +396,11 @@ async def execute_tool_graph(
         for skill_id, state in execution_input.states_by_skill.items()
     }
     result = ExecutionResult(executed_tool_calls=execution_input.executed_tool_calls)
+    inflight_tool_calls: dict[
+        str,
+        asyncio.Task[tuple[dict[str, Any], list[Any], dict[str, Any], bool, str | None]],
+    ] = {}
+    inflight_lock = asyncio.Lock()
     nodes = _build_task_graph(
         tool_calls=execution_input.normalized_tool_calls,
         default_skill_id=execution_input.primary_skill_id,
@@ -437,10 +442,17 @@ async def execute_tool_graph(
                     "error": "当前 skill 未配置交互向导。",
                 }
             else:
-                existing_state = await deps.load_interaction_state(
-                    execution_input.request.conversation_id,
-                    execution_input.primary_skill_id,
-                )
+                try:
+                    existing_state = await deps.load_interaction_state(
+                        execution_input.request.conversation_id,
+                        execution_input.primary_skill_id,
+                        tenant_id=execution_input.request.tenant_id,
+                    )
+                except TypeError:
+                    existing_state = await deps.load_interaction_state(
+                        execution_input.request.conversation_id,
+                        execution_input.primary_skill_id,
+                    )
                 _, interaction_step = await deps.start_or_resume_interaction(
                     request=execution_input.primary_request,
                     config=execution_input.interaction_config,
@@ -474,31 +486,74 @@ async def execute_tool_graph(
             tool_result = deepcopy(cached_execution["tool_result"])
             tool_result["reused"] = True
             return node, tool_result, [], tool_call, False, None
+        existing_task = None
+        task_owned_by_current_node = False
+        async with inflight_lock:
+            existing_task = inflight_tool_calls.get(tool_call_signature)
+            if existing_task is None:
+                task_owned_by_current_node = True
 
-        async with semaphore:
-            before_loaded_chunk_ids = _collect_loaded_chunk_signatures(
-                execution_input.states_by_skill
-            )
-            tool_result, attachments, resolved_tool_call, fallback_note = await _run_tool_with_retry(
-                node=node,
-                execution_input=execution_input,
-                deps=deps,
-            )
-            after_loaded_chunk_ids = _collect_loaded_chunk_signatures(
-                execution_input.states_by_skill
+                async def _execute_once():
+                    async with semaphore:
+                        before_loaded_chunk_ids = _collect_loaded_chunk_signatures(
+                            execution_input.states_by_skill
+                        )
+                        (
+                            local_tool_result,
+                            local_attachments,
+                            local_resolved_tool_call,
+                            local_fallback_note,
+                        ) = await _run_tool_with_retry(
+                            node=node,
+                            execution_input=execution_input,
+                            deps=deps,
+                        )
+                        after_loaded_chunk_ids = _collect_loaded_chunk_signatures(
+                            execution_input.states_by_skill
+                        )
+
+                    local_made_progress = deps.detect_tool_call_progress(
+                        tool_name=node.tool_name,
+                        before_loaded_chunk_ids=before_loaded_chunk_ids,
+                        after_loaded_chunk_ids=after_loaded_chunk_ids,
+                        tool_result=local_tool_result,
+                        next_attachments=local_attachments,
+                    )
+                    return (
+                        local_tool_result,
+                        local_attachments,
+                        local_resolved_tool_call,
+                        local_made_progress,
+                        local_fallback_note,
+                    )
+
+                existing_task = asyncio.create_task(_execute_once())
+                inflight_tool_calls[tool_call_signature] = existing_task
+
+        assert existing_task is not None
+        try:
+            tool_result, attachments, resolved_tool_call, made_progress, fallback_note = await existing_task
+        finally:
+            if task_owned_by_current_node:
+                async with inflight_lock:
+                    inflight_tool_calls.pop(tool_call_signature, None)
+
+        if task_owned_by_current_node:
+            result.executed_tool_calls[tool_call_signature] = {
+                "tool_result": deepcopy(tool_result),
+            }
+            return (
+                node,
+                tool_result,
+                attachments,
+                resolved_tool_call,
+                made_progress,
+                fallback_note,
             )
 
-        made_progress = deps.detect_tool_call_progress(
-            tool_name=node.tool_name,
-            before_loaded_chunk_ids=before_loaded_chunk_ids,
-            after_loaded_chunk_ids=after_loaded_chunk_ids,
-            tool_result=tool_result,
-            next_attachments=attachments,
-        )
-        result.executed_tool_calls[tool_call_signature] = {
-            "tool_result": deepcopy(tool_result),
-        }
-        return node, tool_result, attachments, resolved_tool_call, made_progress, fallback_note
+        reused_tool_result = deepcopy(tool_result)
+        reused_tool_result["reused"] = True
+        return node, reused_tool_result, [], resolved_tool_call, False, None
 
     while pending_by_index:
         elapsed = time.monotonic() - budget.started_monotonic

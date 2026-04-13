@@ -57,6 +57,23 @@ class Settings(BaseSettings):
     skill_retrieval_embedding_model: str = "nomic-embed-text"
     skill_retrieval_embedding_cache_ttl_seconds: int = 60 * 60 * 12
     skill_retrieval_embedding_batch_size: int = 16
+    skill_tool_script_timeout_seconds: int = 120
+    skill_tool_script_cpu_seconds: int = 60
+    skill_tool_script_memory_limit_mb: int = 1_024
+    skill_tool_script_output_limit_mb: int = 64
+    skill_sensitive_operation_policy: str = "allow"
+    request_timeout_seconds: float = 180.0
+    request_queue_wait_timeout_seconds: float = 2.5
+    request_rate_limit_window_seconds: int = 60
+    request_rate_limit_max_requests_per_window: int = 120
+    request_max_concurrent_global: int = 64
+    request_max_concurrent_per_tenant: int = 16
+    feature_planner_enabled: bool = True
+    feature_planner_rollout_ratio: float = 1.0
+    feature_executor_enabled: bool = True
+    feature_executor_rollout_ratio: float = 1.0
+    agent_trace_ttl_seconds: int = 60 * 60 * 24 * 30
+    agent_trace_store_enabled: bool = True
     skill_tool_max_iterations: int = 12
     skill_planner_top_k_candidates: int = 4
     skill_planner_max_implicit_skills: int = 2
@@ -81,6 +98,19 @@ class Settings(BaseSettings):
     @classmethod
     def validate_redis_url(cls, value: str | None) -> str | None:
         return normalize_redis_url(value)
+
+    @field_validator("feature_planner_rollout_ratio", "feature_executor_rollout_ratio")
+    @classmethod
+    def validate_rollout_ratio(cls, value: float) -> float:
+        return max(0.0, min(1.0, float(value)))
+
+    @field_validator("skill_sensitive_operation_policy")
+    @classmethod
+    def validate_sensitive_operation_policy(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"allow", "confirm", "deny_high"}:
+            return "allow"
+        return normalized
 
 
 settings = Settings(

@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -9,6 +10,11 @@ try:
     import yaml
 except ModuleNotFoundError:  # pragma: no cover
     yaml = None
+
+try:
+    import resource
+except ModuleNotFoundError:  # pragma: no cover
+    resource = None
 
 from ...models.conversation.attachments import ChatAttachment
 from ...models.conversation.stream import ChatStreamRequest
@@ -748,6 +754,187 @@ def _get_tool_name(tool_call: dict[str, Any]) -> str:
     return ""
 
 
+def _validate_simple_type(value: Any, expected_type: str) -> bool:
+    if expected_type == "string":
+        return isinstance(value, str)
+    if expected_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected_type == "boolean":
+        return isinstance(value, bool)
+    if expected_type == "array":
+        return isinstance(value, list)
+    if expected_type == "object":
+        return isinstance(value, dict)
+    return True
+
+
+def _validate_tool_arguments_schema(
+    *,
+    tool_name: str,
+    arguments: dict[str, Any],
+    parameters: dict[str, Any],
+) -> None:
+    schema_type = str(parameters.get("type", "object")).strip()
+    if schema_type and schema_type != "object":
+        raise ValueError(f"工具 `{tool_name}` 参数 schema.type 仅支持 object。")
+
+    properties = parameters.get("properties")
+    if not isinstance(properties, dict):
+        properties = {}
+
+    raw_required = parameters.get("required")
+    required_keys: list[str] = []
+    if isinstance(raw_required, list):
+        required_keys = [
+            str(key).strip()
+            for key in raw_required
+            if isinstance(key, str) and str(key).strip()
+        ]
+    for required_key in required_keys:
+        if required_key not in arguments:
+            raise ValueError(f"工具 `{tool_name}` 缺少必填参数：{required_key}")
+
+    additional_properties = parameters.get("additionalProperties", True)
+    if additional_properties is False:
+        unknown_keys = [key for key in arguments.keys() if key not in properties]
+        if unknown_keys:
+            raise ValueError(
+                f"工具 `{tool_name}` 参数包含未声明字段：{', '.join(sorted(unknown_keys))}"
+            )
+
+    for key, value in arguments.items():
+        prop_schema = properties.get(key)
+        if not isinstance(prop_schema, dict):
+            continue
+
+        expected_type = prop_schema.get("type")
+        if isinstance(expected_type, str):
+            if not _validate_simple_type(value, expected_type):
+                raise ValueError(
+                    f"工具 `{tool_name}` 参数 `{key}` 类型错误，期望 {expected_type}。"
+                )
+
+            if expected_type == "array" and isinstance(value, list):
+                item_schema = prop_schema.get("items")
+                if isinstance(item_schema, dict):
+                    item_type = item_schema.get("type")
+                    if isinstance(item_type, str):
+                        for index, item in enumerate(value):
+                            if not _validate_simple_type(item, item_type):
+                                raise ValueError(
+                                    f"工具 `{tool_name}` 参数 `{key}[{index}]` 类型错误，期望 {item_type}。"
+                                )
+
+        enum_values = prop_schema.get("enum")
+        if isinstance(enum_values, list) and enum_values:
+            if value not in enum_values:
+                raise ValueError(
+                    f"工具 `{tool_name}` 参数 `{key}` 不在允许枚举值中。"
+                )
+
+        minimum = prop_schema.get("minimum")
+        if isinstance(minimum, (int, float)) and isinstance(value, (int, float)):
+            if value < minimum:
+                raise ValueError(
+                    f"工具 `{tool_name}` 参数 `{key}` 小于最小值 {minimum}。"
+                )
+
+        maximum = prop_schema.get("maximum")
+        if isinstance(maximum, (int, float)) and isinstance(value, (int, float)):
+            if value > maximum:
+                raise ValueError(
+                    f"工具 `{tool_name}` 参数 `{key}` 超过最大值 {maximum}。"
+                )
+
+
+def _build_builtin_tool_parameters(tool_name: str) -> dict[str, Any] | None:
+    if tool_name == "list_skill_directory":
+        return {
+            "type": "object",
+            "properties": {"relative_path": {"type": "string"}},
+            "additionalProperties": False,
+        }
+    if tool_name == "read_skill_file":
+        return {
+            "type": "object",
+            "properties": {"relative_path": {"type": "string"}},
+            "required": ["relative_path"],
+            "additionalProperties": False,
+        }
+    if tool_name == "search_skill_context":
+        return {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "source_path": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 8},
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        }
+    if tool_name == "read_skill_context":
+        return {
+            "type": "object",
+            "properties": {
+                "chunk_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                }
+            },
+            "required": ["chunk_ids"],
+            "additionalProperties": False,
+        }
+    if tool_name == "start_skill_interaction":
+        return {
+            "type": "object",
+            "properties": {"reason": {"type": "string"}},
+            "additionalProperties": False,
+        }
+    return None
+
+
+def _enforce_declared_tool_security_policy(
+    *,
+    request: ChatStreamRequest,
+    tool: SkillToolConfig,
+) -> None:
+    security = tool.security
+    if security is None:
+        return
+
+    risk_level = str(security.risk_level).strip().lower() or "low"
+    policy = settings.skill_sensitive_operation_policy
+
+    if policy == "confirm" and security.requires_confirmation and not request.confirm_sensitive_actions:
+        raise ValueError(
+            f"工具 `{tool.name}` 被标记为需要确认，当前请求未授权执行敏感操作。"
+        )
+
+    if policy == "deny_high" and risk_level == "high":
+        raise ValueError(
+            f"工具 `{tool.name}` 风险等级为 high，当前策略禁止执行。"
+        )
+
+
+def _build_subprocess_preexec(*, skill_root: Path):
+    if resource is None:
+        return None
+
+    cpu_seconds = max(1, settings.skill_tool_script_cpu_seconds)
+    memory_bytes = max(64, settings.skill_tool_script_memory_limit_mb) * 1024 * 1024
+    output_bytes = max(8, settings.skill_tool_script_output_limit_mb) * 1024 * 1024
+
+    def _preexec() -> None:
+        os.chdir(skill_root)
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
+        resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
+        resource.setrlimit(resource.RLIMIT_FSIZE, (output_bytes, output_bytes))
+
+    return _preexec
+
+
 def _resolve_tool_scope(
     *,
     default_skill_id: str,
@@ -1071,12 +1258,31 @@ def _execute_declared_script_tool(
             arguments=arguments,
             temp_dir_path=temp_dir_path,
         )
+        skill_root = _get_skill_root(request.skill_id)
 
-        completed = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                cwd=str(skill_root),
+                timeout=max(1, settings.skill_tool_script_timeout_seconds),
+                preexec_fn=_build_subprocess_preexec(skill_root=skill_root),
+                env={
+                    "PATH": os.environ.get("PATH", ""),
+                    "PYTHONIOENCODING": "utf-8",
+                    "PYTHONUNBUFFERED": "1",
+                    "TMPDIR": str(temp_dir_path),
+                },
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "ok": False,
+                "error": (
+                    "脚本执行超时，已中止。"
+                    f" 超时阈值：{max(1, settings.skill_tool_script_timeout_seconds)} 秒。"
+                ),
+            }, []
 
         if completed.returncode != 0:
             stderr = completed.stderr.strip()
@@ -1130,6 +1336,14 @@ def execute_skill_tool_call(
     arguments = _parse_tool_arguments(tool_call)
 
     try:
+        builtin_parameters = _build_builtin_tool_parameters(tool_name)
+        if builtin_parameters is not None:
+            _validate_tool_arguments_schema(
+                tool_name=tool_name,
+                arguments=arguments,
+                parameters=builtin_parameters,
+            )
+
         if tool_name == "list_skill_directory":
             relative_path = str(arguments.get("relative_path", "")).strip()
             return {
@@ -1244,6 +1458,15 @@ def execute_skill_tool_call(
                 "error": f"未知工具：{tool_name or '<empty>'}",
             }, []
 
+        _validate_tool_arguments_schema(
+            tool_name=tool_name,
+            arguments=arguments,
+            parameters=declared_tool.parameters,
+        )
+        _enforce_declared_tool_security_policy(
+            request=request,
+            tool=declared_tool,
+        )
         return _execute_declared_script_tool(
             request=request,
             tool=declared_tool,

@@ -20,10 +20,15 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
         assert state.skill_id in {"project-architecture-docx", "document-assistant"}
         return None
 
-    async def fake_load_conversation_state(_conversation_id: str):
+    async def fake_load_conversation_state(
+        _conversation_id: str,
+        tenant_id: str = "default",
+    ):
+        assert tenant_id == "default"
         return None
 
-    async def fake_save_conversation_state(_state):
+    async def fake_save_conversation_state(_state, tenant_id: str = "default"):
+        assert tenant_id == "default"
         return None
 
     call_counter = {"value": 0}

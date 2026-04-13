@@ -170,3 +170,39 @@ def test_execute_tool_graph_retries_search_without_source_path() -> None:
     assert "source_path" not in observed_arguments[1]
     assert result.round_made_progress is True
 
+
+def test_execute_tool_graph_deduplicates_same_signature_tool_calls() -> None:
+    budget = ExecutionBudget(
+        max_tool_calls=10,
+        max_time_seconds=20,
+        max_prompt_tokens=500,
+        prompt_tokens_estimate=40,
+    )
+    duplicated_tool_call = {
+        "function": {
+            "name": "read_skill_file",
+            "arguments": {"relative_path": "SKILL.md"},
+        }
+    }
+    execution_input = _build_execution_input(
+        normalized_tool_calls=[duplicated_tool_call, duplicated_tool_call],
+        budget=budget,
+    )
+
+    invoked_counter = {"value": 0}
+
+    def fake_execute_skill_tool_call(**_kwargs):
+        invoked_counter["value"] += 1
+        return {"ok": True, "content": "loaded"}, []
+
+    import asyncio
+
+    result = asyncio.run(
+        execute_tool_graph(
+            execution_input=execution_input,
+            deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
+        )
+    )
+
+    assert invoked_counter["value"] == 1
+    assert result.state_diff.reused_tool_calls >= 1

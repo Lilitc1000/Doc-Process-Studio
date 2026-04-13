@@ -44,8 +44,10 @@ def test_api_skill_cache_status_reports_redis_ping(monkeypatch) -> None:
 def test_api_skill_cache_refresh_reports_ttl(monkeypatch) -> None:
     async def fake_refresh_conversation_state_ttl(
         conversation_id: str,
+        tenant_id: str = "default",
     ) -> tuple[bool, int]:
         assert conversation_id == "conversation-1"
+        assert tenant_id == "default"
         return True, 3600
 
     monkeypatch.setattr(
@@ -67,14 +69,20 @@ def test_api_skill_cache_refresh_reports_ttl(monkeypatch) -> None:
 
 
 def test_api_skill_cache_delete_clears_state(monkeypatch) -> None:
-    async def fake_clear_conversation_state(conversation_id: str) -> bool:
+    async def fake_clear_conversation_state(
+        conversation_id: str,
+        tenant_id: str = "default",
+    ) -> bool:
         assert conversation_id == "conversation-1"
+        assert tenant_id == "default"
         return True
 
     async def fake_get_conversation_state_ttl_seconds(
         conversation_id: str,
+        tenant_id: str = "default",
     ) -> int:
         assert conversation_id == "conversation-1"
+        assert tenant_id == "default"
         return -2
 
     monkeypatch.setattr(

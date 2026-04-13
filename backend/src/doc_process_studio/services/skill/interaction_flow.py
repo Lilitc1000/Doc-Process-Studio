@@ -128,7 +128,11 @@ async def start_or_resume_interaction(
     request: ChatStreamRequest,
     config: SkillInteractionConfig,
 ) -> tuple[SkillInteractionState, dict[str, Any]]:
-    state = await load_interaction_state(request.conversation_id, request.skill_id)
+    state = await load_interaction_state(
+        request.conversation_id,
+        request.skill_id,
+        tenant_id=request.tenant_id,
+    )
     if (
         state is None
         or state.current_step_index >= len(config.steps)
@@ -141,7 +145,7 @@ async def start_or_resume_interaction(
             collected=deepcopy(config.defaults),
         )
     state.updated_at = _utcnow()
-    await save_interaction_state(state)
+    await save_interaction_state(state, tenant_id=request.tenant_id)
     return state, _build_step_payload(config=config, state=state)
 
 
@@ -151,7 +155,11 @@ async def submit_interaction_answer(
     config: SkillInteractionConfig,
     answer: ChatInteractionAnswer,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    state = await load_interaction_state(request.conversation_id, request.skill_id)
+    state = await load_interaction_state(
+        request.conversation_id,
+        request.skill_id,
+        tenant_id=request.tenant_id,
+    )
     if state is None:
         raise ValueError("当前会话还未开始交互采集，请先发起交互。")
 
@@ -159,7 +167,11 @@ async def submit_interaction_answer(
         raise ValueError("交互会话已变化，请刷新当前步骤后重试。")
 
     if state.current_step_index >= len(config.steps):
-        await clear_interaction_state(request.conversation_id, request.skill_id)
+        await clear_interaction_state(
+            request.conversation_id,
+            request.skill_id,
+            tenant_id=request.tenant_id,
+        )
         raise ValueError("当前交互已经完成，请重新发起。")
 
     current_step = config.steps[state.current_step_index]
@@ -174,12 +186,16 @@ async def submit_interaction_answer(
     state.updated_at = _utcnow()
 
     if state.current_step_index < len(config.steps):
-        await save_interaction_state(state)
+        await save_interaction_state(state, tenant_id=request.tenant_id)
         return _build_step_payload(config=config, state=state), None
 
     completed_payload = _deep_merge(config.defaults, state.collected)
     if answer.use_defaults_for_missing:
         completed_payload["allow_incomplete"] = True
 
-    await clear_interaction_state(request.conversation_id, request.skill_id)
+    await clear_interaction_state(
+        request.conversation_id,
+        request.skill_id,
+        tenant_id=request.tenant_id,
+    )
     return None, completed_payload

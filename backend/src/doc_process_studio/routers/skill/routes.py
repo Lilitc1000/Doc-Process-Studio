@@ -80,8 +80,12 @@ async def get_skill_cache_status() -> SkillCacheStatusResponse:
 )
 async def refresh_skill_conversation_cache(
     conversation_id: str,
+    tenant_id: str = Query(default="default"),
 ) -> SkillConversationCacheResponse:
-    refreshed, ttl_seconds = await refresh_conversation_state_ttl(conversation_id)
+    refreshed, ttl_seconds = await refresh_conversation_state_ttl(
+        conversation_id,
+        tenant_id=tenant_id,
+    )
     return SkillConversationCacheResponse(
         conversation_id=conversation_id,
         exists=refreshed,
@@ -100,9 +104,13 @@ async def refresh_skill_conversation_cache(
 )
 async def delete_skill_conversation_cache(
     conversation_id: str,
+    tenant_id: str = Query(default="default"),
 ) -> SkillConversationCacheResponse:
-    cleared = await clear_conversation_state(conversation_id)
-    ttl_seconds = await get_conversation_state_ttl_seconds(conversation_id)
+    cleared = await clear_conversation_state(conversation_id, tenant_id=tenant_id)
+    ttl_seconds = await get_conversation_state_ttl_seconds(
+        conversation_id,
+        tenant_id=tenant_id,
+    )
     return SkillConversationCacheResponse(
         conversation_id=conversation_id,
         exists=not cleared and ttl_seconds >= 0,

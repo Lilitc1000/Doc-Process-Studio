@@ -321,116 +321,99 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 `发起请求 -> 收到步骤 -> 提交全部步骤 -> 返回附件 -> 验证附件可下载`。
 
 ## Tool Calling 与 Skill 上下文
-当前主链路已升级为“分层规划 + 会话级 Agent 状态 + 执行器调度（Executor）”。
+当前主链路已升级为“分层规划 + 会话级 Agent 状态 + 执行器调度 + 生产级可靠性防护（阶段4）”。
 
 ### 主链路流程
-一次 `/api/chat/stream` 请求会走以下固定流程：
+1. 入口接收 `/api/chat/stream` 请求，生成/复用 `trace_id`，并做请求防护：
+   - 租户级速率限制
+   - 全局并发 + 租户并发队列控制
+   - 请求级超时保护
+2. 按 feature flag 决定是否启用规划器灰度：
+   - 开启：走 `services/skill/planner.py`
+   - 关闭：回退到“显式 skill + system skill”直连策略
+3. 加载会话级 Agent 状态（Redis，按 `tenant_id + conversation_id` 隔离）：
+   - `skills_state`
+   - `planner_trace`
+   - `tool_history`
+4. 检索与上下文组装：
+   - BM25 + embedding 混合召回
+   - 候选融合后用 `reranker_model` 做 chunk 重排
+   - 层级记忆（`skill_memory / episodic_memory / short_term_memory`）+ 正文片段打包
+5. 流式调用 Ollama `/api/chat`，若有工具调用则进入执行器：
+   - 执行器灰度开关（feature flag）
+   - DAG 调度、并行读、重试补救、预算收束
+6. 结束后落盘 trace 审计记录，可按 `trace_id` 回放。
 
-1. 解析显式 skill（`selected_skill_ids` + 消息中的 `$skill-id`）。
-2. 执行分层规划（`services/skill/planner.py`）并产出 `SkillPlanDecision`。
-3. 读取/初始化会话级 Agent 状态（Redis）：
-   - `skills_state`：按 skill 维护上下文状态
-   - `planner_trace`：规划轨迹
-   - `tool_history`：工具执行轨迹
-4. 对每个激活 skill 进行上下文同步与预算打包：
-   - 先注入层级记忆（`skill_memory / episodic_memory / short_term_memory`）
-   - 再按预算注入未压缩正文 chunk
-5. 构建上游消息并调用 Ollama `/api/chat`（stream=true）。
-6. 收到 `tool_calls` 后交给 `services/agent/executor.py` 调度执行。
+### 安全策略
+- 参数白名单：
+  - 内置工具和声明式工具都在后端按 JSON Schema 校验参数，拒绝未声明字段和类型不匹配。
+- 路径沙箱：
+  - 仅允许访问 skill 根目录内路径，禁止越界读取。
+- 脚本资源限制：
+  - 运行目录固定在 skill 根目录。
+  - 子进程限制 CPU 时间、内存、输出文件大小，并配置执行超时。
+- 敏感操作策略：
+  - 工具可声明 `security.requires_confirmation` / `risk_level`。
+  - 后端按 `skill_sensitive_operation_policy` 执行 `allow / confirm / deny_high`。
 
-### 混合召回 + 语义重排（阶段3检索）
-`search_skill_context_chunks` 已升级为“词法 + 语义 + 重排”的三段式：
+### SLA 与隔离
+- 请求级超时：`request_timeout_seconds`
+- 队列等待超时：`request_queue_wait_timeout_seconds`
+- 全局并发限制：`request_max_concurrent_global`
+- 租户并发限制：`request_max_concurrent_per_tenant`
+- 租户速率限制：`request_rate_limit_*`
+- 会话缓存键按租户隔离：`conversation:{tenant_id}:{conversation_id}`
 
-1. 词法召回：BM25（基于 chunk 级 token/tf/df）。
-2. 语义召回：embedding 相似度（默认 embedding 模型 `skill_retrieval_embedding_model`）。
-3. 候选合并：对词法和语义候选做 rank reciprocal 融合。
-4. chunk 级重排：用 `reranker_model`（为空时回退聊天模型）输出 relevance，再做最终排序。
+### 回放与审计
+- 每次对话生成 trace 审计数据（规划结果、轮次、工具状态、错误、首包时延）。
+- 新增回放接口：
+  - `GET /api/system/agent-traces/{trace_id}?tenant_id=...`
+- 可用于线上问题排查、回归比对和质量评估。
 
-缓存与失效：
-- chunk embedding 缓存：按 `skill_id + embedding_model + chunk_fingerprint` 缓存，带 TTL。
-- query embedding 缓存：按 `embedding_model + query` 缓存，带 TTL。
-- 当 skill chunk 内容变化导致 fingerprint 变化时，旧 chunk embedding 会自然失效。
+### 灰度发布
+- 规划器灰度：
+  - `feature_planner_enabled`
+  - `feature_planner_rollout_ratio`
+- 执行器灰度：
+  - `feature_executor_enabled`
+  - `feature_executor_rollout_ratio`
+- 使用稳定哈希分桶，按 `tenant_id:conversation_id` 做一致性命中。
 
-### 层级记忆
-
-- `short_term_memory`：当前任务近期压缩摘要（短期）。
-- `episodic_memory`：跨轮过程记忆（中期）。
-- `skill_memory`：稳定规则/背景摘要（长期）。
-
-压缩触发策略：
-- 常规轮次：仅在正文 chunk 注入接近上限时压缩。
-- 超预算轮次：先触发一轮 `force_compact`（更激进压缩），再重算 token。
-- 压缩后仍超预算：执行器收束，关闭后续工具调用，要求模型基于已读信息直接完成回答。
-
-### 执行器（Executor）职责
-执行器接口：
-- 输入：`ExecutionInput`（含 `SkillPlanDecision`、当前会话状态、工具调用批次、预算）
-- 输出：`ExecutionResult` + `ExecutionStateDiff`
-
-执行器能力：
-- 轻量 DAG 调度：
-  - 节点类型：`read / search / load / declare_tool / interaction`
-  - 依赖约束：优先完成检索/读取，再执行载入与声明式生成工具
-- 并行执行：
-  - `read/search` 节点可并发执行（受 `agent_executor_max_parallel_reads` 限制）
-- 预算控制：
-  - token 预算（按模型 context_length 推导）
-  - tool 调用预算
-  - 时间预算
-  - 超预算自动收束并停止后续工具调用
-- 重试与补救：
-  - 指数退避重试（`agent_executor_tool_retry_*`）
-  - 失败后回退次优路径（例如 `search_skill_context` 自动移除 `source_path` 后重试）
-
-### 模型上下文预算（按模型动态）
-为避免每轮请求都探测模型上下文，后端使用两段式策略：
-
-1. 启动预热：
-   - `main.py` 启动时调用 `warmup_model_context_cache()`
-   - 基于 `/api/tags` + `/api/show` 预热模型 `context_length` 缓存
-2. 对话期读取：
-   - 每轮仅从缓存读取 context_length（`get_model_context_length`）
-   - 用 `agent_executor_prompt_budget_ratio` 计算本轮 prompt token 预算
-   - 超预算则进入“收束模式”（关闭工具调用，要求模型基于已有信息直接完成回答）
+### 声明式参数规整约定
+- `tools.json` 中 `serializer=json_file` 的参数会先规整再传给脚本。
+- 支持模型传入：
+  - JSON 对象
+  - JSON 数组
+  - JSON / YAML 字符串
+- 若配置了 `text_normalizer`，会继续把 Markdown/纯文本草稿规整为结构化对象。
+- 当前内置 `text_normalizer`：
+  - `chaptered_document`（输出章节树结构）
 
 ### 关键实现位置
 - 规划：`services/skill/planner.py`
 - 检索：`services/skill/context.py`
 - 层级记忆：`services/skill/context_packer.py`
 - 执行器：`services/agent/executor.py`
-- 模型上下文缓存：`services/infra/model_context.py`
+- 质量门控：`services/agent/quality_gate.py`
+- 请求防护：`services/infra/request_guard.py`
+- 审计追踪：`services/agent/trace_store.py`
 - 流式编排：`services/chat/stream.py`
 
-### 常用配置（`settings.py`）
-- 规划：`skill_planner_*`
-- 检索：`skill_retrieval_*`
-- 层级记忆：`skill_memory_short_term_max_characters`、`skill_memory_episodic_max_characters`、`skill_memory_long_term_max_characters`
-- 执行器：`agent_executor_max_parallel_reads`、`agent_executor_max_tool_calls`、`agent_executor_time_budget_seconds`
-- 重试：`agent_executor_tool_retry_max_attempts`、`agent_executor_tool_retry_base_delay_seconds`
-- token 预算：`agent_executor_prompt_budget_ratio`、`agent_executor_default_context_length`
-- context 缓存：`agent_executor_model_context_cache_ttl_seconds`、`agent_executor_model_context_warmup_concurrency`
-- 重排模型入口：请求体 `reranker_model`（前端“重排序模型”下拉透传；为空时后端回退聊天模型）
-
-另外当前的声明式工具参数还有一条重要约定：
-
-- `tools.json` 中声明为 `json_file` 的参数，后端会先做规整再交给脚本执行。
-- 默认情况下，`json_file` 支持模型直接传：
-  - JSON 对象
-  - JSON 数组
-  - JSON / YAML 字符串
-- 如果某个参数在 `execution.arg_bindings` 里额外声明了 `text_normalizer`，后端还会按该策略继续把 Markdown 结构稿或纯文本草稿规整成结构化对象，再写入临时文件。
-- 当前这种做法的目的，是把“文本到结构化入参”的容错能力做成声明式能力，而不是在 Python 业务代码里为单个 skill 或单个参数名写特判。
-
-这样可以降低模型工具调用时对“严格 JSON 格式”的依赖，也能让不同 skill 在需要时复用同一套参数规整机制。
-
-当前 `text_normalizer` 的使用约定也建议一并记住：
-
-- `text_normalizer` 只在 `serializer=json_file` 且模型实际传入的是字符串时生效。
-- 如果模型本来就传了对象或数组，后端会直接使用，不会再额外做文本规整。
-- 当前已支持的值只有：
-  - `chaptered_document`
-    用于把 Markdown 标题结构稿或纯文本草稿规整成通用章节树结构，输出形态类似 `{"chapters": [...]}`，每个章节节点包含 `title`、`content`、`sections`。
-- 新增新的 `text_normalizer` 时，优先抽象成可复用的通用结构转换，不要为了单个 skill 的私有格式继续堆专用分支。
+### 测试与评估体系
+- 单测覆盖：
+  - 规划器规则与灰度门控
+  - 状态迁移兼容（旧快照字段可读）
+  - 工具签名并发去重
+  - 工具参数白名单与敏感策略
+  - 请求限流/队列保护
+- 集成覆盖：
+  - 流式事件序列断言（`tool-status / interaction / attachment / done`）
+  - trace 回放接口
+- 基准集：
+  - 当前在 `tests/skill_selection_cases.json` 提供小规模任务集（按当前 skills 数量设计，可扩展）。
+- 回归门槛：
+  - `test_skill_selection_precision_gate_from_benchmark_cases` 里强制 precision >= 0.85。
+  - 阈值不达标时测试失败，即阻断发布流程。
 
 ## 生成文件与下载
 当前 backend 已支持 skill 在工具调用中生成受控附件，也支持把用户上传文件统一落成会话附件：

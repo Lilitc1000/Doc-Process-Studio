@@ -40,10 +40,22 @@ class ChatStreamRequest(BaseModel):
         ...,
         description="前后端共享的会话标识，用于缓存 skill 上下文",
     )
+    tenant_id: str = Field(
+        default="default",
+        description="租户标识，用于请求隔离、限流与会话缓存隔离。",
+    )
+    trace_id: str = Field(
+        default="",
+        description="可选请求追踪标识；为空时后端自动生成。",
+    )
     model: str = Field(..., description="要调用的模型名称")
     reranker_model: str = Field(
         default="",
         description="用于检索重排序的轻量模型；为空时回退使用聊天模型。",
+    )
+    confirm_sensitive_actions: bool = Field(
+        default=True,
+        description="是否允许执行需要显式确认的敏感工具操作。",
     )
     skill_id: str = Field(
         default="",

@@ -51,13 +51,23 @@ def _patch_common_chat_stream_dependencies(monkeypatch) -> None:
         assert state.skill_id in {"incident-report", "document-assistant"}
         return None
 
-    async def fake_load_interaction_state(_conversation_id: str, _skill_id: str):
+    async def fake_load_interaction_state(
+        _conversation_id: str,
+        _skill_id: str,
+        tenant_id: str = "default",
+    ):
+        assert tenant_id == "default"
         return None
 
-    async def fake_load_conversation_state(_conversation_id: str):
+    async def fake_load_conversation_state(
+        _conversation_id: str,
+        tenant_id: str = "default",
+    ):
+        assert tenant_id == "default"
         return None
 
-    async def fake_save_conversation_state(_state):
+    async def fake_save_conversation_state(_state, tenant_id: str = "default"):
+        assert tenant_id == "default"
         return None
 
     async def fake_plan_skill_activation(**_kwargs):
@@ -386,6 +396,35 @@ def test_api_chat_stream_interaction_completion_runs_final_tool(monkeypatch) -> 
         == "/api/attachments/attachment-interaction-1/download"
     )
 
+    interaction_completed_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.get("type") == "interaction" and event.get("status") == "completed"
+    )
+    tool_start_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.get("type") == "tool-status" and event.get("phase") == "start"
+    )
+    attachment_index = next(
+        index for index, event in enumerate(events) if event.get("type") == "attachment"
+    )
+    tool_finish_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.get("type") == "tool-status" and event.get("phase") == "finish"
+    )
+    done_index = next(
+        index for index, event in enumerate(events) if event.get("done") is True
+    )
+    assert (
+        interaction_completed_index
+        < tool_start_index
+        < attachment_index
+        < tool_finish_index
+        < done_index
+    )
+
     assert "交互完成，已生成附件。" in _collect_assistant_contents(events)
 
     done_events = _collect_done_events(events)
@@ -523,7 +562,12 @@ def test_api_chat_stream_resumes_existing_interaction_state(monkeypatch) -> None
         lambda _skill_id: interaction_config,
     )
 
-    async def fake_load_interaction_state(_conversation_id: str, _skill_id: str):
+    async def fake_load_interaction_state(
+        _conversation_id: str,
+        _skill_id: str,
+        tenant_id: str = "default",
+    ):
+        assert tenant_id == "default"
         return object()
 
     async def fake_start_or_resume_interaction(*, request, config):

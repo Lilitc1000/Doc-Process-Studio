@@ -1,5 +1,7 @@
 import json
 import re
+import time
+import uuid
 from datetime import UTC, datetime
 from collections.abc import AsyncIterator
 from typing import Any
@@ -14,6 +16,8 @@ from ...services.agent.executor import (
     ExecutorDeps,
     execute_tool_graph,
 )
+from ...services.agent.feature_flags import is_feature_enabled_for_key
+from ...services.agent.trace_store import AgentTraceRecorder
 from ...models.skill.runtime import (
     ConversationAgentState,
     SkillConversationState,
@@ -23,6 +27,7 @@ from ...models.skill.runtime import (
 from ...settings import settings
 from ..infra.model_context import estimate_prompt_tokens, get_model_context_length
 from ..infra.ollama_client import OllamaNotConfiguredError, stream_chat_completion
+from ..infra.request_guard import RequestGuardError, guard_request_slot
 from ..skill.interaction_flow import start_or_resume_interaction, submit_interaction_answer
 from ..skill.interaction_store import load_interaction_state
 from ..skill.conversation_store import load_conversation_state, save_conversation_state
@@ -225,6 +230,51 @@ async def _resolve_skill_plan(
     return skill_plan
 
 
+def _build_direct_skill_plan(
+    *,
+    request: ChatStreamRequest,
+) -> SkillPlanDecision:
+    """规划器灰度关闭时的兜底策略：仅使用显式 skill + system skill。"""
+    available_skills = list_skill_interfaces()
+    available_skill_ids = [skill.id for skill in available_skills]
+    explicit_skill_ids = [
+        skill_id
+        for skill_id in _normalize_skill_ids(request.selected_skill_ids)
+        if skill_id in available_skill_ids
+    ]
+    if explicit_skill_ids:
+        primary_skill_id = explicit_skill_ids[0]
+    elif SYSTEM_DOCUMENT_SKILL_ID in available_skill_ids:
+        primary_skill_id = SYSTEM_DOCUMENT_SKILL_ID
+    else:
+        primary_skill_id = available_skill_ids[0] if available_skill_ids else SYSTEM_DOCUMENT_SKILL_ID
+
+    active_skill_ids: list[str] = [primary_skill_id]
+    if SYSTEM_DOCUMENT_SKILL_ID in available_skill_ids and SYSTEM_DOCUMENT_SKILL_ID not in active_skill_ids:
+        active_skill_ids.append(SYSTEM_DOCUMENT_SKILL_ID)
+    for skill_id in explicit_skill_ids:
+        if skill_id not in active_skill_ids:
+            active_skill_ids.append(skill_id)
+
+    return SkillPlanDecision(
+        planner_model=request.model,
+        required_skill_ids=explicit_skill_ids,
+        optional_skill_ids=[],
+        missing_explicit_skill_ids=[],
+        active_skill_ids=active_skill_ids,
+        primary_skill_id=primary_skill_id,
+        confidence=None,
+        reasons={"planner": "规划器灰度关闭，已回退到显式选择策略。"},
+        candidates=[],
+        created_at=datetime.now(UTC),
+    )
+
+
+def _is_request_timed_out(started_monotonic: float) -> bool:
+    timeout_seconds = max(1.0, settings.request_timeout_seconds)
+    return (time.monotonic() - started_monotonic) >= timeout_seconds
+
+
 def _resolve_tool_scope_for_history(
     *,
     default_skill_id: str,
@@ -287,17 +337,75 @@ async def stream_remote_chat_completion(
     request: ChatStreamRequest,
     upload_files: list[UploadFile] | None = None,
 ) -> AsyncIterator[str]:
+    started_monotonic = time.monotonic()
+    tenant_id = request.tenant_id.strip() or "default"
+    trace_id = request.trace_id.strip() or uuid.uuid4().hex
+    trace_recorder = AgentTraceRecorder(
+        trace_id=trace_id,
+        tenant_id=tenant_id,
+        conversation_id=request.conversation_id,
+        user_message_id=request.user_message_id,
+        model=request.model,
+        reranker_model=(request.reranker_model or request.model),
+    )
+    stream_done_reason: str | None = None
+    stream_error_message: str | None = None
+    request_guard = guard_request_slot(tenant_id)
+    request_guard_entered = False
+
     if not settings.ollama_base_url:
+        stream_error_message = "未配置 OLLAMA_BASE_URL，请检查后端环境配置文件。"
         yield format_sse_event(
             {
                 "type": "error",
-                "message": "未配置 OLLAMA_BASE_URL，请检查后端环境配置文件。",
+                "message": stream_error_message,
             }
         )
+        trace_recorder.add_event(
+            event_type="error",
+            detail={"message": stream_error_message},
+        )
+        trace_recorder.set_final(done_reason=stream_done_reason, error=stream_error_message)
+        await trace_recorder.flush()
         return
 
     try:
-        skill_plan = await _resolve_skill_plan(request)
+        await request_guard.__aenter__()
+        request_guard_entered = True
+        yield format_sse_event(
+            {
+                "type": "trace",
+                "phase": "start",
+                "trace_id": trace_id,
+            }
+        )
+
+        planner_enabled = is_feature_enabled_for_key(
+            feature_name="planner",
+            key=f"{tenant_id}:{request.conversation_id}",
+            enabled=settings.feature_planner_enabled,
+            rollout_ratio=settings.feature_planner_rollout_ratio,
+        )
+        executor_enabled = is_feature_enabled_for_key(
+            feature_name="executor",
+            key=f"{tenant_id}:{request.conversation_id}",
+            enabled=settings.feature_executor_enabled,
+            rollout_ratio=settings.feature_executor_rollout_ratio,
+        )
+        trace_recorder.add_event(
+            event_type="feature_flags",
+            detail={
+                "planner_enabled": planner_enabled,
+                "executor_enabled": executor_enabled,
+            },
+        )
+
+        if planner_enabled:
+            skill_plan = await _resolve_skill_plan(request)
+        else:
+            skill_plan = _build_direct_skill_plan(request=request)
+
+        trace_recorder.set_planner(skill_plan.model_dump(mode="json"))
         active_skill_ids = skill_plan.active_skill_ids
         primary_skill_id = skill_plan.primary_skill_id
         primary_request = request.model_copy(update={"skill_id": primary_skill_id})
@@ -313,7 +421,10 @@ async def stream_remote_chat_completion(
             persisted_uploaded_files_context,
             new_uploaded_files_context,
         )
-        agent_state = await load_conversation_state(request.conversation_id)
+        agent_state = await load_conversation_state(
+            request.conversation_id,
+            tenant_id=tenant_id,
+        )
         if agent_state is None:
             agent_state = ConversationAgentState(conversation_id=request.conversation_id)
 
@@ -335,15 +446,44 @@ async def stream_remote_chat_completion(
 
         primary_state = states_by_skill[primary_skill_id]
         _append_planner_trace(agent_state=agent_state, decision=skill_plan)
-        await save_conversation_state(agent_state)
+        await save_conversation_state(agent_state, tenant_id=tenant_id)
     except ValueError as exc:
+        stream_error_message = str(exc)
         yield format_sse_event({"type": "error", "message": str(exc)})
+        trace_recorder.add_event(event_type="error", detail={"message": str(exc)})
+        if request_guard_entered:
+            await request_guard.__aexit__(None, None, None)
+            request_guard_entered = False
+        trace_recorder.set_final(done_reason=stream_done_reason, error=stream_error_message)
+        await trace_recorder.flush()
+        return
+    except RequestGuardError as exc:
+        stream_error_message = str(exc)
+        yield format_sse_event({"type": "error", "message": stream_error_message})
+        trace_recorder.add_event(
+            event_type="error",
+            detail={"message": stream_error_message},
+        )
+        if request_guard_entered:
+            await request_guard.__aexit__(None, None, None)
+            request_guard_entered = False
+        trace_recorder.set_final(done_reason=stream_done_reason, error=stream_error_message)
+        await trace_recorder.flush()
         return
 
     interaction_config = get_skill_interaction_config(primary_skill_id)
     interaction_context_message: dict[str, Any] | None = None
 
     try:
+        if _is_request_timed_out(started_monotonic):
+            stream_error_message = "请求处理超时，已终止。"
+            yield format_sse_event({"type": "error", "message": stream_error_message})
+            trace_recorder.add_event(
+                event_type="error",
+                detail={"message": stream_error_message},
+            )
+            return
+
         for prepared_uploaded_file in prepared_uploaded_files:
             yield format_sse_event(
                 {
@@ -360,6 +500,7 @@ async def stream_remote_chat_completion(
                 current_interaction_state = await load_interaction_state(
                     request.conversation_id,
                     primary_skill_id,
+                    tenant_id=tenant_id,
                 )
                 if current_interaction_state is not None:
                     _, interaction_step = await start_or_resume_interaction(
@@ -377,6 +518,7 @@ async def stream_remote_chat_completion(
                         model=request.model,
                         done_reason="interaction_required",
                     )
+                    stream_done_reason = "interaction_required"
                     return
 
             else:
@@ -387,7 +529,12 @@ async def stream_remote_chat_completion(
                         answer=request.interaction_answer,
                     )
                 except ValueError as exc:
+                    stream_error_message = str(exc)
                     yield format_sse_event({"type": "error", "message": str(exc)})
+                    trace_recorder.add_event(
+                        event_type="error",
+                        detail={"message": stream_error_message},
+                    )
                     return
 
                 if next_interaction_step is not None:
@@ -402,6 +549,7 @@ async def stream_remote_chat_completion(
                         model=request.model,
                         done_reason="interaction_required",
                     )
+                    stream_done_reason = "interaction_required"
                     return
 
                 yield format_sse_event({"type": "interaction", "status": "completed"})
@@ -492,11 +640,16 @@ async def stream_remote_chat_completion(
                             created_at=datetime.now(UTC),
                         ),
                     )
-                    await save_conversation_state(agent_state)
+                    await save_conversation_state(agent_state, tenant_id=tenant_id)
 
                     if not tool_result.get("ok"):
                         error_message = str(tool_result.get("error", "工具执行失败。"))
+                        stream_error_message = error_message
                         yield format_sse_event({"type": "error", "message": error_message})
+                        trace_recorder.add_event(
+                            event_type="error",
+                            detail={"message": stream_error_message},
+                        )
                         return
 
                     completion_text = interaction_config.completion_message or "已根据你的选择生成报告。"
@@ -505,6 +658,7 @@ async def stream_remote_chat_completion(
                         content=completion_text,
                     )
                     yield _format_done_event(model=request.model, done_reason="stop")
+                    stream_done_reason = "stop"
                     return
 
                 if completed_payload is not None:
@@ -519,9 +673,11 @@ async def stream_remote_chat_completion(
         tool_trace_messages: list[dict[str, Any]] = (
             [interaction_context_message] if interaction_context_message is not None else []
         )
+        first_assistant_chunk_emitted = False
         final_done_reason = "stop"
         executed_tool_calls: dict[str, dict[str, Any]] = {}
-        tools_enabled = True
+        tools_enabled = executor_enabled
+        tool_disabled_retry_count = 0
         tool_round_count = 0
         execution_budget = ExecutionBudget(
             max_tool_calls=max(1, settings.agent_executor_max_tool_calls),
@@ -529,8 +685,28 @@ async def stream_remote_chat_completion(
             max_prompt_tokens=0,
             prompt_tokens_estimate=0,
         )
+        if not executor_enabled:
+            tool_trace_messages.append(
+                {
+                    "role": "system",
+                    "content": "当前请求未命中执行器灰度范围，本轮禁用工具调用，请直接完成回答。",
+                }
+            )
+            trace_recorder.add_event(
+                event_type="executor",
+                detail={"enabled": False, "message": "executor 灰度关闭"},
+            )
 
         while True:
+            if _is_request_timed_out(started_monotonic):
+                stream_error_message = "请求处理超时，已终止。"
+                yield format_sse_event({"type": "error", "message": stream_error_message})
+                trace_recorder.add_event(
+                    event_type="error",
+                    detail={"message": stream_error_message},
+                )
+                return
+
             tooling_skill_ids = [
                 skill_id
                 for skill_id in active_skill_ids
@@ -548,7 +724,7 @@ async def stream_remote_chat_completion(
                 )
                 if skill_context:
                     skill_context_by_skill[skill_id] = skill_context
-            await save_conversation_state(agent_state)
+            await save_conversation_state(agent_state, tenant_id=tenant_id)
 
             upstream_messages = build_upstream_messages_for_skills(
                 request=request,
@@ -582,7 +758,7 @@ async def stream_remote_chat_completion(
                     )
                     if compacted_context:
                         compacted_context_by_skill[skill_id] = compacted_context
-                await save_conversation_state(agent_state)
+                await save_conversation_state(agent_state, tenant_id=tenant_id)
 
                 skill_context_by_skill = compacted_context_by_skill
                 upstream_messages = build_upstream_messages_for_skills(
@@ -637,11 +813,28 @@ async def stream_remote_chat_completion(
                     else None
                 ),
             ):
+                if _is_request_timed_out(started_monotonic):
+                    stream_error_message = "请求处理超时，已终止。"
+                    yield format_sse_event({"type": "error", "message": stream_error_message})
+                    trace_recorder.add_event(
+                        event_type="error",
+                        detail={"message": stream_error_message},
+                    )
+                    return
+
                 if chunk_payload is None:
                     break
 
                 delta_text = extract_delta_text(chunk_payload)
                 if delta_text:
+                    if not first_assistant_chunk_emitted:
+                        trace_recorder.add_event(
+                            event_type="first_assistant_chunk",
+                            detail={
+                                "latency_ms": int((time.monotonic() - started_monotonic) * 1000),
+                            },
+                        )
+                        first_assistant_chunk_emitted = True
                     assistant_content_parts.append(delta_text)
                     yield _format_assistant_delta_event(
                         model=request.model,
@@ -674,21 +867,37 @@ async def stream_remote_chat_completion(
                     model=request.model,
                     done_reason=final_done_reason,
                 )
+                stream_done_reason = final_done_reason
                 return
 
             if not tools_enabled:
-                yield _format_done_event(
-                    model=request.model,
-                    done_reason=final_done_reason,
+                tool_disabled_retry_count += 1
+                tool_trace_messages.append(
+                    {
+                        "role": "system",
+                        "content": "工具调用当前不可用，请直接根据已有信息给出最终回答。",
+                    }
                 )
-                return
+                if tool_disabled_retry_count >= 2:
+                    yield _format_done_event(
+                        model=request.model,
+                        done_reason=final_done_reason,
+                    )
+                    stream_done_reason = final_done_reason
+                    return
+                continue
 
             if tool_round_count >= settings.skill_tool_max_iterations:
+                stream_error_message = "工具调用轮次过多，已终止本次请求。"
                 yield format_sse_event(
                     {
                         "type": "error",
-                        "message": "工具调用轮次过多，已终止本次请求。",
+                        "message": stream_error_message,
                     }
+                )
+                trace_recorder.add_event(
+                    event_type="error",
+                    detail={"message": stream_error_message},
                 )
                 return
 
@@ -722,6 +931,17 @@ async def stream_remote_chat_completion(
             )
             executed_tool_calls = execution_result.executed_tool_calls
             tool_trace_messages.extend(execution_result.tool_trace_messages)
+            trace_recorder.add_round(
+                round_index=tool_round_count,
+                detail={
+                    "normalized_tool_calls": normalized_tool_calls,
+                    "status_events": execution_result.status_events,
+                    "tool_trace_messages": execution_result.tool_trace_messages,
+                    "error_message": execution_result.error_message,
+                    "disable_tools": execution_result.disable_tools,
+                    "tool_calls_consumed": execution_result.tool_calls_consumed,
+                },
+            )
 
             for status_event in execution_result.status_events:
                 yield format_sse_event(status_event)
@@ -738,27 +958,51 @@ async def stream_remote_chat_completion(
                     model=request.model,
                     done_reason=execution_result.done_reason or "interaction_required",
                 )
+                stream_done_reason = execution_result.done_reason or "interaction_required"
                 return
 
             if execution_result.error_message:
+                stream_error_message = execution_result.error_message
                 yield format_sse_event(
                     {
                         "type": "error",
                         "message": execution_result.error_message,
                     }
                 )
+                trace_recorder.add_event(
+                    event_type="error",
+                    detail={"message": stream_error_message},
+                )
                 return
 
             if execution_result.disable_tools:
                 tools_enabled = False
 
-            await save_conversation_state(agent_state)
+            await save_conversation_state(agent_state, tenant_id=tenant_id)
     except OllamaNotConfiguredError as exc:
+        stream_error_message = str(exc)
+        trace_recorder.add_event(event_type="error", detail={"message": stream_error_message})
         yield format_sse_event({"type": "error", "message": str(exc)})
     except httpx.HTTPStatusError as exc:
         error_message = await _extract_http_status_error_message(exc)
+        stream_error_message = error_message
+        trace_recorder.add_event(event_type="error", detail={"message": stream_error_message})
         yield format_sse_event({"type": "error", "message": error_message})
     except httpx.HTTPError as exc:
+        stream_error_message = f"连接远程 Ollama 失败：{exc}"
+        trace_recorder.add_event(event_type="error", detail={"message": stream_error_message})
         yield format_sse_event(
-            {"type": "error", "message": f"连接远程 Ollama 失败：{exc}"}
+            {"type": "error", "message": stream_error_message}
         )
+    finally:
+        if request_guard_entered:
+            await request_guard.__aexit__(None, None, None)
+        trace_recorder.set_final(
+            done_reason=stream_done_reason,
+            error=stream_error_message,
+        )
+        try:
+            await trace_recorder.flush()
+        except Exception:
+            # 审计落盘失败不影响主对话链路返回。
+            pass
