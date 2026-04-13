@@ -7,7 +7,7 @@ import doc_process_studio.main as main_module
 import doc_process_studio.services.chat.stream as chat_stream_module
 from doc_process_studio.models.conversation.attachments import ChatAttachment
 from doc_process_studio.models.skill.interaction import SkillInteractionConfig
-from doc_process_studio.models.skill.runtime import SkillConversationState
+from doc_process_studio.models.skill.runtime import SkillPlanDecision
 
 
 def _parse_sse_events(response_text: str) -> list[dict]:
@@ -46,24 +46,33 @@ def _patch_common_chat_stream_dependencies(monkeypatch) -> None:
     def fake_build_persisted_uploaded_files_context(_attachment_ids) -> str | None:
         return None
 
-    async def fake_ensure_skill_context_for_request(request):
-        return (
-            SkillConversationState(
-                conversation_id=request.conversation_id,
-                skill_id=request.skill_id,
-                system_prompt="test",
-                loaded_chunk_ids=[],
-            ),
-            None,
-        )
-
     async def fake_sync_skill_context_state(*, model: str, state) -> str | None:
         assert model == "qwen3-coder-next:latest"
-        assert state.skill_id == "incident-report"
+        assert state.skill_id in {"incident-report", "document-assistant"}
         return None
 
     async def fake_load_interaction_state(_conversation_id: str, _skill_id: str):
         return None
+
+    async def fake_load_conversation_state(_conversation_id: str):
+        return None
+
+    async def fake_save_conversation_state(_state):
+        return None
+
+    async def fake_plan_skill_activation(**_kwargs):
+        return SkillPlanDecision(
+            planner_model="qwen3-coder-next:latest",
+            required_skill_ids=["incident-report"],
+            optional_skill_ids=[],
+            missing_explicit_skill_ids=[],
+            active_skill_ids=["incident-report", "document-assistant"],
+            primary_skill_id="incident-report",
+            confidence=0.9,
+            reasons={},
+            candidates=[],
+            created_at=datetime.now(),
+        )
 
     monkeypatch.setattr(
         chat_stream_module.settings,
@@ -82,18 +91,28 @@ def _patch_common_chat_stream_dependencies(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         chat_stream_module,
-        "ensure_skill_context_for_request",
-        fake_ensure_skill_context_for_request,
-    )
-    monkeypatch.setattr(
-        chat_stream_module,
         "sync_skill_context_state",
         fake_sync_skill_context_state,
     )
     monkeypatch.setattr(
         chat_stream_module,
+        "load_conversation_state",
+        fake_load_conversation_state,
+    )
+    monkeypatch.setattr(
+        chat_stream_module,
+        "save_conversation_state",
+        fake_save_conversation_state,
+    )
+    monkeypatch.setattr(
+        chat_stream_module,
         "load_interaction_state",
         fake_load_interaction_state,
+    )
+    monkeypatch.setattr(
+        chat_stream_module,
+        "plan_skill_activation",
+        fake_plan_skill_activation,
     )
 
 

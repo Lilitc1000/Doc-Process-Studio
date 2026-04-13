@@ -321,58 +321,53 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 `发起请求 -> 收到步骤 -> 提交全部步骤 -> 返回附件 -> 验证附件可下载`。
 
 ## Tool Calling 与 Skill 上下文
-当前主链路采用“规划层 + 流式 tool calling + Redis 会话缓存”。
+当前主链路采用为“分层规划 + 会话级 Agent 状态 + 流式工具循环”。
 
-### 规划层
-一次 `/api/chat/stream` 请求会先做 skill 规划，规则如下：
+### 主链路流程
+一次 `/api/chat/stream` 请求会走以下固定流程：
 
-1. 显式技能（mandatory）：
-   - 来自前端 `selected_skill_ids`（用户在输入框中显式选择的方式）
-   - 以及用户消息里显式提及的 `$skill-id`
-   - 这些 skill 必须进入本轮激活集合。
-2. 隐式技能（optional）：
-   - 第一层：词法召回（基于用户问题与 `display_name`/`short_description` 等字段打分）筛出候选 skill。
-   - 第二层：使用“当前聊天选择的模型”对候选做一次轻量重排，输出最小隐式技能集合。
-   - 若第二层失败（如远端不可用、返回非结构化结果），自动回退到第一层结果。
-3. 系统级技能：
-   - `document-assistant` 始终启用，作为 system skill 基线。
+1. 解析显式 skill：
+   - 前端 `selected_skill_ids`
+   - 用户消息中的 `$skill-id`
+2. 执行分层规划（`services/skill/planner.py`）：
+   - 第一层：词法召回候选（lexical）
+   - 第二层：当前会话模型重排候选（rerank）
+   - 策略门控：`max_implicit_skills`、`top_k_candidates`、`min_confidence`
+   - 产出统一结构：`SkillPlanDecision`
+3. 装载会话级 Agent 状态（Redis）：
+   - `ConversationAgentState.skills_state`：每个激活 skill 的上下文状态
+   - `ConversationAgentState.planner_trace`：规划轨迹（限长）
+   - `ConversationAgentState.tool_history`：工具执行历史（限长）
+4. 进入流式工具循环（`services/chat/stream.py`）：
+   - 每轮先同步所有激活 skill 的上下文压缩与注入预算
+   - 调用 Ollama 原生 `/api/chat`（`stream=true`）
+   - 收到 `tool_calls` 后执行工具，结果写回消息流并继续下一轮
+   - 无工具调用或无进展时收束到直接回答
 
-补充说明：
-- 聊天请求里的 `skill_id` 现为兼容保留字段，不参与主决策；主决策只看 `selected_skill_ids`、`$skill-id` 和隐式规划结果。
+### 规划结果与优先级
+- `document-assistant` 作为 system skill 始终纳入激活集合。
+- `primary_skill_id` 由 `SkillPlanDecision` 统一给出。
+- 请求体中的 `skill_id` 不参与规划决策；规划只看显式集合 + 消息内容 + 候选重排结果。
 
-主 skill（`primary_skill_id`）优先级：
-- 有显式 skill 时，取首个显式 skill。
-- 否则取首个隐式命中 skill。
-- 都没有时回退到 `document-assistant`（或当前可用 skill 列表首项）。
-
-### 流式工具循环
-skill 规划完成后，后端会：
-
-1. 注入主 skill 的 `default_prompt`，并注入：
-   - 本轮显式 skill 列表
-   - 规划层追加的隐式 skill 列表
-   - 可用 skill 清单与渐进式披露规则
-2. 从 Redis 读取/同步 skill 会话上下文状态。
-3. 使用 `stream=true + tools` 调远端 Ollama。
-4. 若模型返回 `tool_calls`，执行工具并把结果回填到消息流，再继续下一轮请求。
-5. 直到模型不再返回工具调用，输出最终回答并结束。
-
-支持的工具包含：
+### 工具与上下文行为
 - 内置渐进式披露工具：`list_skill_directory`、`read_skill_file`、`search_skill_context`、`read_skill_context`
-- skill 在 `tools.json` 声明的脚本型工具（如文档生成、文件产出）
+- skill 声明式工具：来自各 skill 的 `tools.json`
+- 已读取 chunk 与压缩摘要会写入 Redis，会话内复用。
+- 工具调用做签名去重，避免同轮重复读取。
+- 交互向导 `start_skill_interaction` 仅在单一目标 skill 场景启用。
 
-### 当前行为要点
-- `SKILL.md`/`references/` 不会每轮全量塞入上下文，而是按需读取。
-- 已读取 chunk 会写入 Redis 会话状态，后续轮次可复用。
-- 相同工具调用会自动去重，避免重复读取。
-- 当工具轮次没有新增信息时，后端会收束到直接回答，避免空转。
-- 并行激活多个 skill 时，不启用 `start_skill_interaction`（交互向导仍只支持单一目标 skill）。
+### 可调参数（`settings.py`）
+- `skill_planner_top_k_candidates`
+- `skill_planner_max_implicit_skills`
+- `skill_planner_min_confidence`
+- `skill_planner_trace_max_entries`
+- `skill_tool_history_max_entries`
 
 维护建议：
-- 渐进式读取与工具执行优先看 `services/skill/tool_loop.py`
-- 上下文压缩/注入优先看 `services/skill/runtime.py`、`services/skill/context_packer.py`
-- 流式编排优先看 `services/chat/stream.py`
-- 不要在路由层直接操作这些缓存和工具细节
+- 规划策略优先看 `services/skill/planner.py`
+- 上下文压缩与状态同步优先看 `services/skill/runtime.py`
+- 工具执行与状态文案优先看 `services/skill/tool_loop.py`
+- 流式编排与轨迹写入优先看 `services/chat/stream.py`
 
 另外当前的声明式工具参数还有一条重要约定：
 

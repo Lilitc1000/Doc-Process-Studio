@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     skill_compact_summary_max_characters: int = 2_400
     skill_context_search_limit: int = 4
     skill_tool_max_iterations: int = 12
+    skill_planner_top_k_candidates: int = 4
+    skill_planner_max_implicit_skills: int = 2
+    skill_planner_min_confidence: float = 0.35
+    skill_planner_trace_max_entries: int = 20
+    skill_tool_history_max_entries: int = 200
     generated_attachments_dir: str = str(BACKEND_DIR / "generated-attachments")
     generated_attachment_ttl_seconds: int = 60 * 60 * 24 * 7
 

@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import UTC, datetime
 from collections.abc import AsyncIterator
 from copy import deepcopy
 from typing import Any
@@ -8,19 +9,24 @@ import httpx
 from fastapi import UploadFile
 
 from ...models.conversation.stream import ChatStreamRequest
-from ...models.skill.runtime import SkillConversationState
+from ...models.skill.runtime import (
+    ConversationAgentState,
+    SkillConversationState,
+    SkillPlanDecision,
+    SkillToolHistoryRecord,
+)
 from ...settings import settings
 from ..infra.ollama_client import OllamaNotConfiguredError, stream_chat_completion
 from ..skill.interaction_flow import start_or_resume_interaction, submit_interaction_answer
 from ..skill.interaction_store import load_interaction_state
-from ..skill.context import get_skill_context_chunks_by_ids
+from ..skill.conversation_store import load_conversation_state, save_conversation_state
 from ..skill.registry import (
     get_skill_interface,
     get_skill_interaction_config,
     list_skill_interfaces,
 )
-from ..skill.planner import plan_implicit_skill_ids_with_model
-from ..skill.runtime import ensure_skill_context_for_request, sync_skill_context_state
+from ..skill.planner import plan_skill_activation
+from ..skill.runtime import sync_skill_context_state
 from ..skill.tool_loop import (
     build_skill_tools,
     build_skill_tools_for_skills,
@@ -179,11 +185,11 @@ def _extract_skill_ids_from_messages(
     return mentioned_skill_ids, missing_skill_ids
 
 
-async def _resolve_active_skill_ids(
+async def _resolve_skill_plan(
     request: ChatStreamRequest,
-) -> tuple[list[str], list[str], list[str], list[str], str]:
+) -> SkillPlanDecision:
     available_skills = list_skill_interfaces()
-    available_skill_ids = [skill.id for skill in available_skills]
+    available_skill_ids = {skill.id for skill in available_skills}
     explicit_skill_ids = _normalize_skill_ids(request.selected_skill_ids)
     mentioned_skill_ids, missing_mentioned_skill_ids = _extract_skill_ids_from_messages(
         messages=request.messages,
@@ -198,83 +204,77 @@ async def _resolve_active_skill_ids(
     for missing_skill_id in missing_mentioned_skill_ids:
         if missing_skill_id not in missing_explicit_skill_ids:
             missing_explicit_skill_ids.append(missing_skill_id)
-    valid_explicit_skill_ids = [
-        skill_id for skill_id in explicit_skill_ids if skill_id in available_skill_ids
-    ]
-
-    implicit_skill_ids = await plan_implicit_skill_ids_with_model(
+    valid_explicit_skill_ids = [skill_id for skill_id in explicit_skill_ids if skill_id in available_skill_ids]
+    skill_plan = await plan_skill_activation(
         model=request.model,
         messages=request.messages,
         available_skills=available_skills,
         explicit_skill_ids=valid_explicit_skill_ids,
+        missing_explicit_skill_ids=missing_explicit_skill_ids,
         system_skill_id=SYSTEM_DOCUMENT_SKILL_ID,
+        max_implicit_skills=settings.skill_planner_max_implicit_skills,
+        top_k_candidates=settings.skill_planner_top_k_candidates,
+        min_confidence=settings.skill_planner_min_confidence,
     )
-    implicit_skill_ids = [
-        skill_id for skill_id in implicit_skill_ids if skill_id in available_skill_ids
-    ]
-
-    has_system_skill = SYSTEM_DOCUMENT_SKILL_ID in available_skill_ids
-    active_skill_ids: list[str] = []
-
-    # 决策顺序：
-    # 1) 显式 skill（用户选择或消息明确提及）必须纳入；
-    # 2) 规划层可追加隐式 skill；
-    # 3) 都没有时回退到 system skill 基线。
-    if valid_explicit_skill_ids:
-        primary_skill_id = valid_explicit_skill_ids[0]
-    elif implicit_skill_ids:
-        primary_skill_id = implicit_skill_ids[0]
-    else:
-        if has_system_skill:
-            primary_skill_id = SYSTEM_DOCUMENT_SKILL_ID
-        else:
-            primary_skill_id = next(iter(available_skill_ids), SYSTEM_DOCUMENT_SKILL_ID)
-
-    active_skill_ids.append(primary_skill_id)
-    if has_system_skill and SYSTEM_DOCUMENT_SKILL_ID not in active_skill_ids:
-        active_skill_ids.append(SYSTEM_DOCUMENT_SKILL_ID)
-
-    for skill_id in valid_explicit_skill_ids:
-        if skill_id not in active_skill_ids:
-            active_skill_ids.append(skill_id)
-
-    for skill_id in implicit_skill_ids:
-        if skill_id not in active_skill_ids:
-            active_skill_ids.append(skill_id)
-
-    return (
-        active_skill_ids,
-        valid_explicit_skill_ids,
-        missing_explicit_skill_ids,
-        implicit_skill_ids,
-        primary_skill_id,
-    )
+    return skill_plan
 
 
-def _build_ephemeral_skill_context(state: SkillConversationState) -> str | None:
-    loaded_chunks = get_skill_context_chunks_by_ids(state.skill_id, state.loaded_chunk_ids)
-    if not loaded_chunks:
-        return None
+def _resolve_tool_scope_for_history(
+    *,
+    default_skill_id: str,
+    tool_call: dict[str, Any],
+) -> tuple[str, str]:
+    tool_name = get_tool_call_name(tool_call)
+    normalized_tool_name = tool_name
 
-    sections = [
-        (
-            "你已经读取了该文档处理方式的以下内容片段，请优先基于这些信息回答：\n\n"
-            + "\n\n".join(
-                [
-                    "\n".join(
-                        [
-                            f"来源：{chunk.source_path}",
-                            f"标题：{chunk.title}",
-                            "内容：",
-                            chunk.content,
-                        ]
-                    )
-                    for chunk in loaded_chunks
-                ]
-            )
-        )
-    ]
-    return "\n\n".join(sections).strip() or None
+    if "::" in tool_name:
+        scoped_skill_id, scoped_tool_name = tool_name.split("::", 1)
+        scoped_skill_id = scoped_skill_id.strip()
+        scoped_tool_name = scoped_tool_name.strip()
+        if scoped_skill_id and scoped_tool_name:
+            return scoped_skill_id, scoped_tool_name
+
+    function_payload = tool_call.get("function")
+    if isinstance(function_payload, dict):
+        raw_arguments = function_payload.get("arguments")
+        parsed_arguments: dict[str, Any] = {}
+        if isinstance(raw_arguments, dict):
+            parsed_arguments = raw_arguments
+        elif isinstance(raw_arguments, str):
+            try:
+                loaded_arguments = json.loads(raw_arguments)
+            except json.JSONDecodeError:
+                loaded_arguments = {}
+            if isinstance(loaded_arguments, dict):
+                parsed_arguments = loaded_arguments
+
+        scoped_skill_id = str(parsed_arguments.get("skill_id", "")).strip()
+        if scoped_skill_id:
+            return scoped_skill_id, normalized_tool_name
+
+    return default_skill_id, normalized_tool_name
+
+
+def _append_planner_trace(
+    *,
+    agent_state: ConversationAgentState,
+    decision: SkillPlanDecision,
+) -> None:
+    agent_state.planner_trace.append(decision)
+    max_entries = max(1, settings.skill_planner_trace_max_entries)
+    if len(agent_state.planner_trace) > max_entries:
+        agent_state.planner_trace = agent_state.planner_trace[-max_entries:]
+
+
+def _append_tool_history(
+    *,
+    agent_state: ConversationAgentState,
+    record: SkillToolHistoryRecord,
+) -> None:
+    agent_state.tool_history.append(record)
+    max_entries = max(1, settings.skill_tool_history_max_entries)
+    if len(agent_state.tool_history) > max_entries:
+        agent_state.tool_history = agent_state.tool_history[-max_entries:]
 
 
 def _collect_loaded_chunk_signatures(
@@ -301,13 +301,9 @@ async def stream_remote_chat_completion(
         return
 
     try:
-        (
-            active_skill_ids,
-            explicit_skill_ids,
-            missing_explicit_skill_ids,
-            implicit_skill_ids,
-            primary_skill_id,
-        ) = await _resolve_active_skill_ids(request)
+        skill_plan = await _resolve_skill_plan(request)
+        active_skill_ids = skill_plan.active_skill_ids
+        primary_skill_id = skill_plan.primary_skill_id
         primary_request = request.model_copy(update={"skill_id": primary_skill_id})
         prepared_uploaded_files, new_uploaded_files_context = await prepare_uploaded_files(
             upload_files=upload_files or [],
@@ -321,18 +317,29 @@ async def stream_remote_chat_completion(
             persisted_uploaded_files_context,
             new_uploaded_files_context,
         )
-        primary_state, _ = await ensure_skill_context_for_request(primary_request)
-        states_by_skill: dict[str, SkillConversationState] = {
-            primary_skill_id: primary_state
-        }
-        for skill_id in active_skill_ids[1:]:
+        agent_state = await load_conversation_state(request.conversation_id)
+        if agent_state is None:
+            agent_state = ConversationAgentState(conversation_id=request.conversation_id)
+
+        states_by_skill: dict[str, SkillConversationState] = {}
+        for skill_id in active_skill_ids:
             skill_interface = get_skill_interface(skill_id)
-            states_by_skill[skill_id] = SkillConversationState(
-                conversation_id=request.conversation_id,
-                skill_id=skill_id,
-                system_prompt=skill_interface.default_prompt,
-                loaded_chunk_ids=[],
-            )
+            state = agent_state.skills_state.get(skill_id)
+            if state is None:
+                state = SkillConversationState(
+                    conversation_id=request.conversation_id,
+                    skill_id=skill_id,
+                    system_prompt=skill_interface.default_prompt,
+                    loaded_chunk_ids=[],
+                )
+                agent_state.skills_state[skill_id] = state
+            elif not state.system_prompt.strip():
+                state.system_prompt = skill_interface.default_prompt
+            states_by_skill[skill_id] = state
+
+        primary_state = states_by_skill[primary_skill_id]
+        _append_planner_trace(agent_state=agent_state, decision=skill_plan)
+        await save_conversation_state(agent_state)
     except ValueError as exc:
         yield format_sse_event({"type": "error", "message": str(exc)})
         return
@@ -440,7 +447,7 @@ async def stream_remote_chat_completion(
 
                     tool_result, next_attachments = execute_skill_tool_call(
                         request=primary_request,
-                        state=states_by_skill[primary_skill_id],
+                        state=primary_state,
                         tool_call=tool_call,
                     )
 
@@ -462,13 +469,34 @@ async def stream_remote_chat_completion(
                             "tool_name": tool_name,
                             **build_tool_status_finish(
                                 request=primary_request,
-                                state=states_by_skill[primary_skill_id],
+                                state=primary_state,
                                 tool_call=tool_call,
                                 tool_result=tool_result,
                                 attachments=next_attachments,
                             ),
                         }
                     )
+                    history_skill_id, history_tool_name = _resolve_tool_scope_for_history(
+                        default_skill_id=primary_skill_id,
+                        tool_call=tool_call,
+                    )
+                    _append_tool_history(
+                        agent_state=agent_state,
+                        record=SkillToolHistoryRecord(
+                            skill_id=history_skill_id,
+                            tool_name=history_tool_name,
+                            ok=bool(tool_result.get("ok")),
+                            reused=bool(tool_result.get("reused")),
+                            attachment_count=len(next_attachments),
+                            error=(
+                                str(tool_result.get("error"))
+                                if not tool_result.get("ok") and tool_result.get("error") is not None
+                                else None
+                            ),
+                            created_at=datetime.now(UTC),
+                        ),
+                    )
+                    await save_conversation_state(agent_state)
 
                     if not tool_result.get("ok"):
                         error_message = str(tool_result.get("error", "工具执行失败。"))
@@ -510,26 +538,22 @@ async def stream_remote_chat_completion(
                 tooling_skill_ids = [primary_skill_id]
 
             skill_context_by_skill: dict[str, str] = {}
-            primary_context = await sync_skill_context_state(
-                model=request.model,
-                state=states_by_skill[primary_skill_id],
-            )
-            if primary_context:
-                skill_context_by_skill[primary_skill_id] = primary_context
-
-            for skill_id, skill_state in states_by_skill.items():
-                if skill_id == primary_skill_id:
-                    continue
-                ephemeral_context = _build_ephemeral_skill_context(skill_state)
-                if ephemeral_context:
-                    skill_context_by_skill[skill_id] = ephemeral_context
+            for skill_id in active_skill_ids:
+                skill_state = states_by_skill[skill_id]
+                skill_context = await sync_skill_context_state(
+                    model=request.model,
+                    state=skill_state,
+                )
+                if skill_context:
+                    skill_context_by_skill[skill_id] = skill_context
+            await save_conversation_state(agent_state)
 
             upstream_messages = build_upstream_messages_for_skills(
                 request=request,
                 active_skill_ids=active_skill_ids,
-                explicit_skill_ids=explicit_skill_ids,
-                implicit_skill_ids=implicit_skill_ids,
-                missing_skill_ids=missing_explicit_skill_ids,
+                explicit_skill_ids=skill_plan.required_skill_ids,
+                implicit_skill_ids=skill_plan.optional_skill_ids,
+                missing_skill_ids=skill_plan.missing_explicit_skill_ids,
                 skill_context_by_skill=skill_context_by_skill,
                 uploaded_files_context=uploaded_files_context,
                 extra_messages=tool_trace_messages,
@@ -666,13 +690,34 @@ async def stream_remote_chat_completion(
                             "tool_name": tool_name,
                             **build_tool_status_finish(
                                 request=primary_request,
-                                state=states_by_skill[primary_skill_id],
+                                state=primary_state,
                                 tool_call=tool_call,
                                 tool_result=tool_result,
                                 attachments=[],
                             ),
                         }
                     )
+                    history_skill_id, history_tool_name = _resolve_tool_scope_for_history(
+                        default_skill_id=primary_skill_id,
+                        tool_call=tool_call,
+                    )
+                    _append_tool_history(
+                        agent_state=agent_state,
+                        record=SkillToolHistoryRecord(
+                            skill_id=history_skill_id,
+                            tool_name=history_tool_name,
+                            ok=bool(tool_result.get("ok")),
+                            reused=False,
+                            attachment_count=0,
+                            error=(
+                                str(tool_result.get("error"))
+                                if not tool_result.get("ok") and tool_result.get("error") is not None
+                                else None
+                            ),
+                            created_at=datetime.now(UTC),
+                        ),
+                    )
+                    await save_conversation_state(agent_state)
 
                     if tool_result.get("ok") and interaction_step is not None:
                         if should_emit_intro and interaction_config and interaction_config.intro_message:
@@ -772,13 +817,34 @@ async def stream_remote_chat_completion(
                         "tool_name": tool_name,
                         **build_tool_status_finish(
                             request=primary_request,
-                            state=states_by_skill[primary_skill_id],
+                            state=primary_state,
                             tool_call=tool_call,
                             tool_result=tool_result,
                             attachments=next_attachments,
                         ),
                     }
                 )
+                history_skill_id, history_tool_name = _resolve_tool_scope_for_history(
+                    default_skill_id=primary_skill_id,
+                    tool_call=tool_call,
+                )
+                _append_tool_history(
+                    agent_state=agent_state,
+                    record=SkillToolHistoryRecord(
+                        skill_id=history_skill_id,
+                        tool_name=history_tool_name,
+                        ok=bool(tool_result.get("ok")),
+                        reused=bool(tool_result.get("reused")),
+                        attachment_count=len(next_attachments),
+                        error=(
+                            str(tool_result.get("error"))
+                            if not tool_result.get("ok") and tool_result.get("error") is not None
+                            else None
+                        ),
+                        created_at=datetime.now(UTC),
+                    ),
+                )
+                await save_conversation_state(agent_state)
 
             if not round_made_progress:
                 tools_enabled = False

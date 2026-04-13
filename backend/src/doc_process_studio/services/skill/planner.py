@@ -1,13 +1,19 @@
-import re
-from typing import Iterable
 import json
+import re
+from datetime import UTC, datetime
+from typing import Any, Iterable
 
 from ...models.skill.catalog import SkillInterfaceConfig
+from ...models.skill.runtime import SkillPlanDecision, SkillPlannerCandidate
 from ..infra.ollama_client import extract_first_message_content, post_chat_completion
 
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9._-]+|[\u4e00-\u9fff]{2,}")
 _SPLIT_PATTERN = re.compile(r"[\s,，。；;、:：()（）\[\]{}<>!！?？/\\|+\-]+")
 _CJK_SEQUENCE_PATTERN = re.compile(r"[\u4e00-\u9fff]{2,}")
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 def _collect_user_query(messages: list[object]) -> str:
@@ -144,9 +150,6 @@ def build_implicit_skill_candidates(
     if not scored_skills:
         return []
 
-    # 命中阈值：
-    # - 显式 skill 已存在时，提高阈值，避免隐式 skill 过度介入。
-    # - 无显式 skill 时允许更灵敏一些，支持自动匹配。
     threshold = 12 if explicit_set else 8
     candidates = [
         skill_id
@@ -162,7 +165,7 @@ def build_implicit_skill_candidates(
     return ranked_candidates
 
 
-def _parse_json_object(text: str) -> dict[str, object] | None:
+def _parse_json_object(text: str) -> dict[str, Any] | None:
     normalized = text.strip()
     if not normalized:
         return None
@@ -200,14 +203,11 @@ def _build_rerank_prompt_payload(
     *,
     user_query: str,
     explicit_skill_ids: list[str],
-    candidate_skills: list[dict[str, object]],
+    candidate_skills: list[dict[str, Any]],
     max_implicit_skills: int,
 ) -> str:
     prompt_payload = {
-        "task": (
-            "请在候选技能中选择本轮最小必要集合用于隐式调用。"
-            "显式技能已固定，不要重复输出显式技能。"
-        ),
+        "task": "请从候选技能里选择本轮最小必要隐式集合。",
         "user_query": user_query,
         "explicit_skill_ids": explicit_skill_ids,
         "candidate_skills": candidate_skills,
@@ -218,10 +218,44 @@ def _build_rerank_prompt_payload(
         },
         "output_json_schema": {
             "selected_skill_ids": ["候选中的skill_id"],
-            "reason": "一句话中文说明",
+            "confidence": 0.0,
+            "reasons": {"skill_id": "一句话理由"},
         },
     }
     return json.dumps(prompt_payload, ensure_ascii=False, indent=2)
+
+
+def _parse_rerank_result(payload: dict[str, Any]) -> tuple[list[str], float | None, dict[str, str]]:
+    raw_selected_skill_ids = payload.get("selected_skill_ids")
+    selected_skill_ids: list[str] = []
+    if isinstance(raw_selected_skill_ids, list):
+        for raw_skill_id in raw_selected_skill_ids:
+            if not isinstance(raw_skill_id, str):
+                continue
+            normalized_skill_id = raw_skill_id.strip()
+            if normalized_skill_id and normalized_skill_id not in selected_skill_ids:
+                selected_skill_ids.append(normalized_skill_id)
+
+    raw_confidence = payload.get("confidence")
+    confidence: float | None = None
+    if isinstance(raw_confidence, (int, float)):
+        confidence = float(raw_confidence)
+        confidence = max(0.0, min(1.0, confidence))
+
+    reasons: dict[str, str] = {}
+    raw_reasons = payload.get("reasons")
+    if isinstance(raw_reasons, dict):
+        for skill_id, reason in raw_reasons.items():
+            if not isinstance(skill_id, str):
+                continue
+            if not isinstance(reason, str):
+                continue
+            normalized_skill_id = skill_id.strip()
+            normalized_reason = reason.strip()
+            if normalized_skill_id and normalized_reason:
+                reasons[normalized_skill_id] = normalized_reason
+
+    return selected_skill_ids, confidence, reasons
 
 
 async def _rerank_implicit_skills_with_model(
@@ -229,9 +263,9 @@ async def _rerank_implicit_skills_with_model(
     model: str,
     user_query: str,
     explicit_skill_ids: list[str],
-    candidate_skills: list[dict[str, object]],
+    candidate_skills: list[dict[str, Any]],
     max_implicit_skills: int,
-) -> list[str] | None:
+) -> tuple[list[str], float | None, dict[str, str]] | None:
     """第二层：模型重排。失败时返回 None，由上层回退到词法结果。"""
     system_prompt = (
         "你是技能规划器。"
@@ -261,73 +295,80 @@ async def _rerank_implicit_skills_with_model(
     if not isinstance(parsed_object, dict):
         return None
 
-    raw_selected_skill_ids = parsed_object.get("selected_skill_ids")
-    if not isinstance(raw_selected_skill_ids, list):
-        return []
-
-    selected_skill_ids: list[str] = []
-    for raw_skill_id in raw_selected_skill_ids:
-        if not isinstance(raw_skill_id, str):
-            continue
-        normalized_skill_id = raw_skill_id.strip()
-        if normalized_skill_id and normalized_skill_id not in selected_skill_ids:
-            selected_skill_ids.append(normalized_skill_id)
-    return selected_skill_ids[:max_implicit_skills]
+    selected_skill_ids, confidence, reasons = _parse_rerank_result(parsed_object)
+    return selected_skill_ids[:max_implicit_skills], confidence, reasons
 
 
-def plan_implicit_skill_ids(
+def _build_active_skill_ids(
     *,
-    messages: list[object],
-    available_skills: list[SkillInterfaceConfig],
-    explicit_skill_ids: list[str],
+    available_skill_ids: list[str],
+    required_skill_ids: list[str],
+    optional_skill_ids: list[str],
     system_skill_id: str,
-    max_implicit_skills: int = 2,
-) -> list[str]:
-    """兼容入口：仅词法召回，保留给测试与降级路径。"""
-    candidates = build_implicit_skill_candidates(
-        messages=messages,
-        available_skills=available_skills,
-        explicit_skill_ids=explicit_skill_ids,
-        system_skill_id=system_skill_id,
-        top_k=max_implicit_skills,
-    )
-    return [skill_id for skill_id, _score in candidates][:max_implicit_skills]
+) -> tuple[list[str], str]:
+    has_system_skill = system_skill_id in available_skill_ids
+    active_skill_ids: list[str] = []
+
+    if required_skill_ids:
+        primary_skill_id = required_skill_ids[0]
+    elif optional_skill_ids:
+        primary_skill_id = optional_skill_ids[0]
+    elif has_system_skill:
+        primary_skill_id = system_skill_id
+    else:
+        primary_skill_id = next(iter(available_skill_ids), system_skill_id)
+
+    active_skill_ids.append(primary_skill_id)
+    if has_system_skill and system_skill_id not in active_skill_ids:
+        active_skill_ids.append(system_skill_id)
+
+    for skill_id in required_skill_ids:
+        if skill_id not in active_skill_ids:
+            active_skill_ids.append(skill_id)
+
+    for skill_id in optional_skill_ids:
+        if skill_id not in active_skill_ids:
+            active_skill_ids.append(skill_id)
+
+    return active_skill_ids, primary_skill_id
 
 
-async def plan_implicit_skill_ids_with_model(
+async def plan_skill_activation(
     *,
     model: str,
     messages: list[object],
     available_skills: list[SkillInterfaceConfig],
     explicit_skill_ids: list[str],
+    missing_explicit_skill_ids: list[str],
     system_skill_id: str,
     max_implicit_skills: int = 2,
     top_k_candidates: int = 4,
-) -> list[str]:
-    """分层规划：词法召回 -> 模型重排 -> 策略裁剪。"""
-    candidates = build_implicit_skill_candidates(
+    min_confidence: float = 0.35,
+) -> SkillPlanDecision:
+    """分层混合规划：显式强约束 + 词法召回 + 模型重排 + 策略门控。"""
+    available_skill_ids = [skill.id for skill in available_skills]
+    required_skill_ids = [
+        skill_id for skill_id in _dedupe_keep_order(explicit_skill_ids) if skill_id in available_skill_ids
+    ]
+
+    lexical_candidates = build_implicit_skill_candidates(
         messages=messages,
         available_skills=available_skills,
-        explicit_skill_ids=explicit_skill_ids,
+        explicit_skill_ids=required_skill_ids,
         system_skill_id=system_skill_id,
         top_k=top_k_candidates,
     )
-    if not candidates:
-        return []
+    lexical_fallback_skill_ids = [
+        skill_id for skill_id, _score in lexical_candidates
+    ][:max_implicit_skills]
 
-    lexical_fallback = [skill_id for skill_id, _score in candidates][:max_implicit_skills]
-    user_query = _collect_user_query(messages)
-    if not user_query:
-        return lexical_fallback
-
-    explicit_set = set(_dedupe_keep_order(explicit_skill_ids))
     candidate_map = {skill.id: skill for skill in available_skills}
-    candidate_payload: list[dict[str, object]] = []
-    for skill_id, score in candidates:
+    rerank_payload_candidates: list[dict[str, Any]] = []
+    for skill_id, score in lexical_candidates:
         skill = candidate_map.get(skill_id)
         if skill is None:
             continue
-        candidate_payload.append(
+        rerank_payload_candidates.append(
             {
                 "skill_id": skill.id,
                 "display_name": skill.display_name,
@@ -336,27 +377,105 @@ async def plan_implicit_skill_ids_with_model(
             }
         )
 
-    reranked_skill_ids = await _rerank_implicit_skills_with_model(
-        model=model,
-        user_query=user_query,
-        explicit_skill_ids=list(explicit_set),
-        candidate_skills=candidate_payload,
-        max_implicit_skills=max_implicit_skills,
-    )
-    if reranked_skill_ids is None:
-        return lexical_fallback
+    user_query = _collect_user_query(messages)
+    rerank_output: tuple[list[str], float | None, dict[str, str]] | None = None
+    if user_query and rerank_payload_candidates:
+        rerank_output = await _rerank_implicit_skills_with_model(
+            model=model,
+            user_query=user_query,
+            explicit_skill_ids=required_skill_ids,
+            candidate_skills=rerank_payload_candidates,
+            max_implicit_skills=max_implicit_skills,
+        )
 
-    candidate_skill_id_set = {skill_id for skill_id, _score in candidates}
-    normalized_skill_ids: list[str] = []
-    for skill_id in reranked_skill_ids:
-        if skill_id in explicit_set:
-            continue
-        if skill_id == system_skill_id:
-            continue
-        if skill_id not in candidate_skill_id_set:
-            continue
-        if skill_id not in normalized_skill_ids:
-            normalized_skill_ids.append(skill_id)
-    if normalized_skill_ids:
-        return normalized_skill_ids[:max_implicit_skills]
-    return lexical_fallback
+    optional_skill_ids: list[str] = []
+    confidence: float | None = None
+    reasons: dict[str, str] = {}
+    if rerank_output is None:
+        optional_skill_ids = lexical_fallback_skill_ids
+        for skill_id, score in lexical_candidates:
+            if skill_id in optional_skill_ids:
+                reasons[skill_id] = f"词法召回分数 {score}"
+    else:
+        reranked_skill_ids, confidence, rerank_reasons = rerank_output
+        candidate_skill_id_set = {skill_id for skill_id, _score in lexical_candidates}
+        for skill_id in reranked_skill_ids:
+            if skill_id in required_skill_ids:
+                continue
+            if skill_id == system_skill_id:
+                continue
+            if skill_id not in candidate_skill_id_set:
+                continue
+            if skill_id not in optional_skill_ids:
+                optional_skill_ids.append(skill_id)
+            if skill_id in rerank_reasons:
+                reasons[skill_id] = rerank_reasons[skill_id]
+
+        if confidence is not None and confidence < min_confidence:
+            optional_skill_ids = []
+            reasons["planner"] = (
+                f"模型重排置信度 {confidence:.2f} 低于阈值 {min_confidence:.2f}，"
+                "已禁用隐式技能自动追加。"
+            )
+
+        if not optional_skill_ids:
+            optional_skill_ids = lexical_fallback_skill_ids
+            if not reasons:
+                for skill_id, score in lexical_candidates:
+                    if skill_id in optional_skill_ids:
+                        reasons[skill_id] = f"词法召回分数 {score}"
+
+    optional_skill_ids = optional_skill_ids[:max_implicit_skills]
+    active_skill_ids, primary_skill_id = _build_active_skill_ids(
+        available_skill_ids=available_skill_ids,
+        required_skill_ids=required_skill_ids,
+        optional_skill_ids=optional_skill_ids,
+        system_skill_id=system_skill_id,
+    )
+
+    candidates: list[SkillPlannerCandidate] = []
+    for skill_id in required_skill_ids:
+        candidates.append(
+            SkillPlannerCandidate(
+                skill_id=skill_id,
+                source="explicit",
+                selected=True,
+                reason="用户显式选择或显式提及。",
+            )
+        )
+
+    for skill_id, score in lexical_candidates:
+        source = "implicit_rerank" if rerank_output is not None else "implicit_lexical"
+        candidates.append(
+            SkillPlannerCandidate(
+                skill_id=skill_id,
+                source=source,
+                selected=skill_id in optional_skill_ids,
+                lexical_score=score,
+                confidence=confidence,
+                reason=reasons.get(skill_id),
+            )
+        )
+
+    if system_skill_id in active_skill_ids:
+        candidates.append(
+            SkillPlannerCandidate(
+                skill_id=system_skill_id,
+                source="system",
+                selected=True,
+                reason="系统级技能始终启用。",
+            )
+        )
+
+    return SkillPlanDecision(
+        planner_model=model,
+        required_skill_ids=required_skill_ids,
+        optional_skill_ids=optional_skill_ids,
+        missing_explicit_skill_ids=_dedupe_keep_order(missing_explicit_skill_ids),
+        active_skill_ids=active_skill_ids,
+        primary_skill_id=primary_skill_id,
+        confidence=confidence,
+        reasons=reasons,
+        candidates=candidates,
+        created_at=_utcnow(),
+    )

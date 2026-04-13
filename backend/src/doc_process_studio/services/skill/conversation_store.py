@@ -1,4 +1,4 @@
-from ...models.skill.runtime import SkillConversationState
+from ...models.skill.runtime import ConversationAgentState
 from ...settings import settings
 from ..infra.redis_store import (
     build_cache_key,
@@ -16,17 +16,17 @@ def build_conversation_state_key(conversation_id: str) -> str:
 
 async def load_conversation_state(
     conversation_id: str,
-) -> SkillConversationState | None:
+) -> ConversationAgentState | None:
     cached_payload = await get_json(build_conversation_state_key(conversation_id))
     if not isinstance(cached_payload, dict):
         return None
-    return SkillConversationState.model_validate(cached_payload)
+    return ConversationAgentState.model_validate(cached_payload)
 
 
-async def save_conversation_state(state: SkillConversationState) -> None:
+async def save_conversation_state(state: ConversationAgentState) -> None:
     await set_json(
         build_conversation_state_key(state.conversation_id),
-        state.model_dump(),
+        state.model_dump(mode="json"),
         ttl_seconds=settings.redis_ttl_seconds,
     )
 
@@ -43,4 +43,3 @@ async def clear_conversation_state(conversation_id: str) -> bool:
 
 async def get_conversation_state_ttl_seconds(conversation_id: str) -> int:
     return await get_ttl_seconds(build_conversation_state_key(conversation_id))
-

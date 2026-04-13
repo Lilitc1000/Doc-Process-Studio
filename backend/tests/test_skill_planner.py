@@ -3,10 +3,7 @@ import asyncio
 from doc_process_studio.models.conversation.stream import ChatMessageInput
 from doc_process_studio.models.skill.catalog import SkillInterfaceConfig
 from doc_process_studio.services.skill import planner as planner_module
-from doc_process_studio.services.skill.planner import (
-    plan_implicit_skill_ids,
-    plan_implicit_skill_ids_with_model,
-)
+from doc_process_studio.services.skill.planner import plan_skill_activation
 
 
 def _build_skill(
@@ -24,7 +21,7 @@ def _build_skill(
     )
 
 
-def test_plan_implicit_skill_ids_selects_resume_skill() -> None:
+def test_plan_skill_activation_selects_resume_skill() -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -43,17 +40,24 @@ def test_plan_implicit_skill_ids_selects_resume_skill() -> None:
         ),
     ]
 
-    implicit_skill_ids = plan_implicit_skill_ids(
-        messages=[ChatMessageInput(role="user", content="请帮我做一轮简历审核，重点看交通行业经验")],
-        available_skills=skills,
-        explicit_skill_ids=[],
-        system_skill_id="document-assistant",
+    plan = asyncio.run(
+        plan_skill_activation(
+            model="qwen3-coder-next:latest",
+            messages=[ChatMessageInput(role="user", content="请帮我做一轮简历审核，重点看交通行业经验")],
+            available_skills=skills,
+            explicit_skill_ids=[],
+            missing_explicit_skill_ids=[],
+            system_skill_id="document-assistant",
+        )
     )
 
-    assert implicit_skill_ids == ["resume-transport-review"]
+    assert plan.required_skill_ids == []
+    assert plan.optional_skill_ids == ["resume-transport-review"]
+    assert plan.primary_skill_id == "resume-transport-review"
+    assert "document-assistant" in plan.active_skill_ids
 
 
-def test_plan_implicit_skill_ids_skips_explicit_skills() -> None:
+def test_plan_skill_activation_skips_explicit_skills() -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -72,23 +76,29 @@ def test_plan_implicit_skill_ids_skips_explicit_skills() -> None:
         ),
     ]
 
-    implicit_skill_ids = plan_implicit_skill_ids(
-        messages=[
-            ChatMessageInput(
-                role="user",
-                content="按事故报告模板整理后，再补一份架构文档",
-            )
-        ],
-        available_skills=skills,
-        explicit_skill_ids=["incident-report"],
-        system_skill_id="document-assistant",
+    plan = asyncio.run(
+        plan_skill_activation(
+            model="qwen3-coder-next:latest",
+            messages=[
+                ChatMessageInput(
+                    role="user",
+                    content="按事故报告模板整理后，再补一份架构文档",
+                )
+            ],
+            available_skills=skills,
+            explicit_skill_ids=["incident-report"],
+            missing_explicit_skill_ids=[],
+            system_skill_id="document-assistant",
+        )
     )
 
-    assert "incident-report" not in implicit_skill_ids
-    assert "project-architecture-docx" in implicit_skill_ids
+    assert plan.required_skill_ids == ["incident-report"]
+    assert "incident-report" not in plan.optional_skill_ids
+    assert "project-architecture-docx" in plan.optional_skill_ids
+    assert plan.primary_skill_id == "incident-report"
 
 
-def test_plan_implicit_skill_ids_with_model_fallback_to_lexical(monkeypatch) -> None:
+def test_plan_skill_activation_fallback_to_lexical(monkeypatch) -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -111,20 +121,21 @@ def test_plan_implicit_skill_ids_with_model_fallback_to_lexical(monkeypatch) -> 
         fake_post_chat_completion,
     )
 
-    implicit_skill_ids = asyncio.run(
-        plan_implicit_skill_ids_with_model(
+    plan = asyncio.run(
+        plan_skill_activation(
             model="qwen3-coder-next:latest",
             messages=[ChatMessageInput(role="user", content="请帮我做交通简历审核")],
             available_skills=skills,
             explicit_skill_ids=[],
+            missing_explicit_skill_ids=[],
             system_skill_id="document-assistant",
         )
     )
 
-    assert implicit_skill_ids == ["resume-transport-review"]
+    assert plan.optional_skill_ids == ["resume-transport-review"]
 
 
-def test_plan_implicit_skill_ids_with_model_prefers_rerank_result(monkeypatch) -> None:
+def test_plan_skill_activation_prefers_rerank_result(monkeypatch) -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -147,7 +158,11 @@ def test_plan_implicit_skill_ids_with_model_prefers_rerank_result(monkeypatch) -
         return {
             "message": {
                 "role": "assistant",
-                "content": '{"selected_skill_ids":["project-architecture-docx"],"reason":"匹配架构文档任务"}',
+                "content": (
+                    '{"selected_skill_ids":["project-architecture-docx"],'
+                    '"confidence":0.88,'
+                    '"reasons":{"project-architecture-docx":"任务描述明确指向架构文档输出"}}'
+                ),
             }
         }
 
@@ -157,8 +172,8 @@ def test_plan_implicit_skill_ids_with_model_prefers_rerank_result(monkeypatch) -
         fake_post_chat_completion,
     )
 
-    implicit_skill_ids = asyncio.run(
-        plan_implicit_skill_ids_with_model(
+    plan = asyncio.run(
+        plan_skill_activation(
             model="qwen3-coder-next:latest",
             messages=[
                 ChatMessageInput(
@@ -168,8 +183,11 @@ def test_plan_implicit_skill_ids_with_model_prefers_rerank_result(monkeypatch) -
             ],
             available_skills=skills,
             explicit_skill_ids=[],
+            missing_explicit_skill_ids=[],
             system_skill_id="document-assistant",
         )
     )
 
-    assert implicit_skill_ids == ["project-architecture-docx"]
+    assert plan.optional_skill_ids == ["project-architecture-docx"]
+    assert plan.confidence == 0.88
+

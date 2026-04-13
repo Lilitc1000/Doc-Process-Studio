@@ -24,7 +24,7 @@ from .registry import (
     get_skill_interaction_config,
     list_skill_interfaces,
 )
-from .runtime import ensure_skill_context_for_request, sync_skill_context_state
+from .runtime import sync_skill_context_state
 from .tool_loop import (
     build_skill_tools,
     build_skill_tools_for_skills,
@@ -37,7 +37,6 @@ __all__ = [
     "build_skill_tools_for_skills",
     "clear_conversation_state",
     "clear_interaction_state",
-    "ensure_skill_context_for_request",
     "execute_skill_tool_call",
     "execute_scoped_skill_tool_call",
     "get_conversation_state_ttl_seconds",

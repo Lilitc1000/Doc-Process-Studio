@@ -13,15 +13,22 @@ from .interaction import (
     SkillInteractionStep,
 )
 from .runtime import (
+    ConversationAgentState,
     SkillContextChunk,
     SkillContextChunkSummary,
     SkillConversationState,
+    SkillPlanDecision,
+    SkillPlannerCandidate,
+    SkillToolHistoryRecord,
 )
 
 __all__ = [
+    "ConversationAgentState",
     "SkillCacheStatusResponse",
     "SkillContextChunk",
     "SkillContextChunkSummary",
+    "SkillPlanDecision",
+    "SkillPlannerCandidate",
     "SkillContextSearchResponse",
     "SkillConversationCacheResponse",
     "SkillConversationState",
@@ -31,5 +38,6 @@ __all__ = [
     "SkillInteractionOption",
     "SkillInteractionState",
     "SkillInteractionStep",
+    "SkillToolHistoryRecord",
     "SkillListResponse",
 ]
