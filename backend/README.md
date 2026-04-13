@@ -323,7 +323,7 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 ## Tool Calling 与 Skill 上下文
 当前主链路已升级为“分层规划 + 会话级 Agent 状态 + 执行器调度（Executor）”。
 
-### 阶段2流程
+### 主链路流程
 一次 `/api/chat/stream` 请求会走以下固定流程：
 
 1. 解析显式 skill（`selected_skill_ids` + 消息中的 `$skill-id`）。
@@ -332,8 +332,35 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
    - `skills_state`：按 skill 维护上下文状态
    - `planner_trace`：规划轨迹
    - `tool_history`：工具执行轨迹
-4. 构建上游消息并调用 Ollama `/api/chat`（stream=true）。
-5. 收到 `tool_calls` 后交给 `services/agent/executor.py` 调度执行。
+4. 对每个激活 skill 进行上下文同步与预算打包：
+   - 先注入层级记忆（`skill_memory / episodic_memory / short_term_memory`）
+   - 再按预算注入未压缩正文 chunk
+5. 构建上游消息并调用 Ollama `/api/chat`（stream=true）。
+6. 收到 `tool_calls` 后交给 `services/agent/executor.py` 调度执行。
+
+### 混合召回 + 语义重排（阶段3检索）
+`search_skill_context_chunks` 已升级为“词法 + 语义 + 重排”的三段式：
+
+1. 词法召回：BM25（基于 chunk 级 token/tf/df）。
+2. 语义召回：embedding 相似度（默认 embedding 模型 `skill_retrieval_embedding_model`）。
+3. 候选合并：对词法和语义候选做 rank reciprocal 融合。
+4. chunk 级重排：用 `reranker_model`（为空时回退聊天模型）输出 relevance，再做最终排序。
+
+缓存与失效：
+- chunk embedding 缓存：按 `skill_id + embedding_model + chunk_fingerprint` 缓存，带 TTL。
+- query embedding 缓存：按 `embedding_model + query` 缓存，带 TTL。
+- 当 skill chunk 内容变化导致 fingerprint 变化时，旧 chunk embedding 会自然失效。
+
+### 层级记忆
+
+- `short_term_memory`：当前任务近期压缩摘要（短期）。
+- `episodic_memory`：跨轮过程记忆（中期）。
+- `skill_memory`：稳定规则/背景摘要（长期）。
+
+压缩触发策略：
+- 常规轮次：仅在正文 chunk 注入接近上限时压缩。
+- 超预算轮次：先触发一轮 `force_compact`（更激进压缩），再重算 token。
+- 压缩后仍超预算：执行器收束，关闭后续工具调用，要求模型基于已读信息直接完成回答。
 
 ### 执行器（Executor）职责
 执行器接口：
@@ -368,16 +395,21 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 
 ### 关键实现位置
 - 规划：`services/skill/planner.py`
+- 检索：`services/skill/context.py`
+- 层级记忆：`services/skill/context_packer.py`
 - 执行器：`services/agent/executor.py`
 - 模型上下文缓存：`services/infra/model_context.py`
 - 流式编排：`services/chat/stream.py`
 
 ### 常用配置（`settings.py`）
 - 规划：`skill_planner_*`
+- 检索：`skill_retrieval_*`
+- 层级记忆：`skill_memory_short_term_max_characters`、`skill_memory_episodic_max_characters`、`skill_memory_long_term_max_characters`
 - 执行器：`agent_executor_max_parallel_reads`、`agent_executor_max_tool_calls`、`agent_executor_time_budget_seconds`
 - 重试：`agent_executor_tool_retry_max_attempts`、`agent_executor_tool_retry_base_delay_seconds`
 - token 预算：`agent_executor_prompt_budget_ratio`、`agent_executor_default_context_length`
 - context 缓存：`agent_executor_model_context_cache_ttl_seconds`、`agent_executor_model_context_warmup_concurrency`
+- 重排模型入口：请求体 `reranker_model`（前端“重排序模型”下拉透传；为空时后端回退聊天模型）
 
 另外当前的声明式工具参数还有一条重要约定：
 

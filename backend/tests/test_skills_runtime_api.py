@@ -7,7 +7,7 @@ from doc_process_studio.models.skill.runtime import (
     SkillConversationState,
 )
 from doc_process_studio.services.skill.context_packer import (
-    _build_local_compact_summary,
+    _build_local_summary_from_chunks,
     build_skill_context_budget_text,
 )
 
@@ -100,12 +100,12 @@ def test_api_skill_cache_delete_clears_state(monkeypatch) -> None:
     }
 
 
-def test_compact_summary_excludes_compacted_chunks_from_full_injection() -> None:
+def test_hierarchical_memory_excludes_compacted_chunks_from_full_injection() -> None:
     state = SkillConversationState(
         conversation_id="conversation-1",
         skill_id="document-assistant",
         system_prompt="test",
-        compact_summary="保留摘要",
+        short_term_memory="保留短期记忆",
         compacted_chunk_ids=["chunk-1"],
     )
     loaded_chunks = [
@@ -130,14 +130,14 @@ def test_compact_summary_excludes_compacted_chunks_from_full_injection() -> None
     budget_text = build_skill_context_budget_text(state, loaded_chunks)
 
     assert budget_text is not None
-    assert "保留摘要" in budget_text
+    assert "保留短期记忆" in budget_text
     assert "这一段应该完整注入" in budget_text
     assert "这一段应该只存在于摘要里" not in budget_text
 
 
-def test_local_compact_summary_contains_chunk_titles() -> None:
-    summary = _build_local_compact_summary(
-        [
+def test_local_short_term_summary_contains_chunk_titles() -> None:
+    summary = _build_local_summary_from_chunks(
+        chunks=[
             SkillContextChunk(
                 id="chunk-1",
                 skill_id="document-assistant",
@@ -146,7 +146,9 @@ def test_local_compact_summary_contains_chunk_titles() -> None:
                 preview="工作方式预览",
                 content="先识别用户目标，再结合文档内容进行整理和回答。",
             )
-        ]
+        ],
+        title="短期记忆要点：",
+        max_characters=500,
     )
 
     assert "工作方式" in summary

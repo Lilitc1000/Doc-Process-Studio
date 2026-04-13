@@ -573,17 +573,18 @@ async def stream_remote_chat_completion(
             execution_budget.max_prompt_tokens = prompt_budget_tokens
 
             if tools_enabled and prompt_tokens_estimate >= prompt_budget_tokens:
-                tools_enabled = False
-                tool_trace_messages.append(
-                    {
-                        "role": "system",
-                        "content": (
-                            "当前会话上下文已接近模型可用窗口上限，"
-                            f"估算 token={prompt_tokens_estimate}，预算={prompt_budget_tokens}。"
-                            "本轮起停止工具调用，请基于已读取内容直接回答。"
-                        ),
-                    }
-                )
+                compacted_context_by_skill: dict[str, str] = {}
+                for skill_id in active_skill_ids:
+                    compacted_context = await sync_skill_context_state(
+                        model=request.model,
+                        state=states_by_skill[skill_id],
+                        force_compact=True,
+                    )
+                    if compacted_context:
+                        compacted_context_by_skill[skill_id] = compacted_context
+                await save_conversation_state(agent_state)
+
+                skill_context_by_skill = compacted_context_by_skill
                 upstream_messages = build_upstream_messages_for_skills(
                     request=request,
                     active_skill_ids=active_skill_ids,
@@ -594,6 +595,31 @@ async def stream_remote_chat_completion(
                     uploaded_files_context=uploaded_files_context,
                     extra_messages=tool_trace_messages,
                 )
+                prompt_tokens_estimate = estimate_prompt_tokens(upstream_messages)
+                execution_budget.prompt_tokens_estimate = prompt_tokens_estimate
+
+                if prompt_tokens_estimate >= prompt_budget_tokens:
+                    tools_enabled = False
+                    tool_trace_messages.append(
+                        {
+                            "role": "system",
+                            "content": (
+                                "当前会话上下文已接近模型可用窗口上限，且压缩后仍超过预算。"
+                                f"估算 token={prompt_tokens_estimate}，预算={prompt_budget_tokens}。"
+                                "本轮起停止工具调用，请基于已读取内容直接回答。"
+                            ),
+                        }
+                    )
+                    upstream_messages = build_upstream_messages_for_skills(
+                        request=request,
+                        active_skill_ids=active_skill_ids,
+                        explicit_skill_ids=skill_plan.required_skill_ids,
+                        implicit_skill_ids=skill_plan.optional_skill_ids,
+                        missing_skill_ids=skill_plan.missing_explicit_skill_ids,
+                        skill_context_by_skill=skill_context_by_skill,
+                        uploaded_files_context=uploaded_files_context,
+                        extra_messages=tool_trace_messages,
+                    )
 
             merged_tool_calls: dict[int, dict[str, Any]] = {}
             assistant_content_parts: list[str] = []

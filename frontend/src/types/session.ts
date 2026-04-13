@@ -25,6 +25,7 @@ export interface ChatSessionSnapshotPayload {
   selected_root_child_id: string | null;
   selected_child_id_by_parent: Record<string, string>;
   selected_model: string;
+  selected_reranker_model?: string | null;
 }
 
 export interface ChatSessionSummary {
@@ -33,6 +34,7 @@ export interface ChatSessionSummary {
   created_at: string;
   updated_at: string;
   selected_model: string;
+  selected_reranker_model?: string | null;
 }
 
 export interface ChatSessionDetail extends ChatSessionSummary {

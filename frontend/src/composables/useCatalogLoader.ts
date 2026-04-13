@@ -5,6 +5,7 @@ import type { SkillOption } from '../types/skill';
 interface UseCatalogLoaderOptions {
   availableModels: Ref<string[]>;
   selectedModel: Ref<string>;
+  selectedRerankerModel: Ref<string>;
   processingModes: Ref<SkillOption[]>;
 }
 
@@ -19,6 +20,9 @@ export const useCatalogLoader = (options: UseCatalogLoaderOptions) => {
       options.availableModels.value = modelNames;
       if (!modelNames.includes(options.selectedModel.value)) {
         options.selectedModel.value = modelNames[0];
+      }
+      if (!modelNames.includes(options.selectedRerankerModel.value)) {
+        options.selectedRerankerModel.value = options.selectedModel.value;
       }
     } catch (error) {
       console.error('加载远程模型列表失败，继续使用前端兜底模型列表。', error);

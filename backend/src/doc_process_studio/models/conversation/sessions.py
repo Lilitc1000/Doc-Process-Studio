@@ -86,6 +86,10 @@ class ChatSessionSnapshot(BaseModel):
         description="各父节点当前选中的子节点",
     )
     selected_model: str = Field(..., description="当前模型名称")
+    selected_reranker_model: str | None = Field(
+        default=None,
+        description="当前重排序模型名称",
+    )
 
 
 class ChatSessionSummary(BaseModel):
@@ -94,6 +98,10 @@ class ChatSessionSummary(BaseModel):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     selected_model: str = Field(..., description="当前模型名称")
+    selected_reranker_model: str | None = Field(
+        default=None,
+        description="当前重排序模型名称",
+    )
 
 
 class ChatSessionDetail(ChatSessionSummary):

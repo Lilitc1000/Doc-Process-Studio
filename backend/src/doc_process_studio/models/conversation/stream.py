@@ -41,6 +41,10 @@ class ChatStreamRequest(BaseModel):
         description="前后端共享的会话标识，用于缓存 skill 上下文",
     )
     model: str = Field(..., description="要调用的模型名称")
+    reranker_model: str = Field(
+        default="",
+        description="用于检索重排序的轻量模型；为空时回退使用聊天模型。",
+    )
     skill_id: str = Field(
         default="",
         description="保留字段：兼容历史请求，不参与当前规划层主决策。",

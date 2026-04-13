@@ -21,6 +21,7 @@ interface UseChatSessionsOptions {
   selectedRootChildId: Ref<string | null>;
   selectedChildIdByParent: Ref<Record<string, string>>;
   selectedModel: Ref<string>;
+  selectedRerankerModel: Ref<string>;
   isChatLocked: () => boolean;
   getDisplayedMessages: () => ChatMessageNode[];
   resetEditingState: () => void;
@@ -47,6 +48,7 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
       created_at: session.created_at,
       updated_at: session.updated_at,
       selected_model: session.selected_model,
+      selected_reranker_model: session.selected_reranker_model ?? null,
     } satisfies ChatSessionSummary;
   };
 
@@ -87,6 +89,7 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
       selected_root_child_id: options.selectedRootChildId.value,
       selected_child_id_by_parent: { ...options.selectedChildIdByParent.value },
       selected_model: options.selectedModel.value,
+      selected_reranker_model: options.selectedRerankerModel.value,
     };
   };
 
@@ -126,6 +129,8 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
       ...snapshot.selected_child_id_by_parent,
     };
     options.selectedModel.value = snapshot.selected_model;
+    options.selectedRerankerModel.value =
+      snapshot.selected_reranker_model ?? snapshot.selected_model;
     options.resetEditingState();
   };
 

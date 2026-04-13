@@ -8,6 +8,7 @@ describe('ChatSidebar', () => {
       props: {
         models: ['qwen3:8b'],
         selectedModel: 'qwen3:8b',
+        selectedRerankerModel: 'qwen3:8b',
         sessions: [
           {
             id: 'session-recent',

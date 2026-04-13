@@ -28,13 +28,21 @@ class SkillConversationState(BaseModel):
         default_factory=list,
         description="已经加入会话上下文的 chunk 列表",
     )
-    compact_summary: str = Field(
+    short_term_memory: str = Field(
         default="",
-        description="超出上下文后保留的压缩 skill 记忆",
+        description="短期记忆：最近一次压缩得到的摘要",
+    )
+    episodic_memory: str = Field(
+        default="",
+        description="情节记忆：跨轮对话过程中的关键摘要",
+    )
+    skill_memory: str = Field(
+        default="",
+        description="技能记忆：相对稳定的长期技能背景摘要",
     )
     compacted_chunk_ids: list[str] = Field(
         default_factory=list,
-        description="已经被压缩进 compact_summary 的 chunk 列表",
+        description="已经进入层级记忆、不再全文注入的 chunk 列表",
     )
 
 

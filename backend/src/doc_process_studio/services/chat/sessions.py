@@ -134,6 +134,9 @@ async def upsert_chat_session(
         created_at=created_at,
         updated_at=now,
         selected_model=snapshot.selected_model,
+        selected_reranker_model=(
+            snapshot.selected_reranker_model or snapshot.selected_model
+        ),
     )
 
     await save_chat_session_summary(summary)

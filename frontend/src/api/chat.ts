@@ -13,6 +13,7 @@ export const streamChatReply = async (
       user_message_id: requestSnapshot.userMessageId,
       conversation_id: requestSnapshot.conversationId,
       model: requestSnapshot.model,
+      reranker_model: requestSnapshot.rerankerModel,
       selected_skill_ids: requestSnapshot.selectedSkillIds,
       messages: requestSnapshot.messages,
       attachment_ids: requestSnapshot.attachmentIds,

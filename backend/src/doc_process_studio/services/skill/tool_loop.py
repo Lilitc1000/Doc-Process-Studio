@@ -1174,6 +1174,7 @@ def execute_skill_tool_call(
                 exclude_chunk_ids=set(),
                 limit=limit,
                 source_path_contains=source_path,
+                reranker_model=(request.reranker_model or request.model),
             )
             return {
                 "ok": True,

@@ -3,10 +3,12 @@
     <ChatSidebar
       :models="availableModels"
       :selected-model="selectedModel"
+      :selected-reranker-model="selectedRerankerModel"
       :sessions="sessionSummaries"
       :active-session-id="activeSessionId"
       :is-locked="isLoading"
       @select-model="onSelectModel"
+      @select-reranker-model="onSelectRerankerModel"
       @clear-chat="onClearChat"
       @load-session="onLoadSession"
       @rename-session="onRenameSession"
@@ -174,6 +176,7 @@ const selectedFiles = ref<File[]>([]);
 const selectedSkillIds = ref<string[]>([]);
 const processingModes = ref<SkillOption[]>([]);
 const selectedModel = ref(fallbackModels[0]);
+const selectedRerankerModel = ref(fallbackModels[0]);
 const availableModels = ref(fallbackModels);
 const messageNodes = ref<Record<string, ChatMessageNode>>({});
 const rootChildIds = ref<string[]>([]);
@@ -298,6 +301,7 @@ const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
     userMessageId,
     conversationId: conversationId.value,
     model: selectedModel.value,
+    rerankerModel: selectedRerankerModel.value,
     selectedSkillIds: selectedSkillIdsFromMessage,
     messages: path.map((message) => ({
       role: message.role,
@@ -486,6 +490,7 @@ const {
   selectedRootChildId,
   selectedChildIdByParent,
   selectedModel,
+  selectedRerankerModel,
   isChatLocked: () => isLoading.value,
   getDisplayedMessages: () => displayedMessages.value,
   resetEditingState: () => {
@@ -596,6 +601,16 @@ const {
 
 const onSelectModel = (model: string) => {
   selectedModel.value = model;
+  if (!availableModels.value.includes(selectedRerankerModel.value)) {
+    selectedRerankerModel.value = model;
+  }
+  if (activeSessionId.value && rootChildIds.value.length > 0) {
+    void persistCurrentSession();
+  }
+};
+
+const onSelectRerankerModel = (model: string) => {
+  selectedRerankerModel.value = model;
   if (activeSessionId.value && rootChildIds.value.length > 0) {
     void persistCurrentSession();
   }
@@ -627,6 +642,7 @@ const onDeleteSession = async (sessionId: string) => {
 const { loadAvailableModels, loadAvailableSkills } = useCatalogLoader({
   availableModels,
   selectedModel,
+  selectedRerankerModel,
   processingModes,
 });
 

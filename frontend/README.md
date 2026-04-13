@@ -72,7 +72,7 @@ frontend/
 - [ChatInput.vue](/frontend/src/components/ChatInput.vue)
   底部输入区、文件选择、`$skill` 多选输入。
 - [ChatSidebar.vue](/frontend/src/components/ChatSidebar.vue)
-  左侧历史会话与模型选择区域。
+  左侧历史会话与模型选择区域（包含“聊天模型”和“重排序模型”两个下拉）。
 
 ### 2. 组合式逻辑
 
@@ -100,7 +100,7 @@ frontend/
 - [api/sessions.ts](/frontend/src/api/sessions.ts)
   历史会话接口。
 - [api/chat.ts](/frontend/src/api/chat.ts)
-  聊天流式请求封装。
+  聊天流式请求封装（透传 `model` 与 `reranker_model`）。
 - [api/attachments.ts](/frontend/src/api/attachments.ts)
   附件下载接口封装（统一使用 `attachment` 语义）。
 

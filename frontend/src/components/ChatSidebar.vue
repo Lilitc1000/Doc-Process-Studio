@@ -87,7 +87,7 @@
 
       <section class="settings-section">
         <div ref="modelSelectorRef" class="selector-group">
-          <label id="model-select-label">选择模型</label>
+          <label id="model-select-label">聊天模型</label>
           <button
             type="button"
             class="selector-trigger"
@@ -135,6 +135,66 @@
                 <span>{{ model }}</span>
                 <span
                   v-if="model === selectedModel"
+                  class="selector-option-tag"
+                >
+                  当前
+                </span>
+              </button>
+            </div>
+          </Transition>
+        </div>
+
+        <div ref="rerankerSelectorRef" class="selector-group">
+          <label id="reranker-select-label">重排序模型</label>
+          <button
+            type="button"
+            class="selector-trigger"
+            :class="{ open: isRerankerDropdownOpen }"
+            :aria-expanded="isRerankerDropdownOpen"
+            aria-haspopup="listbox"
+            aria-labelledby="reranker-select-label"
+            :disabled="props.isLocked"
+            @click="toggleRerankerDropdown"
+            @keydown.enter.prevent="toggleRerankerDropdown"
+            @keydown.space.prevent="toggleRerankerDropdown"
+            @keydown.esc.prevent="closeAllDropdowns"
+          >
+            <span class="selector-trigger-text">{{
+              selectedRerankerModel
+            }}</span>
+            <span class="selector-trigger-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" class="selector-trigger-icon-svg">
+                <path
+                  d="M3.5 6.25L8 10.75L12.5 6.25"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+              </svg>
+            </span>
+          </button>
+
+          <Transition name="dropdown">
+            <div
+              v-if="isRerankerDropdownOpen"
+              class="selector-dropdown"
+              role="listbox"
+              aria-labelledby="reranker-select-label"
+            >
+              <button
+                v-for="model in models"
+                :key="`reranker-${model}`"
+                type="button"
+                class="selector-option"
+                :class="{ active: model === selectedRerankerModel }"
+                :disabled="props.isLocked"
+                @click="onSelectRerankerModel(model)"
+              >
+                <span>{{ model }}</span>
+                <span
+                  v-if="model === selectedRerankerModel"
                   class="selector-option-tag"
                 >
                   当前
@@ -216,6 +276,7 @@ import { groupSessionsByDate } from '../utils/session-groups';
 const props = defineProps<{
   models: readonly string[];
   selectedModel: string;
+  selectedRerankerModel: string;
   sessions: readonly ChatSessionSummary[];
   activeSessionId: string | null;
   isLocked?: boolean;
@@ -223,6 +284,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select-model', model: string): void;
+  (e: 'select-reranker-model', model: string): void;
   (e: 'clear-chat'): void;
   (e: 'load-session', sessionId: string): void;
   (e: 'rename-session', payload: { sessionId: string; title: string }): void;
@@ -230,10 +292,12 @@ const emit = defineEmits<{
 }>();
 
 const isModelDropdownOpen = ref(false);
+const isRerankerDropdownOpen = ref(false);
 const openSessionMenuId = ref<string | null>(null);
 const renameDialogSession = ref<ChatSessionSummary | null>(null);
 const renameInput = ref('');
 const modelSelectorRef = ref<HTMLElement | null>(null);
+const rerankerSelectorRef = ref<HTMLElement | null>(null);
 
 const sessionGroups = computed<SessionGroup[]>(() => {
   return groupSessionsByDate(props.sessions);
@@ -241,6 +305,7 @@ const sessionGroups = computed<SessionGroup[]>(() => {
 
 const closeAllDropdowns = () => {
   isModelDropdownOpen.value = false;
+  isRerankerDropdownOpen.value = false;
 };
 
 const closeSessionMenu = () => {
@@ -259,6 +324,17 @@ const toggleModelDropdown = () => {
   isModelDropdownOpen.value = !isModelDropdownOpen.value;
   if (isModelDropdownOpen.value) {
     closeSessionMenu();
+  }
+};
+
+const toggleRerankerDropdown = () => {
+  if (props.isLocked) {
+    return;
+  }
+  isRerankerDropdownOpen.value = !isRerankerDropdownOpen.value;
+  if (isRerankerDropdownOpen.value) {
+    closeSessionMenu();
+    isModelDropdownOpen.value = false;
   }
 };
 
@@ -302,11 +378,23 @@ const onSelectModel = (model: string) => {
   closeAllDropdowns();
 };
 
+const onSelectRerankerModel = (model: string) => {
+  if (props.isLocked) {
+    return;
+  }
+  emit('select-reranker-model', model);
+  closeAllDropdowns();
+};
+
 const handleClickOutside = (event: MouseEvent) => {
   const target = event.target as HTMLElement | null;
 
   if (target && !modelSelectorRef.value?.contains(target)) {
-    closeAllDropdowns();
+    isModelDropdownOpen.value = false;
+  }
+
+  if (target && !rerankerSelectorRef.value?.contains(target)) {
+    isRerankerDropdownOpen.value = false;
   }
 
   if (
