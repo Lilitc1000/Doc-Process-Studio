@@ -2,13 +2,18 @@ import json
 import re
 from datetime import UTC, datetime
 from collections.abc import AsyncIterator
-from copy import deepcopy
 from typing import Any
 
 import httpx
 from fastapi import UploadFile
 
 from ...models.conversation.stream import ChatStreamRequest
+from ...services.agent.executor import (
+    ExecutionBudget,
+    ExecutionInput,
+    ExecutorDeps,
+    execute_tool_graph,
+)
 from ...models.skill.runtime import (
     ConversationAgentState,
     SkillConversationState,
@@ -16,6 +21,7 @@ from ...models.skill.runtime import (
     SkillToolHistoryRecord,
 )
 from ...settings import settings
+from ..infra.model_context import estimate_prompt_tokens, get_model_context_length
 from ..infra.ollama_client import OllamaNotConfiguredError, stream_chat_completion
 from ..skill.interaction_flow import start_or_resume_interaction, submit_interaction_answer
 from ..skill.interaction_store import load_interaction_state
@@ -277,16 +283,6 @@ def _append_tool_history(
         agent_state.tool_history = agent_state.tool_history[-max_entries:]
 
 
-def _collect_loaded_chunk_signatures(
-    states_by_skill: dict[str, SkillConversationState],
-) -> set[str]:
-    signatures: set[str] = set()
-    for skill_id, state in states_by_skill.items():
-        for chunk_id in state.loaded_chunk_ids:
-            signatures.add(f"{skill_id}::{chunk_id}")
-    return signatures
-
-
 async def stream_remote_chat_completion(
     request: ChatStreamRequest,
     upload_files: list[UploadFile] | None = None,
@@ -527,6 +523,12 @@ async def stream_remote_chat_completion(
         executed_tool_calls: dict[str, dict[str, Any]] = {}
         tools_enabled = True
         tool_round_count = 0
+        execution_budget = ExecutionBudget(
+            max_tool_calls=max(1, settings.agent_executor_max_tool_calls),
+            max_time_seconds=max(1.0, settings.agent_executor_time_budget_seconds),
+            max_prompt_tokens=0,
+            prompt_tokens_estimate=0,
+        )
 
         while True:
             tooling_skill_ids = [
@@ -558,6 +560,40 @@ async def stream_remote_chat_completion(
                 uploaded_files_context=uploaded_files_context,
                 extra_messages=tool_trace_messages,
             )
+            model_context_length = await get_model_context_length(request.model)
+            prompt_tokens_estimate = estimate_prompt_tokens(upstream_messages)
+            prompt_budget_tokens = max(
+                256,
+                int(
+                    max(1, model_context_length)
+                    * max(0.2, min(0.95, settings.agent_executor_prompt_budget_ratio))
+                ),
+            )
+            execution_budget.prompt_tokens_estimate = prompt_tokens_estimate
+            execution_budget.max_prompt_tokens = prompt_budget_tokens
+
+            if tools_enabled and prompt_tokens_estimate >= prompt_budget_tokens:
+                tools_enabled = False
+                tool_trace_messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "当前会话上下文已接近模型可用窗口上限，"
+                            f"估算 token={prompt_tokens_estimate}，预算={prompt_budget_tokens}。"
+                            "本轮起停止工具调用，请基于已读取内容直接回答。"
+                        ),
+                    }
+                )
+                upstream_messages = build_upstream_messages_for_skills(
+                    request=request,
+                    active_skill_ids=active_skill_ids,
+                    explicit_skill_ids=skill_plan.required_skill_ids,
+                    implicit_skill_ids=skill_plan.optional_skill_ids,
+                    missing_skill_ids=skill_plan.missing_explicit_skill_ids,
+                    skill_context_by_skill=skill_context_by_skill,
+                    uploaded_files_context=uploaded_files_context,
+                    extra_messages=tool_trace_messages,
+                )
 
             merged_tool_calls: dict[int, dict[str, Any]] = {}
             assistant_content_parts: list[str] = []
@@ -631,233 +667,66 @@ async def stream_remote_chat_completion(
                 return
 
             tool_round_count += 1
-            round_made_progress = False
-
-            for tool_call in normalized_tool_calls:
-                tool_name = get_tool_call_name(tool_call)
-
-                yield format_sse_event(
-                    {
-                        "type": "tool-status",
-                        "phase": "start",
-                        "tool_name": tool_name,
-                        **build_tool_status_start(
-                            skill_id=primary_skill_id,
-                            tool_call=tool_call,
-                        ),
-                    }
-                )
-
-                if tool_name == "start_skill_interaction":
-                    interaction_step: dict[str, Any] | None = None
-                    should_emit_intro = False
-                    if len(tooling_skill_ids) != 1:
-                        tool_result = {
-                            "ok": False,
-                            "error": (
-                                "当前同时激活了多个文档处理方式，已禁用交互向导。"
-                                "请仅选择一个处理方式后再发起向导。"
-                            ),
-                        }
-                    elif interaction_config is None:
-                        tool_result = {
-                            "ok": False,
-                            "error": "当前 skill 未配置交互向导。",
-                        }
-                    else:
-                        existing_state = await load_interaction_state(
-                            request.conversation_id,
-                            primary_skill_id,
-                        )
-                        _, interaction_step = await start_or_resume_interaction(
-                            request=primary_request,
-                            config=interaction_config,
-                        )
-                        tool_result = {
-                            "ok": True,
-                            "interaction": interaction_step,
-                            "message": "已启动交互向导。",
-                        }
-                        should_emit_intro = (
-                            existing_state is None and bool(interaction_config.intro_message)
-                        )
-                    next_attachments: list[Any] = []
-
-                    yield format_sse_event(
-                        {
-                            "type": "tool-status",
-                            "phase": "finish",
-                            "tool_name": tool_name,
-                            **build_tool_status_finish(
-                                request=primary_request,
-                                state=primary_state,
-                                tool_call=tool_call,
-                                tool_result=tool_result,
-                                attachments=[],
-                            ),
-                        }
-                    )
-                    history_skill_id, history_tool_name = _resolve_tool_scope_for_history(
-                        default_skill_id=primary_skill_id,
-                        tool_call=tool_call,
-                    )
-                    _append_tool_history(
-                        agent_state=agent_state,
-                        record=SkillToolHistoryRecord(
-                            skill_id=history_skill_id,
-                            tool_name=history_tool_name,
-                            ok=bool(tool_result.get("ok")),
-                            reused=False,
-                            attachment_count=0,
-                            error=(
-                                str(tool_result.get("error"))
-                                if not tool_result.get("ok") and tool_result.get("error") is not None
-                                else None
-                            ),
-                            created_at=datetime.now(UTC),
-                        ),
-                    )
-                    await save_conversation_state(agent_state)
-
-                    if tool_result.get("ok") and interaction_step is not None:
-                        if should_emit_intro and interaction_config and interaction_config.intro_message:
-                            yield _format_assistant_delta_event(
-                                model=request.model,
-                                content=interaction_config.intro_message,
-                            )
-                        yield format_sse_event(
-                            {
-                                "type": "interaction",
-                                "status": "required",
-                                "interaction": interaction_step,
-                            }
-                        )
-                        yield _format_done_event(
-                            model=request.model,
-                            done_reason="interaction_required",
-                        )
-                        return
-
-                    tool_trace_messages.append(
-                        {
-                            "role": "tool",
-                            "name": tool_name,
-                            "content": json.dumps(tool_result, ensure_ascii=False),
-                        }
-                    )
-                    continue
-
-                tool_call_signature = build_tool_call_signature(tool_call)
-                if tool_call_signature in executed_tool_calls:
-                    cached_execution = executed_tool_calls[tool_call_signature]
-                    tool_result = deepcopy(cached_execution["tool_result"])
-                    tool_result["reused"] = True
-                    next_attachments = []
-                else:
-                    before_loaded_chunk_ids = _collect_loaded_chunk_signatures(
-                        states_by_skill
-                    )
-                    if len(tooling_skill_ids) == 1:
-                        single_skill_id = tooling_skill_ids[0]
-                        scoped_request = request.model_copy(
-                            update={"skill_id": single_skill_id}
-                        )
-                        tool_result, next_attachments = execute_skill_tool_call(
-                            request=scoped_request,
-                            state=states_by_skill[single_skill_id],
-                            tool_call=tool_call,
-                        )
-                    else:
-                        tool_result, next_attachments = execute_scoped_skill_tool_call(
-                            request=request,
-                            states_by_skill=states_by_skill,
-                            default_skill_id=primary_skill_id,
-                            tool_call=tool_call,
-                        )
-                    after_loaded_chunk_ids = _collect_loaded_chunk_signatures(
-                        states_by_skill
-                    )
-                    if detect_tool_call_progress(
-                        tool_name=tool_name,
-                        before_loaded_chunk_ids=before_loaded_chunk_ids,
-                        after_loaded_chunk_ids=after_loaded_chunk_ids,
-                        tool_result=tool_result,
-                        next_attachments=next_attachments,
-                    ):
-                        round_made_progress = True
-                    executed_tool_calls[tool_call_signature] = {
-                        "tool_result": deepcopy(tool_result),
-                    }
-
-                for attachment in next_attachments:
-                    yield format_sse_event(
-                        {
-                            "type": "attachment",
-                            "attachment": attachment.model_dump(
-                                mode="json",
-                                by_alias=True,
-                            ),
-                        }
-                    )
-
-                if next_attachments:
-                    round_made_progress = True
-
-                tool_trace_messages.append(
-                    {
-                        "role": "tool",
-                        "name": tool_name,
-                        "content": json.dumps(tool_result, ensure_ascii=False),
-                    }
-                )
-                yield format_sse_event(
-                    {
-                        "type": "tool-status",
-                        "phase": "finish",
-                        "tool_name": tool_name,
-                        **build_tool_status_finish(
-                            request=primary_request,
-                            state=primary_state,
-                            tool_call=tool_call,
-                            tool_result=tool_result,
-                            attachments=next_attachments,
-                        ),
-                    }
-                )
-                history_skill_id, history_tool_name = _resolve_tool_scope_for_history(
-                    default_skill_id=primary_skill_id,
-                    tool_call=tool_call,
-                )
-                _append_tool_history(
+            execution_result = await execute_tool_graph(
+                execution_input=ExecutionInput(
+                    request=request,
+                    primary_request=primary_request,
+                    plan_decision=skill_plan,
                     agent_state=agent_state,
-                    record=SkillToolHistoryRecord(
-                        skill_id=history_skill_id,
-                        tool_name=history_tool_name,
-                        ok=bool(tool_result.get("ok")),
-                        reused=bool(tool_result.get("reused")),
-                        attachment_count=len(next_attachments),
-                        error=(
-                            str(tool_result.get("error"))
-                            if not tool_result.get("ok") and tool_result.get("error") is not None
-                            else None
-                        ),
-                        created_at=datetime.now(UTC),
-                    ),
-                )
-                await save_conversation_state(agent_state)
+                    states_by_skill=states_by_skill,
+                    primary_skill_id=primary_skill_id,
+                    primary_state=primary_state,
+                    tooling_skill_ids=tooling_skill_ids,
+                    normalized_tool_calls=normalized_tool_calls,
+                    executed_tool_calls=executed_tool_calls,
+                    interaction_config=interaction_config,
+                    budget=execution_budget,
+                ),
+                deps=ExecutorDeps(
+                    build_tool_status_start=build_tool_status_start,
+                    build_tool_status_finish=build_tool_status_finish,
+                    build_tool_call_signature=build_tool_call_signature,
+                    get_tool_call_name=get_tool_call_name,
+                    detect_tool_call_progress=detect_tool_call_progress,
+                    execute_skill_tool_call=execute_skill_tool_call,
+                    execute_scoped_skill_tool_call=execute_scoped_skill_tool_call,
+                    load_interaction_state=load_interaction_state,
+                    start_or_resume_interaction=start_or_resume_interaction,
+                ),
+            )
+            executed_tool_calls = execution_result.executed_tool_calls
+            tool_trace_messages.extend(execution_result.tool_trace_messages)
 
-            if not round_made_progress:
-                tools_enabled = False
-                tool_trace_messages.append(
+            for status_event in execution_result.status_events:
+                yield format_sse_event(status_event)
+
+            for assistant_delta in execution_result.assistant_deltas:
+                yield _format_assistant_delta_event(
+                    model=request.model,
+                    content=assistant_delta,
+                )
+
+            if execution_result.interaction_event is not None:
+                yield format_sse_event(execution_result.interaction_event)
+                yield _format_done_event(
+                    model=request.model,
+                    done_reason=execution_result.done_reason or "interaction_required",
+                )
+                return
+
+            if execution_result.error_message:
+                yield format_sse_event(
                     {
-                        "role": "system",
-                        "content": (
-                            "本轮工具调用没有获得新的信息，或者只是重复读取。"
-                            "请基于已经读取到的技能说明、参考资料和工具结果直接完成回答，"
-                            "不要继续重复调用相同工具。"
-                        ),
+                        "type": "error",
+                        "message": execution_result.error_message,
                     }
                 )
+                return
+
+            if execution_result.disable_tools:
+                tools_enabled = False
+
+            await save_conversation_state(agent_state)
     except OllamaNotConfiguredError as exc:
         yield format_sse_event({"type": "error", "message": str(exc)})
     except httpx.HTTPStatusError as exc:

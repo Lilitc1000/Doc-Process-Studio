@@ -31,6 +31,11 @@ def build_models_url() -> str:
     return f"{get_ollama_base_url()}/api/tags"
 
 
+def build_model_show_url() -> str:
+    """返回 Ollama 原生模型详情接口地址。"""
+    return f"{get_ollama_base_url()}/api/show"
+
+
 def build_timeout(*, stream: bool = False) -> httpx.Timeout:
     """统一远端调用超时策略。"""
     return httpx.Timeout(

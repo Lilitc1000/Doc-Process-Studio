@@ -321,53 +321,63 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 `发起请求 -> 收到步骤 -> 提交全部步骤 -> 返回附件 -> 验证附件可下载`。
 
 ## Tool Calling 与 Skill 上下文
-当前主链路采用为“分层规划 + 会话级 Agent 状态 + 流式工具循环”。
+当前主链路已升级为“分层规划 + 会话级 Agent 状态 + 执行器调度（Executor）”。
 
-### 主链路流程
+### 阶段2流程
 一次 `/api/chat/stream` 请求会走以下固定流程：
 
-1. 解析显式 skill：
-   - 前端 `selected_skill_ids`
-   - 用户消息中的 `$skill-id`
-2. 执行分层规划（`services/skill/planner.py`）：
-   - 第一层：词法召回候选（lexical）
-   - 第二层：当前会话模型重排候选（rerank）
-   - 策略门控：`max_implicit_skills`、`top_k_candidates`、`min_confidence`
-   - 产出统一结构：`SkillPlanDecision`
-3. 装载会话级 Agent 状态（Redis）：
-   - `ConversationAgentState.skills_state`：每个激活 skill 的上下文状态
-   - `ConversationAgentState.planner_trace`：规划轨迹（限长）
-   - `ConversationAgentState.tool_history`：工具执行历史（限长）
-4. 进入流式工具循环（`services/chat/stream.py`）：
-   - 每轮先同步所有激活 skill 的上下文压缩与注入预算
-   - 调用 Ollama 原生 `/api/chat`（`stream=true`）
-   - 收到 `tool_calls` 后执行工具，结果写回消息流并继续下一轮
-   - 无工具调用或无进展时收束到直接回答
+1. 解析显式 skill（`selected_skill_ids` + 消息中的 `$skill-id`）。
+2. 执行分层规划（`services/skill/planner.py`）并产出 `SkillPlanDecision`。
+3. 读取/初始化会话级 Agent 状态（Redis）：
+   - `skills_state`：按 skill 维护上下文状态
+   - `planner_trace`：规划轨迹
+   - `tool_history`：工具执行轨迹
+4. 构建上游消息并调用 Ollama `/api/chat`（stream=true）。
+5. 收到 `tool_calls` 后交给 `services/agent/executor.py` 调度执行。
 
-### 规划结果与优先级
-- `document-assistant` 作为 system skill 始终纳入激活集合。
-- `primary_skill_id` 由 `SkillPlanDecision` 统一给出。
-- 请求体中的 `skill_id` 不参与规划决策；规划只看显式集合 + 消息内容 + 候选重排结果。
+### 执行器（Executor）职责
+执行器接口：
+- 输入：`ExecutionInput`（含 `SkillPlanDecision`、当前会话状态、工具调用批次、预算）
+- 输出：`ExecutionResult` + `ExecutionStateDiff`
 
-### 工具与上下文行为
-- 内置渐进式披露工具：`list_skill_directory`、`read_skill_file`、`search_skill_context`、`read_skill_context`
-- skill 声明式工具：来自各 skill 的 `tools.json`
-- 已读取 chunk 与压缩摘要会写入 Redis，会话内复用。
-- 工具调用做签名去重，避免同轮重复读取。
-- 交互向导 `start_skill_interaction` 仅在单一目标 skill 场景启用。
+执行器能力：
+- 轻量 DAG 调度：
+  - 节点类型：`read / search / load / declare_tool / interaction`
+  - 依赖约束：优先完成检索/读取，再执行载入与声明式生成工具
+- 并行执行：
+  - `read/search` 节点可并发执行（受 `agent_executor_max_parallel_reads` 限制）
+- 预算控制：
+  - token 预算（按模型 context_length 推导）
+  - tool 调用预算
+  - 时间预算
+  - 超预算自动收束并停止后续工具调用
+- 重试与补救：
+  - 指数退避重试（`agent_executor_tool_retry_*`）
+  - 失败后回退次优路径（例如 `search_skill_context` 自动移除 `source_path` 后重试）
 
-### 可调参数（`settings.py`）
-- `skill_planner_top_k_candidates`
-- `skill_planner_max_implicit_skills`
-- `skill_planner_min_confidence`
-- `skill_planner_trace_max_entries`
-- `skill_tool_history_max_entries`
+### 模型上下文预算（按模型动态）
+为避免每轮请求都探测模型上下文，后端使用两段式策略：
 
-维护建议：
-- 规划策略优先看 `services/skill/planner.py`
-- 上下文压缩与状态同步优先看 `services/skill/runtime.py`
-- 工具执行与状态文案优先看 `services/skill/tool_loop.py`
-- 流式编排与轨迹写入优先看 `services/chat/stream.py`
+1. 启动预热：
+   - `main.py` 启动时调用 `warmup_model_context_cache()`
+   - 基于 `/api/tags` + `/api/show` 预热模型 `context_length` 缓存
+2. 对话期读取：
+   - 每轮仅从缓存读取 context_length（`get_model_context_length`）
+   - 用 `agent_executor_prompt_budget_ratio` 计算本轮 prompt token 预算
+   - 超预算则进入“收束模式”（关闭工具调用，要求模型基于已有信息直接完成回答）
+
+### 关键实现位置
+- 规划：`services/skill/planner.py`
+- 执行器：`services/agent/executor.py`
+- 模型上下文缓存：`services/infra/model_context.py`
+- 流式编排：`services/chat/stream.py`
+
+### 常用配置（`settings.py`）
+- 规划：`skill_planner_*`
+- 执行器：`agent_executor_max_parallel_reads`、`agent_executor_max_tool_calls`、`agent_executor_time_budget_seconds`
+- 重试：`agent_executor_tool_retry_max_attempts`、`agent_executor_tool_retry_base_delay_seconds`
+- token 预算：`agent_executor_prompt_budget_ratio`、`agent_executor_default_context_length`
+- context 缓存：`agent_executor_model_context_cache_ttl_seconds`、`agent_executor_model_context_warmup_concurrency`
 
 另外当前的声明式工具参数还有一条重要约定：
 

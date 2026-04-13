@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     skill_planner_min_confidence: float = 0.35
     skill_planner_trace_max_entries: int = 20
     skill_tool_history_max_entries: int = 200
+    agent_executor_max_parallel_reads: int = 4
+    agent_executor_tool_retry_max_attempts: int = 3
+    agent_executor_tool_retry_base_delay_seconds: float = 0.25
+    agent_executor_time_budget_seconds: float = 30.0
+    agent_executor_max_tool_calls: int = 24
+    agent_executor_prompt_budget_ratio: float = 0.82
+    agent_executor_default_context_length: int = 8192
+    agent_executor_model_context_cache_ttl_seconds: int = 60 * 60 * 12
+    agent_executor_model_context_warmup_concurrency: int = 4
     generated_attachments_dir: str = str(BACKEND_DIR / "generated-attachments")
     generated_attachment_ttl_seconds: int = 60 * 60 * 24 * 7
 

@@ -5,12 +5,14 @@ from fastapi import FastAPI
 
 from .routers import routers as app_routers
 from .services.chat.attachments import cleanup_expired_attachments
+from .services.infra.model_context import warmup_model_context_cache
 from .settings import settings
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     cleanup_expired_attachments()
+    await warmup_model_context_cache()
     yield
 
 
