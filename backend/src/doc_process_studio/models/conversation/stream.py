@@ -73,7 +73,3 @@ class ChatStreamRequest(BaseModel):
         default_factory=list,
         description="当前消息路径上已持久化的用户上传文件标识",
     )
-    interaction_answer: ChatInteractionAnswer | None = Field(
-        default=None,
-        description="交互式步骤提交数据；为空表示发起或继续普通对话",
-    )

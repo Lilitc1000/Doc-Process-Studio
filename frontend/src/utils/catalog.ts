@@ -42,6 +42,7 @@ export const normalizeSkillCatalog = (payload: SkillCatalogPayload) => {
       skill.shortDescription ??
       ''
     ).trim();
+    const skillType = (skill.skill_type ?? skill.skillType ?? 'chat').trim();
 
     if (!id || !displayName) {
       continue;
@@ -51,6 +52,7 @@ export const normalizeSkillCatalog = (payload: SkillCatalogPayload) => {
       id,
       displayName,
       shortDescription,
+      skillType,
     });
   }
 

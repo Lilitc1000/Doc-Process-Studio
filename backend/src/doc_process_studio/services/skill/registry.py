@@ -156,6 +156,11 @@ def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | Non
         interface_values.get("display_name", "").strip()
         or skill_markdown_metadata.get("name", "").strip()
     )
+    skill_type = (
+        interface_values.get("skill_type", "").strip()
+        or skill_markdown_metadata.get("skill_type", "").strip()
+        or "chat"
+    )
     default_prompt = interface_values.get("default_prompt", "").strip()
     short_description = (
         interface_values.get("short_description", "").strip()
@@ -168,6 +173,7 @@ def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | Non
     return SkillInterfaceConfig(
         id=skill_dir.name,
         display_name=display_name,
+        skill_type=skill_type,
         short_description=short_description,
         default_prompt=default_prompt,
         tools=_load_declared_tools(skill_dir),

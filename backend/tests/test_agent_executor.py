@@ -60,17 +60,8 @@ def _build_execution_input(
         tooling_skill_ids=["incident-report"],
         normalized_tool_calls=normalized_tool_calls,
         executed_tool_calls={},
-        interaction_config=None,
         budget=budget,
     )
-
-
-async def _fake_load_interaction_state(_conversation_id: str, _skill_id: str):
-    return None
-
-
-async def _fake_start_or_resume_interaction(**_kwargs):
-    return object(), {}
 
 
 def _build_deps(
@@ -85,8 +76,6 @@ def _build_deps(
         detect_tool_call_progress=lambda **_kwargs: True,
         execute_skill_tool_call=execute_skill_tool_call,
         execute_scoped_skill_tool_call=lambda **_kwargs: ({"ok": True}, []),
-        load_interaction_state=_fake_load_interaction_state,
-        start_or_resume_interaction=_fake_start_or_resume_interaction,
     )
 
 

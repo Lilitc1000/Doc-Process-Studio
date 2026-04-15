@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Any
 
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -62,10 +61,6 @@ class ChatSessionMessageNode(BaseModel):
     tool_statuses: list[dict[str, str | None]] = Field(
         default_factory=list,
         description="工具调用状态记录",
-    )
-    interaction: dict[str, Any] | None = Field(
-        default=None,
-        description="当前消息上的交互步骤卡片状态",
     )
     timestamp: datetime = Field(..., description="消息时间")
     parent_id: str | None = Field(default=None, description="父消息标识")

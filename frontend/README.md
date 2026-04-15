@@ -31,6 +31,13 @@ npm run build
 npm run test
 ```
 
+说明：
+
+- `npm run test`：Vitest 单元测试
+- `npm run lint`：ESLint 规则检查
+- `vue-tsc --noEmit`：TypeScript 类型检查
+- `npm run build`：生产构建可用性检查
+
 ## 目录约定
 
 当前前端目录按“组件 / 类型 / API / 工具 / 样式 / 组合式逻辑”分层：
@@ -68,16 +75,20 @@ frontend/
 - [ChatMessage.vue](/frontend/src/components/ChatMessage.vue)
   单条消息装配组件，负责拼装消息子组件与事件透传。
 - [components/message/*](/frontend/src/components/message)
-  消息子组件集合：`MessageHeader`、`MessageFiles`、`MessageToolbar`、`MessageToolTimeline`、`MessageInteractionCard`、`MessageLiveToolStatus`。
+  消息子组件集合：`MessageHeader`、`MessageFiles`、`MessageToolbar`、`MessageToolTimeline`、`MessageLiveToolStatus`。
 - [ChatInput.vue](/frontend/src/components/ChatInput.vue)
   底部输入区、文件选择、`$skill` 多选输入。
 - [ChatSidebar.vue](/frontend/src/components/ChatSidebar.vue)
   左侧历史会话与模型选择区域（包含“聊天模型”和“重排序模型”两个下拉）。
+- [IncidentReportWorkspace.vue](/frontend/src/components/IncidentReportWorkspace.vue)
+  事故报告工作区页面，包含欢迎向导、全量表单、生成弹窗、下载与链路回放。
 
 ### 2. 组合式逻辑
 
 - [useChatSessions.ts](/frontend/src/composables/useChatSessions.ts)
   历史会话加载、保存、重命名、删除、会话切换后的状态恢复。
+- [useIncidentReportSessions.ts](/frontend/src/composables/useIncidentReportSessions.ts)
+  事故报告会话加载、创建、表单实时保存、生成与下载状态管理。
 - [useChatStreaming.ts](/frontend/src/composables/useChatStreaming.ts)
   流式生成、停止生成、流式内容回填。
 - [useCopyToast.ts](/frontend/src/composables/useCopyToast.ts)
@@ -89,7 +100,7 @@ frontend/
 - [useSkillMentionSelector.ts](/frontend/src/composables/useSkillMentionSelector.ts)
   统一的 `$skill` 触发、候选过滤、键盘导航、token 删除逻辑，供输入框与编辑态复用。
 - [composables/message/*](/frontend/src/composables/message)
-  消息局部逻辑：`useMessageRender`（懒渲染/缓存）、`useMessageEdit`（编辑态自适应输入）、`useMessageInteraction`（交互卡片提交流程）。
+  消息局部逻辑：`useMessageRender`（懒渲染/缓存）、`useMessageEdit`（编辑态自适应输入）。
 
 ### 3. 请求层
 
@@ -101,6 +112,8 @@ frontend/
   历史会话接口。
 - [api/chat.ts](/frontend/src/api/chat.ts)
   聊天流式请求封装（透传 `model` 与 `reranker_model`）。
+- [api/incident-report.ts](/frontend/src/api/incident-report.ts)
+  事故报告工作区接口封装（schema/sessions/generate/title/delete）。
 - [api/attachments.ts](/frontend/src/api/attachments.ts)
   附件下载接口封装（统一使用 `attachment` 语义）。
 - [api/trace.ts](/frontend/src/api/trace.ts)
@@ -110,6 +123,8 @@ frontend/
 
 - [types/chat.ts](/frontend/src/types/chat.ts)
   消息节点、聊天请求、流式事件等类型。
+- [types/incident-report.ts](/frontend/src/types/incident-report.ts)
+  事故报告表单、会话、生成响应等类型。
 - [types/session.ts](/frontend/src/types/session.ts)
   历史会话与快照结构。
 - [types/trace.ts](/frontend/src/types/trace.ts)
@@ -244,20 +259,27 @@ cacheScopeId + messageId + role + contentHash
 
 ## Skill 选择输入约定
 
-文档处理方式目前是在输入框内输入 `$` 来做触发式选择：
+聊天输入框仍支持 `$` 触发 skill 选择，但只展示 `skillType=chat` 的条目。
 
-- 在输入框或用户消息编辑态输入 `$`，会弹出可选 skill 列表
-- 支持方向键、`Enter`、`Tab`、鼠标点击选择
-- 选中的 skill 会显示为 token，`Backspace` 在文本为空时可整块删除最后一个 token
-- 一条用户消息可绑定多个 skill（`requestSkillIds`），后端按该条消息快照执行
+- 输入框和消息编辑态输入 `$` 时弹出候选列表。
+- 支持方向键、`Enter`、`Tab`、鼠标点击选择。
+- 一条用户消息可绑定多个 skill（`requestSkillIds`）。
+- `document-assistant` 是 system skill，不在候选中显示。
+- `incident-report` 属于 `workspace_incident` 类型，不会出现在聊天候选与隐式选择中。
 
-`document-assistant` 是 system skill，不会出现在前端候选里。
+## 事故报告工作区
 
-## 交互式消息卡片
+事故报告走独立页面流程：
 
-- assistant 消息支持显示交互步骤卡片（single / multi / text），由后端 `interaction` 流事件驱动。
-- 前端会兼容 `snake_case` 与 `camelCase` 的交互字段，避免历史会话回放时因字段风格不同导致卡片丢失。
-- 交互提交流程保持在同一条 assistant 消息内继续流式更新，直到工具完成并返回附件。
+1. 侧栏切换到“事故报告”后显示欢迎向导。
+2. 点击“开始”会创建事故报告会话，标题格式：`事故报告-YYYY/MM/DD HH:MM`。
+3. 页面渲染 `interaction.json` 中全部步骤为完整表单。
+4. 日期字段使用 `datetime-local`，按浏览器本地时区输入与展示。
+5. 生成前先做必填校验，缺项在表单内高亮提示。
+6. 生成中显示“正在生成中，请稍候”并锁定页面操作。
+7. 生成完成后显示“附件已生成，请下载”，按钮切换为下载。
+8. 仅允许下载 `.docx` 附件。
+9. 若 LLM 润色失败，自动回退原始表单数据生成，并可在链路回放中看到回退状态。
 
 ## 新功能开发建议
 
@@ -299,6 +321,7 @@ cacheScopeId + messageId + role + contentHash
 - 聊天流事件解析
 - 附件上传/下载与 `attachment` 流事件
 - `ChatSidebar` 基础交互
+- 事故报告工作区（欢迎页/建会话/表单生成）流程
 
 后续如果继续补测试，优先补这些高价值点：
 

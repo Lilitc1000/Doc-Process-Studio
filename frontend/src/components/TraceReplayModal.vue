@@ -71,10 +71,32 @@
               <h4>关键事件</h4>
               <ul class="trace-modal-event-list">
                 <li v-for="(event, index) in payload.events" :key="index">
-                  <span class="trace-event-type">{{ event.type || '-' }}</span>
-                  <span class="trace-event-time">{{
-                    formatDateTime(event.at)
-                  }}</span>
+                  <div class="trace-event-head">
+                    <span
+                      class="trace-event-type"
+                      :class="{ 'is-error': isErrorEvent(event) }"
+                    >
+                      {{ event.type || '-' }}
+                    </span>
+                    <span class="trace-event-time">{{
+                      formatDateTime(event.at)
+                    }}</span>
+                  </div>
+                  <p
+                    v-if="extractEventMessage(event)"
+                    class="trace-event-message"
+                  >
+                    {{ extractEventMessage(event) }}
+                  </p>
+                  <details
+                    v-if="hasEventDetail(event)"
+                    class="trace-event-detail-block"
+                  >
+                    <summary>查看详情</summary>
+                    <pre class="trace-modal-code">{{
+                      formatDetailJson(event.detail)
+                    }}</pre>
+                  </details>
                 </li>
               </ul>
             </section>
@@ -135,6 +157,52 @@ const formatDateTime = (value?: string | null) => {
   return date.toLocaleString('zh-CN', {
     hour12: false,
   });
+};
+
+const hasEventDetail = (event: { detail?: Record<string, unknown> }) => {
+  return Boolean(event.detail && Object.keys(event.detail).length > 0);
+};
+
+const extractEventMessage = (event: { detail?: Record<string, unknown> }) => {
+  const detail = event.detail ?? {};
+  const message = detail.message;
+  if (typeof message === 'string' && message.trim()) {
+    return message.trim();
+  }
+
+  const errorText = detail.error;
+  if (typeof errorText === 'string' && errorText.trim()) {
+    return errorText.trim();
+  }
+
+  const errorDetail = detail.error_detail;
+  if (
+    typeof errorDetail === 'object' &&
+    errorDetail !== null &&
+    typeof (errorDetail as { message?: unknown }).message === 'string'
+  ) {
+    const nestedMessage = (errorDetail as { message: string }).message.trim();
+    if (nestedMessage) {
+      return nestedMessage;
+    }
+  }
+
+  return '';
+};
+
+const isErrorEvent = (event: {
+  type?: string;
+  detail?: Record<string, unknown>;
+}) => {
+  if ((event.type ?? '').toLowerCase() === 'error') {
+    return true;
+  }
+  const detail = event.detail ?? {};
+  return Boolean(detail.error || detail.error_detail);
+};
+
+const formatDetailJson = (value?: Record<string, unknown>) => {
+  return JSON.stringify(value ?? {}, null, 2);
 };
 </script>
 

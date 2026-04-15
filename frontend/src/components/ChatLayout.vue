@@ -4,116 +4,147 @@
       :models="availableModels"
       :selected-model="selectedModel"
       :selected-reranker-model="selectedRerankerModel"
-      :sessions="sessionSummaries"
-      :active-session-id="activeSessionId"
-      :is-locked="isLoading"
+      :sessions="sidebarSessions"
+      :active-session-id="sidebarActiveSessionId"
+      :workspaces="workspaceTabs"
+      :active-workspace-id="activeWorkspaceId"
+      :is-locked="isSidebarLocked"
+      @select-workspace="onSelectWorkspace"
       @select-model="onSelectModel"
       @select-reranker-model="onSelectRerankerModel"
-      @clear-chat="onClearChat"
       @load-session="onLoadSession"
       @rename-session="onRenameSession"
       @delete-session="onDeleteSession"
     />
     <div class="chat-main">
-      <Transition name="session-switch" mode="out-in">
-        <div
-          :key="sessionViewKey"
-          ref="messageContainerRef"
-          class="chat-messages"
-        >
-          <ChatMessage
-            v-for="message in displayedMessages"
-            :key="message.id"
-            :message="message"
-            :is-thinking="isMessageThinking(message)"
-            :is-streaming="isMessageStreaming(message)"
-            :version-index="getMessageVersionIndex(message.id)"
-            :version-count="getMessageVersionCount(message.id)"
-            :show-version-switcher="getMessageVersionCount(message.id) > 1"
-            :can-go-prev="canSwitchMessageVersion(message.id, -1)"
-            :can-go-next="canSwitchMessageVersion(message.id, 1)"
-            :can-edit="message.role === 'user' && !isLoading"
-            :can-regenerate="message.role === 'assistant' && !isLoading"
-            :can-copy="message.content.trim().length > 0"
-            :can-download="
-              message.role === 'assistant' && message.content.trim().length > 0
-            "
-            :is-version-locked="message.role !== 'system' && isLoading"
-            :is-editing="editingMessageId === message.id"
-            :editing-text="editingDraftText"
-            :editing-files="
-              editingMessageId === message.id ? editingDraftFiles : []
-            "
-            :editing-skill-ids="
-              editingMessageId === message.id ? editingDraftSkillIds : []
-            "
-            :available-skills="processingModes"
-            :can-confirm-edit="canConfirmEdit"
-            :show-toolbar-by-default="message.id === lastAssistantMessageId"
-            :cache-scope-id="activeSessionId ?? conversationId"
-            :can-submit-interaction="canSubmitInteraction"
-            :can-open-trace="
-              message.role === 'assistant' &&
-              typeof message.traceId === 'string' &&
-              message.traceId.trim().length > 0 &&
-              !isMessageStreaming(message)
-            "
-            :live-tool-status="
-              message.id === activeGeneration?.assistantId
-                ? latestLiveToolStatus
-                : null
-            "
-            @prev-version="switchMessageVersion(message.id, -1)"
-            @next-version="switchMessageVersion(message.id, 1)"
-            @start-edit="startEditingMessage(message.id)"
-            @update-edit-text="updateEditingText"
-            @update-edit-skill-ids="updateEditingSkillIds"
-            @upload-edit-files="appendEditingFiles"
-            @remove-edit-file="removeEditingFile"
-            @cancel-edit="cancelEditingMessage"
-            @confirm-edit="confirmEditingMessage"
-            @regenerate="onRegenerate(message.id)"
-            @copy="copyMessage(message.id)"
-            @download="downloadAssistantMessage(message.id)"
-            @download-file="downloadMessageFile"
-            @submit-interaction="submitMessageInteraction(message.id, $event)"
-            @open-trace="openMessageTrace(message.id)"
-          />
+      <Transition name="workspace-switch" mode="out-in">
+        <div :key="activeWorkspaceId" class="workspace-panel">
+          <template v-if="activeWorkspaceId === 'chat'">
+            <Transition name="session-switch" mode="out-in">
+              <div
+                :key="sessionViewKey"
+                ref="messageContainerRef"
+                class="chat-messages"
+              >
+                <ChatMessage
+                  v-for="message in displayedMessages"
+                  :key="message.id"
+                  :message="message"
+                  :is-thinking="isMessageThinking(message)"
+                  :is-streaming="isMessageStreaming(message)"
+                  :version-index="getMessageVersionIndex(message.id)"
+                  :version-count="getMessageVersionCount(message.id)"
+                  :show-version-switcher="
+                    getMessageVersionCount(message.id) > 1
+                  "
+                  :can-go-prev="canSwitchMessageVersion(message.id, -1)"
+                  :can-go-next="canSwitchMessageVersion(message.id, 1)"
+                  :can-edit="message.role === 'user' && !isLoading"
+                  :can-regenerate="message.role === 'assistant' && !isLoading"
+                  :can-copy="message.content.trim().length > 0"
+                  :can-download="
+                    message.role === 'assistant' &&
+                    message.content.trim().length > 0
+                  "
+                  :is-version-locked="message.role !== 'system' && isLoading"
+                  :is-editing="editingMessageId === message.id"
+                  :editing-text="editingDraftText"
+                  :editing-files="
+                    editingMessageId === message.id ? editingDraftFiles : []
+                  "
+                  :editing-skill-ids="
+                    editingMessageId === message.id ? editingDraftSkillIds : []
+                  "
+                  :available-skills="processingModes"
+                  :can-confirm-edit="canConfirmEdit"
+                  :show-toolbar-by-default="
+                    message.id === lastAssistantMessageId
+                  "
+                  :cache-scope-id="activeSessionId ?? conversationId"
+                  :can-open-trace="
+                    message.role === 'assistant' &&
+                    typeof message.traceId === 'string' &&
+                    message.traceId.trim().length > 0 &&
+                    !isMessageStreaming(message)
+                  "
+                  :live-tool-status="
+                    message.id === activeGeneration?.assistantId
+                      ? latestLiveToolStatus
+                      : null
+                  "
+                  @prev-version="switchMessageVersion(message.id, -1)"
+                  @next-version="switchMessageVersion(message.id, 1)"
+                  @start-edit="startEditingMessage(message.id)"
+                  @update-edit-text="updateEditingText"
+                  @update-edit-skill-ids="updateEditingSkillIds"
+                  @upload-edit-files="appendEditingFiles"
+                  @remove-edit-file="removeEditingFile"
+                  @cancel-edit="cancelEditingMessage"
+                  @confirm-edit="confirmEditingMessage"
+                  @regenerate="onRegenerate(message.id)"
+                  @copy="copyMessage(message.id)"
+                  @download="downloadAssistantMessage(message.id)"
+                  @download-file="downloadMessageFile"
+                  @open-trace="openMessageTrace(message.id)"
+                />
+              </div>
+            </Transition>
+            <Transition name="copy-toast">
+              <div v-if="isCopyToastVisible" class="copy-toast">
+                <div class="copy-toast-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" class="copy-toast-icon-svg">
+                    <path
+                      d="M5 10.5L8.25 13.75L15 7"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                  </svg>
+                </div>
+                <div class="copy-toast-content">
+                  <span class="copy-toast-title">{{ copyToastTitle }}</span>
+                  <span class="copy-toast-description">{{
+                    copyToastMessage
+                  }}</span>
+                </div>
+              </div>
+            </Transition>
+            <ChatInput
+              v-model:text="inputText"
+              :files="selectedFiles"
+              :available-skills="processingModes"
+              :selected-skill-ids="selectedSkillIds"
+              :is-loading="isLoading"
+              @update:selected-skill-ids="updateSelectedSkillIds"
+              @upload-files="onFilesSelect"
+              @send="onSendMessage"
+              @stop="onStopGeneration"
+              @clear-all-files="onClearAllFiles"
+              @remove-file="onRemoveFile"
+            />
+          </template>
+
+          <template v-else>
+            <IncidentReportWorkspace
+              :schema="incidentSchema"
+              :session="activeIncidentSession"
+              :is-generating="isIncidentGenerating"
+              :generation-state="generationState"
+              :generation-trace-id="incidentGenerationTraceId"
+              :generation-progress-lines="incidentGenerationProgress"
+              @start="onStartIncident"
+              @update-answers="onIncidentAnswersUpdate"
+              @generate="onIncidentGenerate"
+              @stop-generation="onIncidentStopGeneration"
+              @download="onIncidentDownload"
+              @open-trace="onIncidentOpenTrace"
+              @close-notice="closeGenerationNotice"
+            />
+          </template>
         </div>
       </Transition>
-      <Transition name="copy-toast">
-        <div v-if="isCopyToastVisible" class="copy-toast">
-          <div class="copy-toast-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20" class="copy-toast-icon-svg">
-              <path
-                d="M5 10.5L8.25 13.75L15 7"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-              />
-            </svg>
-          </div>
-          <div class="copy-toast-content">
-            <span class="copy-toast-title">{{ copyToastTitle }}</span>
-            <span class="copy-toast-description">{{ copyToastMessage }}</span>
-          </div>
-        </div>
-      </Transition>
-      <ChatInput
-        v-model:text="inputText"
-        :files="selectedFiles"
-        :available-skills="processingModes"
-        :selected-skill-ids="selectedSkillIds"
-        :is-loading="isLoading"
-        @update:selected-skill-ids="updateSelectedSkillIds"
-        @upload-files="onFilesSelect"
-        @send="onSendMessage"
-        @stop="onStopGeneration"
-        @clear-all-files="onClearAllFiles"
-        @remove-file="onRemoveFile"
-      />
     </div>
     <TraceReplayModal
       :visible="isTraceModalVisible"
@@ -137,6 +168,7 @@ import { useCatalogLoader } from '../composables/useCatalogLoader';
 import { useChatSessions } from '../composables/useChatSessions';
 import { useChatStreaming } from '../composables/useChatStreaming';
 import { useCopyToast } from '../composables/useCopyToast';
+import { useIncidentReportSessions } from '../composables/useIncidentReportSessions';
 import { useMessageActions } from '../composables/useMessageActions';
 import type {
   ChatAttachment,
@@ -145,6 +177,7 @@ import type {
   ChatRequestSnapshot,
   ChatToolStatus,
 } from '../types/chat';
+import type { IncidentFormAnswer } from '../types/incident-report';
 import type { SkillOption } from '../types/skill';
 import type { TraceReplayPayload } from '../types/trace';
 import { createMessageId } from '../utils/ids';
@@ -165,7 +198,13 @@ import { prewarmRenderedContentCache } from '../utils/render-markdown';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatSidebar from './ChatSidebar.vue';
+import IncidentReportWorkspace from './IncidentReportWorkspace.vue';
 import TraceReplayModal from './TraceReplayModal.vue';
+
+const workspaceTabs = [
+  { id: 'chat', label: '对话' },
+  { id: 'incident-report', label: '事故报告' },
+];
 
 const welcomeMessages: ChatMessageNode[] = [
   {
@@ -191,6 +230,7 @@ const welcomeMessages: ChatMessageNode[] = [
   },
 ];
 
+const activeWorkspaceId = ref<'chat' | 'incident-report'>('chat');
 const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
 const selectedSkillIds = ref<string[]>([]);
@@ -407,17 +447,6 @@ const updateMessageTraceId = (messageId: string, traceId: string) => {
   targetMessage.traceId = traceId;
 };
 
-const updateMessageInteraction = (
-  messageId: string,
-  interaction: ChatMessageNode['interaction'],
-) => {
-  const targetMessage = findMessageById(messageId);
-  if (!targetMessage) {
-    return;
-  }
-  targetMessage.interaction = interaction ?? null;
-};
-
 const getMessageVersionIndex = (messageId: string) => {
   return getMessageVersionIndexInTree({
     messageNodes: messageNodes.value,
@@ -486,9 +515,7 @@ const createAssistantVariant = (userMessageId: string) => {
 
 const {
   activeGeneration,
-  canSubmitInteraction,
   executeAssistantGeneration,
-  executeAssistantInteraction,
   isLoading,
   isMessageThinking,
   onStopGeneration,
@@ -498,7 +525,6 @@ const {
   appendMessageAttachment,
   appendMessageToolStatus,
   updateMessageTraceId,
-  updateMessageInteraction,
   updateMessageContent,
   findMessageById,
   scrollToBottom,
@@ -546,6 +572,45 @@ const {
   onDeleteActiveSession: () => {
     onClearChat();
   },
+});
+
+const {
+  activeIncidentSession,
+  activeIncidentSessionId,
+  clearActiveIncidentSession,
+  closeGenerationNotice,
+  deleteIncident,
+  downloadGeneratedIncidentAttachment,
+  generateIncident,
+  generationState,
+  incidentGenerationProgress,
+  incidentGenerationTraceId,
+  incidentSchema,
+  incidentSidebarSessions,
+  isIncidentGenerating,
+  loadIncidentSchema,
+  loadIncidentSession,
+  loadIncidentSessionSummaries,
+  renameIncident,
+  startIncidentSession,
+  stopIncidentGeneration,
+  updateIncidentAnswers,
+} = useIncidentReportSessions();
+
+const isSidebarLocked = computed(() => {
+  return isLoading.value || isIncidentGenerating.value;
+});
+
+const sidebarSessions = computed(() => {
+  return activeWorkspaceId.value === 'chat'
+    ? sessionSummaries.value
+    : incidentSidebarSessions.value;
+});
+
+const sidebarActiveSessionId = computed(() => {
+  return activeWorkspaceId.value === 'chat'
+    ? activeSessionId.value
+    : activeIncidentSessionId.value;
 });
 
 const isMessageStreaming = (message: ChatMessageNode) => {
@@ -645,9 +710,8 @@ const openMessageTrace = async (messageId: string) => {
   const targetMessage = findMessageById(messageId);
   const traceId = targetMessage?.traceId?.trim() ?? '';
   if (!traceId) {
-    showCopyToast({
+    showCopyToast('这条回复还没有可查看的 trace_id。', {
       title: '暂无链路信息',
-      message: '这条回复还没有可查看的 trace_id。',
     });
     return;
   }
@@ -671,10 +735,7 @@ const copyTraceId = async () => {
     return;
   }
   await navigator.clipboard.writeText(traceId);
-  showCopyToast({
-    title: 'Trace ID 已复制',
-    message: traceId,
-  });
+  showCopyToast(traceId, { title: 'Trace ID 已复制' });
 };
 
 const {
@@ -691,7 +752,6 @@ const {
   confirmEditingMessage,
   onSendMessage,
   onRegenerate,
-  submitMessageInteraction,
   copyMessage,
   downloadAssistantMessage,
   downloadMessageFile,
@@ -704,7 +764,6 @@ const {
   editingDraftFiles,
   editingDraftSkillIds,
   isLoading,
-  canSubmitInteractionRequest: () => canSubmitInteraction.value,
   activeSessionId,
   conversationId,
   rootChildIds,
@@ -716,7 +775,6 @@ const {
   createMessageNode,
   buildRequestSnapshotForUserMessage,
   executeAssistantGeneration,
-  executeAssistantInteraction,
   persistCurrentSession: async () => {
     await persistCurrentSession();
   },
@@ -727,6 +785,17 @@ const {
   showCopyToast,
   downloadAttachment,
 });
+
+const onSelectWorkspace = async (workspaceId: string) => {
+  if (workspaceId === 'chat') {
+    activeWorkspaceId.value = 'chat';
+    onClearChat();
+    return;
+  }
+
+  activeWorkspaceId.value = 'incident-report';
+  clearActiveIncidentSession();
+};
 
 const onSelectModel = (model: string) => {
   selectedModel.value = model;
@@ -754,18 +823,69 @@ const updateEditingSkillIds = (skillIds: string[]) => {
 };
 
 const onLoadSession = async (sessionId: string) => {
-  await loadChatSession(sessionId);
+  if (activeWorkspaceId.value === 'chat') {
+    await loadChatSession(sessionId);
+    return;
+  }
+  await loadIncidentSession(sessionId);
 };
 
 const onRenameSession = async (payload: {
   sessionId: string;
   title: string;
 }) => {
-  await renameChatSession(payload.sessionId, payload.title);
+  if (activeWorkspaceId.value === 'chat') {
+    await renameChatSession(payload.sessionId, payload.title);
+    return;
+  }
+  await renameIncident(payload.sessionId, payload.title);
 };
 
 const onDeleteSession = async (sessionId: string) => {
-  await deleteChatSession(sessionId);
+  if (activeWorkspaceId.value === 'chat') {
+    await deleteChatSession(sessionId);
+    return;
+  }
+  await deleteIncident(sessionId);
+};
+
+const onStartIncident = async () => {
+  await startIncidentSession();
+};
+
+const onIncidentAnswersUpdate = (
+  answers: Record<string, IncidentFormAnswer>,
+) => {
+  updateIncidentAnswers(answers);
+};
+
+const onIncidentGenerate = async () => {
+  try {
+    await generateIncident(selectedModel.value, selectedRerankerModel.value);
+    await loadIncidentSessionSummaries();
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : '生成附件失败，请稍后重试。';
+    showCopyToast(message, { title: '生成失败' });
+  }
+};
+
+const onIncidentStopGeneration = () => {
+  stopIncidentGeneration();
+};
+
+const onIncidentDownload = async () => {
+  try {
+    await downloadGeneratedIncidentAttachment();
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : '下载失败，请稍后重试。';
+    showCopyToast(message, { title: '下载失败' });
+  }
+};
+
+const onIncidentOpenTrace = (traceId: string) => {
+  void openTraceModalByTraceId(traceId);
 };
 
 const { loadAvailableModels, loadAvailableSkills } = useCatalogLoader({
@@ -778,6 +898,8 @@ const { loadAvailableModels, loadAvailableSkills } = useCatalogLoader({
 onMounted(() => {
   scrollToBottom();
   void loadSessionSummaries();
+  void loadIncidentSchema();
+  void loadIncidentSessionSummaries();
   void loadAvailableSkills();
   void loadAvailableModels();
   prewarmVisibleConversationCache(

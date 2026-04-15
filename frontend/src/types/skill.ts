@@ -2,6 +2,7 @@ export interface SkillOption {
   id: string;
   displayName: string;
   shortDescription?: string;
+  skillType?: string;
 }
 
 export interface SkillCatalogPayload {
@@ -11,5 +12,7 @@ export interface SkillCatalogPayload {
     displayName?: string;
     short_description?: string;
     shortDescription?: string;
+    skill_type?: string;
+    skillType?: string;
   }>;
 }

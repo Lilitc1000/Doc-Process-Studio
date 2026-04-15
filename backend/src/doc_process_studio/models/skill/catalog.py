@@ -87,6 +87,10 @@ class SkillToolConfig(BaseModel):
 class SkillInterfaceConfig(BaseModel):
     id: str = Field(..., description="skill 唯一标识")
     display_name: str = Field(..., description="用于前端显示的名称")
+    skill_type: str = Field(
+        default="chat",
+        description="skill 类型，用于区分聊天可用与工作区专用能力。",
+    )
     short_description: str = Field(
         default="",
         description="skill 简短说明",

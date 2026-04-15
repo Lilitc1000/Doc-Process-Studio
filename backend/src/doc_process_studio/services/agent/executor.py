@@ -5,10 +5,9 @@ import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Awaitable, Callable, Literal
+from typing import Any, Callable, Literal
 
 from ...models.conversation.stream import ChatStreamRequest
-from ...models.skill.interaction import SkillInteractionConfig
 from ...models.skill.runtime import (
     ConversationAgentState,
     SkillConversationState,
@@ -17,7 +16,7 @@ from ...models.skill.runtime import (
 )
 from ...settings import settings
 
-TaskNodeType = Literal["read", "search", "load", "declare_tool", "interaction"]
+TaskNodeType = Literal["read", "search", "load", "declare_tool"]
 
 
 @dataclass
@@ -46,8 +45,6 @@ class ExecutionResult:
     tool_trace_messages: list[dict[str, Any]] = field(default_factory=list)
     attachments: list[Any] = field(default_factory=list)
     assistant_deltas: list[str] = field(default_factory=list)
-    interaction_event: dict[str, Any] | None = None
-    done_reason: str | None = None
     error_message: str | None = None
     round_made_progress: bool = False
     disable_tools: bool = False
@@ -68,7 +65,6 @@ class ExecutionInput:
     tooling_skill_ids: list[str]
     normalized_tool_calls: list[dict[str, Any]]
     executed_tool_calls: dict[str, dict[str, Any]]
-    interaction_config: SkillInteractionConfig | None
     budget: ExecutionBudget
 
 
@@ -81,8 +77,6 @@ class ExecutorDeps:
     detect_tool_call_progress: Callable[..., bool]
     execute_skill_tool_call: Callable[..., tuple[dict[str, Any], list[Any]]]
     execute_scoped_skill_tool_call: Callable[..., tuple[dict[str, Any], list[Any]]]
-    load_interaction_state: Callable[[str, str], Awaitable[Any]]
-    start_or_resume_interaction: Callable[..., Awaitable[tuple[Any, dict[str, Any]]]]
 
 
 @dataclass
@@ -142,8 +136,6 @@ def _classify_node_type(base_tool_name: str) -> TaskNodeType:
         return "search"
     if base_tool_name == "read_skill_context":
         return "load"
-    if base_tool_name == "start_skill_interaction":
-        return "interaction"
     return "declare_tool"
 
 
@@ -425,61 +417,6 @@ async def execute_tool_graph(
             }
         )
 
-        if node.base_tool_name == "start_skill_interaction":
-            interaction_step: dict[str, Any] | None = None
-            should_emit_intro = False
-            if len(execution_input.tooling_skill_ids) != 1:
-                tool_result = {
-                    "ok": False,
-                    "error": (
-                        "当前同时激活了多个文档处理方式，已禁用交互向导。"
-                        "请仅选择一个处理方式后再发起向导。"
-                    ),
-                }
-            elif execution_input.interaction_config is None:
-                tool_result = {
-                    "ok": False,
-                    "error": "当前 skill 未配置交互向导。",
-                }
-            else:
-                try:
-                    existing_state = await deps.load_interaction_state(
-                        execution_input.request.conversation_id,
-                        execution_input.primary_skill_id,
-                        tenant_id=execution_input.request.tenant_id,
-                    )
-                except TypeError:
-                    existing_state = await deps.load_interaction_state(
-                        execution_input.request.conversation_id,
-                        execution_input.primary_skill_id,
-                    )
-                _, interaction_step = await deps.start_or_resume_interaction(
-                    request=execution_input.primary_request,
-                    config=execution_input.interaction_config,
-                )
-                tool_result = {
-                    "ok": True,
-                    "interaction": interaction_step,
-                    "message": "已启动交互向导。",
-                }
-                should_emit_intro = (
-                    existing_state is None
-                    and bool(execution_input.interaction_config.intro_message)
-                )
-
-            attachments: list[Any] = []
-            if should_emit_intro and execution_input.interaction_config and execution_input.interaction_config.intro_message:
-                result.assistant_deltas.append(execution_input.interaction_config.intro_message)
-            if tool_result.get("ok") and interaction_step is not None:
-                result.interaction_event = {
-                    "type": "interaction",
-                    "status": "required",
-                    "interaction": interaction_step,
-                }
-                result.done_reason = "interaction_required"
-
-            return node, tool_result, attachments, tool_call, False, None
-
         tool_call_signature = deps.build_tool_call_signature(tool_call)
         if tool_call_signature in result.executed_tool_calls:
             cached_execution = result.executed_tool_calls[tool_call_signature]
@@ -665,9 +602,6 @@ async def execute_tool_graph(
 
             completed_indexes.add(node.index)
             pending_by_index.pop(node.index, None)
-
-            if result.done_reason == "interaction_required":
-                return result
 
     result.state_diff.loaded_chunk_ids_added = _build_loaded_chunk_diff(
         before_states=before_loaded_states,

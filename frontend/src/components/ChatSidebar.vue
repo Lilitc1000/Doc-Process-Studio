@@ -2,16 +2,23 @@
   <aside class="chat-sidebar">
     <div class="sidebar-header">
       <h2>文档处理助手</h2>
-      <button
-        class="clear-btn"
-        :disabled="props.isLocked"
-        @click="$emit('clear-chat')"
-      >
-        新建对话
-      </button>
     </div>
 
     <div class="sidebar-content">
+      <section class="workspace-section">
+        <button
+          v-for="workspace in workspaces"
+          :key="workspace.id"
+          type="button"
+          class="workspace-item"
+          :class="{ active: workspace.id === activeWorkspaceId }"
+          :disabled="props.isLocked"
+          @click="$emit('select-workspace', workspace.id)"
+        >
+          {{ workspace.label }}
+        </button>
+      </section>
+
       <section class="history-section">
         <div
           v-for="group in sessionGroups"
@@ -37,6 +44,13 @@
               >
                 <span class="history-session-title" :title="session.title">
                   {{ session.title }}
+                </span>
+                <span
+                  v-if="session.status_label"
+                  class="history-session-status"
+                  :title="session.status_label"
+                >
+                  {{ session.status_label }}
                 </span>
               </button>
 
@@ -241,7 +255,7 @@
               v-model="renameInput"
               class="rename-dialog-input"
               rows="3"
-              placeholder="请输入新的对话名称"
+              placeholder="请输入新的会话名称"
             ></textarea>
 
             <div class="rename-dialog-actions">
@@ -279,13 +293,15 @@ const props = defineProps<{
   selectedRerankerModel: string;
   sessions: readonly ChatSessionSummary[];
   activeSessionId: string | null;
+  workspaces: Array<{ id: string; label: string }>;
+  activeWorkspaceId: string;
   isLocked?: boolean;
 }>();
 
 const emit = defineEmits<{
+  (e: 'select-workspace', workspaceId: string): void;
   (e: 'select-model', model: string): void;
   (e: 'select-reranker-model', model: string): void;
-  (e: 'clear-chat'): void;
   (e: 'load-session', sessionId: string): void;
   (e: 'rename-session', payload: { sessionId: string; title: string }): void;
   (e: 'delete-session', sessionId: string): void;

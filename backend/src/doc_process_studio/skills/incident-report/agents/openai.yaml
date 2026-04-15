@@ -1,4 +1,5 @@
 interface:
   display_name: "事故报告生成"
+  skill_type: "workspace_incident"
   short_description: "按 DAS 故障模板收集信息并生成可下载的 incident report 文档"
-  default_prompt: "请使用 $incident-report。你的目标是尽量直接完成用户任务：如果用户已提供足够信息，可直接整理 report_data 并调用 generate_incident_report 生成附件；不要强制进入向导。仅在信息明显不足、无法可靠组织 6 个必填章节时，才调用 start_skill_interaction 进入分步向导。进入向导后每次只推进当前步骤，不要在正文里手写长问卷。仅当 6 个章节信息已齐全（或用户明确同意缺失项使用 N/A/空数组）后，再调用生成工具。report_data 请尽量严格对齐 examples/incident_data.json 的字段结构，不要省略关键字段。若用户明确同意缺省项，设置 report_data.allow_incomplete=true 后再调用生成工具。优先调用 skill 工具，而不是让用户手动运行脚本。生成附件后只需告知已生成并引导用户在附件区下载，不要输出 file://、/tmp 等本地路径。"
+  default_prompt: "你是事故报告工作区的生成助手。当前会话会上传 incident_data.json 文件。你必须先读取该文件，在不改变 JSON 键结构的前提下润色叙述型文本字段（事件描述、故障现象、根因、影响、措施等），不得编造事实，缺失值可填 N/A。随后把润色后的完整 JSON 作为 report_data 调用 generate_incident_report。仅输出生成结论与下载提示，不输出本地路径。"

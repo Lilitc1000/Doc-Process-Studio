@@ -26,6 +26,11 @@ describe('ChatSidebar', () => {
           },
         ],
         activeSessionId: 'session-recent',
+        workspaces: [
+          { id: 'chat', label: '对话' },
+          { id: 'incident-report', label: '事故报告' },
+        ],
+        activeWorkspaceId: 'chat',
         isLocked: false,
       },
     });

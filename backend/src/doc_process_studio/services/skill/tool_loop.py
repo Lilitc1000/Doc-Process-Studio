@@ -29,7 +29,6 @@ from .context import (
 from .registry import (
     SKILLS_DIR,
     get_skill_interface,
-    get_skill_interaction_config,
     get_skill_tool_config,
 )
 
@@ -243,12 +242,6 @@ def build_tool_status_start(
     )
     arguments = _parse_tool_arguments(tool_call)
 
-    if tool_name == "start_skill_interaction":
-        return {
-            "label": "收集报告信息",
-            "message": "正在启动交互向导并准备分步采集。",
-        }
-
     if tool_name in {"list_skill_directory", "read_skill_file"}:
         relative_path = str(arguments.get("relative_path", "")).strip()
         label = _build_builtin_status_label(tool_name, relative_path)
@@ -332,18 +325,6 @@ def build_tool_status_finish(
         tool_call=tool_call,
     )
     arguments = _parse_tool_arguments(tool_call)
-    if tool_name == "start_skill_interaction":
-        if tool_result.get("ok"):
-            return {
-                "label": "收集报告信息",
-                "message": "已进入交互向导，等待用户补充信息。",
-            }
-        error_message = str(tool_result.get("error", "未知错误"))
-        return {
-            "label": "收集报告信息",
-            "message": f"启动交互向导失败：{error_message}",
-        }
-
     if tool_result.get("reused"):
         if tool_name == "list_skill_directory":
             relative_path = str(arguments.get("relative_path", "")).strip()
@@ -556,31 +537,6 @@ def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
             },
         },
     ]
-    interaction_config = get_skill_interaction_config(skill_id)
-    if interaction_config is not None:
-        builtin_tools.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": "start_skill_interaction",
-                    "description": (
-                        "当用户目标是生成文档但当前信息不足时，启动或恢复该技能的分步交互向导。"
-                        "若信息已经完整则不要调用。"
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "reason": {
-                                "type": "string",
-                                "description": "可选。简述为何需要向导补充信息。",
-                            }
-                        },
-                        "additionalProperties": False,
-                    },
-                },
-            }
-        )
-
     declared_tools: list[dict[str, Any]] = []
     for tool in skill_interface.tools:
         declared_tools.append(
@@ -937,12 +893,6 @@ def _build_builtin_tool_parameters(tool_name: str) -> dict[str, Any] | None:
                 }
             },
             "required": ["chunk_ids"],
-            "additionalProperties": False,
-        }
-    if tool_name == "start_skill_interaction":
-        return {
-            "type": "object",
-            "properties": {"reason": {"type": "string"}},
             "additionalProperties": False,
         }
     return None

@@ -118,13 +118,6 @@
           />
 
           <template v-if="message.role === 'assistant'">
-            <MessageInteractionCard
-              v-if="activeInteraction"
-              :interaction="activeInteraction"
-              :can-submit-interaction="canSubmitInteraction"
-              @submit="$emit('submit-interaction', $event)"
-            />
-
             <!-- eslint-disable vue/no-v-html -->
             <div
               v-if="normalizedDisplayContent.trim().length > 0"
@@ -208,15 +201,12 @@ import { useSkillMentionSelector } from '../composables/useSkillMentionSelector'
 import type {
   ChatAttachment,
   ChatEditAttachment,
-  ChatInteractionAnswer,
-  ChatInteractionCard,
   ChatMessageDisplay,
   ChatToolStatus,
 } from '../types/chat';
 import type { SkillOption } from '../types/skill';
 import MessageFiles from './message/MessageFiles.vue';
 import MessageHeader from './message/MessageHeader.vue';
-import MessageInteractionCard from './message/MessageInteractionCard.vue';
 import MessageLiveToolStatus from './message/MessageLiveToolStatus.vue';
 import MessageToolTimeline from './message/MessageToolTimeline.vue';
 import MessageToolbar from './message/MessageToolbar.vue';
@@ -245,7 +235,6 @@ const props = defineProps<{
   availableSkills?: SkillOption[];
   canConfirmEdit?: boolean;
   showToolbarByDefault?: boolean;
-  canSubmitInteraction?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -263,7 +252,6 @@ const emit = defineEmits<{
   (e: 'open-trace'): void;
   (e: 'download'): void;
   (e: 'download-file', file: ChatAttachment): void;
-  (e: 'submit-interaction', answer: ChatInteractionAnswer): void;
 }>();
 
 const isEditing = computed(() => props.isEditing ?? false);
@@ -286,9 +274,6 @@ const canDownload = computed(() => props.canDownload ?? false);
 const canOpenTrace = computed(() => props.canOpenTrace ?? false);
 const isVersionLocked = computed(() => props.isVersionLocked ?? false);
 const canConfirmEdit = computed(() => props.canConfirmEdit ?? false);
-const canSubmitInteraction = computed(
-  () => props.canSubmitInteraction ?? false,
-);
 const toolStatuses = computed<ChatToolStatus[]>(() => {
   return props.message.toolStatuses ?? [];
 });
@@ -318,12 +303,6 @@ const displaySkillTags = computed(() => {
       displayName: matchedSkill?.displayName ?? skillId,
     };
   });
-});
-const activeInteraction = computed<ChatInteractionCard | null>(() => {
-  if (props.message.role !== 'assistant') {
-    return null;
-  }
-  return props.message.interaction ?? null;
 });
 const liveToolStatus = computed(() => props.liveToolStatus ?? null);
 

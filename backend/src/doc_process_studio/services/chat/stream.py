@@ -17,23 +17,20 @@ from ...services.agent.executor import (
     execute_tool_graph,
 )
 from ...services.agent.feature_flags import is_feature_enabled_for_key
+from ...services.agent.error_detail import build_exception_detail, summarize_exception
 from ...services.agent.trace_store import AgentTraceRecorder
 from ...models.skill.runtime import (
     ConversationAgentState,
     SkillConversationState,
     SkillPlanDecision,
-    SkillToolHistoryRecord,
 )
 from ...settings import settings
 from ..infra.model_context import estimate_prompt_tokens, get_model_context_length
 from ..infra.ollama_client import OllamaNotConfiguredError, stream_chat_completion
 from ..infra.request_guard import RequestGuardError, guard_request_slot
-from ..skill.interaction_flow import start_or_resume_interaction, submit_interaction_answer
-from ..skill.interaction_store import load_interaction_state
 from ..skill.conversation_store import load_conversation_state, save_conversation_state
 from ..skill.registry import (
     get_skill_interface,
-    get_skill_interaction_config,
     list_skill_interfaces,
 )
 from ..skill.planner import plan_skill_activation
@@ -56,7 +53,6 @@ from .streaming import (
     extract_done_reason,
     extract_delta_text,
     extract_delta_tool_calls,
-    format_output_name_from_template,
     format_sse_event,
     get_tool_call_name,
     merge_stream_tool_calls,
@@ -64,6 +60,16 @@ from .streaming import (
 )
 
 SYSTEM_DOCUMENT_SKILL_ID = "document-assistant"
+CHAT_SKILL_TYPE = "chat"
+
+
+def _list_chat_skill_interfaces() -> list[Any]:
+    """仅返回聊天通道允许使用的 skill。"""
+    return [
+        skill
+        for skill in list_skill_interfaces()
+        if str(getattr(skill, "skill_type", CHAT_SKILL_TYPE)).strip() == CHAT_SKILL_TYPE
+    ]
 
 
 def _format_assistant_delta_event(*, model: str, content: str) -> str:
@@ -159,6 +165,22 @@ async def _extract_http_status_error_message(exc: httpx.HTTPStatusError) -> str:
     return base_message
 
 
+async def _build_error_event_detail(
+    *,
+    message: str,
+    exc: BaseException | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    detail: dict[str, Any] = {
+        "message": message,
+    }
+    if exc is not None:
+        detail["error_detail"] = await build_exception_detail(exc)
+    if extra:
+        detail.update(extra)
+    return detail
+
+
 def _normalize_skill_ids(raw_skill_ids: list[str]) -> list[str]:
     normalized: list[str] = []
     for raw_skill_id in raw_skill_ids:
@@ -199,7 +221,7 @@ def _extract_skill_ids_from_messages(
 async def _resolve_skill_plan(
     request: ChatStreamRequest,
 ) -> SkillPlanDecision:
-    available_skills = list_skill_interfaces()
+    available_skills = _list_chat_skill_interfaces()
     available_skill_ids = {skill.id for skill in available_skills}
     explicit_skill_ids = _normalize_skill_ids(request.selected_skill_ids)
     mentioned_skill_ids, missing_mentioned_skill_ids = _extract_skill_ids_from_messages(
@@ -235,7 +257,7 @@ def _build_direct_skill_plan(
     request: ChatStreamRequest,
 ) -> SkillPlanDecision:
     """规划器灰度关闭时的兜底策略：仅使用显式 skill + system skill。"""
-    available_skills = list_skill_interfaces()
+    available_skills = _list_chat_skill_interfaces()
     available_skill_ids = [skill.id for skill in available_skills]
     explicit_skill_ids = [
         skill_id
@@ -275,42 +297,6 @@ def _is_request_timed_out(started_monotonic: float) -> bool:
     return (time.monotonic() - started_monotonic) >= timeout_seconds
 
 
-def _resolve_tool_scope_for_history(
-    *,
-    default_skill_id: str,
-    tool_call: dict[str, Any],
-) -> tuple[str, str]:
-    tool_name = get_tool_call_name(tool_call)
-    normalized_tool_name = tool_name
-
-    if "::" in tool_name:
-        scoped_skill_id, scoped_tool_name = tool_name.split("::", 1)
-        scoped_skill_id = scoped_skill_id.strip()
-        scoped_tool_name = scoped_tool_name.strip()
-        if scoped_skill_id and scoped_tool_name:
-            return scoped_skill_id, scoped_tool_name
-
-    function_payload = tool_call.get("function")
-    if isinstance(function_payload, dict):
-        raw_arguments = function_payload.get("arguments")
-        parsed_arguments: dict[str, Any] = {}
-        if isinstance(raw_arguments, dict):
-            parsed_arguments = raw_arguments
-        elif isinstance(raw_arguments, str):
-            try:
-                loaded_arguments = json.loads(raw_arguments)
-            except json.JSONDecodeError:
-                loaded_arguments = {}
-            if isinstance(loaded_arguments, dict):
-                parsed_arguments = loaded_arguments
-
-        scoped_skill_id = str(parsed_arguments.get("skill_id", "")).strip()
-        if scoped_skill_id:
-            return scoped_skill_id, normalized_tool_name
-
-    return default_skill_id, normalized_tool_name
-
-
 def _append_planner_trace(
     *,
     agent_state: ConversationAgentState,
@@ -320,17 +306,6 @@ def _append_planner_trace(
     max_entries = max(1, settings.skill_planner_trace_max_entries)
     if len(agent_state.planner_trace) > max_entries:
         agent_state.planner_trace = agent_state.planner_trace[-max_entries:]
-
-
-def _append_tool_history(
-    *,
-    agent_state: ConversationAgentState,
-    record: SkillToolHistoryRecord,
-) -> None:
-    agent_state.tool_history.append(record)
-    max_entries = max(1, settings.skill_tool_history_max_entries)
-    if len(agent_state.tool_history) > max_entries:
-        agent_state.tool_history = agent_state.tool_history[-max_entries:]
 
 
 async def stream_remote_chat_completion(
@@ -363,7 +338,13 @@ async def stream_remote_chat_completion(
         )
         trace_recorder.add_event(
             event_type="error",
-            detail={"message": stream_error_message},
+            detail={
+                "message": stream_error_message,
+                "error_detail": {
+                    "type": "ConfigurationError",
+                    "message": stream_error_message,
+                },
+            },
         )
         trace_recorder.set_final(done_reason=stream_done_reason, error=stream_error_message)
         await trace_recorder.flush()
@@ -448,9 +429,15 @@ async def stream_remote_chat_completion(
         _append_planner_trace(agent_state=agent_state, decision=skill_plan)
         await save_conversation_state(agent_state, tenant_id=tenant_id)
     except ValueError as exc:
-        stream_error_message = str(exc)
-        yield format_sse_event({"type": "error", "message": str(exc)})
-        trace_recorder.add_event(event_type="error", detail={"message": str(exc)})
+        stream_error_message = summarize_exception(exc)
+        yield format_sse_event({"type": "error", "message": stream_error_message})
+        trace_recorder.add_event(
+            event_type="error",
+            detail=await _build_error_event_detail(
+                message=stream_error_message,
+                exc=exc,
+            ),
+        )
         if request_guard_entered:
             await request_guard.__aexit__(None, None, None)
             request_guard_entered = False
@@ -458,11 +445,14 @@ async def stream_remote_chat_completion(
         await trace_recorder.flush()
         return
     except RequestGuardError as exc:
-        stream_error_message = str(exc)
+        stream_error_message = summarize_exception(exc)
         yield format_sse_event({"type": "error", "message": stream_error_message})
         trace_recorder.add_event(
             event_type="error",
-            detail={"message": stream_error_message},
+            detail=await _build_error_event_detail(
+                message=stream_error_message,
+                exc=exc,
+            ),
         )
         if request_guard_entered:
             await request_guard.__aexit__(None, None, None)
@@ -471,16 +461,19 @@ async def stream_remote_chat_completion(
         await trace_recorder.flush()
         return
 
-    interaction_config = get_skill_interaction_config(primary_skill_id)
-    interaction_context_message: dict[str, Any] | None = None
-
     try:
         if _is_request_timed_out(started_monotonic):
             stream_error_message = "请求处理超时，已终止。"
             yield format_sse_event({"type": "error", "message": stream_error_message})
             trace_recorder.add_event(
                 event_type="error",
-                detail={"message": stream_error_message},
+                detail={
+                    "message": stream_error_message,
+                    "error_detail": {
+                        "type": "TimeoutError",
+                        "message": stream_error_message,
+                    },
+                },
             )
             return
 
@@ -495,184 +488,7 @@ async def stream_remote_chat_completion(
                 }
             )
 
-        if interaction_config is not None:
-            if request.interaction_answer is None:
-                current_interaction_state = await load_interaction_state(
-                    request.conversation_id,
-                    primary_skill_id,
-                    tenant_id=tenant_id,
-                )
-                if current_interaction_state is not None:
-                    _, interaction_step = await start_or_resume_interaction(
-                        request=primary_request,
-                        config=interaction_config,
-                    )
-                    yield format_sse_event(
-                        {
-                            "type": "interaction",
-                            "status": "required",
-                            "interaction": interaction_step,
-                        }
-                    )
-                    yield _format_done_event(
-                        model=request.model,
-                        done_reason="interaction_required",
-                    )
-                    stream_done_reason = "interaction_required"
-                    return
-
-            else:
-                try:
-                    next_interaction_step, completed_payload = await submit_interaction_answer(
-                        request=primary_request,
-                        config=interaction_config,
-                        answer=request.interaction_answer,
-                    )
-                except ValueError as exc:
-                    stream_error_message = str(exc)
-                    yield format_sse_event({"type": "error", "message": str(exc)})
-                    trace_recorder.add_event(
-                        event_type="error",
-                        detail={"message": stream_error_message},
-                    )
-                    return
-
-                if next_interaction_step is not None:
-                    yield format_sse_event(
-                        {
-                            "type": "interaction",
-                            "status": "required",
-                            "interaction": next_interaction_step,
-                        }
-                    )
-                    yield _format_done_event(
-                        model=request.model,
-                        done_reason="interaction_required",
-                    )
-                    stream_done_reason = "interaction_required"
-                    return
-
-                yield format_sse_event({"type": "interaction", "status": "completed"})
-
-                if completed_payload is not None and interaction_config.final_tool is not None:
-                    final_tool = interaction_config.final_tool
-                    tool_arguments = {
-                        final_tool.argument_name: completed_payload,
-                        **final_tool.static_arguments,
-                    }
-                    rendered_output_name = format_output_name_from_template(
-                        final_tool.output_name_template,
-                        completed_payload,
-                    )
-                    if rendered_output_name:
-                        tool_arguments["output_name"] = rendered_output_name
-
-                    tool_call = {
-                        "id": "interaction-final-tool",
-                        "type": "function",
-                        "function": {
-                            "name": final_tool.name,
-                            "arguments": json.dumps(tool_arguments, ensure_ascii=False),
-                        },
-                    }
-                    tool_name = final_tool.name
-
-                    yield format_sse_event(
-                        {
-                            "type": "tool-status",
-                            "phase": "start",
-                            "tool_name": tool_name,
-                            **build_tool_status_start(
-                                skill_id=primary_skill_id,
-                                tool_call=tool_call,
-                            ),
-                        }
-                    )
-
-                    tool_result, next_attachments = execute_skill_tool_call(
-                        request=primary_request,
-                        state=primary_state,
-                        tool_call=tool_call,
-                    )
-
-                    for attachment in next_attachments:
-                        yield format_sse_event(
-                            {
-                                "type": "attachment",
-                                "attachment": attachment.model_dump(
-                                    mode="json",
-                                    by_alias=True,
-                                ),
-                            }
-                        )
-
-                    yield format_sse_event(
-                        {
-                            "type": "tool-status",
-                            "phase": "finish",
-                            "tool_name": tool_name,
-                            **build_tool_status_finish(
-                                request=primary_request,
-                                state=primary_state,
-                                tool_call=tool_call,
-                                tool_result=tool_result,
-                                attachments=next_attachments,
-                            ),
-                        }
-                    )
-                    history_skill_id, history_tool_name = _resolve_tool_scope_for_history(
-                        default_skill_id=primary_skill_id,
-                        tool_call=tool_call,
-                    )
-                    _append_tool_history(
-                        agent_state=agent_state,
-                        record=SkillToolHistoryRecord(
-                            skill_id=history_skill_id,
-                            tool_name=history_tool_name,
-                            ok=bool(tool_result.get("ok")),
-                            reused=bool(tool_result.get("reused")),
-                            attachment_count=len(next_attachments),
-                            error=(
-                                str(tool_result.get("error"))
-                                if not tool_result.get("ok") and tool_result.get("error") is not None
-                                else None
-                            ),
-                            created_at=datetime.now(UTC),
-                        ),
-                    )
-                    await save_conversation_state(agent_state, tenant_id=tenant_id)
-
-                    if not tool_result.get("ok"):
-                        error_message = str(tool_result.get("error", "工具执行失败。"))
-                        stream_error_message = error_message
-                        yield format_sse_event({"type": "error", "message": error_message})
-                        trace_recorder.add_event(
-                            event_type="error",
-                            detail={"message": stream_error_message},
-                        )
-                        return
-
-                    completion_text = interaction_config.completion_message or "已根据你的选择生成报告。"
-                    yield _format_assistant_delta_event(
-                        model=request.model,
-                        content=completion_text,
-                    )
-                    yield _format_done_event(model=request.model, done_reason="stop")
-                    stream_done_reason = "stop"
-                    return
-
-                if completed_payload is not None:
-                    interaction_context_message = {
-                        "role": "system",
-                        "content": (
-                            "以下是用户通过交互步骤确认的结构化信息，请直接基于它完成任务，不要再次向用户提问：\n"
-                            + json.dumps(completed_payload, ensure_ascii=False, indent=2)
-                        ),
-                    }
-
-        tool_trace_messages: list[dict[str, Any]] = (
-            [interaction_context_message] if interaction_context_message is not None else []
-        )
+        tool_trace_messages: list[dict[str, Any]] = []
         first_assistant_chunk_emitted = False
         final_done_reason = "stop"
         executed_tool_calls: dict[str, dict[str, Any]] = {}
@@ -703,7 +519,13 @@ async def stream_remote_chat_completion(
                 yield format_sse_event({"type": "error", "message": stream_error_message})
                 trace_recorder.add_event(
                     event_type="error",
-                    detail={"message": stream_error_message},
+                    detail={
+                        "message": stream_error_message,
+                        "error_detail": {
+                            "type": "TimeoutError",
+                            "message": stream_error_message,
+                        },
+                    },
                 )
                 return
 
@@ -818,7 +640,13 @@ async def stream_remote_chat_completion(
                     yield format_sse_event({"type": "error", "message": stream_error_message})
                     trace_recorder.add_event(
                         event_type="error",
-                        detail={"message": stream_error_message},
+                        detail={
+                            "message": stream_error_message,
+                            "error_detail": {
+                                "type": "TimeoutError",
+                                "message": stream_error_message,
+                            },
+                        },
                     )
                     return
 
@@ -897,7 +725,13 @@ async def stream_remote_chat_completion(
                 )
                 trace_recorder.add_event(
                     event_type="error",
-                    detail={"message": stream_error_message},
+                    detail={
+                        "message": stream_error_message,
+                        "error_detail": {
+                            "type": "ToolRoundLimitError",
+                            "message": stream_error_message,
+                        },
+                    },
                 )
                 return
 
@@ -914,7 +748,6 @@ async def stream_remote_chat_completion(
                     tooling_skill_ids=tooling_skill_ids,
                     normalized_tool_calls=normalized_tool_calls,
                     executed_tool_calls=executed_tool_calls,
-                    interaction_config=interaction_config,
                     budget=execution_budget,
                 ),
                 deps=ExecutorDeps(
@@ -925,8 +758,6 @@ async def stream_remote_chat_completion(
                     detect_tool_call_progress=detect_tool_call_progress,
                     execute_skill_tool_call=execute_skill_tool_call,
                     execute_scoped_skill_tool_call=execute_scoped_skill_tool_call,
-                    load_interaction_state=load_interaction_state,
-                    start_or_resume_interaction=start_or_resume_interaction,
                 ),
             )
             executed_tool_calls = execution_result.executed_tool_calls
@@ -952,15 +783,6 @@ async def stream_remote_chat_completion(
                     content=assistant_delta,
                 )
 
-            if execution_result.interaction_event is not None:
-                yield format_sse_event(execution_result.interaction_event)
-                yield _format_done_event(
-                    model=request.model,
-                    done_reason=execution_result.done_reason or "interaction_required",
-                )
-                stream_done_reason = execution_result.done_reason or "interaction_required"
-                return
-
             if execution_result.error_message:
                 stream_error_message = execution_result.error_message
                 yield format_sse_event(
@@ -971,7 +793,13 @@ async def stream_remote_chat_completion(
                 )
                 trace_recorder.add_event(
                     event_type="error",
-                    detail={"message": stream_error_message},
+                    detail={
+                        "message": stream_error_message,
+                        "error_detail": {
+                            "type": "ToolExecutionError",
+                            "message": stream_error_message,
+                        },
+                    },
                 )
                 return
 
@@ -980,17 +808,35 @@ async def stream_remote_chat_completion(
 
             await save_conversation_state(agent_state, tenant_id=tenant_id)
     except OllamaNotConfiguredError as exc:
-        stream_error_message = str(exc)
-        trace_recorder.add_event(event_type="error", detail={"message": stream_error_message})
-        yield format_sse_event({"type": "error", "message": str(exc)})
+        stream_error_message = summarize_exception(exc)
+        trace_recorder.add_event(
+            event_type="error",
+            detail=await _build_error_event_detail(
+                message=stream_error_message,
+                exc=exc,
+            ),
+        )
+        yield format_sse_event({"type": "error", "message": stream_error_message})
     except httpx.HTTPStatusError as exc:
         error_message = await _extract_http_status_error_message(exc)
         stream_error_message = error_message
-        trace_recorder.add_event(event_type="error", detail={"message": stream_error_message})
+        trace_recorder.add_event(
+            event_type="error",
+            detail=await _build_error_event_detail(
+                message=stream_error_message,
+                exc=exc,
+            ),
+        )
         yield format_sse_event({"type": "error", "message": error_message})
     except httpx.HTTPError as exc:
-        stream_error_message = f"连接远程 Ollama 失败：{exc}"
-        trace_recorder.add_event(event_type="error", detail={"message": stream_error_message})
+        stream_error_message = f"连接远程 Ollama 失败：{summarize_exception(exc)}"
+        trace_recorder.add_event(
+            event_type="error",
+            detail=await _build_error_event_detail(
+                message=stream_error_message,
+                exc=exc,
+            ),
+        )
         yield format_sse_event(
             {"type": "error", "message": stream_error_message}
         )

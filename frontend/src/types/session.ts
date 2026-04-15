@@ -1,9 +1,4 @@
-import type {
-  ChatAttachment,
-  ChatInteractionCard,
-  ChatMessageRole,
-  ChatToolStatus,
-} from './chat';
+import type { ChatAttachment, ChatMessageRole, ChatToolStatus } from './chat';
 
 export interface ChatSessionNodePayload {
   id: string;
@@ -14,7 +9,6 @@ export interface ChatSessionNodePayload {
   request_skill_ids?: string[] | null;
   files?: ChatAttachment[];
   tool_statuses?: ChatToolStatus[];
-  interaction?: ChatInteractionCard | null;
   timestamp: string;
   parent_id: string | null;
   child_ids: string[];
@@ -32,9 +26,11 @@ export interface ChatSessionSnapshotPayload {
 export interface ChatSessionSummary {
   id: string;
   title: string;
+  status?: string;
+  status_label?: string;
   created_at: string;
   updated_at: string;
-  selected_model: string;
+  selected_model?: string;
   selected_reranker_model?: string | null;
 }
 

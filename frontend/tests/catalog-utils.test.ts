@@ -39,11 +39,13 @@ describe('catalog utils', () => {
         id: 'document-assistant',
         displayName: '文档助手',
         shortDescription: '通用文档处理',
+        skillType: 'chat',
       },
       {
         id: 'resume-review',
         displayName: '简历筛选',
         shortDescription: '',
+        skillType: 'chat',
       },
     ]);
   });

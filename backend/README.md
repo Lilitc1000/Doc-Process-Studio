@@ -30,15 +30,20 @@ ENV=dev uv run uvicorn doc_process_studio.main:app --reload --host 0.0.0.0 --por
 ```
 
 ## 测试
-后端改动完成后，至少执行下面两步：
+后端改动完成后，使用 `uv` 作为统一入口，推荐本地这样跑：
 
 ```bash
 cd backend
-ENV=dev /workspace/backend/.venv/bin/python -m pytest
-ENV=dev /workspace/backend/.venv/bin/python -m compileall /workspace/backend/src/doc_process_studio
+env ENV=dev uv run --no-sync pytest -q -p no:cacheprovider
+env ENV=dev uv run --no-sync python -m compileall src/doc_process_studio
 ```
 
-第一条用于回归行为，第二条用于快速发现导入错误和语法错误。
+说明：
+
+- 第一条是后端全量测试（带超时，避免异常卡住）。
+- 第二条是语法与导入完整性检查。
+- 如果本机存在缓存目录权限问题，可附加：
+  `UV_CACHE_DIR=/tmp/uv-cache TMPDIR=/tmp PYTHONDONTWRITEBYTECODE=1`
 
 ## 测试文件开发指南
 为了保证后续维护可控，建议新增测试时遵循“通用能力优先、skill 专项最小化补充”的原则。
@@ -61,26 +66,13 @@ ENV=dev /workspace/backend/.venv/bin/python -m compileall /workspace/backend/src
 ### 编写约定
 - 优先复用 `tests/conftest.py` 的 fixture，不要在每个文件重复搭环境。
 - 外部依赖（远端 Ollama、真实 Redis、文件系统副作用）默认用可控替身或临时目录隔离。
-- 流式接口测试建议断言事件顺序和关键事件类型（如 `interaction`、`tool-status`、`attachment`、`done`），不要只断言最终文本。
+- 流式接口测试建议断言事件顺序和关键事件类型（如 `tool-status`、`attachment`、`done`），不要只断言最终文本。
 - skill 相关测试优先走真实 `tools.json` 声明链路，避免在测试里硬编码一套与生产不同的执行分支。
 
 ### 新增 skill 时的最小测试清单
 1. 通过 `test_skill_registry_smoke.py`（无需特判即可被发现并解析配置）。
 2. 在 `tests/skills/<skill_id>/` 下至少增加 1 条工具链契约测试（输入 -> 工具调用 -> 输出结构）。
-3. 如果该 skill 启用交互式步骤（`interaction.json`），补 1 条“触发交互 + 提交答案后完成工具调用”的链路测试。
-
-### 推荐本地命令
-```bash
-cd backend
-ENV=dev /workspace/backend/.venv/bin/python -m pytest -q
-ENV=dev /workspace/backend/.venv/bin/python -m compileall /workspace/backend/src/doc_process_studio
-```
-
-如果本地环境会因为 `pyc` 写入权限导致报错，可临时加：
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 ENV=dev /workspace/backend/.venv/bin/python -m pytest -q
-```
+3. 如果该 skill 是工作区专用类型（例如 incident-report），补 1 条“表单校验 + 生成附件 + 状态落盘 + trace 回放”的链路测试。
 
 ## 目录结构
 当前后端按职责分组，不再使用扁平目录。
@@ -307,18 +299,40 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 
 不要继续在 Python 业务代码里为单个 skill 手写专用工具链路。
 
-## 交互式 Skill
-新增了一套通用交互式采集链路，可供任意 skill 按声明启用，不再是单一 skill 特化逻辑。
+## 事故报告工作区
+当前 `incident-report` 已调整为工作区专用能力。
 
-- skill 可在 `agents/interaction.json` 声明分步采集（single/multi/text）。
-- 交互向导默认是“可调用能力”而不是入口强制流程：模型可通过 `start_skill_interaction` 工具在信息不足时主动进入向导；信息充足时可直接调用生成工具。
-- 交互向导当前只支持“单一目标 skill”模式；当本轮同时激活多个 skill 时，后端会拒绝 `start_skill_interaction` 并提示用户缩小到单 skill。
-- 若某个会话已处于进行中的向导状态，后端会优先恢复当前步骤，避免状态丢失。
-- 后端流式接口会按步骤返回 `interaction` 事件，步骤完成后继续执行声明式工具并返回 `tool-status`、`attachment`、`done`。
-- 交互状态默认走 Redis，会话维度缓存；测试时可用内存替身避免环境依赖。
+- `incident-report` 在注册中心标记为 `skill_type=workspace_incident`。
+- 聊天通道只允许 `skill_type=chat` 的 skill 进入规划与执行。
+- 前端侧栏新增工作区切换：`对话` 与 `事故报告`。
+- 事故报告会话与聊天会话分开存储、分开展示、分开状态管理。
 
-推荐在改动交互链路后至少做一次完整回归：  
-`发起请求 -> 收到步骤 -> 提交全部步骤 -> 返回附件 -> 验证附件可下载`。
+事故报告后端接口：
+
+- `GET /api/incident-report/schema`：获取欢迎文案与表单步骤（来自 `agents/interaction.json`）。
+- `GET /api/incident-report/sessions`：获取事故报告会话列表。
+- `POST /api/incident-report/sessions`：创建事故报告会话。
+- `GET /api/incident-report/sessions/{session_id}`：读取会话详情与表单快照。
+- `PUT /api/incident-report/sessions/{session_id}`：实时保存表单答案。
+- `POST /api/incident-report/sessions/{session_id}/generate`：触发附件生成。
+- `PATCH /api/incident-report/sessions/{session_id}/title`：修改标题。
+- `DELETE /api/incident-report/sessions/{session_id}`：删除会话并清理附件/trace。
+
+生成链路说明：
+
+1. 先做表单必填校验，缺项时返回明确错误。
+2. 将表单答案映射为结构化 `incident_data.json`（对齐 `examples/incident_data.json`）。
+3. 把该 `incident_data.json` 作为会话上传文件注入 incident-report skill 对话上下文。
+4. 由 incident-report skill 驱动模型读取该文件，润色叙述型字段后调用 `generate_incident_report`。
+5. 后端从工具参数中提取润色后的 `report_data` 回写快照，并保存生成附件。
+6. 只接受 `.docx`（Word）附件作为最终产物。
+
+会话状态约定：
+
+- `draft`：可编辑未生成。
+- `generating`：正在生成，页面与侧栏应锁定。
+- `generated`：已生成，表单锁定。
+- `failed`：生成失败，可继续修正后重试。
 
 ## Tool Calling 与 Skill 上下文
 当前主链路已升级为“分层规划 + 会话级 Agent 状态 + 执行器调度 + 生产级可靠性防护（阶段4）”。
@@ -407,7 +421,7 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
   - 工具参数白名单与敏感策略
   - 请求限流/队列保护
 - 集成覆盖：
-  - 流式事件序列断言（`tool-status / interaction / attachment / done`）
+  - 流式事件序列断言（`tool-status / attachment / done`）
   - trace 回放接口
 - 基准集：
   - 当前在 `tests/skill_selection_cases.json` 提供小规模任务集（按当前 skills 数量设计，可扩展）。

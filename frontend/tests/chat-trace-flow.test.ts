@@ -9,6 +9,8 @@ const fetchAvailableModelsMock = vi.hoisted(() => vi.fn());
 const fetchAvailableSkillsMock = vi.hoisted(() => vi.fn());
 const fetchSessionSummariesMock = vi.hoisted(() => vi.fn());
 const saveSessionMock = vi.hoisted(() => vi.fn());
+const fetchIncidentFormSchemaMock = vi.hoisted(() => vi.fn());
+const fetchIncidentSessionSummariesMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../src/api/chat', () => ({
   streamChatReply: streamChatReplyMock,
@@ -36,6 +38,17 @@ vi.mock('../src/api/sessions', () => ({
   saveSession: saveSessionMock,
 }));
 
+vi.mock('../src/api/incident-report', () => ({
+  fetchIncidentFormSchema: fetchIncidentFormSchemaMock,
+  fetchIncidentSessionSummaries: fetchIncidentSessionSummariesMock,
+  createIncidentSession: vi.fn(),
+  fetchIncidentSessionDetail: vi.fn(),
+  saveIncidentSessionSnapshot: vi.fn(),
+  generateIncidentAttachment: vi.fn(),
+  renameIncidentSession: vi.fn(),
+  removeIncidentSession: vi.fn(),
+}));
+
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -45,6 +58,11 @@ describe('chat trace flow', () => {
     fetchAvailableModelsMock.mockResolvedValue(['qwen3-coder-next:latest']);
     fetchAvailableSkillsMock.mockResolvedValue({ skills: [] });
     fetchSessionSummariesMock.mockResolvedValue([]);
+    fetchIncidentFormSchemaMock.mockResolvedValue({
+      introMessage: '事故报告向导',
+      steps: [],
+    });
+    fetchIncidentSessionSummariesMock.mockResolvedValue([]);
     saveSessionMock.mockResolvedValue({
       id: 'conversation-1',
       title: '测试会话',

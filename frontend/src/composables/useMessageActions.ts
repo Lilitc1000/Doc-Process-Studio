@@ -2,7 +2,6 @@ import { computed, type Ref } from 'vue';
 import type {
   ChatAttachment,
   ChatEditAttachment,
-  ChatInteractionAnswer,
   ChatMessageNode,
   ChatRequestSnapshot,
 } from '../types/chat';
@@ -17,7 +16,6 @@ interface UseMessageActionsOptions {
   editingDraftFiles: Ref<ChatEditAttachment[]>;
   editingDraftSkillIds: Ref<string[]>;
   isLoading: Ref<boolean>;
-  canSubmitInteractionRequest: () => boolean;
   activeSessionId: Ref<string | null>;
   conversationId: Ref<string>;
   rootChildIds: Ref<string[]>;
@@ -34,11 +32,6 @@ interface UseMessageActionsOptions {
   ) => ChatRequestSnapshot;
   executeAssistantGeneration: (
     requestSnapshot: ChatRequestSnapshot,
-  ) => Promise<void>;
-  executeAssistantInteraction: (
-    requestSnapshot: ChatRequestSnapshot,
-    assistantMessageId: string,
-    interactionAnswer: ChatInteractionAnswer,
   ) => Promise<void>;
   persistCurrentSession: () => Promise<unknown>;
   resetEditingState: () => void;
@@ -270,30 +263,6 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     );
   };
 
-  const submitMessageInteraction = async (
-    assistantMessageId: string,
-    interactionAnswer: ChatInteractionAnswer,
-  ) => {
-    if (!options.canSubmitInteractionRequest()) {
-      return;
-    }
-
-    const assistantNode = options.getNodeById(assistantMessageId);
-    if (
-      !assistantNode ||
-      assistantNode.role !== 'assistant' ||
-      !assistantNode.parentId
-    ) {
-      return;
-    }
-
-    await options.executeAssistantInteraction(
-      options.buildRequestSnapshotForUserMessage(assistantNode.parentId),
-      assistantMessageId,
-      interactionAnswer,
-    );
-  };
-
   const copyMessage = async (messageId: string) => {
     const messageNode = options.getNodeById(messageId);
     if (!messageNode?.content.trim() || !navigator.clipboard) {
@@ -357,7 +326,6 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     confirmEditingMessage,
     onSendMessage,
     onRegenerate,
-    submitMessageInteraction,
     copyMessage,
     downloadAssistantMessage,
     downloadMessageFile,

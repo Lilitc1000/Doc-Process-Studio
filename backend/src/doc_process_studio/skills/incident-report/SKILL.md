@@ -1,80 +1,35 @@
 ---
 name: "incident-report"
-description: "通过交互式向导采集事故信息，并生成符合 DAS 模板的英文事故报告文档。适用于生产故障、服务中断、事故复盘与合规留档场景。"
+description: "用于事故报告工作区：基于结构化表单收集事故信息，生成符合 DAS 模板的英文 Word 事故报告文档。"
+skill_type: "workspace_incident"
 ---
 
 # 事故报告技能（incident-report）
 
-本技能用于在对话中分步骤采集事故信息，并最终生成可下载的英文 Word 报告。
+本技能仅用于“事故报告”工作区，不参与普通聊天通道的 `$skill` 选择与隐式规划。
 
-## 触发场景
+## 使用方式
 
-当用户表达以下需求时应启用本技能：
+1. 用户在侧边栏切换到“事故报告”。
+2. 进入欢迎页后点击“开始”，创建事故报告会话。
+3. 前端按 `agents/interaction.json` 的步骤一次性渲染完整表单。
+4. 用户填写后点击“生成附件”，后端先做必填校验，再把生成的 `incident_data.json` 作为文件送入 skill 对话链路。
 
-- “帮我生成事故报告”
-- “生成故障报告 / 事故复盘文档”
-- “写一份 post-mortem”
-- 需要按模板留档系统中断、性能异常、交易失败、网络故障等事件
+## 生成链路
 
-## 交互模式（必须遵循）
+1. 将表单答案映射为结构化 `incident_data.json`。
+2. 把该 `incident_data.json` 作为会话上传文件注入到 incident-report skill 聊天上下文。
+3. 模型必须先读取上传的 `incident_data.json`，在不改变 JSON 键结构的前提下润色其中叙述型文本字段（如事件描述、故障现象、根因、影响、处置措施等）。
+4. 模型将润色后的完整 JSON 作为 `report_data` 调用 `generate_incident_report`，生成附件。
+5. 后端把工具参数中的润色后 `report_data` 回写到会话快照。
 
-1. 优先判断用户输入是否已足够生成文档：
-   - 若信息完整，可直接调用生成工具，不必进入向导。
-   - 若信息不足，再调用 `start_skill_interaction` 启动向导。
-2. 进入向导后，通过交互式步骤逐步采集，当前步骤未确认前不进入下一步。
-3. 仅在必填信息采集完成后再调用生成工具。
-4. 若用户明确同意缺省值，可在 `report_data` 中携带 `allow_incomplete=true` 后生成。
+## 数据与产物约束
 
-本技能的结构化步骤定义在：
-
-- `agents/interaction.json`
-
-其中包含：
-
-- 步骤顺序
-- 每步选项
-- 字段映射（`field_path`）
-- 最终工具调用配置（`final_tool`）
-
-## 目标产物
-
-生成英文 Word 文档（`.docx`），包含：
-
-- Page 1: Fault Log Form（A/B/C 三个区块）
-- Page 2: Detailed Incident Report（6 个章节）
-
-## 6 个必填章节语义
-
-1. Description of the Incident
-2. Affected Date
-3. Event Sequence
-4. Impact
-5. Root Cause
-6. Follow-Up Actions
-
-## 数据结构规范
-
-`report_data` 建议尽量对齐：
-
-- `examples/incident_data.json`
-
-关键要求：
-
-- 尽量不要省略关键字段
-- 缺失值请使用 `N/A` 或空数组
-- 时间字段建议统一格式 `DD/MM/YYYY HH:MM`
-
-## 生成脚本
-
-- `scripts/generate_incident_report.py`
-
-脚本会对输入做归一化处理，并尽量补齐模板字段；但如果信息明显不完整，默认会阻止生成并提示缺失章节。
-
-## 最佳实践
-
-1. 先采集再生成，避免空白区域。
-2. 生成后只提示用户在附件区下载，不输出本地临时路径。
-3. 若用户要求英文报告，保持字段值与报告正文为英文表述。
+- `report_data` 必须对齐 `examples/incident_data.json` 的键结构。
+- 时间字段建议使用 `DD/MM/YYYY HH:MM`。
+- 不得编造事实；缺失值可填 `N/A`。
+- 产物仅允许 `.docx`（Word）附件。
+- 生成后前端表单锁定，避免二次编辑造成状态不一致。
 
 ## 目录结构
 

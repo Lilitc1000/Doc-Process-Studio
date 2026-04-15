@@ -13,7 +13,6 @@ import type {
   ChatSessionSummary,
 } from '../types/session';
 import { createConversationId } from '../utils/ids';
-import { normalizeInteractionCard } from '../utils/interaction';
 
 interface UseChatSessionsOptions {
   messageNodes: Ref<Record<string, ChatMessageNode>>;
@@ -80,7 +79,6 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
           request_skill_ids: message.requestSkillIds ?? [],
           files: message.files ?? [],
           tool_statuses: message.toolStatuses ?? [],
-          interaction: message.interaction ?? null,
           timestamp: message.timestamp.toISOString(),
           parent_id: message.parentId,
           child_ids: [...message.childIds],
@@ -116,7 +114,6 @@ export const useChatSessions = (options: UseChatSessionsOptions) => {
         requestSkillIds: message.request_skill_ids ?? [],
         files: message.files ?? [],
         toolStatuses: message.tool_statuses ?? [],
-        interaction: normalizeInteractionCard(message.interaction),
         timestamp: new Date(message.timestamp),
         parentId: message.parent_id,
         childIds: [...message.child_ids],

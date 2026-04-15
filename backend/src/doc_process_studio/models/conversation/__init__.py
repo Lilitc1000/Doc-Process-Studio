@@ -1,5 +1,18 @@
 from .attachments import ChatAttachment, ChatAttachmentMetadata
 from .file_context import UploadedFileContext
+from .incident_report import (
+    IncidentFormAnswer,
+    IncidentReportFormSchemaResponse,
+    IncidentReportGenerateRequest,
+    IncidentReportGenerateResponse,
+    IncidentReportSessionCreateRequest,
+    IncidentReportSessionDetail,
+    IncidentReportSessionListResponse,
+    IncidentReportSessionSnapshot,
+    IncidentReportSessionSummary,
+    IncidentReportSessionTitleUpdateRequest,
+    IncidentReportSessionUpdateRequest,
+)
 from .sessions import (
     ChatSessionAttachment,
     ChatSessionDetail,
@@ -26,5 +39,16 @@ __all__ = [
     "ChatStreamRequest",
     "ChatAttachment",
     "ChatAttachmentMetadata",
+    "IncidentFormAnswer",
+    "IncidentReportFormSchemaResponse",
+    "IncidentReportGenerateRequest",
+    "IncidentReportGenerateResponse",
+    "IncidentReportSessionCreateRequest",
+    "IncidentReportSessionDetail",
+    "IncidentReportSessionListResponse",
+    "IncidentReportSessionSnapshot",
+    "IncidentReportSessionSummary",
+    "IncidentReportSessionTitleUpdateRequest",
+    "IncidentReportSessionUpdateRequest",
     "UploadedFileContext",
 ]
