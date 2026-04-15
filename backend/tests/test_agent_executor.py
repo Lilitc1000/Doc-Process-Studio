@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import time
+
 from doc_process_studio.models.conversation.stream import ChatMessageInput, ChatStreamRequest
 from doc_process_studio.models.skill.runtime import (
     ConversationAgentState,
@@ -195,3 +197,80 @@ def test_execute_tool_graph_deduplicates_same_signature_tool_calls() -> None:
 
     assert invoked_counter["value"] == 1
     assert result.state_diff.reused_tool_calls >= 1
+
+
+def test_execute_tool_graph_converges_when_accumulated_time_exceeded() -> None:
+    budget = ExecutionBudget(
+        max_tool_calls=10,
+        max_time_seconds=5.0,
+        max_prompt_tokens=500,
+        prompt_tokens_estimate=40,
+        accumulated_execution_seconds=6.0,
+    )
+    execution_input = _build_execution_input(
+        normalized_tool_calls=[
+            {
+                "function": {
+                    "name": "search_skill_context",
+                    "arguments": {"query": "事故报告模板"},
+                }
+            }
+        ],
+        budget=budget,
+    )
+
+    def fake_execute_skill_tool_call(**_kwargs):
+        raise AssertionError("时间预算超限后不应真正执行工具。")
+
+    import asyncio
+
+    result = asyncio.run(
+        execute_tool_graph(
+            execution_input=execution_input,
+            deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
+        )
+    )
+
+    assert result.disable_tools is True
+    assert result.state_diff.budget_converged is True
+    assert "时间预算" in result.state_diff.budget_reason
+
+
+def test_execute_tool_graph_converges_when_round_time_exceeded() -> None:
+    budget = ExecutionBudget(
+        max_tool_calls=10,
+        max_time_seconds=5.0,
+        max_prompt_tokens=500,
+        prompt_tokens_estimate=40,
+        accumulated_execution_seconds=4.5,
+        round_started_monotonic=time.monotonic(),
+    )
+    execution_input = _build_execution_input(
+        normalized_tool_calls=[
+            {
+                "function": {
+                    "name": "search_skill_context",
+                    "arguments": {"query": "事故报告模板"},
+                }
+            }
+        ],
+        budget=budget,
+    )
+
+    def fake_execute_skill_tool_call(**_kwargs):
+        raise AssertionError("时间预算超限后不应真正执行工具。")
+
+    import asyncio
+
+    time.sleep(0.6)
+
+    result = asyncio.run(
+        execute_tool_graph(
+            execution_input=execution_input,
+            deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
+        )
+    )
+
+    assert result.disable_tools is True
+    assert result.state_diff.budget_converged is True
+    assert "时间预算" in result.state_diff.budget_reason

@@ -27,7 +27,8 @@ class ExecutionBudget:
     max_prompt_tokens: int
     prompt_tokens_estimate: int
     used_tool_calls: int = 0
-    started_monotonic: float = field(default_factory=time.monotonic)
+    accumulated_execution_seconds: float = 0.0
+    round_started_monotonic: float = 0.0
 
 
 @dataclass
@@ -310,6 +311,13 @@ async def _run_tool_with_retry(
     return tool_result, next_attachments, current_tool_call, fallback_note
 
 
+def _is_execution_time_exceeded(budget: ExecutionBudget) -> bool:
+    if budget.round_started_monotonic <= 0:
+        return budget.accumulated_execution_seconds >= budget.max_time_seconds
+    current_round_elapsed = time.monotonic() - budget.round_started_monotonic
+    return (budget.accumulated_execution_seconds + current_round_elapsed) >= budget.max_time_seconds
+
+
 def _build_budget_converged_result(reason: str) -> ExecutionResult:
     result = ExecutionResult(
         disable_tools=True,
@@ -535,8 +543,7 @@ async def execute_tool_graph(
             )
         )
 
-    elapsed = time.monotonic() - budget.started_monotonic
-    if elapsed >= budget.max_time_seconds:
+    if _is_execution_time_exceeded(budget):
         return _build_budget_converged_result("本次工具执行已达到时间预算上限。")
 
     if budget.used_tool_calls >= budget.max_tool_calls:
@@ -563,8 +570,7 @@ async def execute_tool_graph(
     semaphore = asyncio.Semaphore(max(1, settings.agent_executor_max_parallel_reads))
 
     while pending_by_index:
-        elapsed = time.monotonic() - budget.started_monotonic
-        if elapsed >= budget.max_time_seconds:
+        if _is_execution_time_exceeded(budget):
             return _build_budget_converged_result("本次工具执行已达到时间预算上限。")
         if budget.used_tool_calls >= budget.max_tool_calls:
             return _build_budget_converged_result("本次工具执行已达到调用次数预算上限。")

@@ -40,7 +40,7 @@ def build_timeout(*, stream: bool = False) -> httpx.Timeout:
     """统一远端调用超时策略。"""
     return httpx.Timeout(
         connect=settings.ollama_timeout_seconds,
-        read=None if stream else settings.ollama_timeout_seconds,
+        read=settings.ollama_stream_idle_timeout_seconds if stream else settings.ollama_timeout_seconds,
         write=settings.ollama_timeout_seconds,
         pool=settings.ollama_timeout_seconds,
     )

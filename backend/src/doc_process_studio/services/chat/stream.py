@@ -772,6 +772,7 @@ async def stream_remote_chat_completion(
                 return
 
             tool_round_count += 1
+            execution_budget.round_started_monotonic = time.monotonic()
             execution_result = await execute_tool_graph(
                 execution_input=ExecutionInput(
                     request=request,
@@ -787,6 +788,9 @@ async def stream_remote_chat_completion(
                     budget=execution_budget,
                 ),
                 deps=_build_executor_deps(),
+            )
+            execution_budget.accumulated_execution_seconds += (
+                time.monotonic() - execution_budget.round_started_monotonic
             )
             executed_tool_calls = execution_result.executed_tool_calls
             tool_trace_messages.extend(execution_result.tool_trace_messages)

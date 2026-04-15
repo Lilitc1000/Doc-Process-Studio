@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     db_dsn: str | None = None
     ollama_base_url: str | None = None
     ollama_timeout_seconds: float = 10.0
+    ollama_stream_idle_timeout_seconds: float = 120.0
     redis_url: str | None = None
     redis_password: str | None = None
     redis_key_prefix: str = "doc-process-studio"
