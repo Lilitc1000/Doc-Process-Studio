@@ -25,7 +25,7 @@ describe('catalog utils', () => {
         },
         {
           id: 'resume-review',
-          displayName: '简历筛选',
+          display_name: '简历筛选',
         },
         {
           id: '',
@@ -37,15 +37,15 @@ describe('catalog utils', () => {
     expect(skills).toEqual([
       {
         id: 'document-assistant',
-        displayName: '文档助手',
-        shortDescription: '通用文档处理',
-        skillType: 'chat',
+        display_name: '文档助手',
+        short_description: '通用文档处理',
+        skill_type: 'chat',
       },
       {
         id: 'resume-review',
-        displayName: '简历筛选',
-        shortDescription: '',
-        skillType: 'chat',
+        display_name: '简历筛选',
+        short_description: '',
+        skill_type: 'chat',
       },
     ]);
   });

@@ -31,28 +31,19 @@ export const normalizeSkillCatalog = (payload: SkillCatalogPayload) => {
 
   for (const skill of rawSkills) {
     const id = skill.id?.trim() ?? '';
-    const displayName = (
-      skill.display_name ??
-      skill.displayName ??
-      skill.id ??
-      ''
-    ).trim();
-    const shortDescription = (
-      skill.short_description ??
-      skill.shortDescription ??
-      ''
-    ).trim();
-    const skillType = (skill.skill_type ?? skill.skillType ?? 'chat').trim();
+    const display_name = (skill.display_name ?? skill.id ?? '').trim();
+    const short_description = (skill.short_description ?? '').trim();
+    const skill_type = (skill.skill_type ?? 'chat').trim();
 
-    if (!id || !displayName) {
+    if (!id || !display_name) {
       continue;
     }
 
     skills.push({
       id,
-      displayName,
-      shortDescription,
-      skillType,
+      display_name,
+      short_description,
+      skill_type,
     });
   }
 

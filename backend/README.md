@@ -40,7 +40,7 @@ env ENV=dev uv run --no-sync python -m compileall src/doc_process_studio
 
 说明：
 
-- 第一条是后端全量测试（带超时，避免异常卡住）。
+- 第一条是后端全量测试。
 - 第二条是语法与导入完整性检查。
 - 如果本机存在缓存目录权限问题，可附加：
   `UV_CACHE_DIR=/tmp/uv-cache TMPDIR=/tmp PYTHONDONTWRITEBYTECODE=1`
@@ -90,6 +90,7 @@ backend/src/doc_process_studio
 │   ├── skill
 │   └── system
 ├── services
+│   ├── agent
 │   ├── chat
 │   ├── infra
 │   └── skill
@@ -141,10 +142,14 @@ backend/src/doc_process_studio
 - 执行 skill 脚本型工具
 
 ### `services/infra`
-负责与外部依赖交互：
+负责与外部依赖交互和跨模块共享基础设施：
 
 - Ollama HTTP 调用
 - Redis 读写
+- 通用会话存储基类
+- 跨模块共享工具函数
+
+如果某个函数在两个及以上业务模块里重复出现，优先收敛到这里。
 
 ### `routers/*`
 每个子包负责一组 HTTP 路由，最终由总入口统一收集。
@@ -196,13 +201,21 @@ from doc_process_studio.services.skill.runtime import ensure_skill_context_for_r
 如果你需要使用内部细节函数，比如某个调度器或某个打包器的私有辅助方法，优先直接从对应文件导入，不要强行塞回 `__init__.py`。
 
 ### 4. 不要过度设计
-这个项目当前更适合“轻分层 + 清晰职责”，不建议一上来做：
+这个项目当前更适合"轻分层 + 清晰职责"，不建议一上来做：
 
 - 很重的 DDD 分层
 - 每个 service 再套 interface
 - 为了抽象而抽象出多层空壳
 
 如果一个能力只在一个地方用到，而且逻辑不复杂，直接放在当前职责文件里通常更合适。
+
+### 5. Pydantic 模型只用 snake_case
+所有 Pydantic 模型的字段统一使用 `snake_case`，不要引入 `AliasChoices`、`serialization_alias` 或 `by_alias=True`。
+
+前端已全部对齐 snake_case，后端序列化直接用 `model.model_dump()` 即可，不需要任何别名映射。
+
+### 6. 重复逻辑收敛到 infra
+如果同一个函数在两个及以上业务模块里重复出现，优先收敛到 `services/infra/` 下的对应模块，不要各自维护私有副本。
 
 ## 常见改动应该放哪里
 ### 新增聊天接口
@@ -235,6 +248,19 @@ from doc_process_studio.services.skill.runtime import ensure_skill_context_for_r
 - `models/conversation/sessions.py`
 - `services/chat/sessions.py`
 - 前端对应的会话保存/恢复逻辑
+
+### 新增会话存储
+如果需要新增一种会话存储（例如新的工作区类型），优先复用 `services/infra/session_store.py` 的 `RedisSessionStore[TSummary, TSnapshot]` 泛型基类，只需定义自己的 Summary 和 Snapshot 模型即可，不要重新写一套 Redis 读写逻辑。
+
+参考现有用法：[session_store](/backend/src/doc_process_studio/services/chat/session_store.py)、[incident_session_store](/backend/src/doc_process_studio/services/chat/incident_session_store.py)。
+
+### 新增跨模块共享工具函数
+如果某个工具函数在两个及以上业务模块里需要使用（例如时间获取、参数解析、错误详情构建），放到 `services/infra/` 下对应模块：
+
+- `dtutils.py`：时间与错误详情
+- `tool_args.py`：工具参数解析与规整
+
+如果现有模块不合适，可以新建，但保持 `services/infra/` 下的模块职责单一。
 
 ## Skill 开发约定
 Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
@@ -450,7 +476,8 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 2. 没有把业务逻辑塞进 `routers`。
 3. 没有重复写新的 Ollama/Redis 调用，而是复用了 `services/infra`。
 4. 涉及会话或 skill 的改动时，检查对应模型是否需要同步调整。
-5. `pytest` 和 `compileall` 通过。
+5. 没有在 Pydantic 模型里引入 `AliasChoices`、`serialization_alias` 或 `by_alias=True`。
+6. `pytest` 和 `compileall` 通过。
 
 ## 维护建议
 如果后面继续迭代，建议遵循下面这条简单原则：

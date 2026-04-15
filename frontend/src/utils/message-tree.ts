@@ -14,7 +14,7 @@ interface MessageSiblingOptions {
   messageId: string;
 }
 
-export const getNodeById = (
+export const findNodeById = (
   messageNodes: Record<string, ChatMessageNode>,
   messageId: string,
 ) => {
@@ -26,11 +26,11 @@ export const getSelectedChildId = (
   selectedChildIdByParent: Record<string, string>,
   messageId: string,
 ) => {
-  const currentNode = getNodeById(messageNodes, messageId);
-  if (!currentNode || currentNode.childIds.length === 0) {
+  const currentNode = findNodeById(messageNodes, messageId);
+  if (!currentNode || currentNode.child_ids.length === 0) {
     return null;
   }
-  return selectedChildIdByParent[messageId] ?? currentNode.childIds[0] ?? null;
+  return selectedChildIdByParent[messageId] ?? currentNode.child_ids[0] ?? null;
 };
 
 export const buildDisplayedMessages = (options: DisplayedMessagesOptions) => {
@@ -44,7 +44,7 @@ export const buildDisplayedMessages = (options: DisplayedMessagesOptions) => {
   let currentMessageId: string | null = rootMessageId;
 
   while (currentMessageId) {
-    const currentNode = getNodeById(options.messageNodes, currentMessageId);
+    const currentNode = findNodeById(options.messageNodes, currentMessageId);
     if (!currentNode) {
       break;
     }
@@ -67,12 +67,12 @@ export const getMessagePathToNode = (
   let currentMessageId: string | null = messageId;
 
   while (currentMessageId !== null) {
-    const currentNode = getNodeById(messageNodes, currentMessageId);
+    const currentNode = findNodeById(messageNodes, currentMessageId);
     if (!currentNode) {
       break;
     }
     path.push(currentNode);
-    currentMessageId = currentNode.parentId;
+    currentMessageId = currentNode.parent_id;
   }
 
   return path.reverse();
@@ -81,39 +81,40 @@ export const getMessagePathToNode = (
 export const collectPersistedUploadedAttachmentIdsFromPath = (
   path: ChatMessageNode[],
 ) => {
-  const attachmentIds: string[] = [];
+  const attachment_ids: string[] = [];
 
   for (const message of path) {
     for (const file of message.files ?? []) {
-      const normalizedAttachmentId = file.attachmentId?.trim();
+      const normalizedAttachmentId = file.attachment_id?.trim();
       const isUploadedAttachment =
         file.source === 'uploaded' || (!file.source && message.role === 'user');
       if (
         normalizedAttachmentId &&
         isUploadedAttachment &&
-        !attachmentIds.includes(normalizedAttachmentId)
+        !attachment_ids.includes(normalizedAttachmentId)
       ) {
-        attachmentIds.push(normalizedAttachmentId);
+        attachment_ids.push(normalizedAttachmentId);
       }
     }
   }
 
-  return attachmentIds;
+  return attachment_ids;
 };
 
 export const getMessageSiblingIds = (options: MessageSiblingOptions) => {
-  const messageNode = getNodeById(options.messageNodes, options.messageId);
+  const messageNode = findNodeById(options.messageNodes, options.messageId);
   if (!messageNode) {
     return [];
   }
 
-  const siblingSourceIds = messageNode.parentId
-    ? (getNodeById(options.messageNodes, messageNode.parentId)?.childIds ?? [])
+  const siblingSourceIds = messageNode.parent_id
+    ? (findNodeById(options.messageNodes, messageNode.parent_id)?.child_ids ??
+      [])
     : options.rootChildIds;
 
   return siblingSourceIds.filter((childId) => {
     return (
-      getNodeById(options.messageNodes, childId)?.role === messageNode.role
+      findNodeById(options.messageNodes, childId)?.role === messageNode.role
     );
   });
 };
@@ -172,7 +173,7 @@ export const findAdjacentVersionNodes = (options: {
       if (!siblingId) {
         continue;
       }
-      const siblingNode = getNodeById(options.messageNodes, siblingId);
+      const siblingNode = findNodeById(options.messageNodes, siblingId);
       if (siblingNode) {
         versionCandidates.push(siblingNode);
       }

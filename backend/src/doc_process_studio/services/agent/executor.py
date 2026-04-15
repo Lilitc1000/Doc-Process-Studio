@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, Callable, Literal
 
 from ...models.conversation.stream import ChatStreamRequest
+from ...services.infra.tool_args import parse_tool_arguments
 from ...models.skill.runtime import (
     ConversationAgentState,
     SkillConversationState,
@@ -90,24 +91,6 @@ class _TaskNode:
     dependencies: set[int] = field(default_factory=set)
 
 
-def _parse_tool_arguments(tool_call: dict[str, Any]) -> dict[str, Any]:
-    function_payload = tool_call.get("function")
-    if not isinstance(function_payload, dict):
-        return {}
-
-    raw_arguments = function_payload.get("arguments")
-    if isinstance(raw_arguments, dict):
-        return raw_arguments
-    if isinstance(raw_arguments, str):
-        try:
-            parsed = json.loads(raw_arguments)
-        except json.JSONDecodeError:
-            return {}
-        if isinstance(parsed, dict):
-            return parsed
-    return {}
-
-
 def _resolve_tool_scope(
     *,
     default_skill_id: str,
@@ -122,7 +105,7 @@ def _resolve_tool_scope(
         if scoped_skill_id and base_tool_name:
             return scoped_skill_id, base_tool_name
 
-    arguments = _parse_tool_arguments(tool_call)
+    arguments = parse_tool_arguments(tool_call)
     scoped_skill_id = str(arguments.get("skill_id", "")).strip()
     if scoped_skill_id:
         return scoped_skill_id, normalized_tool_name
@@ -229,7 +212,7 @@ def _build_retry_fallback_tool_call(
     node: _TaskNode,
     tool_call: dict[str, Any],
 ) -> tuple[dict[str, Any], str] | None:
-    arguments = _parse_tool_arguments(tool_call)
+    arguments = parse_tool_arguments(tool_call)
 
     if node.base_tool_name == "search_skill_context":
         source_path = str(arguments.get("source_path", "")).strip()
@@ -543,7 +526,6 @@ async def execute_tool_graph(
                             "type": "attachment",
                             "attachment": attachment.model_dump(
                                 mode="json",
-                                by_alias=True,
                             ),
                         }
                     )

@@ -20,7 +20,6 @@ vi.mock('../src/api/attachments', () => ({
 }));
 
 vi.mock('../src/api/catalog', () => ({
-  fallbackModels: ['qwen3-coder-next:latest'],
   fetchAvailableModels: fetchAvailableModelsMock,
   fetchAvailableSkills: fetchAvailableSkillsMock,
 }));
@@ -51,13 +50,13 @@ describe('chat attachment flow', () => {
       skills: [
         {
           id: 'project-architecture-docx',
-          displayName: '项目架构文档',
+          display_name: '项目架构文档',
         },
       ],
     });
     fetchSessionSummariesMock.mockResolvedValue([]);
     fetchIncidentFormSchemaMock.mockResolvedValue({
-      introMessage: '事故报告向导',
+      intro_message: '事故报告向导',
       steps: [],
     });
     fetchIncidentSessionSummariesMock.mockResolvedValue([]);
@@ -71,18 +70,18 @@ describe('chat attachment flow', () => {
 
     streamChatReplyMock.mockImplementation(
       async (requestSnapshot, _signal, onEvent) => {
-        expect(requestSnapshot.attachmentIds).toEqual([]);
+        expect(requestSnapshot.attachment_ids).toEqual([]);
         onEvent({
           type: 'attachment',
           attachment: {
-            attachmentId: 'attachment-1',
+            attachment_id: 'attachment-1',
             name: '系统架构与设计文档.docx',
             source: 'generated',
-            sizeLabel: '24 KB',
-            downloadUrl: '/api/attachments/attachment-1/download',
-            mimeType:
+            size_label: '24 KB',
+            download_url: '/api/attachments/attachment-1/download',
+            mime_type:
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            expiresAt: '2026-04-14T00:00:00Z',
+            expires_at: '2026-04-14T00:00:00Z',
           },
         });
         onEvent({

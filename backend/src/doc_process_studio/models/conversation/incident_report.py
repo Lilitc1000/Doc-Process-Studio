@@ -1,7 +1,7 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import BaseModel, Field
 
 from .attachments import ChatAttachment
 from ..skill.interaction import SkillInteractionStep
@@ -18,8 +18,6 @@ class IncidentFormAnswer(BaseModel):
     custom_value: str | None = Field(
         default=None,
         description="当步骤支持自定义输入时的补充值。",
-        validation_alias=AliasChoices("custom_value", "customValue"),
-        serialization_alias="customValue",
     )
 
 
@@ -27,50 +25,34 @@ class IncidentReportSessionSnapshot(BaseModel):
     form_answers: dict[str, IncidentFormAnswer] = Field(
         default_factory=dict,
         description="表单各步骤的已填写答案。",
-        validation_alias=AliasChoices("form_answers", "formAnswers"),
-        serialization_alias="formAnswers",
     )
     report_data: dict[str, Any] | None = Field(
         default=None,
         description="最终用于生成文档的 incident_data.json 内容。",
-        validation_alias=AliasChoices("report_data", "reportData"),
-        serialization_alias="reportData",
     )
     generated_attachment: ChatAttachment | None = Field(
         default=None,
         description="生成成功后的附件信息。",
-        validation_alias=AliasChoices("generated_attachment", "generatedAttachment"),
-        serialization_alias="generatedAttachment",
     )
     generated_trace_id: str | None = Field(
         default=None,
         description="生成链路 trace_id，可用于回放。",
-        validation_alias=AliasChoices("generated_trace_id", "generatedTraceId"),
-        serialization_alias="generatedTraceId",
     )
     generated_at: datetime | None = Field(
         default=None,
         description="文档生成完成时间。",
-        validation_alias=AliasChoices("generated_at", "generatedAt"),
-        serialization_alias="generatedAt",
     )
     is_locked: bool = Field(
         default=False,
         description="生成完成后表单锁定，不允许继续编辑。",
-        validation_alias=AliasChoices("is_locked", "isLocked"),
-        serialization_alias="isLocked",
     )
     fallback_used: bool = Field(
         default=False,
         description="LLM 润色失败后是否回退到原始表单数据生成。",
-        validation_alias=AliasChoices("fallback_used", "fallbackUsed"),
-        serialization_alias="fallbackUsed",
     )
     polish_error: str | None = Field(
         default=None,
         description="LLM 润色失败原因，仅用于追踪展示。",
-        validation_alias=AliasChoices("polish_error", "polishError"),
-        serialization_alias="polishError",
     )
 
 
@@ -110,14 +92,10 @@ class IncidentReportGenerateRequest(BaseModel):
     reranker_model: str | None = Field(
         default=None,
         description="可选重排序模型；为空时回退为 model。",
-        validation_alias=AliasChoices("reranker_model", "rerankerModel"),
-        serialization_alias="rerankerModel",
     )
     output_name: str | None = Field(
         default=None,
         description="可选输出文件名；为空时按默认规则生成。",
-        validation_alias=AliasChoices("output_name", "outputName"),
-        serialization_alias="outputName",
     )
 
 
@@ -127,8 +105,6 @@ class IncidentReportGenerateResponse(BaseModel):
     trace_id: str = Field(
         ...,
         description="本次生成的 trace_id",
-        validation_alias=AliasChoices("trace_id", "traceId"),
-        serialization_alias="traceId",
     )
 
 
@@ -136,8 +112,6 @@ class IncidentReportFormSchemaResponse(BaseModel):
     intro_message: str = Field(
         default="",
         description="欢迎向导文案。",
-        validation_alias=AliasChoices("intro_message", "introMessage"),
-        serialization_alias="introMessage",
     )
     steps: list[SkillInteractionStep] = Field(
         default_factory=list,
@@ -157,6 +131,3 @@ def build_empty_incident_snapshot() -> IncidentReportSessionSnapshot:
         polish_error=None,
     )
 
-
-def utc_now() -> datetime:
-    return datetime.now(UTC)

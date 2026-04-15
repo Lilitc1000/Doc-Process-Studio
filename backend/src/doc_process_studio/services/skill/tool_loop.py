@@ -20,6 +20,7 @@ from ...models.conversation.attachments import ChatAttachment
 from ...models.conversation.stream import ChatStreamRequest
 from ...models.skill.catalog import SkillToolConfig
 from ...models.skill.runtime import SkillConversationState
+from ...services.infra.tool_args import parse_tool_arguments
 from ...settings import BACKEND_DIR, settings
 from ..chat.attachments import save_generated_attachment
 from .context import (
@@ -240,7 +241,7 @@ def build_tool_status_start(
         default_skill_id=skill_id,
         tool_call=tool_call,
     )
-    arguments = _parse_tool_arguments(tool_call)
+    arguments = parse_tool_arguments(tool_call)
 
     if tool_name in {"list_skill_directory", "read_skill_file"}:
         relative_path = str(arguments.get("relative_path", "")).strip()
@@ -324,7 +325,7 @@ def build_tool_status_finish(
         default_skill_id=request.skill_id,
         tool_call=tool_call,
     )
-    arguments = _parse_tool_arguments(tool_call)
+    arguments = parse_tool_arguments(tool_call)
     if tool_result.get("reused"):
         if tool_name == "list_skill_directory":
             relative_path = str(arguments.get("relative_path", "")).strip()
@@ -685,28 +686,6 @@ def build_skill_tools_for_skills(skill_ids: list[str]) -> list[dict[str, Any]]:
     return [*builtin_tools, *declared_tools]
 
 
-def _parse_tool_arguments(tool_call: dict[str, Any]) -> dict[str, Any]:
-    function_payload = tool_call.get("function")
-    if not isinstance(function_payload, dict):
-        return {}
-
-    raw_arguments = function_payload.get("arguments")
-    if isinstance(raw_arguments, dict):
-        return raw_arguments
-
-    if not isinstance(raw_arguments, str) or not raw_arguments.strip():
-        return {}
-
-    try:
-        parsed_arguments = json.loads(raw_arguments)
-    except json.JSONDecodeError:
-        return {}
-
-    if isinstance(parsed_arguments, dict):
-        return parsed_arguments
-    return {}
-
-
 def _get_tool_name(tool_call: dict[str, Any]) -> str:
     function_payload = tool_call.get("function")
     if not isinstance(function_payload, dict):
@@ -945,7 +924,7 @@ def _resolve_tool_scope(
 ) -> tuple[str, str]:
     raw_tool_name = _get_tool_name(tool_call)
     scoped_skill_id, base_tool_name = split_scoped_tool_name(raw_tool_name)
-    arguments = _parse_tool_arguments(tool_call)
+    arguments = parse_tool_arguments(tool_call)
     argument_skill_id = str(arguments.get("skill_id", "")).strip()
     resolved_skill_id = scoped_skill_id or argument_skill_id or default_skill_id
     return resolved_skill_id, base_tool_name
@@ -1322,7 +1301,7 @@ def _execute_declared_script_tool(
         )
         return {
             "ok": True,
-            "attachment": attachment.model_dump(mode="json", by_alias=True),
+            "attachment": attachment.model_dump(mode="json"),
             # 附件型工具只返回结构化结果，避免把本地临时路径日志暴露给模型后再回显给用户。
             "message": "文件已生成，请通过附件信息下载。",
         }, [attachment]
@@ -1336,7 +1315,7 @@ def execute_skill_tool_call(
 ) -> tuple[dict[str, Any], list[ChatAttachment]]:
     """执行单个 tool call，并返回工具结果与产物列表。"""
     tool_name = _get_tool_name(tool_call)
-    raw_arguments = _parse_tool_arguments(tool_call)
+    raw_arguments = parse_tool_arguments(tool_call)
     arguments = _normalize_builtin_tool_arguments(
         tool_name=tool_name,
         arguments=raw_arguments,
@@ -1506,7 +1485,7 @@ def execute_scoped_skill_tool_call(
             "error": f"未知或未激活的 skill：{resolved_skill_id}",
         }, []
 
-    arguments = _parse_tool_arguments(tool_call)
+    arguments = parse_tool_arguments(tool_call)
     normalized_arguments = {
         key: value for key, value in arguments.items() if key != "skill_id"
     }

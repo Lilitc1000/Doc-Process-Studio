@@ -18,28 +18,28 @@ export interface IncidentFormStep {
   id: string;
   title: string;
   prompt: string;
-  fieldPath: string;
+  field_path: string;
   kind: IncidentFormKind;
   options: IncidentFormOption[];
-  allowCustom: boolean;
+  allow_custom: boolean;
   required: boolean;
   placeholder?: string | null;
 }
 
 export interface IncidentFormAnswer {
   value?: string | string[] | null;
-  customValue?: string;
+  custom_value?: string;
 }
 
 export interface IncidentSnapshot {
-  formAnswers: Record<string, IncidentFormAnswer>;
-  reportData?: Record<string, unknown> | null;
-  generatedAttachment?: ChatAttachment | null;
-  generatedTraceId?: string | null;
-  generatedAt?: string | null;
-  isLocked: boolean;
-  fallbackUsed: boolean;
-  polishError?: string | null;
+  form_answers: Record<string, IncidentFormAnswer>;
+  report_data?: Record<string, unknown> | null;
+  generated_attachment?: ChatAttachment | null;
+  generated_trace_id?: string | null;
+  generated_at?: string | null;
+  is_locked: boolean;
+  fallback_used: boolean;
+  polish_error?: string | null;
 }
 
 export interface IncidentSessionSummary {
@@ -55,12 +55,12 @@ export interface IncidentSessionDetail extends IncidentSessionSummary {
 }
 
 export interface IncidentFormSchemaPayload {
-  introMessage: string;
+  intro_message: string;
   steps: IncidentFormStep[];
 }
 
 export interface IncidentGenerateResponse {
   session: IncidentSessionSummary;
   snapshot: IncidentSnapshot;
-  traceId: string;
+  trace_id: string;
 }

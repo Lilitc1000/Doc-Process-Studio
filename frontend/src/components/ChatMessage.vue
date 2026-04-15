@@ -27,11 +27,11 @@
               :key="skill.id"
               type="button"
               class="message-edit-skill-chip"
-              :title="`移除文档处理方式：${skill.displayName}`"
+              :title="`移除文档处理方式：${skill.display_name}`"
               @click="removeEditingSkill(skill.id)"
             >
               <span class="message-edit-skill-chip-name">
-                {{ skill.displayName }}
+                {{ skill.display_name }}
               </span>
               <span class="message-edit-skill-chip-remove" aria-hidden="true">
                 ×
@@ -72,20 +72,20 @@
                   type="button"
                   class="message-edit-skill-suggestion-item"
                   :class="{ active: index === activeEditSkillIndex }"
-                  :title="skill.shortDescription || skill.displayName"
+                  :title="skill.short_description || skill.display_name"
                   @mousedown.prevent="selectEditSkillSuggestion(skill.id)"
                   @mouseenter="activeEditSkillIndex = index"
                 >
                   <span class="message-edit-skill-suggestion-main">
                     <span class="message-edit-skill-suggestion-name">
-                      {{ skill.displayName }}
+                      {{ skill.display_name }}
                     </span>
                   </span>
                   <span
-                    v-if="skill.shortDescription"
+                    v-if="skill.short_description"
                     class="message-edit-skill-suggestion-desc"
                   >
-                    {{ skill.shortDescription }}
+                    {{ skill.short_description }}
                   </span>
                 </button>
               </div>
@@ -139,9 +139,9 @@
                 v-for="skill in displaySkillTags"
                 :key="skill.id"
                 class="message-skill-chip"
-                :title="`文档处理方式：${skill.displayName}`"
+                :title="`文档处理方式：${skill.display_name}`"
               >
-                {{ skill.displayName }}
+                {{ skill.display_name }}
               </span>
             </div>
 
@@ -275,7 +275,7 @@ const canOpenTrace = computed(() => props.canOpenTrace ?? false);
 const isVersionLocked = computed(() => props.isVersionLocked ?? false);
 const canConfirmEdit = computed(() => props.canConfirmEdit ?? false);
 const toolStatuses = computed<ChatToolStatus[]>(() => {
-  return props.message.toolStatuses ?? [];
+  return props.message.tool_statuses ?? [];
 });
 const showInlineLiveToolStatus = computed(() => {
   return props.message.role === 'assistant' && Boolean(props.liveToolStatus);
@@ -288,7 +288,7 @@ const displaySkillTags = computed(() => {
     return [];
   }
 
-  const requestSkillIds = props.message.requestSkillIds ?? [];
+  const requestSkillIds = props.message.request_skill_ids ?? [];
   if (requestSkillIds.length === 0) {
     return [];
   }
@@ -300,7 +300,7 @@ const displaySkillTags = computed(() => {
 
     return {
       id: skillId,
-      displayName: matchedSkill?.displayName ?? skillId,
+      display_name: matchedSkill?.display_name ?? skillId,
     };
   });
 });

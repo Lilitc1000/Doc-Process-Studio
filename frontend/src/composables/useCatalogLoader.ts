@@ -36,7 +36,7 @@ export const useCatalogLoader = (options: UseCatalogLoaderOptions) => {
         return;
       }
       const filteredSkills = nextSkills.filter((skill) => {
-        return skill.id !== 'document-assistant' && skill.skillType === 'chat';
+        return skill.id !== 'document-assistant' && skill.skill_type === 'chat';
       });
       options.processingModes.value = filteredSkills;
     } catch (error) {

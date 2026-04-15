@@ -34,18 +34,18 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
     return (
       isLoading.value &&
       message.role === 'assistant' &&
-      message.id === activeGeneration.value?.assistantId &&
+      message.id === activeGeneration.value?.assistant_id &&
       !message.content.trim()
     );
   };
 
   const markGenerationStopped = () => {
-    if (!activeGeneration.value?.assistantId) {
+    if (!activeGeneration.value?.assistant_id) {
       return;
     }
 
     const activeMessage = options.findMessageById(
-      activeGeneration.value.assistantId,
+      activeGeneration.value.assistant_id,
     );
     if (!activeMessage) {
       return;
@@ -98,13 +98,13 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
     requestSnapshot: ChatRequestSnapshot,
   ) => {
     const assistantNode = options.createAssistantVariant(
-      requestSnapshot.userMessageId,
+      requestSnapshot.user_message_id,
     );
     const abortController = new AbortController();
     isLoading.value = true;
     activeGeneration.value = {
-      assistantId: assistantNode.id,
-      userMessageId: requestSnapshot.userMessageId,
+      assistant_id: assistantNode.id,
+      user_message_id: requestSnapshot.user_message_id,
       controller: abortController,
     };
     options.scrollToBottom();
@@ -140,7 +140,7 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
 
           if (payload.type === 'uploaded-attachment' && payload.attachment) {
             options.appendMessageAttachment(
-              requestSnapshot.userMessageId,
+              requestSnapshot.user_message_id,
               payload.attachment,
             );
           }
@@ -163,11 +163,11 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
           ) {
             options.appendMessageToolStatus(assistantNode.id, {
               id: `${assistantNode.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              toolName: payload.tool_name,
+              tool_name: payload.tool_name,
               label: payload.label,
               message: payload.message,
               phase: payload.phase,
-              createdAt: new Date().toISOString(),
+              created_at: new Date().toISOString(),
             });
           }
         },

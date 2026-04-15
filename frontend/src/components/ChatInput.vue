@@ -59,10 +59,10 @@
             :key="skill.id"
             type="button"
             class="skill-chip"
-            :title="`移除文档处理方式：${skill.displayName}`"
+            :title="`移除文档处理方式：${skill.display_name}`"
             @click="removeSelectedSkill(skill.id)"
           >
-            <span class="skill-chip-name">{{ skill.displayName }}</span>
+            <span class="skill-chip-name">{{ skill.display_name }}</span>
             <span class="skill-chip-remove" aria-hidden="true">×</span>
           </button>
         </div>
@@ -91,20 +91,20 @@
                 type="button"
                 class="skill-suggestion-item"
                 :class="{ active: index === activeSuggestionIndex }"
-                :title="skill.shortDescription || skill.displayName"
+                :title="skill.short_description || skill.display_name"
                 @mousedown.prevent="selectSkillSuggestion(skill.id)"
                 @mouseenter="activeSuggestionIndex = index"
               >
                 <span class="skill-suggestion-main">
                   <span class="skill-suggestion-name">{{
-                    skill.displayName
+                    skill.display_name
                   }}</span>
                 </span>
                 <span
-                  v-if="skill.shortDescription"
+                  v-if="skill.short_description"
                   class="skill-suggestion-desc"
                 >
-                  {{ skill.shortDescription }}
+                  {{ skill.short_description }}
                 </span>
               </button>
             </div>

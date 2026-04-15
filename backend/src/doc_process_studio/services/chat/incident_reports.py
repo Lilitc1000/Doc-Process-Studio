@@ -22,6 +22,12 @@ from ...models.conversation.stream import ChatMessageInput, ChatStreamRequest
 from ...models.skill.interaction import SkillInteractionConfig, SkillInteractionStep
 from ...models.skill.runtime import SkillConversationState
 from ...services.agent.error_detail import build_exception_detail, summarize_exception
+from ...services.infra.dtutils import build_error_event_detail, parse_json_object, utcnow
+from ...services.infra.tool_args import (
+    build_normalized_tool_calls,
+    extract_tool_name,
+    parse_tool_arguments,
+)
 from ...services.agent.trace_store import (
     AgentTraceRecorder,
     delete_agent_traces_for_conversation,
@@ -65,12 +71,8 @@ def _is_docx_attachment(attachment: Any) -> bool:
     )
 
 
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
 def _build_default_title(now: datetime | None = None) -> str:
-    current = now or _utcnow()
+    current = now or utcnow()
     return f"事故报告-{current.strftime('%Y/%m/%d %H:%M')}"
 
 
@@ -204,40 +206,6 @@ def _build_report_data_from_snapshot(
     return _deep_merge(config.defaults, collected), []
 
 
-def _parse_json_object(value: str) -> dict[str, Any] | None:
-    normalized = value.strip()
-    if not normalized:
-        return None
-
-    try:
-        parsed = json.loads(normalized)
-    except json.JSONDecodeError:
-        parsed = None
-    if isinstance(parsed, dict):
-        return parsed
-
-    if normalized.startswith("```"):
-        normalized = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", normalized)
-        normalized = re.sub(r"\s*```$", "", normalized).strip()
-        try:
-            parsed = json.loads(normalized)
-        except json.JSONDecodeError:
-            parsed = None
-        if isinstance(parsed, dict):
-            return parsed
-
-    matched = re.search(r"\{[\s\S]*\}", normalized)
-    if matched is None:
-        return None
-    try:
-        parsed = json.loads(matched.group(0))
-    except json.JSONDecodeError:
-        return None
-    if isinstance(parsed, dict):
-        return parsed
-    return None
-
-
 async def _run_skill_chat_completion_round(
     *,
     model: str,
@@ -274,56 +242,13 @@ async def _run_skill_chat_completion_round(
     return "".join(assistant_content_parts), normalized_tool_calls, done_reason
 
 
-def _extract_tool_name(tool_call: dict[str, Any]) -> str:
-    function_payload = tool_call.get("function")
-    if not isinstance(function_payload, dict):
-        return ""
-    raw_name = function_payload.get("name")
-    if isinstance(raw_name, str):
-        return raw_name.strip()
-    return ""
-
-
-def _extract_tool_arguments(tool_call: dict[str, Any]) -> dict[str, Any]:
-    function_payload = tool_call.get("function")
-    if not isinstance(function_payload, dict):
-        return {}
-
-    raw_arguments = function_payload.get("arguments")
-    if isinstance(raw_arguments, dict):
-        return raw_arguments
-    if isinstance(raw_arguments, str):
-        parsed = _parse_json_object(raw_arguments)
-        if isinstance(parsed, dict):
-            return parsed
-    return {}
-
-
-def _build_native_tool_trace_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    normalized_calls: list[dict[str, Any]] = []
-    for tool_call in tool_calls:
-        tool_name = _extract_tool_name(tool_call)
-        if not tool_name:
-            continue
-        arguments = _extract_tool_arguments(tool_call)
-        normalized_calls.append(
-            {
-                "function": {
-                    "name": tool_name,
-                    "arguments": arguments if arguments else {},
-                }
-            }
-        )
-    return normalized_calls
-
-
 def _extract_report_data_from_tool_call(tool_call: dict[str, Any]) -> dict[str, Any] | None:
-    arguments = _extract_tool_arguments(tool_call)
+    arguments = parse_tool_arguments(tool_call)
     raw_report_data = arguments.get("report_data")
     if isinstance(raw_report_data, dict):
         return deepcopy(raw_report_data)
     if isinstance(raw_report_data, str):
-        return _parse_json_object(raw_report_data)
+        return parse_json_object(raw_report_data)
     return None
 
 
@@ -336,20 +261,6 @@ def _build_incident_generate_instruction(*, output_name: str) -> str:
         "并将润色后的完整 JSON 作为 report_data 传入。"
         f"输出文件名请使用：{output_name}"
     )
-
-
-async def _build_error_event_detail(
-    *,
-    message: str,
-    exc: BaseException | None = None,
-    extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    detail: dict[str, Any] = {"message": message}
-    if exc is not None:
-        detail["error_detail"] = await build_exception_detail(exc)
-    if extra:
-        detail.update(extra)
-    return detail
 
 
 async def _flush_trace_safely(recorder: AgentTraceRecorder) -> None:
@@ -408,7 +319,7 @@ async def create_incident_report_session(
     *,
     title: str,
 ) -> IncidentReportSessionSummary:
-    now = _utcnow()
+    now = utcnow()
     session_id = uuid4().hex
     summary = IncidentReportSessionSummary(
         id=session_id,
@@ -436,7 +347,7 @@ async def update_incident_report_session_snapshot(
     if existing.snapshot.is_locked:
         raise ValueError("附件已生成，当前会话已锁定，不能继续编辑。")
 
-    now = _utcnow()
+    now = utcnow()
     next_summary = _build_summary_from_detail(
         existing,
         status="draft",
@@ -470,7 +381,7 @@ async def update_incident_report_session_title(
     detail = await get_incident_report_session(session_id)
     if detail is None:
         return None
-    now = _utcnow()
+    now = utcnow()
     summary = _build_summary_from_detail(
         detail,
         title=title.strip(),
@@ -529,7 +440,7 @@ async def generate_incident_report_session_attachment(
     )
     await _flush_trace_safely(recorder)
 
-    now = _utcnow()
+    now = utcnow()
     generating_summary = _build_summary_from_detail(
         detail,
         status="generating",
@@ -636,7 +547,7 @@ async def generate_incident_report_session_attachment(
                 raise RuntimeError(
                     f"incident-report skill 对话失败：{summarize_exception(exc)}"
                 ) from exc
-            native_tool_calls = _build_native_tool_trace_calls(round_tool_calls)
+            native_tool_calls = build_normalized_tool_calls(round_tool_calls)
             if assistant_content or native_tool_calls:
                 assistant_message: dict[str, Any] = {
                     "role": "assistant",
@@ -664,7 +575,7 @@ async def generate_incident_report_session_attachment(
                 )
 
             for tool_call in round_tool_calls:
-                tool_name = _extract_tool_name(tool_call)
+                tool_name = extract_tool_name(tool_call)
                 tool_result, next_attachments = execute_skill_tool_call(
                     request=request,
                     state=state,
@@ -699,7 +610,7 @@ async def generate_incident_report_session_attachment(
         if docx_attachment is None:
             raise RuntimeError("事故报告仅支持生成 DOCX 附件。")
         attachment = docx_attachment
-        generated_at = _utcnow()
+        generated_at = utcnow()
         next_summary = _build_summary_from_detail(
             detail,
             status="generated",
@@ -736,7 +647,7 @@ async def generate_incident_report_session_attachment(
         )
     except asyncio.CancelledError:
         failure_message = "生成任务已取消。"
-        failed_at = _utcnow()
+        failed_at = utcnow()
         failed_summary = _build_summary_from_detail(
             detail,
             status="failed",
@@ -768,7 +679,7 @@ async def generate_incident_report_session_attachment(
         raise
     except Exception as exc:  # noqa: BLE001
         failure_message = summarize_exception(exc)
-        failed_at = _utcnow()
+        failed_at = utcnow()
         failed_summary = _build_summary_from_detail(
             detail,
             status="failed",
@@ -789,7 +700,7 @@ async def generate_incident_report_session_attachment(
         await touch_incident_session_index(session_id, failed_at.timestamp())
         recorder.add_event(
             event_type="attachment_generated",
-            detail=await _build_error_event_detail(
+            detail=await build_error_event_detail(
                 message=failure_message,
                 exc=exc,
                 extra={

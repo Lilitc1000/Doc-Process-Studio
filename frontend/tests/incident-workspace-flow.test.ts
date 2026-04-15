@@ -24,7 +24,6 @@ vi.mock('../src/api/attachments', () => ({
 }));
 
 vi.mock('../src/api/catalog', () => ({
-  fallbackModels: ['qwen3-coder-next:latest'],
   fetchAvailableModels: fetchAvailableModelsMock,
   fetchAvailableSkills: fetchAvailableSkillsMock,
 }));
@@ -59,16 +58,16 @@ describe('incident workspace flow', () => {
     fetchSessionSummariesMock.mockResolvedValue([]);
     fetchIncidentSessionSummariesMock.mockResolvedValue([]);
     fetchIncidentFormSchemaMock.mockResolvedValue({
-      introMessage: '欢迎来到事故报告向导',
+      intro_message: '欢迎来到事故报告向导',
       steps: [
         {
           id: 'incident_type',
           title: 'Step 1/1 事故类型',
           prompt: '请选择事故类型',
-          fieldPath: 'detailed_description',
+          field_path: 'detailed_description',
           kind: 'single_select',
           options: [{ value: 'A', label: 'A' }],
-          allowCustom: true,
+          allow_custom: true,
           required: true,
           placeholder: '',
         },
@@ -90,14 +89,14 @@ describe('incident workspace flow', () => {
       created_at: '2026-04-14T12:30:00Z',
       updated_at: '2026-04-14T12:30:00Z',
       snapshot: {
-        formAnswers: {},
-        reportData: null,
-        generatedAttachment: null,
-        generatedTraceId: '',
-        generatedAt: null,
-        isLocked: false,
-        fallbackUsed: false,
-        polishError: null,
+        form_answers: {},
+        report_data: null,
+        generated_attachment: null,
+        generated_trace_id: '',
+        generated_at: null,
+        is_locked: false,
+        fallback_used: false,
+        polish_error: null,
       },
     });
 
@@ -110,27 +109,27 @@ describe('incident workspace flow', () => {
         updated_at: '2026-04-14T12:40:00Z',
       },
       snapshot: {
-        formAnswers: {
-          incident_type: { value: 'A', customValue: '' },
+        form_answers: {
+          incident_type: { value: 'A', custom_value: '' },
         },
-        reportData: {},
-        generatedAttachment: {
-          attachmentId: 'incident-attachment-1',
+        report_data: {},
+        generated_attachment: {
+          attachment_id: 'incident-attachment-1',
           name: 'incident-report.docx',
           source: 'generated',
-          sizeLabel: '20 KB',
-          downloadUrl: '/api/attachments/incident-attachment-1/download',
-          mimeType:
+          size_label: '20 KB',
+          download_url: '/api/attachments/incident-attachment-1/download',
+          mime_type:
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          expiresAt: '2026-04-15T00:00:00Z',
+          expires_at: '2026-04-15T00:00:00Z',
         },
-        generatedTraceId: 'trace-incident-1',
-        generatedAt: '2026-04-14T12:40:00Z',
-        isLocked: true,
-        fallbackUsed: false,
-        polishError: null,
+        generated_trace_id: 'trace-incident-1',
+        generated_at: '2026-04-14T12:40:00Z',
+        is_locked: true,
+        fallback_used: false,
+        polish_error: null,
       },
-      traceId: 'trace-incident-1',
+      trace_id: 'trace-incident-1',
     });
     fetchAgentTraceReplayMock.mockResolvedValue({
       payload: {
@@ -180,7 +179,7 @@ describe('incident workspace flow', () => {
       'incident-session-1',
       {
         model: 'qwen3-coder-next:latest',
-        rerankerModel: 'qwen3-coder-next:latest',
+        reranker_model: 'qwen3-coder-next:latest',
       },
       expect.objectContaining({
         signal: expect.any(Object),

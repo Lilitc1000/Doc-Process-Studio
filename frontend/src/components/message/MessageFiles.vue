@@ -8,8 +8,8 @@
       >
         <span
           class="message-file-icon"
-          :style="getFileIconStyle(file.name, file.mimeType)"
-          :title="getFileIconLabel(file.name, file.mimeType)"
+          :style="getFileIconStyle(file.name, file.mime_type)"
+          :title="getFileIconLabel(file.name, file.mime_type)"
           aria-hidden="true"
         >
           <svg viewBox="0 0 20 20" class="message-file-icon-svg">
@@ -30,12 +30,12 @@
             />
           </svg>
           <span class="message-file-icon-badge">
-            {{ getFileIconBadge(file.name, file.mimeType) }}
+            {{ getFileIconBadge(file.name, file.mime_type) }}
           </span>
         </span>
         <div class="message-edit-file-meta">
           <span class="message-file-name">{{ file.name }}</span>
-          <span class="message-file-size">{{ file.sizeLabel }}</span>
+          <span class="message-file-size">{{ file.size_label }}</span>
         </div>
         <button
           class="message-edit-file-remove"
@@ -54,16 +54,16 @@
         :key="buildFileKey(file, index)"
         class="message-file-item"
         :class="{
-          'is-downloadable': Boolean(file.attachmentId),
-          'is-static': !file.attachmentId,
+          'is-downloadable': Boolean(file.attachment_id),
+          'is-static': !file.attachment_id,
         }"
         type="button"
         @click="onFileClick(file)"
       >
         <span
           class="message-file-icon"
-          :style="getFileIconStyle(file.name, file.mimeType)"
-          :title="getFileIconLabel(file.name, file.mimeType)"
+          :style="getFileIconStyle(file.name, file.mime_type)"
+          :title="getFileIconLabel(file.name, file.mime_type)"
           aria-hidden="true"
         >
           <svg viewBox="0 0 20 20" class="message-file-icon-svg">
@@ -84,12 +84,12 @@
             />
           </svg>
           <span class="message-file-icon-badge">
-            {{ getFileIconBadge(file.name, file.mimeType) }}
+            {{ getFileIconBadge(file.name, file.mime_type) }}
           </span>
         </span>
         <div class="message-file-meta">
           <span class="message-file-name">{{ file.name }}</span>
-          <span class="message-file-size">{{ file.sizeLabel }}</span>
+          <span class="message-file-size">{{ file.size_label }}</span>
         </div>
       </button>
     </template>
@@ -134,11 +134,11 @@ const getFileIconLabel = (fileName: string, mimeType?: string) => {
 };
 
 const buildFileKey = (file: ChatAttachment, index: number) => {
-  return `${file.name}-${file.sizeLabel}-${file.attachmentId ?? 'plain'}-${index}`;
+  return `${file.name}-${file.size_label}-${file.attachment_id ?? 'plain'}-${index}`;
 };
 
 const onFileClick = (file: ChatAttachment) => {
-  if (!file.attachmentId) {
+  if (!file.attachment_id) {
     return;
   }
   emit('download', file);

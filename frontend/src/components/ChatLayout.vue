@@ -63,12 +63,12 @@
                   :cache-scope-id="activeSessionId ?? conversationId"
                   :can-open-trace="
                     message.role === 'assistant' &&
-                    typeof message.traceId === 'string' &&
-                    message.traceId.trim().length > 0 &&
+                    typeof message.trace_id === 'string' &&
+                    message.trace_id.trim().length > 0 &&
                     !isMessageStreaming(message)
                   "
                   :live-tool-status="
-                    message.id === activeGeneration?.assistantId
+                    message.id === activeGeneration?.assistant_id
                       ? latestLiveToolStatus
                       : null
                   "
@@ -162,72 +162,37 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { downloadAttachment } from '../api/attachments';
-import { fallbackModels } from '../api/catalog';
-import { fetchAgentTraceReplay } from '../api/trace';
 import { useCatalogLoader } from '../composables/useCatalogLoader';
 import { useChatSessions } from '../composables/useChatSessions';
 import { useChatStreaming } from '../composables/useChatStreaming';
 import { useCopyToast } from '../composables/useCopyToast';
 import { useIncidentReportSessions } from '../composables/useIncidentReportSessions';
 import { useMessageActions } from '../composables/useMessageActions';
+import { useMessageTree } from '../composables/useMessageTree';
+import { useTraceModal } from '../composables/useTraceModal';
 import type {
-  ChatAttachment,
   ChatEditAttachment,
   ChatMessageNode,
-  ChatRequestSnapshot,
   ChatToolStatus,
 } from '../types/chat';
 import type { IncidentFormAnswer } from '../types/incident-report';
 import type { SkillOption } from '../types/skill';
-import type { TraceReplayPayload } from '../types/trace';
-import { createMessageId } from '../utils/ids';
-import {
-  buildDisplayedMessages,
-  canSwitchMessageVersion as canSwitchMessageVersionInTree,
-  collectPersistedUploadedAttachmentIdsFromPath,
-  findAdjacentVersionNodes,
-  getMessagePathToNode,
-  getMessageVersionCount as getMessageVersionCountInTree,
-  getMessageVersionIndex as getMessageVersionIndexInTree,
-  getNodeById as getNodeByIdInTree,
-  resolveCurrentLeafMessageId,
-  resolveLastRoleMessageId,
-  resolveTargetVersionMessageId,
-} from '../utils/message-tree';
-import { prewarmRenderedContentCache } from '../utils/render-markdown';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatSidebar from './ChatSidebar.vue';
 import IncidentReportWorkspace from './IncidentReportWorkspace.vue';
 import TraceReplayModal from './TraceReplayModal.vue';
 
+const defaultModels = [
+  'gpt-4o-mini',
+  'gpt-4o',
+  'claude-3.5-sonnet',
+  'deepseek-v3',
+];
+
 const workspaceTabs = [
   { id: 'chat', label: '对话' },
   { id: 'incident-report', label: '事故报告' },
-];
-
-const welcomeMessages: ChatMessageNode[] = [
-  {
-    id: 'welcome-1',
-    role: 'system',
-    content: [
-      '### 欢迎来到文档处理助手',
-      '',
-      '**上传一份文档，或者直接问我一个问题。**',
-      '',
-      '我会根据你选择的处理方式和模型，帮你更快地读懂、提炼和整理内容。',
-      '',
-      '你可以试试这些开始方式：',
-      '',
-      '- 上传 PDF、Word、Excel、PPT 等常见文档',
-      '- 直接提问，快速拿到摘要、答案或重点结论',
-      '- 围绕同一批文件连续追问，进行多轮对话',
-      '- 让我输出提纲、表格、要点或结构化结果',
-    ].join('\n'),
-    timestamp: new Date(),
-    parentId: null,
-    childIds: [],
-  },
 ];
 
 const activeWorkspaceId = ref<'chat' | 'incident-report'>('chat');
@@ -235,9 +200,9 @@ const inputText = ref('');
 const selectedFiles = ref<File[]>([]);
 const selectedSkillIds = ref<string[]>([]);
 const processingModes = ref<SkillOption[]>([]);
-const selectedModel = ref(fallbackModels[0]);
-const selectedRerankerModel = ref(fallbackModels[0]);
-const availableModels = ref(fallbackModels);
+const selectedModel = ref(defaultModels[0]);
+const selectedRerankerModel = ref(defaultModels[0]);
+const availableModels = ref(defaultModels);
 const messageNodes = ref<Record<string, ChatMessageNode>>({});
 const rootChildIds = ref<string[]>([]);
 const selectedRootChildId = ref<string | null>(null);
@@ -250,11 +215,20 @@ const { copyToastMessage, copyToastTitle, isCopyToastVisible, showCopyToast } =
   useCopyToast();
 
 const messageContainerRef = ref<HTMLElement | null>(null);
-const isTraceModalVisible = ref(false);
-const activeTraceId = ref('');
-const activeTracePayload = ref<TraceReplayPayload | null>(null);
-const isTraceModalLoading = ref(false);
-const traceModalErrorMessage = ref('');
+
+const {
+  activeTraceId,
+  activeTracePayload,
+  closeTraceModal,
+  copyTraceId,
+  isTraceModalLoading,
+  isTraceModalVisible,
+  openTraceModalByTraceId,
+  retryTraceModalLoad,
+  traceModalErrorMessage,
+} = useTraceModal({
+  showCopyToast,
+});
 
 const resetEditingState = () => {
   editingMessageId.value = null;
@@ -263,63 +237,39 @@ const resetEditingState = () => {
   editingDraftSkillIds.value = [];
 };
 
-const getNodeById = (messageId: string) => {
-  return getNodeByIdInTree(messageNodes.value, messageId);
-};
-
-const displayedMessages = computed(() => {
-  return buildDisplayedMessages({
-    messageNodes: messageNodes.value,
-    rootChildIds: rootChildIds.value,
-    selectedRootChildId: selectedRootChildId.value,
-    selectedChildIdByParent: selectedChildIdByParent.value,
-    fallbackMessages: welcomeMessages,
-  });
+const {
+  canSwitchMessageVersion,
+  currentLeafMessageId,
+  displayedMessages,
+  findMessageById,
+  appendMessageAttachment,
+  appendMessageContent,
+  appendMessageToolStatus,
+  buildRequestSnapshotForUserMessage: buildRequestSnapshotBase,
+  createMessageNode,
+  getMessageVersionCount,
+  getMessageVersionIndex,
+  prewarmVisibleConversationCache,
+  switchMessageVersion,
+  updateMessageContent,
+  updateMessageTraceId,
+  lastAssistantMessageId,
+} = useMessageTree({
+  messageNodes,
+  rootChildIds,
+  selectedRootChildId,
+  selectedChildIdByParent,
+  isLoading: () => isLoading.value,
 });
 
-const prewarmDisplayedMessagesCache = (cacheScopeId: string) => {
-  prewarmRenderedContentCache(
-    displayedMessages.value.map((message) => ({
-      cacheScopeId,
-      messageId: message.id,
-      content: message.content,
-      role: message.role,
-    })),
+const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
+  return buildRequestSnapshotBase(
+    userMessageId,
+    conversationId.value,
+    selectedModel.value,
+    selectedRerankerModel.value,
   );
 };
-
-const prewarmAdjacentVersionsCache = (cacheScopeId: string) => {
-  const versionCandidates = findAdjacentVersionNodes({
-    displayedMessages: displayedMessages.value,
-    messageNodes: messageNodes.value,
-    rootChildIds: rootChildIds.value,
-  });
-
-  prewarmRenderedContentCache(
-    versionCandidates.map((message) => ({
-      cacheScopeId,
-      messageId: message.id,
-      content: message.content,
-      role: message.role,
-    })),
-  );
-};
-
-const prewarmVisibleConversationCache = (cacheScopeId: string) => {
-  prewarmDisplayedMessagesCache(cacheScopeId);
-  prewarmAdjacentVersionsCache(cacheScopeId);
-};
-
-const currentLeafMessageId = computed(() => {
-  return resolveCurrentLeafMessageId(
-    rootChildIds.value,
-    displayedMessages.value,
-  );
-});
-
-const lastAssistantMessageId = computed(() => {
-  return resolveLastRoleMessageId(displayedMessages.value, 'assistant');
-});
 
 const scrollToBottom = () => {
   nextTick(() => {
@@ -330,186 +280,12 @@ const scrollToBottom = () => {
   });
 };
 
-const createMessageNode = (
-  node: Omit<ChatMessageNode, 'id' | 'childIds'> & { id?: string },
-) => {
-  const messageId = node.id ?? createMessageId();
-  const newNode: ChatMessageNode = {
-    ...node,
-    id: messageId,
-    childIds: [],
-  };
-
-  messageNodes.value[messageId] = newNode;
-
-  if (node.parentId) {
-    const parentNode = getNodeById(node.parentId);
-    if (parentNode) {
-      parentNode.childIds.push(messageId);
-      selectedChildIdByParent.value[node.parentId] = messageId;
-    }
-  } else {
-    rootChildIds.value.push(messageId);
-    selectedRootChildId.value = messageId;
-  }
-
-  return newNode;
-};
-
-const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
-  const path = getMessagePathToNode(messageNodes.value, userMessageId);
-  const currentUserMessage = getNodeById(userMessageId);
-  const selectedSkillIdsFromMessage = Array.from(
-    new Set(currentUserMessage?.requestSkillIds ?? []),
-  );
-  return {
-    userMessageId,
-    conversationId: conversationId.value,
-    model: selectedModel.value,
-    rerankerModel: selectedRerankerModel.value,
-    selectedSkillIds: selectedSkillIdsFromMessage,
-    messages: path.map((message) => ({
-      role: message.role,
-      content: message.apiContent ?? message.content,
-    })),
-    files: currentUserMessage?.requestFiles ?? [],
-    attachmentIds: collectPersistedUploadedAttachmentIdsFromPath(path),
-  } satisfies ChatRequestSnapshot;
-};
-
-const findMessageById = (messageId: string) => {
-  return getNodeById(messageId);
-};
-
-const updateMessageContent = (messageId: string, content: string) => {
-  const targetMessage = findMessageById(messageId);
-  if (targetMessage) {
-    targetMessage.content = content;
-  }
-};
-
-const appendMessageContent = (messageId: string, chunk: string) => {
-  const targetMessage = findMessageById(messageId);
-  if (targetMessage) {
-    targetMessage.content += chunk;
-  }
-};
-
-const appendMessageAttachment = (
-  messageId: string,
-  attachment: ChatAttachment,
-) => {
-  const targetMessage = findMessageById(messageId);
-  if (!targetMessage) {
-    return;
-  }
-
-  const nextFiles = [...(targetMessage.files ?? [])];
-  const duplicateIndex = nextFiles.findIndex((file) => {
-    if (file.attachmentId && attachment.attachmentId) {
-      return file.attachmentId === attachment.attachmentId;
-    }
-
-    return (
-      file.name === attachment.name && file.sizeLabel === attachment.sizeLabel
-    );
-  });
-
-  if (duplicateIndex >= 0) {
-    nextFiles[duplicateIndex] = attachment;
-  } else {
-    nextFiles.push(attachment);
-  }
-
-  targetMessage.files = nextFiles;
-};
-
-const appendMessageToolStatus = (
-  messageId: string,
-  toolStatus: ChatToolStatus,
-) => {
-  const targetMessage = findMessageById(messageId);
-  if (!targetMessage) {
-    return;
-  }
-
-  targetMessage.toolStatuses = [
-    ...(targetMessage.toolStatuses ?? []),
-    toolStatus,
-  ];
-};
-
-const updateMessageTraceId = (messageId: string, traceId: string) => {
-  const targetMessage = findMessageById(messageId);
-  if (!targetMessage || targetMessage.role !== 'assistant') {
-    return;
-  }
-  targetMessage.traceId = traceId;
-};
-
-const getMessageVersionIndex = (messageId: string) => {
-  return getMessageVersionIndexInTree({
-    messageNodes: messageNodes.value,
-    rootChildIds: rootChildIds.value,
-    messageId,
-  });
-};
-
-const getMessageVersionCount = (messageId: string) => {
-  return getMessageVersionCountInTree({
-    messageNodes: messageNodes.value,
-    rootChildIds: rootChildIds.value,
-    messageId,
-  });
-};
-
-const canSwitchMessageVersion = (messageId: string, direction: -1 | 1) => {
-  return canSwitchMessageVersionInTree({
-    messageNodes: messageNodes.value,
-    rootChildIds: rootChildIds.value,
-    messageId,
-    direction,
-  });
-};
-
-const switchMessageVersion = (messageId: string, direction: -1 | 1) => {
-  if (isLoading.value) {
-    return;
-  }
-
-  const messageNode = getNodeById(messageId);
-  if (!messageNode) {
-    return;
-  }
-
-  const targetMessageId = resolveTargetVersionMessageId({
-    messageNodes: messageNodes.value,
-    rootChildIds: rootChildIds.value,
-    messageId,
-    direction,
-  });
-
-  if (!targetMessageId) {
-    return;
-  }
-
-  if (messageNode.parentId) {
-    selectedChildIdByParent.value[messageNode.parentId] = targetMessageId;
-  } else {
-    selectedRootChildId.value = targetMessageId;
-  }
-
-  prewarmVisibleConversationCache(
-    activeSessionId.value ?? conversationId.value,
-  );
-};
-
 const createAssistantVariant = (userMessageId: string) => {
   return createMessageNode({
     role: 'assistant',
     content: '',
     timestamp: new Date(),
-    parentId: userMessageId,
+    parent_id: userMessageId,
   });
 };
 
@@ -617,20 +393,20 @@ const isMessageStreaming = (message: ChatMessageNode) => {
   return (
     isLoading.value &&
     message.role === 'assistant' &&
-    message.id === activeGeneration.value?.assistantId
+    message.id === activeGeneration.value?.assistant_id
   );
 };
 
 const activeStreamingAssistantMessage = computed(() => {
-  const activeAssistantId = activeGeneration.value?.assistantId;
+  const activeAssistantId = activeGeneration.value?.assistant_id;
   if (!activeAssistantId) {
     return null;
   }
-  return getNodeById(activeAssistantId);
+  return findMessageById(activeAssistantId);
 });
 
 const liveToolStatuses = computed<ChatToolStatus[]>(() => {
-  return activeStreamingAssistantMessage.value?.toolStatuses ?? [];
+  return activeStreamingAssistantMessage.value?.tool_statuses ?? [];
 });
 
 const latestLiveToolStatus = computed<ChatToolStatus | null>(() => {
@@ -647,68 +423,9 @@ const latestLiveToolStatus = computed<ChatToolStatus | null>(() => {
   return liveToolStatuses.value[liveToolStatuses.value.length - 1] ?? null;
 });
 
-const waitFor = (delayMs: number) => {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(() => {
-      resolve();
-    }, delayMs);
-  });
-};
-
-const loadTracePayloadWithRetry = async (
-  traceId: string,
-  options?: {
-    maxAttempts?: number;
-    delayMs?: number;
-  },
-) => {
-  const maxAttempts = Math.max(1, options?.maxAttempts ?? 5);
-  const delayMs = Math.max(50, options?.delayMs ?? 300);
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      const response = await fetchAgentTraceReplay(traceId);
-      return response.payload;
-    } catch (error) {
-      const status = (error as { response?: { status?: number } } | null)
-        ?.response?.status;
-      const isLastAttempt = attempt >= maxAttempts;
-      if (status !== 404 || isLastAttempt) {
-        throw error;
-      }
-      await waitFor(delayMs);
-    }
-  }
-
-  return null;
-};
-
-const openTraceModalByTraceId = async (traceId: string) => {
-  const normalizedTraceId = traceId.trim();
-  if (!normalizedTraceId) {
-    return;
-  }
-
-  activeTraceId.value = normalizedTraceId;
-  activeTracePayload.value = null;
-  traceModalErrorMessage.value = '';
-  isTraceModalLoading.value = true;
-  isTraceModalVisible.value = true;
-
-  try {
-    const payload = await loadTracePayloadWithRetry(normalizedTraceId);
-    activeTracePayload.value = payload;
-  } catch (error) {
-    traceModalErrorMessage.value =
-      error instanceof Error ? error.message : '加载链路回放失败，请稍后重试。';
-  } finally {
-    isTraceModalLoading.value = false;
-  }
-};
-
 const openMessageTrace = async (messageId: string) => {
   const targetMessage = findMessageById(messageId);
-  const traceId = targetMessage?.traceId?.trim() ?? '';
+  const traceId = targetMessage?.trace_id?.trim() ?? '';
   if (!traceId) {
     showCopyToast('这条回复还没有可查看的 trace_id。', {
       title: '暂无链路信息',
@@ -716,26 +433,6 @@ const openMessageTrace = async (messageId: string) => {
     return;
   }
   await openTraceModalByTraceId(traceId);
-};
-
-const closeTraceModal = () => {
-  isTraceModalVisible.value = false;
-};
-
-const retryTraceModalLoad = async () => {
-  if (!activeTraceId.value.trim()) {
-    return;
-  }
-  await openTraceModalByTraceId(activeTraceId.value);
-};
-
-const copyTraceId = async () => {
-  const traceId = activeTraceId.value.trim();
-  if (!traceId) {
-    return;
-  }
-  await navigator.clipboard.writeText(traceId);
-  showCopyToast(traceId, { title: 'Trace ID 已复制' });
 };
 
 const {
@@ -771,7 +468,7 @@ const {
   selectedRootChildId,
   selectedChildIdByParent,
   currentLeafMessageId,
-  getNodeById,
+  findMessageById,
   createMessageNode,
   buildRequestSnapshotForUserMessage,
   executeAssistantGeneration,

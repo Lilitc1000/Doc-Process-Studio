@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from ...settings import settings
+from .dtutils import normalize_tenant_id
 
 _global_semaphore: asyncio.Semaphore | None = None
 _tenant_semaphores: dict[str, asyncio.Semaphore] = {}
@@ -16,11 +17,6 @@ class RequestGuardError(RuntimeError):
     pass
 
 
-def _normalize_tenant_id(tenant_id: str) -> str:
-    normalized = tenant_id.strip()
-    return normalized or "default"
-
-
 async def _get_global_semaphore() -> asyncio.Semaphore:
     global _global_semaphore
     async with _guard_lock:
@@ -30,7 +26,7 @@ async def _get_global_semaphore() -> asyncio.Semaphore:
 
 
 async def _get_tenant_semaphore(tenant_id: str) -> asyncio.Semaphore:
-    normalized_tenant_id = _normalize_tenant_id(tenant_id)
+    normalized_tenant_id = normalize_tenant_id(tenant_id)
     async with _guard_lock:
         semaphore = _tenant_semaphores.get(normalized_tenant_id)
         if semaphore is None:
@@ -40,7 +36,7 @@ async def _get_tenant_semaphore(tenant_id: str) -> asyncio.Semaphore:
 
 
 async def _check_rate_limit(tenant_id: str) -> None:
-    normalized_tenant_id = _normalize_tenant_id(tenant_id)
+    normalized_tenant_id = normalize_tenant_id(tenant_id)
     window_seconds = max(1, settings.request_rate_limit_window_seconds)
     max_requests = max(1, settings.request_rate_limit_max_requests_per_window)
     now = time.monotonic()

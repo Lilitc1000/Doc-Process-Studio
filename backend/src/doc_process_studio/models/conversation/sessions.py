@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import BaseModel, Field
 
 
 class ChatSessionAttachment(BaseModel):
@@ -12,32 +12,22 @@ class ChatSessionAttachment(BaseModel):
     size_label: str = Field(
         ...,
         description="附件大小显示文本",
-        validation_alias=AliasChoices("size_label", "sizeLabel"),
-        serialization_alias="sizeLabel",
     )
     attachment_id: str | None = Field(
         default=None,
         description="可下载附件标识",
-        validation_alias=AliasChoices("attachment_id", "attachmentId"),
-        serialization_alias="attachmentId",
     )
     download_url: str | None = Field(
         default=None,
         description="下载地址",
-        validation_alias=AliasChoices("download_url", "downloadUrl"),
-        serialization_alias="downloadUrl",
     )
     expires_at: datetime | None = Field(
         default=None,
         description="过期时间",
-        validation_alias=AliasChoices("expires_at", "expiresAt"),
-        serialization_alias="expiresAt",
     )
     mime_type: str | None = Field(
         default=None,
         description="文件 MIME 类型",
-        validation_alias=AliasChoices("mime_type", "mimeType"),
-        serialization_alias="mimeType",
     )
 
 

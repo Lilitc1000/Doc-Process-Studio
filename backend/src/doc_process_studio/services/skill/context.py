@@ -12,6 +12,7 @@ import httpx
 
 from ...models.skill.runtime import SkillContextChunk, SkillContextChunkSummary
 from ...settings import settings
+from ..infra.dtutils import utcnow
 from ..infra.ollama_client import (
     build_timeout,
     get_ollama_base_url,
@@ -37,10 +38,6 @@ class _LexicalIndex:
     docs: list[_LexicalChunkDoc]
     df: dict[str, int]
     avg_doc_length: float
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def _normalize_whitespace(value: str) -> str:
@@ -388,7 +385,7 @@ def _get_query_embedding(
     cached = _QUERY_EMBEDDING_CACHE.get(cache_key)
     if cached is not None:
         cached_at, cached_vector = cached
-        if _utcnow() - cached_at <= _embedding_cache_ttl():
+        if utcnow() - cached_at <= _embedding_cache_ttl():
             return cached_vector
 
     embedding_payload = _post_embed_with_ollama(
@@ -399,7 +396,7 @@ def _get_query_embedding(
         return None
 
     vector = embedding_payload[0]
-    _QUERY_EMBEDDING_CACHE[cache_key] = (_utcnow(), vector)
+    _QUERY_EMBEDDING_CACHE[cache_key] = (utcnow(), vector)
     return vector
 
 
@@ -414,7 +411,7 @@ def _get_chunk_embeddings(
     cached = _EMBEDDING_CACHE.get(cache_key)
     if cached is not None:
         cached_fingerprint, cached_at, cached_vectors = cached
-        if cached_fingerprint == fingerprint and _utcnow() - cached_at <= _embedding_cache_ttl():
+        if cached_fingerprint == fingerprint and utcnow() - cached_at <= _embedding_cache_ttl():
             return cached_vectors
 
     batch_size = max(1, settings.skill_retrieval_embedding_batch_size)
@@ -432,7 +429,7 @@ def _get_chunk_embeddings(
         for index, chunk in enumerate(batch_chunks):
             vectors_by_id[chunk.id] = batch_vectors[index]
 
-    _EMBEDDING_CACHE[cache_key] = (fingerprint, _utcnow(), vectors_by_id)
+    _EMBEDDING_CACHE[cache_key] = (fingerprint, utcnow(), vectors_by_id)
     return vectors_by_id
 
 

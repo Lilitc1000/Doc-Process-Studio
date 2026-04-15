@@ -2,40 +2,40 @@ export type ChatMessageRole = 'user' | 'assistant' | 'system';
 
 export interface ChatAttachment {
   name: string;
-  sizeLabel: string;
-  attachmentId?: string;
-  downloadUrl?: string;
-  expiresAt?: string;
-  mimeType?: string;
+  size_label: string;
+  attachment_id?: string;
+  download_url?: string;
+  expires_at?: string;
+  mime_type?: string;
   source?: string;
 }
 
 export interface ChatEditAttachment extends ChatAttachment {
-  requestFile?: File | null;
+  request_file?: File | null;
 }
 
 export interface ChatToolStatus {
   id: string;
-  toolName?: string;
+  tool_name?: string;
   label?: string;
   message: string;
   phase?: string;
-  createdAt: string;
+  created_at: string;
 }
 
 export interface ChatMessageNode {
   id: string;
   role: ChatMessageRole;
   content: string;
-  traceId?: string;
-  apiContent?: string;
+  trace_id?: string;
+  api_content?: string;
   files?: ChatAttachment[];
-  toolStatuses?: ChatToolStatus[];
-  requestFiles?: File[];
-  requestSkillIds?: string[];
+  tool_statuses?: ChatToolStatus[];
+  request_files?: File[];
+  request_skill_ids?: string[];
   timestamp: Date;
-  parentId: string | null;
-  childIds: string[];
+  parent_id: string | null;
+  child_ids: string[];
 }
 
 export type ChatMessageDisplay = Pick<
@@ -43,10 +43,10 @@ export type ChatMessageDisplay = Pick<
   | 'id'
   | 'role'
   | 'content'
-  | 'traceId'
+  | 'trace_id'
   | 'files'
-  | 'requestSkillIds'
-  | 'toolStatuses'
+  | 'request_skill_ids'
+  | 'tool_statuses'
   | 'timestamp'
 >;
 
@@ -56,19 +56,19 @@ export interface ApiChatMessage {
 }
 
 export interface ChatRequestSnapshot {
-  userMessageId: string;
-  conversationId: string;
+  user_message_id: string;
+  conversation_id: string;
   model: string;
-  rerankerModel: string;
-  selectedSkillIds: string[];
+  reranker_model: string;
+  selected_skill_ids: string[];
   messages: ApiChatMessage[];
   files: File[];
-  attachmentIds: string[];
+  attachment_ids: string[];
 }
 
 export interface ActiveGenerationState {
-  assistantId: string;
-  userMessageId: string;
+  assistant_id: string;
+  user_message_id: string;
   controller: AbortController;
 }
 

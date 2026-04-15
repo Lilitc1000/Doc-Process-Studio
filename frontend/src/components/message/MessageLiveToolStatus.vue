@@ -39,7 +39,7 @@ const formatFallbackToolName = (toolName?: string) => {
 const liveToolStatusLabel = computed(() => {
   return (
     props.status.label ||
-    formatFallbackToolName(props.status.toolName) ||
+    formatFallbackToolName(props.status.tool_name) ||
     '工具执行'
   );
 });

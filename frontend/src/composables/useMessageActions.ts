@@ -23,9 +23,9 @@ interface UseMessageActionsOptions {
   selectedRootChildId: Ref<string | null>;
   selectedChildIdByParent: Ref<Record<string, string>>;
   currentLeafMessageId: Ref<string | null>;
-  getNodeById: (messageId: string) => ChatMessageNode | null;
+  findMessageById: (messageId: string) => ChatMessageNode | null;
   createMessageNode: (
-    node: Omit<ChatMessageNode, 'id' | 'childIds'> & { id?: string },
+    node: Omit<ChatMessageNode, 'id' | 'child_ids'> & { id?: string },
   ) => ChatMessageNode;
   buildRequestSnapshotForUserMessage: (
     userMessageId: string,
@@ -46,8 +46,8 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
   const createAttachmentPreview = (files: File[]): ChatAttachment[] => {
     return files.map((file) => ({
       name: file.name,
-      sizeLabel: formatFileSize(file),
-      mimeType: file.type,
+      size_label: formatFileSize(file),
+      mime_type: file.type,
       source: 'uploaded',
     }));
   };
@@ -57,10 +57,10 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
   ): ChatEditAttachment[] => {
     return files.map((file) => ({
       name: file.name,
-      sizeLabel: formatFileSize(file),
-      mimeType: file.type,
+      size_label: formatFileSize(file),
+      mime_type: file.type,
       source: 'uploaded',
-      requestFile: file,
+      request_file: file,
     }));
   };
 
@@ -120,7 +120,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       return;
     }
 
-    const messageNode = options.getNodeById(messageId);
+    const messageNode = options.findMessageById(messageId);
     if (!messageNode || messageNode.role !== 'user') {
       return;
     }
@@ -128,22 +128,22 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     options.editingMessageId.value = messageId;
     options.editingDraftText.value = messageNode.content;
     options.editingDraftSkillIds.value = [
-      ...(messageNode.requestSkillIds ?? []),
+      ...(messageNode.request_skill_ids ?? []),
     ];
     const requestFileEntries: Array<[string, File]> = (
-      messageNode.requestFiles ?? []
-    ).map((file) => [`${file.name}::${formatFileSize(file)}`, file]);
+      messageNode.request_files ?? []
+    ).map((file: File) => [`${file.name}::${formatFileSize(file)}`, file]);
     const requestFileMap = new Map<string, File>(requestFileEntries);
     const sourceFiles =
       messageNode.files && messageNode.files.length > 0
         ? messageNode.files
-        : createAttachmentPreview(messageNode.requestFiles ?? []);
+        : createAttachmentPreview(messageNode.request_files ?? []);
 
     options.editingDraftFiles.value = sourceFiles.map<ChatEditAttachment>(
       (file) => ({
         ...file,
-        requestFile:
-          requestFileMap.get(`${file.name}::${file.sizeLabel}`) ?? null,
+        request_file:
+          requestFileMap.get(`${file.name}::${file.size_label}`) ?? null,
       }),
     );
   };
@@ -172,7 +172,9 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       return;
     }
 
-    const sourceMessage = options.getNodeById(options.editingMessageId.value);
+    const sourceMessage = options.findMessageById(
+      options.editingMessageId.value,
+    );
     if (!sourceMessage || sourceMessage.role !== 'user') {
       options.resetEditingState();
       return;
@@ -180,28 +182,28 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
 
     const nextText = options.editingDraftText.value.trim();
     const nextFiles = options.editingDraftFiles.value.flatMap((file) => {
-      return file.requestFile ? [file.requestFile] : [];
+      return file.request_file ? [file.request_file] : [];
     });
     const nextSkillIds = [...options.editingDraftSkillIds.value];
     const nextAttachments = options.editingDraftFiles.value.map((file) => ({
       name: file.name,
-      sizeLabel: file.sizeLabel,
-      attachmentId: file.attachmentId,
-      downloadUrl: file.downloadUrl,
-      expiresAt: file.expiresAt,
-      mimeType: file.mimeType,
+      size_label: file.size_label,
+      attachment_id: file.attachment_id,
+      download_url: file.download_url,
+      expires_at: file.expires_at,
+      mime_type: file.mime_type,
       source: file.source,
     }));
 
     const editedUserMessage = options.createMessageNode({
       role: 'user',
       content: nextText,
-      apiContent: createUserApiContent(nextText, nextAttachments),
+      api_content: createUserApiContent(nextText, nextAttachments),
       files: nextAttachments,
-      requestFiles: nextFiles,
-      requestSkillIds: nextSkillIds,
+      request_files: nextFiles,
+      request_skill_ids: nextSkillIds,
       timestamp: new Date(),
-      parentId: sourceMessage.parentId,
+      parent_id: sourceMessage.parent_id,
     });
 
     options.resetEditingState();
@@ -227,12 +229,12 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     const userMessage = options.createMessageNode({
       role: 'user',
       content: text,
-      apiContent: createUserApiContent(text, currentRequestFiles),
+      api_content: createUserApiContent(text, currentRequestFiles),
       files: createAttachmentPreview(currentRequestFiles),
-      requestFiles: currentRequestFiles,
-      requestSkillIds: currentRequestSkillIds,
+      request_files: currentRequestFiles,
+      request_skill_ids: currentRequestSkillIds,
       timestamp: new Date(),
-      parentId: options.currentLeafMessageId.value,
+      parent_id: options.currentLeafMessageId.value,
     });
     options.scrollToBottom();
 
@@ -252,19 +254,19 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       return;
     }
 
-    const assistantNode = options.getNodeById(assistantMessageId);
-    if (!assistantNode?.parentId || assistantNode.role !== 'assistant') {
+    const assistantNode = options.findMessageById(assistantMessageId);
+    if (!assistantNode?.parent_id || assistantNode.role !== 'assistant') {
       return;
     }
 
     await options.persistCurrentSession();
     await options.executeAssistantGeneration(
-      options.buildRequestSnapshotForUserMessage(assistantNode.parentId),
+      options.buildRequestSnapshotForUserMessage(assistantNode.parent_id),
     );
   };
 
   const copyMessage = async (messageId: string) => {
-    const messageNode = options.getNodeById(messageId);
+    const messageNode = options.findMessageById(messageId);
     if (!messageNode?.content.trim() || !navigator.clipboard) {
       return;
     }
@@ -278,7 +280,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
   };
 
   const downloadAssistantMessage = (assistantMessageId: string) => {
-    const assistantNode = options.getNodeById(assistantMessageId);
+    const assistantNode = options.findMessageById(assistantMessageId);
     if (!assistantNode?.content.trim()) {
       return;
     }
@@ -299,12 +301,12 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
   };
 
   const downloadMessageFile = async (file: ChatAttachment) => {
-    if (!file.attachmentId) {
+    if (!file.attachment_id) {
       return;
     }
 
     try {
-      await options.downloadAttachment(file.attachmentId);
+      await options.downloadAttachment(file.attachment_id);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : '下载文件失败，请稍后重试。';

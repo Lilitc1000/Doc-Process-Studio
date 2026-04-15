@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 import httpx
 
@@ -22,10 +22,7 @@ from .session_store import (
     save_chat_session_summary,
     touch_chat_session_index,
 )
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
+from ..infra.dtutils import utcnow
 
 
 def _normalize_title_candidate(value: str) -> str:
@@ -116,7 +113,7 @@ async def upsert_chat_session(
     snapshot: ChatSessionSnapshot,
 ) -> ChatSessionSummary:
     existing_session = await get_chat_session(session_id)
-    now = _utcnow()
+    now = utcnow()
     normalized_title = title.strip()
 
     if not normalized_title:
@@ -158,7 +155,7 @@ async def update_chat_session_title(
     summary = ChatSessionSummary(
         **existing_session.model_dump(exclude={"snapshot"}),
         title=title.strip(),
-        updated_at=_utcnow(),
+        updated_at=utcnow(),
     )
     await save_chat_session_summary(summary)
     await touch_chat_session_index(session_id, summary.updated_at.timestamp())

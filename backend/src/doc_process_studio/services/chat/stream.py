@@ -19,6 +19,8 @@ from ...services.agent.executor import (
 from ...services.agent.feature_flags import is_feature_enabled_for_key
 from ...services.agent.error_detail import build_exception_detail, summarize_exception
 from ...services.agent.trace_store import AgentTraceRecorder
+from ...services.infra.dtutils import build_error_event_detail, utcnow
+from ...services.infra.tool_args import build_normalized_tool_calls
 from ...models.skill.runtime import (
     ConversationAgentState,
     SkillConversationState,
@@ -89,42 +91,6 @@ def _format_done_event(*, model: str, done_reason: str) -> str:
         )
     )
 
-
-def _build_native_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    normalized_calls: list[dict[str, Any]] = []
-    for tool_call in tool_calls:
-        function_payload = tool_call.get("function")
-        if not isinstance(function_payload, dict):
-            continue
-
-        tool_name = function_payload.get("name")
-        if not isinstance(tool_name, str) or not tool_name.strip():
-            continue
-
-        raw_arguments = function_payload.get("arguments")
-        if isinstance(raw_arguments, dict):
-            arguments: dict[str, Any] | str = raw_arguments
-        elif isinstance(raw_arguments, str):
-            try:
-                parsed_arguments = json.loads(raw_arguments)
-            except json.JSONDecodeError:
-                arguments = raw_arguments
-            else:
-                arguments = parsed_arguments if isinstance(parsed_arguments, dict) else raw_arguments
-        else:
-            arguments = {}
-
-        normalized_calls.append(
-            {
-                "function": {
-                    "name": tool_name.strip(),
-                    "arguments": arguments,
-                }
-            }
-        )
-    return normalized_calls
-
-
 async def _extract_http_status_error_message(exc: httpx.HTTPStatusError) -> str:
     """安全提取上游错误信息，避免流式响应未读取时触发 ResponseNotRead。"""
     base_message = f"远程 Ollama 接口返回错误状态：{exc.response.status_code}"
@@ -163,22 +129,6 @@ async def _extract_http_status_error_message(exc: httpx.HTTPStatusError) -> str:
             return detail.strip()[:500]
 
     return base_message
-
-
-async def _build_error_event_detail(
-    *,
-    message: str,
-    exc: BaseException | None = None,
-    extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    detail: dict[str, Any] = {
-        "message": message,
-    }
-    if exc is not None:
-        detail["error_detail"] = await build_exception_detail(exc)
-    if extra:
-        detail.update(extra)
-    return detail
 
 
 def _normalize_skill_ids(raw_skill_ids: list[str]) -> list[str]:
@@ -433,7 +383,7 @@ async def stream_remote_chat_completion(
         yield format_sse_event({"type": "error", "message": stream_error_message})
         trace_recorder.add_event(
             event_type="error",
-            detail=await _build_error_event_detail(
+            detail=await build_error_event_detail(
                 message=stream_error_message,
                 exc=exc,
             ),
@@ -449,7 +399,7 @@ async def stream_remote_chat_completion(
         yield format_sse_event({"type": "error", "message": stream_error_message})
         trace_recorder.add_event(
             event_type="error",
-            detail=await _build_error_event_detail(
+            detail=await build_error_event_detail(
                 message=stream_error_message,
                 exc=exc,
             ),
@@ -483,7 +433,6 @@ async def stream_remote_chat_completion(
                     "type": "uploaded-attachment",
                     "attachment": prepared_uploaded_file.attachment.model_dump(
                         mode="json",
-                        by_alias=True,
                     ),
                 }
             )
@@ -686,7 +635,7 @@ async def stream_remote_chat_completion(
                     {
                         "role": "assistant",
                         "content": "".join(assistant_content_parts),
-                        "tool_calls": _build_native_tool_calls(normalized_tool_calls),
+                        "tool_calls": build_normalized_tool_calls(normalized_tool_calls),
                     }
                 )
 
@@ -811,7 +760,7 @@ async def stream_remote_chat_completion(
         stream_error_message = summarize_exception(exc)
         trace_recorder.add_event(
             event_type="error",
-            detail=await _build_error_event_detail(
+            detail=await build_error_event_detail(
                 message=stream_error_message,
                 exc=exc,
             ),
@@ -822,7 +771,7 @@ async def stream_remote_chat_completion(
         stream_error_message = error_message
         trace_recorder.add_event(
             event_type="error",
-            detail=await _build_error_event_detail(
+            detail=await build_error_event_detail(
                 message=stream_error_message,
                 exc=exc,
             ),
@@ -832,7 +781,7 @@ async def stream_remote_chat_completion(
         stream_error_message = f"连接远程 Ollama 失败：{summarize_exception(exc)}"
         trace_recorder.add_event(
             event_type="error",
-            detail=await _build_error_event_detail(
+            detail=await build_error_event_detail(
                 message=stream_error_message,
                 exc=exc,
             ),

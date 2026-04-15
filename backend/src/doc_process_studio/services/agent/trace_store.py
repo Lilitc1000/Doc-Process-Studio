@@ -1,29 +1,21 @@
-from datetime import UTC, datetime
 import json
 from typing import Any
 
 from ...settings import settings
+from ..infra.dtutils import normalize_tenant_id, utcnow_iso
 from ..infra.redis_store import build_cache_key, get_json, get_redis_client, set_json
 
 
-def _utcnow_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 def build_agent_trace_key(*, tenant_id: str, trace_id: str) -> str:
-    return build_cache_key("agent-trace", tenant_id.strip() or "default", trace_id.strip())
+    return build_cache_key("agent-trace", normalize_tenant_id(tenant_id), trace_id.strip())
 
 
 def build_agent_trace_conversation_index_key(*, conversation_id: str) -> str:
     return build_cache_key("agent-trace", "conversation", conversation_id.strip())
 
 
-def _normalize_tenant_id(tenant_id: str) -> str:
-    return tenant_id.strip() or "default"
-
-
 def _encode_trace_index_member(*, tenant_id: str, trace_id: str) -> str:
-    return json.dumps([_normalize_tenant_id(tenant_id), trace_id.strip()], ensure_ascii=False)
+    return json.dumps([normalize_tenant_id(tenant_id), trace_id.strip()], ensure_ascii=False)
 
 
 def _decode_trace_index_member(member: str) -> tuple[str, str] | None:
@@ -49,7 +41,7 @@ async def save_agent_trace(
 ) -> None:
     if not settings.agent_trace_store_enabled:
         return
-    normalized_tenant_id = _normalize_tenant_id(tenant_id)
+    normalized_tenant_id = normalize_tenant_id(tenant_id)
     normalized_trace_id = trace_id.strip()
     normalized_conversation_id = conversation_id.strip()
     if not normalized_trace_id or not normalized_conversation_id:
@@ -146,7 +138,7 @@ class AgentTraceRecorder:
             "user_message_id": user_message_id,
             "model": model,
             "reranker_model": reranker_model,
-            "started_at": _utcnow_iso(),
+            "started_at": utcnow_iso(),
             "planner": None,
             "events": [],
             "rounds": [],
@@ -157,7 +149,7 @@ class AgentTraceRecorder:
         self.payload["events"].append(
             {
                 "type": event_type,
-                "at": _utcnow_iso(),
+                "at": utcnow_iso(),
                 "detail": detail,
             }
         )
@@ -169,7 +161,7 @@ class AgentTraceRecorder:
         self.payload["rounds"].append(
             {
                 "round": round_index,
-                "at": _utcnow_iso(),
+                "at": utcnow_iso(),
                 **detail,
             }
         )
@@ -178,7 +170,7 @@ class AgentTraceRecorder:
         self.payload["final"] = {
             "done_reason": done_reason,
             "error": error,
-            "finished_at": _utcnow_iso(),
+            "finished_at": utcnow_iso(),
         }
 
     async def flush(self) -> None:

@@ -74,7 +74,7 @@ export const useSkillMentionSelector = (
       }
       return (
         skill.id.toLowerCase().includes(normalizedQuery) ||
-        skill.displayName.toLowerCase().includes(normalizedQuery)
+        skill.display_name.toLowerCase().includes(normalizedQuery)
       );
     });
   });

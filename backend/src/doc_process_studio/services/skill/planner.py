@@ -1,19 +1,15 @@
 import json
 import re
-from datetime import UTC, datetime
 from typing import Any, Iterable
 
 from ...models.skill.catalog import SkillInterfaceConfig
 from ...models.skill.runtime import SkillPlanDecision, SkillPlannerCandidate
+from ..infra.dtutils import parse_json_object, utcnow
 from ..infra.ollama_client import extract_first_message_content, post_chat_completion
 
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9._-]+|[\u4e00-\u9fff]{2,}")
 _SPLIT_PATTERN = re.compile(r"[\s,，。；;、:：()（）\[\]{}<>!！?？/\\|+\-]+")
 _CJK_SEQUENCE_PATTERN = re.compile(r"[\u4e00-\u9fff]{2,}")
-
-
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def _collect_user_query(messages: list[object]) -> str:
@@ -165,40 +161,6 @@ def build_implicit_skill_candidates(
     return ranked_candidates
 
 
-def _parse_json_object(text: str) -> dict[str, Any] | None:
-    normalized = text.strip()
-    if not normalized:
-        return None
-
-    try:
-        parsed = json.loads(normalized)
-    except json.JSONDecodeError:
-        parsed = None
-    if isinstance(parsed, dict):
-        return parsed
-
-    if normalized.startswith("```"):
-        normalized = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", normalized)
-        normalized = re.sub(r"\s*```$", "", normalized).strip()
-        try:
-            parsed = json.loads(normalized)
-        except json.JSONDecodeError:
-            parsed = None
-        if isinstance(parsed, dict):
-            return parsed
-
-    object_match = re.search(r"\{[\s\S]*\}", normalized)
-    if object_match is None:
-        return None
-    try:
-        parsed = json.loads(object_match.group(0))
-    except json.JSONDecodeError:
-        return None
-    if isinstance(parsed, dict):
-        return parsed
-    return None
-
-
 def _build_rerank_prompt_payload(
     *,
     user_query: str,
@@ -291,7 +253,7 @@ async def _rerank_implicit_skills_with_model(
         return None
 
     response_text = extract_first_message_content(response_payload)
-    parsed_object = _parse_json_object(response_text)
+    parsed_object = parse_json_object(response_text)
     if not isinstance(parsed_object, dict):
         return None
 
@@ -477,5 +439,5 @@ async def plan_skill_activation(
         confidence=confidence,
         reasons=reasons,
         candidates=candidates,
-        created_at=_utcnow(),
+        created_at=utcnow(),
     )

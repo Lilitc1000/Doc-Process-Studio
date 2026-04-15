@@ -54,14 +54,14 @@ def _build_detail() -> IncidentReportSessionDetail:
 
 def _build_docx_attachment(attachment_id: str, name: str) -> ChatAttachment:
     return ChatAttachment(
-        attachmentId=attachment_id,
+        attachment_id=attachment_id,
         name=name,
         source="generated",
-        mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        sizeBytes=64 * 1024,
-        sizeLabel="64 KB",
-        downloadUrl=f"/api/attachments/{attachment_id}/download",
-        expiresAt=datetime.now(UTC),
+        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        size_bytes=64 * 1024,
+        size_label="64 KB",
+        download_url=f"/api/attachments/{attachment_id}/download",
+        expires_at=datetime.now(UTC),
     )
 
 

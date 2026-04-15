@@ -112,9 +112,9 @@ def test_api_incident_report_generate(monkeypatch) -> None:
         "/api/incident-report/sessions/incident-session-1/generate",
         json={
             "model": "qwen3-coder-next:latest",
-            "rerankerModel": "nomic-embed-text:latest",
+            "reranker_model": "nomic-embed-text:latest",
         },
     )
 
     assert response.status_code == 200
-    assert response.json()["traceId"] == "trace-incident-1"
+    assert response.json()["trace_id"] == "trace-incident-1"

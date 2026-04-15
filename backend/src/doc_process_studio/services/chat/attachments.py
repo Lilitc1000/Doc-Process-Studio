@@ -1,16 +1,26 @@
 import hashlib
 import mimetypes
 import shutil
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 from ...models.conversation.attachments import ChatAttachment, ChatAttachmentMetadata
 from ...settings import settings
+from ..infra.dtutils import utcnow
+
+_last_cleanup_timestamp: float = 0.0
+_cleanup_interval_seconds: float = 300.0
 
 
-def _utcnow() -> datetime:
-    return datetime.now(UTC)
+def _should_run_cleanup() -> bool:
+    global _last_cleanup_timestamp
+    now = time.monotonic()
+    if now - _last_cleanup_timestamp >= _cleanup_interval_seconds:
+        _last_cleanup_timestamp = now
+        return True
+    return False
 
 
 def get_generated_attachments_root() -> Path:
@@ -65,7 +75,7 @@ def _build_chat_attachment_from_metadata(metadata: ChatAttachmentMetadata) -> Ch
 
 def cleanup_expired_attachments() -> None:
     """清理已过期或损坏的附件目录。"""
-    now = _utcnow()
+    now = utcnow()
     root = get_generated_attachments_root()
 
     for attachment_dir in root.iterdir():
@@ -101,7 +111,8 @@ def _save_session_attachment(
     extracted_text: str | None = None,
 ) -> ChatAttachment:
     """保存会话附件到受控目录，并返回前端可直接消费的信息。"""
-    cleanup_expired_attachments()
+    if _should_run_cleanup():
+        cleanup_expired_attachments()
 
     attachment_id = uuid4().hex
     attachment_dir = _build_attachment_dir(attachment_id)
@@ -116,7 +127,7 @@ def _save_session_attachment(
         resolved_mime_type = "application/octet-stream"
 
     stat_result = target_path.stat()
-    created_at = _utcnow()
+    created_at = utcnow()
     expires_at = created_at + timedelta(
         seconds=settings.generated_attachment_ttl_seconds
     )
@@ -197,7 +208,7 @@ def _find_reusable_uploaded_attachment(
         except Exception:
             continue
 
-        if metadata.expires_at <= _utcnow():
+        if metadata.expires_at <= utcnow():
             continue
 
         if metadata.source != "uploaded":
@@ -254,7 +265,8 @@ def resolve_attachment_path(
     """读取附件信息并判断是否过期。"""
     metadata_path = _build_metadata_path(attachment_id)
     if not metadata_path.is_file():
-        cleanup_expired_attachments()
+        if _should_run_cleanup():
+            cleanup_expired_attachments()
         return None, None, False
 
     try:
@@ -263,21 +275,25 @@ def resolve_attachment_path(
         )
     except Exception:
         shutil.rmtree(_build_attachment_dir(attachment_id), ignore_errors=True)
-        cleanup_expired_attachments()
+        if _should_run_cleanup():
+            cleanup_expired_attachments()
         return None, None, False
 
-    if metadata.expires_at <= _utcnow():
+    if metadata.expires_at <= utcnow():
         shutil.rmtree(_build_attachment_dir(attachment_id), ignore_errors=True)
-        cleanup_expired_attachments()
+        if _should_run_cleanup():
+            cleanup_expired_attachments()
         return None, None, True
 
     attachment_path = _build_attachment_dir(attachment_id) / metadata.name
     if not attachment_path.is_file():
         shutil.rmtree(_build_attachment_dir(attachment_id), ignore_errors=True)
-        cleanup_expired_attachments()
+        if _should_run_cleanup():
+            cleanup_expired_attachments()
         return None, None, False
 
-    cleanup_expired_attachments()
+    if _should_run_cleanup():
+        cleanup_expired_attachments()
     return metadata, attachment_path, False
 
 
@@ -304,7 +320,8 @@ def load_uploaded_attachment_context(
 
 def delete_attachments_for_conversation(conversation_id: str) -> int:
     """删除指定会话关联的全部附件目录，返回删除数量。"""
-    cleanup_expired_attachments()
+    if _should_run_cleanup():
+        cleanup_expired_attachments()
     root = get_generated_attachments_root()
     deleted_count = 0
 

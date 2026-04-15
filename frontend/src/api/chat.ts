@@ -10,13 +10,13 @@ export const streamChatReply = async (
   formData.append(
     'payload',
     JSON.stringify({
-      user_message_id: requestSnapshot.userMessageId,
-      conversation_id: requestSnapshot.conversationId,
+      user_message_id: requestSnapshot.user_message_id,
+      conversation_id: requestSnapshot.conversation_id,
       model: requestSnapshot.model,
-      reranker_model: requestSnapshot.rerankerModel,
-      selected_skill_ids: requestSnapshot.selectedSkillIds,
+      reranker_model: requestSnapshot.reranker_model,
+      selected_skill_ids: requestSnapshot.selected_skill_ids,
       messages: requestSnapshot.messages,
-      attachment_ids: requestSnapshot.attachmentIds,
+      attachment_ids: requestSnapshot.attachment_ids,
     }),
   );
 

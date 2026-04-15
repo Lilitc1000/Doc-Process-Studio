@@ -52,7 +52,7 @@ const buildIncidentSessionTitle = () => {
 
 const isDocxAttachment = (
   attachment:
-    | IncidentSessionDetail['snapshot']['generatedAttachment']
+    | IncidentSessionDetail['snapshot']['generated_attachment']
     | null
     | undefined,
 ) => {
@@ -61,7 +61,7 @@ const isDocxAttachment = (
   }
 
   const attachmentName = attachment.name.toLowerCase().trim();
-  const attachmentMime = (attachment.mimeType ?? '').toLowerCase().trim();
+  const attachmentMime = (attachment.mime_type ?? '').toLowerCase().trim();
   return (
     attachmentName.endsWith('.docx') &&
     attachmentMime === INCIDENT_DOCX_MIME_TYPE
@@ -236,7 +236,7 @@ export const useIncidentReportSessions = () => {
       }
       applyIncidentDetail(detail);
 
-      const traceId = (detail.snapshot.generatedTraceId ?? '').trim();
+      const traceId = (detail.snapshot.generated_trace_id ?? '').trim();
       if (traceId) {
         incidentGenerationTraceId.value = traceId;
         await refreshGenerationTraceProgress(traceId);
@@ -258,8 +258,8 @@ export const useIncidentReportSessions = () => {
         if (generationState.value === 'generating') {
           generationState.value = 'idle';
         }
-        if (detail.snapshot.polishError) {
-          incidentErrorMessage.value = detail.snapshot.polishError;
+        if (detail.snapshot.polish_error) {
+          incidentErrorMessage.value = detail.snapshot.polish_error;
         }
         isIncidentGenerating.value = false;
         return true;
@@ -335,7 +335,7 @@ export const useIncidentReportSessions = () => {
       incidentErrorMessage.value = '';
 
       incidentGenerationTraceId.value = (
-        detail.snapshot.generatedTraceId ?? ''
+        detail.snapshot.generated_trace_id ?? ''
       ).trim();
       if (incidentGenerationTraceId.value) {
         await refreshGenerationTraceProgress(incidentGenerationTraceId.value);
@@ -398,7 +398,7 @@ export const useIncidentReportSessions = () => {
 
         const session = activeIncidentSession.value;
         const sessionId = activeIncidentSessionId.value;
-        if (!session || !sessionId || session.snapshot.isLocked) {
+        if (!session || !sessionId || session.snapshot.is_locked) {
           return;
         }
 
@@ -408,7 +408,6 @@ export const useIncidentReportSessions = () => {
             session.snapshot,
           );
           if (!detail || typeof detail.id !== 'string') {
-            // 兜底保护：接口返回异常结构时不更新会话，避免中断后续生成流程。
             return;
           }
 
@@ -420,15 +419,14 @@ export const useIncidentReportSessions = () => {
           }
 
           if (hasQueuedSnapshotSave && activeIncidentSession.value) {
-            // 请求返回时用户又继续编辑，优先保留本地输入，避免出现“刚取消又回选”的抖动。
             const latestLocalAnswers = cloneFormAnswers(
-              activeIncidentSession.value.snapshot.formAnswers,
+              activeIncidentSession.value.snapshot.form_answers,
             );
             activeIncidentSession.value = {
               ...detail,
               snapshot: {
                 ...detail.snapshot,
-                formAnswers: latestLocalAnswers,
+                form_answers: latestLocalAnswers,
               },
             };
           } else {
@@ -471,7 +469,7 @@ export const useIncidentReportSessions = () => {
   ) => {
     if (
       !activeIncidentSession.value ||
-      activeIncidentSession.value.snapshot.isLocked
+      activeIncidentSession.value.snapshot.is_locked
     ) {
       return;
     }
@@ -479,7 +477,7 @@ export const useIncidentReportSessions = () => {
       ...activeIncidentSession.value,
       snapshot: {
         ...activeIncidentSession.value.snapshot,
-        formAnswers: cloneFormAnswers(answers),
+        form_answers: cloneFormAnswers(answers),
       },
       status: 'draft',
     };
@@ -511,7 +509,7 @@ export const useIncidentReportSessions = () => {
     }
   };
 
-  const generateIncident = async (model: string, rerankerModel?: string) => {
+  const generateIncident = async (model: string, reranker_model?: string) => {
     if (!activeIncidentSessionId.value || !activeIncidentSession.value) {
       return;
     }
@@ -523,7 +521,7 @@ export const useIncidentReportSessions = () => {
     incidentErrorMessage.value = '';
     incidentGenerationProgress.value = ['正在提交生成请求...'];
     incidentGenerationTraceId.value = (
-      activeIncidentSession.value.snapshot.generatedTraceId ?? ''
+      activeIncidentSession.value.snapshot.generated_trace_id ?? ''
     ).trim();
     if (incidentGenerationTraceId.value) {
       await refreshGenerationTraceProgress(incidentGenerationTraceId.value);
@@ -535,7 +533,7 @@ export const useIncidentReportSessions = () => {
         sessionId,
         {
           model,
-          rerankerModel,
+          reranker_model,
         },
         {
           signal: generationAbortController.signal,
@@ -546,7 +544,7 @@ export const useIncidentReportSessions = () => {
         snapshot: response.snapshot,
       });
       incidentGenerationTraceId.value = (
-        response.traceId || incidentGenerationTraceId.value
+        response.trace_id || incidentGenerationTraceId.value
       ).trim();
       if (incidentGenerationTraceId.value) {
         await refreshGenerationTraceProgress(incidentGenerationTraceId.value);
@@ -602,14 +600,14 @@ export const useIncidentReportSessions = () => {
 
   const downloadGeneratedIncidentAttachment = async () => {
     const attachment =
-      activeIncidentSession.value?.snapshot.generatedAttachment ?? null;
+      activeIncidentSession.value?.snapshot.generated_attachment ?? null;
     if (!attachment) {
       return;
     }
     if (!isDocxAttachment(attachment)) {
       throw new Error('当前仅支持下载 DOCX 附件。请重新生成事故报告附件。');
     }
-    const attachmentId = attachment.attachmentId ?? '';
+    const attachmentId = attachment.attachment_id ?? '';
     if (!attachmentId) {
       throw new Error('附件缺少下载标识，无法下载。');
     }

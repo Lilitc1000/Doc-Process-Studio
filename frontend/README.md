@@ -91,12 +91,16 @@ frontend/
   事故报告会话加载、创建、表单实时保存、生成与下载状态管理。
 - [useChatStreaming.ts](/frontend/src/composables/useChatStreaming.ts)
   流式生成、停止生成、流式内容回填。
+- [useMessageTree.ts](/frontend/src/composables/useMessageTree.ts)
+  消息树 CRUD、版本切换、请求快照构建、渲染缓存预热。从 ChatLayout 拆出，负责消息节点的增删改查和树结构维护。
+- [useMessageActions.ts](/frontend/src/composables/useMessageActions.ts)
+  发送、编辑、重生、附件下载、复制等消息操作聚合。
+- [useTraceModal.ts](/frontend/src/composables/useTraceModal.ts)
+  链路回放弹窗的打开/关闭/重试/复制逻辑，含 404 短轮询重试。从 ChatLayout 拆出。
 - [useCopyToast.ts](/frontend/src/composables/useCopyToast.ts)
   顶部复制成功提示。
 - [useCatalogLoader.ts](/frontend/src/composables/useCatalogLoader.ts)
   模型与 skill 列表加载，负责 catalog 拉取与 system skill 过滤。
-- [useMessageActions.ts](/frontend/src/composables/useMessageActions.ts)
-  发送、编辑、重生、附件下载、复制等消息操作聚合。
 - [useSkillMentionSelector.ts](/frontend/src/composables/useSkillMentionSelector.ts)
   统一的 `$skill` 触发、候选过滤、键盘导航、token 删除逻辑，供输入框与编辑态复用。
 - [composables/message/*](/frontend/src/composables/message)
@@ -152,6 +156,17 @@ frontend/
 ## TypeScript 配置说明
 
 当前有 4 个 TS 配置文件，这属于正常拆分：
+
+## 字段命名约定
+
+前后端统一使用 `snake_case` 作为字段命名格式：
+
+- `types/` 中的所有接口字段均为 `snake_case`（如 `trace_id`、`parent_id`、`request_skill_ids`）。
+- `api/` 层直接透传后端返回的 `snake_case` 字段，不做任何 camelCase 转换。
+- 不要在类型定义中引入 camelCase 别名或兼容字段（如 `traceId`、`parentId`）。
+- 不要在 API 层写 `normalize` 函数做字段映射。
+
+如果后端新增了字段，前端直接用 `snake_case` 对应即可，不需要额外转换。
 
 - [tsconfig.base.json](/frontend/tsconfig.base.json)
   公共编译选项。
@@ -259,7 +274,7 @@ cacheScopeId + messageId + role + contentHash
 
 ## Skill 选择输入约定
 
-聊天输入框仍支持 `$` 触发 skill 选择，但只展示 `skillType=chat` 的条目。
+聊天输入框仍支持 `$` 触发 skill 选择，但只展示 `skill_type=chat` 的条目。
 
 - 输入框和消息编辑态输入 `$` 时弹出候选列表。
 - 支持方向键、`Enter`、`Tab`、鼠标点击选择。
@@ -336,8 +351,9 @@ cacheScopeId + messageId + role + contentHash
 - 不要把 API 请求重新塞回 `.vue`
 - 不要把共享类型重新写回组件内部
 - 不要把长样式块再塞回 SFC
-- 不要为了“规范”过早上 Pinia 或更重的状态架构
+- 不要为了"规范"过早上 Pinia 或更重的状态架构
 - 不要在消息渲染链路里随意去掉缓存、懒渲染和按需加载
+- 不要在类型或 API 层重新引入 camelCase 兼容代码（normalize 函数、别名双写字段）
 
 ## 当前建议的维护顺序
 

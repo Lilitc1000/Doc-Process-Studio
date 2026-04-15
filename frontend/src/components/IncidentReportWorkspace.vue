@@ -5,7 +5,7 @@
         <h2>事故报告助手</h2>
         <p class="incident-welcome-text">
           {{
-            schema?.introMessage ||
+            schema?.intro_message ||
             '欢迎使用事故报告专区。这里可以引导你整理事故信息，并生成标准化附件。'
           }}
         </p>
@@ -29,7 +29,7 @@
           <span class="incident-status">{{ statusLabel }}</span>
         </header>
 
-        <p v-if="session.snapshot.fallbackUsed" class="incident-fallback-hint">
+        <p v-if="session.snapshot.fallback_used" class="incident-fallback-hint">
           LLM
           润色失败，已回退为原始表单数据生成。你可以在链路回放中查看详细状态。
         </p>
@@ -136,7 +136,7 @@
                 </Transition>
               </div>
               <input
-                v-if="step.allowCustom"
+                v-if="step.allow_custom"
                 type="text"
                 :value="getCustomValue(step.id)"
                 :placeholder="step.placeholder || '可输入自定义内容'"
@@ -171,7 +171,7 @@
                 <span>{{ option.label }}</span>
               </label>
               <input
-                v-if="step.allowCustom"
+                v-if="step.allow_custom"
                 type="text"
                 :value="getCustomValue(step.id)"
                 :placeholder="step.placeholder || '可输入自定义内容'"
@@ -201,11 +201,11 @@
             {{ generateButtonLabel }}
           </button>
           <button
-            v-if="session.snapshot.generatedTraceId"
+            v-if="session.snapshot.generated_trace_id"
             type="button"
             class="incident-secondary-btn"
             :disabled="isGenerating"
-            @click="$emit('open-trace', session.snapshot.generatedTraceId)"
+            @click="$emit('open-trace', session.snapshot.generated_trace_id)"
           >
             链路回放
           </button>
@@ -324,7 +324,7 @@ const missingStepIds = ref<string[]>([]);
 const openSingleSelectId = ref<string | null>(null);
 
 watch(
-  () => props.session?.snapshot.formAnswers,
+  () => props.session?.snapshot.form_answers,
   (nextAnswers) => {
     localAnswers.value = JSON.parse(
       JSON.stringify(nextAnswers ?? {}),
@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
 const missingStepIdSet = computed(() => new Set(missingStepIds.value));
 
 const isFormLocked = computed(() => {
-  return props.isGenerating || Boolean(props.session?.snapshot.isLocked);
+  return props.isGenerating || Boolean(props.session?.snapshot.is_locked);
 });
 
 const statusLabel = computed(() => {
@@ -379,7 +379,7 @@ const statusLabel = computed(() => {
 });
 
 const generateButtonLabel = computed(() => {
-  if (props.session?.snapshot.generatedAttachment) {
+  if (props.session?.snapshot.generated_attachment) {
     return '下载附件';
   }
   return '生成附件';
@@ -393,7 +393,7 @@ const ensureAnswer = (stepId: string) => {
   if (!localAnswers.value[stepId]) {
     localAnswers.value[stepId] = {
       value: '',
-      customValue: '',
+      custom_value: '',
     };
   }
   return localAnswers.value[stepId];
@@ -414,7 +414,7 @@ const getSingleValue = (stepId: string) => {
 };
 
 const getCustomValue = (stepId: string) => {
-  return localAnswers.value[stepId]?.customValue ?? '';
+  return localAnswers.value[stepId]?.custom_value ?? '';
 };
 
 const getMultiValues = (stepId: string) => {
@@ -463,7 +463,7 @@ const getSingleSelectLabel = (step: IncidentFormStep) => {
 
 const onCustomInput = (stepId: string, value: string) => {
   const answer = ensureAnswer(stepId);
-  answer.customValue = value;
+  answer.custom_value = value;
   emitAnswerUpdate();
 };
 
@@ -501,7 +501,7 @@ const validateRequiredFields = () => {
     }
 
     const answer = localAnswers.value[step.id];
-    const customValue = (answer?.customValue ?? '').trim();
+    const customValue = (answer?.custom_value ?? '').trim();
 
     if (step.kind === 'text' || step.kind === 'single_select') {
       const value =
@@ -528,7 +528,7 @@ const onGenerateOrDownload = () => {
   if (!props.session) {
     return;
   }
-  if (props.session.snapshot.generatedAttachment) {
+  if (props.session.snapshot.generated_attachment) {
     emit('download');
     return;
   }

@@ -99,20 +99,20 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
             {
                 "ok": True,
                 "attachment": {
-                    "attachmentId": "attachment-1",
+                    "attachment_id": "attachment-1",
                     "name": "系统架构与设计文档.docx",
                 },
             },
             [
                 ChatAttachment(
-                    attachmentId="attachment-1",
+                    attachment_id="attachment-1",
                     name="系统架构与设计文档.docx",
                     source="generated",
-                    sizeLabel="24 KB",
-                    sizeBytes=24 * 1024,
-                    downloadUrl="/api/attachments/attachment-1/download",
-                    mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    expiresAt="2026-04-14T00:00:00Z",
+                    size_label="24 KB",
+                    size_bytes=24 * 1024,
+                    download_url="/api/attachments/attachment-1/download",
+                    mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    expires_at="2026-04-14T00:00:00Z",
                 )
             ],
         )
@@ -196,7 +196,7 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
     response_text = response.text
     assert '"type": "tool-status"' in response_text
     assert '"type": "attachment"' in response_text
-    assert '"downloadUrl": "/api/attachments/attachment-1/download"' in response_text
+    assert '"download_url": "/api/attachments/attachment-1/download"' in response_text
     assert "文件已生成，可直接下载。" in response_text
     assert '"done": true' in response_text
     assert observed_tools

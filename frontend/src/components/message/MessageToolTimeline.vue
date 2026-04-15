@@ -41,25 +41,25 @@
           </div>
           <span
             v-if="
-              toolStatus.label || toolStatus.toolName || toolStatus.createdAt
+              toolStatus.label || toolStatus.tool_name || toolStatus.created_at
             "
             class="message-tool-status-meta"
           >
-            <template v-if="toolStatus.label || toolStatus.toolName">
+            <template v-if="toolStatus.label || toolStatus.tool_name">
               {{
-                toolStatus.label || formatFallbackToolName(toolStatus.toolName)
+                toolStatus.label || formatFallbackToolName(toolStatus.tool_name)
               }}
             </template>
             <template
               v-if="
-                (toolStatus.label || toolStatus.toolName) &&
-                toolStatus.createdAt
+                (toolStatus.label || toolStatus.tool_name) &&
+                toolStatus.created_at
               "
             >
               <span class="message-tool-status-separator">·</span>
             </template>
-            <template v-if="toolStatus.createdAt">
-              {{ formatStatusTime(toolStatus.createdAt) }}
+            <template v-if="toolStatus.created_at">
+              {{ formatStatusTime(toolStatus.created_at) }}
             </template>
           </span>
         </div>
