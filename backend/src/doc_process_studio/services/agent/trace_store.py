@@ -2,7 +2,8 @@ import json
 from typing import Any
 
 from ...settings import settings
-from ..infra.dtutils import normalize_tenant_id, utcnow_iso
+from ..infra.dtutils import utcnow_iso
+from ..infra.request_guard import normalize_tenant_id
 from ..infra.redis_store import build_cache_key, get_json, get_redis_client, set_json
 
 

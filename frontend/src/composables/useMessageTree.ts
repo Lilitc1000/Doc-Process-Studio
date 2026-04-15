@@ -20,6 +20,30 @@ import {
 import { prewarmRenderedContentCache } from '../utils/render-markdown';
 import { createMessageId } from '../utils/ids';
 
+const WELCOME_MESSAGES: ChatMessageNode[] = [
+  {
+    id: 'welcome-1',
+    role: 'system',
+    content: [
+      '### 欢迎来到文档处理助手',
+      '',
+      '**上传一份文档，或者直接问我一个问题。**',
+      '',
+      '我会根据你选择的处理方式和模型，帮你更快地读懂、提炼和整理内容。',
+      '',
+      '你可以试试这些开始方式：',
+      '',
+      '- 上传 PDF、Word、Excel、PPT 等常见文档',
+      '- 直接提问，快速拿到摘要、答案或重点结论',
+      '- 围绕同一批文件连续追问，进行多轮对话',
+      '- 让我输出提纲、表格、要点或结构化结果',
+    ].join('\n'),
+    timestamp: new Date(),
+    parent_id: null,
+    child_ids: [],
+  },
+];
+
 interface UseMessageTreeOptions {
   messageNodes: Ref<Record<string, ChatMessageNode>>;
   rootChildIds: Ref<string[]>;
@@ -39,7 +63,7 @@ export const useMessageTree = (options: UseMessageTreeOptions) => {
       rootChildIds: options.rootChildIds.value,
       selectedRootChildId: options.selectedRootChildId.value,
       selectedChildIdByParent: options.selectedChildIdByParent.value,
-      fallbackMessages: [],
+      fallbackMessages: WELCOME_MESSAGES,
     });
   });
 

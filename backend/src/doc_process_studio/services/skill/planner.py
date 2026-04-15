@@ -4,7 +4,8 @@ from typing import Any, Iterable
 
 from ...models.skill.catalog import SkillInterfaceConfig
 from ...models.skill.runtime import SkillPlanDecision, SkillPlannerCandidate
-from ..infra.dtutils import parse_json_object, utcnow
+from ..infra.dtutils import utcnow
+from ..infra.text_utils import parse_json_object
 from ..infra.ollama_client import extract_first_message_content, post_chat_completion
 
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9._-]+|[\u4e00-\u9fff]{2,}")
@@ -295,6 +296,105 @@ def _build_active_skill_ids(
     return active_skill_ids, primary_skill_id
 
 
+def _resolve_optional_skills(
+    *,
+    lexical_candidates: list[tuple[str, float]],
+    rerank_output: tuple[list[str], float | None, dict[str, str]] | None,
+    lexical_fallback_skill_ids: list[str],
+    required_skill_ids: list[str],
+    system_skill_id: str,
+    max_implicit_skills: int,
+    min_confidence: float,
+) -> tuple[list[str], float | None, dict[str, str]]:
+    optional_skill_ids: list[str] = []
+    confidence: float | None = None
+    reasons: dict[str, str] = {}
+
+    if rerank_output is None:
+        optional_skill_ids = lexical_fallback_skill_ids
+        for skill_id, score in lexical_candidates:
+            if skill_id in optional_skill_ids:
+                reasons[skill_id] = f"词法召回分数 {score}"
+    else:
+        reranked_skill_ids, confidence, rerank_reasons = rerank_output
+        candidate_skill_id_set = {skill_id for skill_id, _score in lexical_candidates}
+        for skill_id in reranked_skill_ids:
+            if skill_id in required_skill_ids:
+                continue
+            if skill_id == system_skill_id:
+                continue
+            if skill_id not in candidate_skill_id_set:
+                continue
+            if skill_id not in optional_skill_ids:
+                optional_skill_ids.append(skill_id)
+            if skill_id in rerank_reasons:
+                reasons[skill_id] = rerank_reasons[skill_id]
+
+        if confidence is not None and confidence < min_confidence:
+            optional_skill_ids = []
+            reasons["planner"] = (
+                f"模型重排置信度 {confidence:.2f} 低于阈值 {min_confidence:.2f}，"
+                "已禁用隐式技能自动追加。"
+            )
+
+        if not optional_skill_ids:
+            optional_skill_ids = lexical_fallback_skill_ids
+            if not reasons:
+                for skill_id, score in lexical_candidates:
+                    if skill_id in optional_skill_ids:
+                        reasons[skill_id] = f"词法召回分数 {score}"
+
+    return optional_skill_ids[:max_implicit_skills], confidence, reasons
+
+
+def _build_plan_candidates(
+    *,
+    required_skill_ids: list[str],
+    lexical_candidates: list[tuple[str, float]],
+    optional_skill_ids: list[str],
+    system_skill_id: str,
+    active_skill_ids: list[str],
+    rerank_output: tuple[list[str], float | None, dict[str, str]] | None,
+    confidence: float | None,
+    reasons: dict[str, str],
+) -> list[SkillPlannerCandidate]:
+    candidates: list[SkillPlannerCandidate] = []
+    for skill_id in required_skill_ids:
+        candidates.append(
+            SkillPlannerCandidate(
+                skill_id=skill_id,
+                source="explicit",
+                selected=True,
+                reason="用户显式选择或显式提及。",
+            )
+        )
+
+    for skill_id, score in lexical_candidates:
+        source = "implicit_rerank" if rerank_output is not None else "implicit_lexical"
+        candidates.append(
+            SkillPlannerCandidate(
+                skill_id=skill_id,
+                source=source,
+                selected=skill_id in optional_skill_ids,
+                lexical_score=score,
+                confidence=confidence,
+                reason=reasons.get(skill_id),
+            )
+        )
+
+    if system_skill_id in active_skill_ids:
+        candidates.append(
+            SkillPlannerCandidate(
+                skill_id=system_skill_id,
+                source="system",
+                selected=True,
+                reason="系统级技能始终启用。",
+            )
+        )
+
+    return candidates
+
+
 async def plan_skill_activation(
     *,
     model: str,
@@ -307,7 +407,6 @@ async def plan_skill_activation(
     top_k_candidates: int = 4,
     min_confidence: float = 0.35,
 ) -> SkillPlanDecision:
-    """分层混合规划：显式强约束 + 词法召回 + 模型重排 + 策略门控。"""
     available_skill_ids = [skill.id for skill in available_skills]
     required_skill_ids = [
         skill_id for skill_id in _dedupe_keep_order(explicit_skill_ids) if skill_id in available_skill_ids
@@ -350,44 +449,16 @@ async def plan_skill_activation(
             max_implicit_skills=max_implicit_skills,
         )
 
-    optional_skill_ids: list[str] = []
-    confidence: float | None = None
-    reasons: dict[str, str] = {}
-    if rerank_output is None:
-        optional_skill_ids = lexical_fallback_skill_ids
-        for skill_id, score in lexical_candidates:
-            if skill_id in optional_skill_ids:
-                reasons[skill_id] = f"词法召回分数 {score}"
-    else:
-        reranked_skill_ids, confidence, rerank_reasons = rerank_output
-        candidate_skill_id_set = {skill_id for skill_id, _score in lexical_candidates}
-        for skill_id in reranked_skill_ids:
-            if skill_id in required_skill_ids:
-                continue
-            if skill_id == system_skill_id:
-                continue
-            if skill_id not in candidate_skill_id_set:
-                continue
-            if skill_id not in optional_skill_ids:
-                optional_skill_ids.append(skill_id)
-            if skill_id in rerank_reasons:
-                reasons[skill_id] = rerank_reasons[skill_id]
+    optional_skill_ids, confidence, reasons = _resolve_optional_skills(
+        lexical_candidates=lexical_candidates,
+        rerank_output=rerank_output,
+        lexical_fallback_skill_ids=lexical_fallback_skill_ids,
+        required_skill_ids=required_skill_ids,
+        system_skill_id=system_skill_id,
+        max_implicit_skills=max_implicit_skills,
+        min_confidence=min_confidence,
+    )
 
-        if confidence is not None and confidence < min_confidence:
-            optional_skill_ids = []
-            reasons["planner"] = (
-                f"模型重排置信度 {confidence:.2f} 低于阈值 {min_confidence:.2f}，"
-                "已禁用隐式技能自动追加。"
-            )
-
-        if not optional_skill_ids:
-            optional_skill_ids = lexical_fallback_skill_ids
-            if not reasons:
-                for skill_id, score in lexical_candidates:
-                    if skill_id in optional_skill_ids:
-                        reasons[skill_id] = f"词法召回分数 {score}"
-
-    optional_skill_ids = optional_skill_ids[:max_implicit_skills]
     active_skill_ids, primary_skill_id = _build_active_skill_ids(
         available_skill_ids=available_skill_ids,
         required_skill_ids=required_skill_ids,
@@ -395,39 +466,16 @@ async def plan_skill_activation(
         system_skill_id=system_skill_id,
     )
 
-    candidates: list[SkillPlannerCandidate] = []
-    for skill_id in required_skill_ids:
-        candidates.append(
-            SkillPlannerCandidate(
-                skill_id=skill_id,
-                source="explicit",
-                selected=True,
-                reason="用户显式选择或显式提及。",
-            )
-        )
-
-    for skill_id, score in lexical_candidates:
-        source = "implicit_rerank" if rerank_output is not None else "implicit_lexical"
-        candidates.append(
-            SkillPlannerCandidate(
-                skill_id=skill_id,
-                source=source,
-                selected=skill_id in optional_skill_ids,
-                lexical_score=score,
-                confidence=confidence,
-                reason=reasons.get(skill_id),
-            )
-        )
-
-    if system_skill_id in active_skill_ids:
-        candidates.append(
-            SkillPlannerCandidate(
-                skill_id=system_skill_id,
-                source="system",
-                selected=True,
-                reason="系统级技能始终启用。",
-            )
-        )
+    candidates = _build_plan_candidates(
+        required_skill_ids=required_skill_ids,
+        lexical_candidates=lexical_candidates,
+        optional_skill_ids=optional_skill_ids,
+        system_skill_id=system_skill_id,
+        active_skill_ids=active_skill_ids,
+        rerank_output=rerank_output,
+        confidence=confidence,
+        reasons=reasons,
+    )
 
     return SkillPlanDecision(
         planner_model=model,

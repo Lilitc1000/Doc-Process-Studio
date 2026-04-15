@@ -311,50 +311,52 @@ def build_tool_status_start(
     }
 
 
-def build_tool_status_finish(
+def _build_reused_tool_status(
     *,
-    request: ChatStreamRequest,
-    state: SkillConversationState,
-    tool_call: dict[str, Any],
+    tool_name: str,
+    arguments: dict[str, Any],
     tool_result: dict[str, Any],
-    attachments: list[ChatAttachment],
-) -> dict[str, str]:
-    """根据工具执行结果生成更业务化的完成状态。"""
-    del state
-    resolved_skill_id, tool_name = _resolve_tool_scope(
-        default_skill_id=request.skill_id,
-        tool_call=tool_call,
-    )
-    arguments = parse_tool_arguments(tool_call)
-    if tool_result.get("reused"):
-        if tool_name == "list_skill_directory":
-            relative_path = str(arguments.get("relative_path", "")).strip()
-            return {
-                "label": _build_builtin_status_label(tool_name, relative_path),
-                "message": "该目录内容已读取过，本轮不再重复查看。",
-            }
+) -> dict[str, str] | None:
+    if not tool_result.get("reused"):
+        return None
 
-        if tool_name == "read_skill_file":
-            relative_path = str(arguments.get("relative_path", "")).strip()
-            return {
-                "label": _build_builtin_status_label(tool_name, relative_path),
-                "message": "该文件内容已读取过，本轮不再重复读取。",
-            }
+    if tool_name == "list_skill_directory":
+        relative_path = str(arguments.get("relative_path", "")).strip()
+        return {
+            "label": _build_builtin_status_label(tool_name, relative_path),
+            "message": "该目录内容已读取过，本轮不再重复查看。",
+        }
 
-        if tool_name == "search_skill_context":
-            source_path = str(arguments.get("source_path", "")).strip()
-            return {
-                "label": _build_builtin_status_label(tool_name, source_path),
-                "message": "相同检索条件已执行过，本轮不再重复检索。",
-            }
+    if tool_name == "read_skill_file":
+        relative_path = str(arguments.get("relative_path", "")).strip()
+        return {
+            "label": _build_builtin_status_label(tool_name, relative_path),
+            "message": "该文件内容已读取过，本轮不再重复读取。",
+        }
 
-        if tool_name == "read_skill_context":
-            relative_path = _get_read_context_relative_path(tool_result)
-            return {
-                "label": _build_builtin_status_label(tool_name, relative_path),
-                "message": "这些技能片段已经在上下文中，本轮不再重复载入。",
-            }
+    if tool_name == "search_skill_context":
+        source_path = str(arguments.get("source_path", "")).strip()
+        return {
+            "label": _build_builtin_status_label(tool_name, source_path),
+            "message": "相同检索条件已执行过，本轮不再重复检索。",
+        }
 
+    if tool_name == "read_skill_context":
+        relative_path = _get_read_context_relative_path(tool_result)
+        return {
+            "label": _build_builtin_status_label(tool_name, relative_path),
+            "message": "这些技能片段已经在上下文中，本轮不再重复载入。",
+        }
+
+    return None
+
+
+def _build_builtin_tool_status(
+    *,
+    tool_name: str,
+    arguments: dict[str, Any],
+    tool_result: dict[str, Any],
+) -> dict[str, str] | None:
     if tool_name == "list_skill_directory":
         relative_path = str(arguments.get("relative_path", "")).strip()
         return {
@@ -394,6 +396,16 @@ def build_tool_status_finish(
             "message": f"已将 {chunk_count or 1} 个相关片段加入当前会话上下文。",
         }
 
+    return None
+
+
+def _build_declared_tool_status(
+    *,
+    resolved_skill_id: str,
+    tool_name: str,
+    tool_result: dict[str, Any],
+    attachments: list[ChatAttachment],
+) -> dict[str, str]:
     try:
         declared_tool = get_skill_tool_config(resolved_skill_id, tool_name)
     except ValueError:
@@ -447,6 +459,45 @@ def build_tool_status_finish(
         "label": status_label,
         "message": "工具执行完成。",
     }
+
+
+def build_tool_status_finish(
+    *,
+    request: ChatStreamRequest,
+    state: SkillConversationState,
+    tool_call: dict[str, Any],
+    tool_result: dict[str, Any],
+    attachments: list[ChatAttachment],
+) -> dict[str, str]:
+    del state
+    resolved_skill_id, tool_name = _resolve_tool_scope(
+        default_skill_id=request.skill_id,
+        tool_call=tool_call,
+    )
+    arguments = parse_tool_arguments(tool_call)
+
+    reused_status = _build_reused_tool_status(
+        tool_name=tool_name,
+        arguments=arguments,
+        tool_result=tool_result,
+    )
+    if reused_status is not None:
+        return reused_status
+
+    builtin_status = _build_builtin_tool_status(
+        tool_name=tool_name,
+        arguments=arguments,
+        tool_result=tool_result,
+    )
+    if builtin_status is not None:
+        return builtin_status
+
+    return _build_declared_tool_status(
+        resolved_skill_id=resolved_skill_id,
+        tool_name=tool_name,
+        tool_result=tool_result,
+        attachments=attachments,
+    )
 
 
 def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
@@ -1307,13 +1358,130 @@ def _execute_declared_script_tool(
         }, [attachment]
 
 
+def _execute_builtin_tool(
+    *,
+    request: ChatStreamRequest,
+    state: SkillConversationState,
+    tool_name: str,
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any], list[ChatAttachment]] | None:
+    if tool_name == "list_skill_directory":
+        relative_path = str(arguments.get("relative_path", "")).strip()
+        return {
+            "ok": True,
+            "skill_id": request.skill_id,
+            "relative_path": relative_path or ".",
+            "entries": _list_directory_entries(request.skill_id, relative_path),
+        }, []
+
+    if tool_name == "read_skill_file":
+        relative_path = str(arguments.get("relative_path", "")).strip()
+        if not relative_path:
+            return {
+                "ok": False,
+                "error": "relative_path 不能为空。",
+            }, []
+
+        return {
+            "ok": True,
+            "skill_id": request.skill_id,
+            **_read_skill_file_content(request.skill_id, relative_path),
+        }, []
+
+    if tool_name == "search_skill_context":
+        query = str(arguments.get("query", "")).strip()
+        if not query:
+            return {
+                "ok": False,
+                "error": "query 不能为空。",
+            }, []
+
+        source_path = str(arguments.get("source_path", "")).strip() or None
+        default_search_limit, max_search_limit = _resolve_search_limit_bounds()
+        raw_limit = arguments.get("limit", default_search_limit)
+        limit = (
+            raw_limit
+            if isinstance(raw_limit, int) and 1 <= raw_limit <= max_search_limit
+            else default_search_limit
+        )
+        chunks = search_skill_context_chunks(
+            request.skill_id,
+            query,
+            exclude_chunk_ids=set(),
+            limit=limit,
+            source_path_contains=source_path,
+            reranker_model=(request.reranker_model or request.model),
+        )
+        return {
+            "ok": True,
+            "skill_id": request.skill_id,
+            "query": query,
+            "source_path": source_path,
+            "limit": limit,
+            "chunks": [
+                {
+                    "id": chunk.id,
+                    "source_path": chunk.source_path,
+                    "title": chunk.title,
+                    "preview": chunk.preview,
+                    "already_loaded": chunk.id in state.loaded_chunk_ids,
+                }
+                for chunk in chunks
+            ],
+        }, []
+
+    if tool_name == "read_skill_context":
+        raw_chunk_ids = arguments.get("chunk_ids", [])
+        if not isinstance(raw_chunk_ids, list):
+            return {
+                "ok": False,
+                "error": "chunk_ids 必须是字符串数组。",
+            }, []
+
+        chunk_ids = [
+            str(chunk_id).strip()
+            for chunk_id in raw_chunk_ids
+            if isinstance(chunk_id, str) and str(chunk_id).strip()
+        ]
+        if not chunk_ids:
+            return {
+                "ok": False,
+                "error": "chunk_ids 不能为空。",
+            }, []
+
+        loaded_chunks = get_skill_context_chunks_by_ids(request.skill_id, chunk_ids)
+        next_chunk_ids = [
+            chunk.id
+            for chunk in loaded_chunks
+            if chunk.id not in state.loaded_chunk_ids
+        ]
+        if next_chunk_ids:
+            state.loaded_chunk_ids.extend(next_chunk_ids)
+
+        return {
+            "ok": True,
+            "skill_id": request.skill_id,
+            "loaded_chunk_ids": next_chunk_ids,
+            "chunks": [
+                {
+                    "id": chunk.id,
+                    "source_path": chunk.source_path,
+                    "title": chunk.title,
+                    "content": chunk.content,
+                }
+                for chunk in loaded_chunks
+            ],
+        }, []
+
+    return None
+
+
 def execute_skill_tool_call(
     *,
     request: ChatStreamRequest,
     state: SkillConversationState,
     tool_call: dict[str, Any],
 ) -> tuple[dict[str, Any], list[ChatAttachment]]:
-    """执行单个 tool call，并返回工具结果与产物列表。"""
     tool_name = _get_tool_name(tool_call)
     raw_arguments = parse_tool_arguments(tool_call)
     arguments = _normalize_builtin_tool_arguments(
@@ -1330,113 +1498,14 @@ def execute_skill_tool_call(
                 parameters=builtin_parameters,
             )
 
-        if tool_name == "list_skill_directory":
-            relative_path = str(arguments.get("relative_path", "")).strip()
-            return {
-                "ok": True,
-                "skill_id": request.skill_id,
-                "relative_path": relative_path or ".",
-                "entries": _list_directory_entries(request.skill_id, relative_path),
-            }, []
-
-        if tool_name == "read_skill_file":
-            relative_path = str(arguments.get("relative_path", "")).strip()
-            if not relative_path:
-                return {
-                    "ok": False,
-                    "error": "relative_path 不能为空。",
-                }, []
-
-            return {
-                "ok": True,
-                "skill_id": request.skill_id,
-                **_read_skill_file_content(request.skill_id, relative_path),
-            }, []
-
-        if tool_name == "search_skill_context":
-            query = str(arguments.get("query", "")).strip()
-            if not query:
-                return {
-                    "ok": False,
-                    "error": "query 不能为空。",
-                }, []
-
-            source_path = str(arguments.get("source_path", "")).strip() or None
-            default_search_limit, max_search_limit = _resolve_search_limit_bounds()
-            raw_limit = arguments.get("limit", default_search_limit)
-            limit = (
-                raw_limit
-                if isinstance(raw_limit, int) and 1 <= raw_limit <= max_search_limit
-                else default_search_limit
-            )
-            chunks = search_skill_context_chunks(
-                request.skill_id,
-                query,
-                exclude_chunk_ids=set(),
-                limit=limit,
-                source_path_contains=source_path,
-                reranker_model=(request.reranker_model or request.model),
-            )
-            return {
-                "ok": True,
-                "skill_id": request.skill_id,
-                "query": query,
-                "source_path": source_path,
-                "limit": limit,
-                "chunks": [
-                    {
-                        "id": chunk.id,
-                        "source_path": chunk.source_path,
-                        "title": chunk.title,
-                        "preview": chunk.preview,
-                        "already_loaded": chunk.id in state.loaded_chunk_ids,
-                    }
-                    for chunk in chunks
-                ],
-            }, []
-
-        if tool_name == "read_skill_context":
-            raw_chunk_ids = arguments.get("chunk_ids", [])
-            if not isinstance(raw_chunk_ids, list):
-                return {
-                    "ok": False,
-                    "error": "chunk_ids 必须是字符串数组。",
-                }, []
-
-            chunk_ids = [
-                str(chunk_id).strip()
-                for chunk_id in raw_chunk_ids
-                if isinstance(chunk_id, str) and str(chunk_id).strip()
-            ]
-            if not chunk_ids:
-                return {
-                    "ok": False,
-                    "error": "chunk_ids 不能为空。",
-                }, []
-
-            loaded_chunks = get_skill_context_chunks_by_ids(request.skill_id, chunk_ids)
-            next_chunk_ids = [
-                chunk.id
-                for chunk in loaded_chunks
-                if chunk.id not in state.loaded_chunk_ids
-            ]
-            if next_chunk_ids:
-                state.loaded_chunk_ids.extend(next_chunk_ids)
-
-            return {
-                "ok": True,
-                "skill_id": request.skill_id,
-                "loaded_chunk_ids": next_chunk_ids,
-                "chunks": [
-                    {
-                        "id": chunk.id,
-                        "source_path": chunk.source_path,
-                        "title": chunk.title,
-                        "content": chunk.content,
-                    }
-                    for chunk in loaded_chunks
-                ],
-            }, []
+        builtin_result = _execute_builtin_tool(
+            request=request,
+            state=state,
+            tool_name=tool_name,
+            arguments=arguments,
+        )
+        if builtin_result is not None:
+            return builtin_result
 
         try:
             declared_tool = get_skill_tool_config(request.skill_id, tool_name)

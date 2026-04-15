@@ -24,6 +24,8 @@ export const streamChatReply = async (
     formData.append('files', file);
   }
 
+  // 使用原生 fetch 而非 axios，因为 SSE 流式接口需要 ReadableStream 逐块读取，
+  // axios 不原生支持 ReadableStream，无法实现实时流式输出。
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
     signal,

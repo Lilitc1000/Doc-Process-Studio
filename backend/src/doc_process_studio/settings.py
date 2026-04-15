@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     agent_executor_max_parallel_reads: int = 4
     agent_executor_tool_retry_max_attempts: int = 3
     agent_executor_tool_retry_base_delay_seconds: float = 0.25
-    agent_executor_time_budget_seconds: float = 30.0
+    agent_executor_time_budget_seconds: float = 60.0
     agent_executor_max_tool_calls: int = 24
     agent_executor_prompt_budget_ratio: float = 0.82
     agent_executor_default_context_length: int = 8192

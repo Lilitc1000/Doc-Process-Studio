@@ -88,7 +88,11 @@ frontend/
 - [useChatSessions.ts](/frontend/src/composables/useChatSessions.ts)
   历史会话加载、保存、重命名、删除、会话切换后的状态恢复。
 - [useIncidentReportSessions.ts](/frontend/src/composables/useIncidentReportSessions.ts)
-  事故报告会话加载、创建、表单实时保存、生成与下载状态管理。
+  事故报告会话加载、创建、重命名、删除。组合 `useIncidentForm` 和 `useIncidentGeneration`，对外提供统一接口。
+- [useIncidentForm.ts](/frontend/src/composables/useIncidentForm.ts)
+  事故报告表单 schema 加载、答案更新、debounce 快照保存。
+- [useIncidentGeneration.ts](/frontend/src/composables/useIncidentGeneration.ts)
+  事故报告生成流程、轮询监控、trace 进度追踪、下载。
 - [useChatStreaming.ts](/frontend/src/composables/useChatStreaming.ts)
   流式生成、停止生成、流式内容回填。
 - [useMessageTree.ts](/frontend/src/composables/useMessageTree.ts)
@@ -147,7 +151,9 @@ frontend/
 - [utils/catalog.ts](/frontend/src/utils/catalog.ts)
   模型和 skill 响应归一化。
 - [utils/file.ts](/frontend/src/utils/file.ts)
-  文件大小格式化。
+  文件大小格式化、文件类型视觉配置查找。
+- [utils/file-type-visuals.ts](/frontend/src/utils/file-type-visuals.ts)
+  文件类型视觉映射数据。
 - [utils/ids.ts](/frontend/src/utils/ids.ts)
   前端会话 ID / 消息 ID 生成。
 - [utils/message-tree.ts](/frontend/src/utils/message-tree.ts)
@@ -264,7 +270,7 @@ cacheScopeId + messageId + role + contentHash
 
 - 当前附件图标不是单一通用图标，而是优先按常见扩展名识别，再回退到 MIME 类型。
 - 例如 `md`、`vue`、`ts`、`js`、`py`、`json`、`yaml`、`pdf`、`docx` 会显示各自更具体的 badge。
-- 这套规则统一收敛在 `src/utils/file.ts`，后续如果要补新的文件类型，优先改这里，不要在组件里各自写判断。
+- 这套规则统一收敛在 `src/utils/file-type-visuals.ts`（映射数据）和 `src/utils/file.ts`（查找逻辑），后续如果要补新的文件类型，优先改 `file-type-visuals.ts`，不要在组件里各自写判断。
 
 ### 4. 链路回放入口
 

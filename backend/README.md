@@ -255,10 +255,14 @@ from doc_process_studio.services.skill.runtime import ensure_skill_context_for_r
 参考现有用法：[session_store](/backend/src/doc_process_studio/services/chat/session_store.py)、[incident_session_store](/backend/src/doc_process_studio/services/chat/incident_session_store.py)。
 
 ### 新增跨模块共享工具函数
-如果某个工具函数在两个及以上业务模块里需要使用（例如时间获取、参数解析、错误详情构建），放到 `services/infra/` 下对应模块：
+如果某个工具函数在两个及以上业务模块里需要使用，放到 `services/infra/` 下对应模块：
 
-- `dtutils.py`：时间与错误详情
+- `dtutils.py`：日期时间（`utcnow`、`utcnow_iso`）
+- `text_utils.py`：文本/JSON 解析（`parse_json_object`）
+- `error_utils.py`：错误事件构建（`build_error_event_detail`）
 - `tool_args.py`：工具参数解析与规整
+- `request_guard.py`：请求防护与租户归一化（`normalize_tenant_id`）
+- `model_context.py`：模型上下文长度估算与 prompt 预算
 
 如果现有模块不合适，可以新建，但保持 `services/infra/` 下的模块职责单一。
 

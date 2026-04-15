@@ -5,7 +5,11 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from ...settings import settings
-from .dtutils import normalize_tenant_id
+
+
+def normalize_tenant_id(tenant_id: str) -> str:
+    normalized = tenant_id.strip()
+    return normalized or "default"
 
 _global_semaphore: asyncio.Semaphore | None = None
 _tenant_semaphores: dict[str, asyncio.Semaphore] = {}

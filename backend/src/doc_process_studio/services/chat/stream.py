@@ -2,6 +2,7 @@ import json
 import re
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from collections.abc import AsyncIterator
 from typing import Any
@@ -19,7 +20,8 @@ from ...services.agent.executor import (
 from ...services.agent.feature_flags import is_feature_enabled_for_key
 from ...services.agent.error_detail import build_exception_detail, summarize_exception
 from ...services.agent.trace_store import AgentTraceRecorder
-from ...services.infra.dtutils import build_error_event_detail, utcnow
+from ...services.infra.dtutils import utcnow
+from ...services.infra.error_utils import build_error_event_detail
 from ...services.infra.tool_args import build_normalized_tool_calls
 from ...models.skill.runtime import (
     ConversationAgentState,
@@ -66,7 +68,6 @@ CHAT_SKILL_TYPE = "chat"
 
 
 def _list_chat_skill_interfaces() -> list[Any]:
-    """仅返回聊天通道允许使用的 skill。"""
     return [
         skill
         for skill in list_skill_interfaces()
@@ -91,8 +92,8 @@ def _format_done_event(*, model: str, done_reason: str) -> str:
         )
     )
 
+
 async def _extract_http_status_error_message(exc: httpx.HTTPStatusError) -> str:
-    """安全提取上游错误信息，避免流式响应未读取时触发 ResponseNotRead。"""
     base_message = f"远程 Ollama 接口返回错误状态：{exc.response.status_code}"
     error_payload: Any | None = None
 
@@ -145,7 +146,6 @@ def _extract_skill_ids_from_messages(
     messages: list[Any],
     available_skills: list[Any],
 ) -> tuple[list[str], list[str]]:
-    """从用户消息中提取显式提及（仅识别 `$skill-id`）。"""
     mentioned_skill_ids: list[str] = []
     missing_skill_ids: list[str] = []
     pattern = re.compile(r"\$([A-Za-z0-9._-]+)")
@@ -206,7 +206,6 @@ def _build_direct_skill_plan(
     *,
     request: ChatStreamRequest,
 ) -> SkillPlanDecision:
-    """规划器灰度关闭时的兜底策略：仅使用显式 skill + system skill。"""
     available_skills = _list_chat_skill_interfaces()
     available_skill_ids = [skill.id for skill in available_skills]
     explicit_skill_ids = [
@@ -256,6 +255,245 @@ def _append_planner_trace(
     max_entries = max(1, settings.skill_planner_trace_max_entries)
     if len(agent_state.planner_trace) > max_entries:
         agent_state.planner_trace = agent_state.planner_trace[-max_entries:]
+
+
+def _build_timeout_error_detail() -> dict[str, Any]:
+    message = "请求处理超时，已终止。"
+    return {
+        "message": message,
+        "error_detail": {
+            "type": "TimeoutError",
+            "message": message,
+        },
+    }
+
+
+@dataclass
+class _SkillContext:
+    skill_plan: SkillPlanDecision
+    active_skill_ids: list[str]
+    primary_skill_id: str
+    primary_request: ChatStreamRequest
+    agent_state: ConversationAgentState
+    states_by_skill: dict[str, SkillConversationState]
+    primary_state: SkillConversationState
+    prepared_uploaded_files: list[Any]
+    uploaded_files_context: str
+    planner_enabled: bool
+    executor_enabled: bool
+
+
+async def _prepare_skill_context(
+    request: ChatStreamRequest,
+    trace_recorder: AgentTraceRecorder,
+    upload_files: list[UploadFile] | None,
+    tenant_id: str,
+) -> _SkillContext:
+    planner_enabled = is_feature_enabled_for_key(
+        feature_name="planner",
+        key=f"{tenant_id}:{request.conversation_id}",
+        enabled=settings.feature_planner_enabled,
+        rollout_ratio=settings.feature_planner_rollout_ratio,
+    )
+    executor_enabled = is_feature_enabled_for_key(
+        feature_name="executor",
+        key=f"{tenant_id}:{request.conversation_id}",
+        enabled=settings.feature_executor_enabled,
+        rollout_ratio=settings.feature_executor_rollout_ratio,
+    )
+    trace_recorder.add_event(
+        event_type="feature_flags",
+        detail={
+            "planner_enabled": planner_enabled,
+            "executor_enabled": executor_enabled,
+        },
+    )
+
+    if planner_enabled:
+        skill_plan = await _resolve_skill_plan(request)
+    else:
+        skill_plan = _build_direct_skill_plan(request=request)
+
+    trace_recorder.set_planner(skill_plan.model_dump(mode="json"))
+    active_skill_ids = skill_plan.active_skill_ids
+    primary_skill_id = skill_plan.primary_skill_id
+    primary_request = request.model_copy(update={"skill_id": primary_skill_id})
+    prepared_uploaded_files, new_uploaded_files_context = await prepare_uploaded_files(
+        upload_files=upload_files or [],
+        conversation_id=request.conversation_id,
+        skill_id=primary_skill_id,
+    )
+    persisted_uploaded_files_context = build_persisted_uploaded_files_context(
+        request.attachment_ids
+    )
+    uploaded_files_context = merge_uploaded_files_context(
+        persisted_uploaded_files_context,
+        new_uploaded_files_context,
+    )
+    agent_state = await load_conversation_state(
+        request.conversation_id,
+        tenant_id=tenant_id,
+    )
+    if agent_state is None:
+        agent_state = ConversationAgentState(conversation_id=request.conversation_id)
+
+    states_by_skill: dict[str, SkillConversationState] = {}
+    for skill_id in active_skill_ids:
+        skill_interface = get_skill_interface(skill_id)
+        state = agent_state.skills_state.get(skill_id)
+        if state is None:
+            state = SkillConversationState(
+                conversation_id=request.conversation_id,
+                skill_id=skill_id,
+                system_prompt=skill_interface.default_prompt,
+                loaded_chunk_ids=[],
+            )
+            agent_state.skills_state[skill_id] = state
+        elif not state.system_prompt.strip():
+            state.system_prompt = skill_interface.default_prompt
+        states_by_skill[skill_id] = state
+
+    primary_state = states_by_skill[primary_skill_id]
+    _append_planner_trace(agent_state=agent_state, decision=skill_plan)
+    await save_conversation_state(agent_state, tenant_id=tenant_id)
+
+    return _SkillContext(
+        skill_plan=skill_plan,
+        active_skill_ids=active_skill_ids,
+        primary_skill_id=primary_skill_id,
+        primary_request=primary_request,
+        agent_state=agent_state,
+        states_by_skill=states_by_skill,
+        primary_state=primary_state,
+        prepared_uploaded_files=prepared_uploaded_files,
+        uploaded_files_context=uploaded_files_context,
+        planner_enabled=planner_enabled,
+        executor_enabled=executor_enabled,
+    )
+
+
+def _build_skill_upstream_messages(
+    *,
+    request: ChatStreamRequest,
+    skill_ctx: _SkillContext,
+    skill_context_by_skill: dict[str, str],
+    extra_messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return build_upstream_messages_for_skills(
+        request=request,
+        active_skill_ids=skill_ctx.active_skill_ids,
+        explicit_skill_ids=skill_ctx.skill_plan.required_skill_ids,
+        implicit_skill_ids=skill_ctx.skill_plan.optional_skill_ids,
+        missing_skill_ids=skill_ctx.skill_plan.missing_explicit_skill_ids,
+        skill_context_by_skill=skill_context_by_skill,
+        uploaded_files_context=skill_ctx.uploaded_files_context,
+        extra_messages=extra_messages,
+    )
+
+
+@dataclass
+class _RoundMessages:
+    upstream_messages: list[dict[str, Any]]
+    skill_context_by_skill: dict[str, str]
+    tools_enabled: bool
+
+
+async def _build_round_upstream_messages(
+    *,
+    request: ChatStreamRequest,
+    skill_ctx: _SkillContext,
+    tool_trace_messages: list[dict[str, Any]],
+    execution_budget: ExecutionBudget,
+    tools_enabled: bool,
+    tenant_id: str,
+) -> _RoundMessages:
+    skill_context_by_skill: dict[str, str] = {}
+    for skill_id in skill_ctx.active_skill_ids:
+        skill_state = skill_ctx.states_by_skill[skill_id]
+        skill_context = await sync_skill_context_state(
+            model=request.model,
+            state=skill_state,
+        )
+        if skill_context:
+            skill_context_by_skill[skill_id] = skill_context
+    await save_conversation_state(skill_ctx.agent_state, tenant_id=tenant_id)
+
+    upstream_messages = _build_skill_upstream_messages(
+        request=request,
+        skill_ctx=skill_ctx,
+        skill_context_by_skill=skill_context_by_skill,
+        extra_messages=tool_trace_messages,
+    )
+    model_context_length = await get_model_context_length(request.model)
+    prompt_tokens_estimate = estimate_prompt_tokens(upstream_messages)
+    prompt_budget_tokens = max(
+        256,
+        int(
+            max(1, model_context_length)
+            * max(0.2, min(0.95, settings.agent_executor_prompt_budget_ratio))
+        ),
+    )
+    execution_budget.prompt_tokens_estimate = prompt_tokens_estimate
+    execution_budget.max_prompt_tokens = prompt_budget_tokens
+
+    if tools_enabled and prompt_tokens_estimate >= prompt_budget_tokens:
+        compacted_context_by_skill: dict[str, str] = {}
+        for skill_id in skill_ctx.active_skill_ids:
+            compacted_context = await sync_skill_context_state(
+                model=request.model,
+                state=skill_ctx.states_by_skill[skill_id],
+                force_compact=True,
+            )
+            if compacted_context:
+                compacted_context_by_skill[skill_id] = compacted_context
+        await save_conversation_state(skill_ctx.agent_state, tenant_id=tenant_id)
+
+        skill_context_by_skill = compacted_context_by_skill
+        upstream_messages = _build_skill_upstream_messages(
+            request=request,
+            skill_ctx=skill_ctx,
+            skill_context_by_skill=skill_context_by_skill,
+            extra_messages=tool_trace_messages,
+        )
+        prompt_tokens_estimate = estimate_prompt_tokens(upstream_messages)
+        execution_budget.prompt_tokens_estimate = prompt_tokens_estimate
+
+        if prompt_tokens_estimate >= prompt_budget_tokens:
+            tools_enabled = False
+            tool_trace_messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        "当前会话上下文已接近模型可用窗口上限，且压缩后仍超过预算。"
+                        f"估算 token={prompt_tokens_estimate}，预算={prompt_budget_tokens}。"
+                        "本轮起停止工具调用，请基于已读取内容直接回答。"
+                    ),
+                }
+            )
+            upstream_messages = _build_skill_upstream_messages(
+                request=request,
+                skill_ctx=skill_ctx,
+                skill_context_by_skill=skill_context_by_skill,
+                extra_messages=tool_trace_messages,
+            )
+
+    return _RoundMessages(
+        upstream_messages=upstream_messages,
+        skill_context_by_skill=skill_context_by_skill,
+        tools_enabled=tools_enabled,
+    )
+
+
+def _build_executor_deps() -> ExecutorDeps:
+    return ExecutorDeps(
+        build_tool_status_start=build_tool_status_start,
+        build_tool_status_finish=build_tool_status_finish,
+        build_tool_call_signature=build_tool_call_signature,
+        get_tool_call_name=get_tool_call_name,
+        detect_tool_call_progress=detect_tool_call_progress,
+        execute_skill_tool_call=execute_skill_tool_call,
+        execute_scoped_skill_tool_call=execute_scoped_skill_tool_call,
+    )
 
 
 async def stream_remote_chat_completion(
@@ -311,73 +549,12 @@ async def stream_remote_chat_completion(
             }
         )
 
-        planner_enabled = is_feature_enabled_for_key(
-            feature_name="planner",
-            key=f"{tenant_id}:{request.conversation_id}",
-            enabled=settings.feature_planner_enabled,
-            rollout_ratio=settings.feature_planner_rollout_ratio,
-        )
-        executor_enabled = is_feature_enabled_for_key(
-            feature_name="executor",
-            key=f"{tenant_id}:{request.conversation_id}",
-            enabled=settings.feature_executor_enabled,
-            rollout_ratio=settings.feature_executor_rollout_ratio,
-        )
-        trace_recorder.add_event(
-            event_type="feature_flags",
-            detail={
-                "planner_enabled": planner_enabled,
-                "executor_enabled": executor_enabled,
-            },
-        )
-
-        if planner_enabled:
-            skill_plan = await _resolve_skill_plan(request)
-        else:
-            skill_plan = _build_direct_skill_plan(request=request)
-
-        trace_recorder.set_planner(skill_plan.model_dump(mode="json"))
-        active_skill_ids = skill_plan.active_skill_ids
-        primary_skill_id = skill_plan.primary_skill_id
-        primary_request = request.model_copy(update={"skill_id": primary_skill_id})
-        prepared_uploaded_files, new_uploaded_files_context = await prepare_uploaded_files(
-            upload_files=upload_files or [],
-            conversation_id=request.conversation_id,
-            skill_id=primary_skill_id,
-        )
-        persisted_uploaded_files_context = build_persisted_uploaded_files_context(
-            request.attachment_ids
-        )
-        uploaded_files_context = merge_uploaded_files_context(
-            persisted_uploaded_files_context,
-            new_uploaded_files_context,
-        )
-        agent_state = await load_conversation_state(
-            request.conversation_id,
+        skill_ctx = await _prepare_skill_context(
+            request=request,
+            trace_recorder=trace_recorder,
+            upload_files=upload_files,
             tenant_id=tenant_id,
         )
-        if agent_state is None:
-            agent_state = ConversationAgentState(conversation_id=request.conversation_id)
-
-        states_by_skill: dict[str, SkillConversationState] = {}
-        for skill_id in active_skill_ids:
-            skill_interface = get_skill_interface(skill_id)
-            state = agent_state.skills_state.get(skill_id)
-            if state is None:
-                state = SkillConversationState(
-                    conversation_id=request.conversation_id,
-                    skill_id=skill_id,
-                    system_prompt=skill_interface.default_prompt,
-                    loaded_chunk_ids=[],
-                )
-                agent_state.skills_state[skill_id] = state
-            elif not state.system_prompt.strip():
-                state.system_prompt = skill_interface.default_prompt
-            states_by_skill[skill_id] = state
-
-        primary_state = states_by_skill[primary_skill_id]
-        _append_planner_trace(agent_state=agent_state, decision=skill_plan)
-        await save_conversation_state(agent_state, tenant_id=tenant_id)
     except ValueError as exc:
         stream_error_message = summarize_exception(exc)
         yield format_sse_event({"type": "error", "message": stream_error_message})
@@ -417,17 +594,11 @@ async def stream_remote_chat_completion(
             yield format_sse_event({"type": "error", "message": stream_error_message})
             trace_recorder.add_event(
                 event_type="error",
-                detail={
-                    "message": stream_error_message,
-                    "error_detail": {
-                        "type": "TimeoutError",
-                        "message": stream_error_message,
-                    },
-                },
+                detail=_build_timeout_error_detail(),
             )
             return
 
-        for prepared_uploaded_file in prepared_uploaded_files:
+        for prepared_uploaded_file in skill_ctx.prepared_uploaded_files:
             yield format_sse_event(
                 {
                     "type": "uploaded-attachment",
@@ -441,7 +612,7 @@ async def stream_remote_chat_completion(
         first_assistant_chunk_emitted = False
         final_done_reason = "stop"
         executed_tool_calls: dict[str, dict[str, Any]] = {}
-        tools_enabled = executor_enabled
+        tools_enabled = skill_ctx.executor_enabled
         tool_disabled_retry_count = 0
         tool_round_count = 0
         execution_budget = ExecutionBudget(
@@ -450,7 +621,7 @@ async def stream_remote_chat_completion(
             max_prompt_tokens=0,
             prompt_tokens_estimate=0,
         )
-        if not executor_enabled:
+        if not skill_ctx.executor_enabled:
             tool_trace_messages.append(
                 {
                     "role": "system",
@@ -468,112 +639,34 @@ async def stream_remote_chat_completion(
                 yield format_sse_event({"type": "error", "message": stream_error_message})
                 trace_recorder.add_event(
                     event_type="error",
-                    detail={
-                        "message": stream_error_message,
-                        "error_detail": {
-                            "type": "TimeoutError",
-                            "message": stream_error_message,
-                        },
-                    },
+                    detail=_build_timeout_error_detail(),
                 )
                 return
 
             tooling_skill_ids = [
                 skill_id
-                for skill_id in active_skill_ids
+                for skill_id in skill_ctx.active_skill_ids
                 if skill_id != SYSTEM_DOCUMENT_SKILL_ID
             ]
             if not tooling_skill_ids:
-                tooling_skill_ids = [primary_skill_id]
+                tooling_skill_ids = [skill_ctx.primary_skill_id]
 
-            skill_context_by_skill: dict[str, str] = {}
-            for skill_id in active_skill_ids:
-                skill_state = states_by_skill[skill_id]
-                skill_context = await sync_skill_context_state(
-                    model=request.model,
-                    state=skill_state,
-                )
-                if skill_context:
-                    skill_context_by_skill[skill_id] = skill_context
-            await save_conversation_state(agent_state, tenant_id=tenant_id)
-
-            upstream_messages = build_upstream_messages_for_skills(
+            round_messages = await _build_round_upstream_messages(
                 request=request,
-                active_skill_ids=active_skill_ids,
-                explicit_skill_ids=skill_plan.required_skill_ids,
-                implicit_skill_ids=skill_plan.optional_skill_ids,
-                missing_skill_ids=skill_plan.missing_explicit_skill_ids,
-                skill_context_by_skill=skill_context_by_skill,
-                uploaded_files_context=uploaded_files_context,
-                extra_messages=tool_trace_messages,
+                skill_ctx=skill_ctx,
+                tool_trace_messages=tool_trace_messages,
+                execution_budget=execution_budget,
+                tools_enabled=tools_enabled,
+                tenant_id=tenant_id,
             )
-            model_context_length = await get_model_context_length(request.model)
-            prompt_tokens_estimate = estimate_prompt_tokens(upstream_messages)
-            prompt_budget_tokens = max(
-                256,
-                int(
-                    max(1, model_context_length)
-                    * max(0.2, min(0.95, settings.agent_executor_prompt_budget_ratio))
-                ),
-            )
-            execution_budget.prompt_tokens_estimate = prompt_tokens_estimate
-            execution_budget.max_prompt_tokens = prompt_budget_tokens
-
-            if tools_enabled and prompt_tokens_estimate >= prompt_budget_tokens:
-                compacted_context_by_skill: dict[str, str] = {}
-                for skill_id in active_skill_ids:
-                    compacted_context = await sync_skill_context_state(
-                        model=request.model,
-                        state=states_by_skill[skill_id],
-                        force_compact=True,
-                    )
-                    if compacted_context:
-                        compacted_context_by_skill[skill_id] = compacted_context
-                await save_conversation_state(agent_state, tenant_id=tenant_id)
-
-                skill_context_by_skill = compacted_context_by_skill
-                upstream_messages = build_upstream_messages_for_skills(
-                    request=request,
-                    active_skill_ids=active_skill_ids,
-                    explicit_skill_ids=skill_plan.required_skill_ids,
-                    implicit_skill_ids=skill_plan.optional_skill_ids,
-                    missing_skill_ids=skill_plan.missing_explicit_skill_ids,
-                    skill_context_by_skill=skill_context_by_skill,
-                    uploaded_files_context=uploaded_files_context,
-                    extra_messages=tool_trace_messages,
-                )
-                prompt_tokens_estimate = estimate_prompt_tokens(upstream_messages)
-                execution_budget.prompt_tokens_estimate = prompt_tokens_estimate
-
-                if prompt_tokens_estimate >= prompt_budget_tokens:
-                    tools_enabled = False
-                    tool_trace_messages.append(
-                        {
-                            "role": "system",
-                            "content": (
-                                "当前会话上下文已接近模型可用窗口上限，且压缩后仍超过预算。"
-                                f"估算 token={prompt_tokens_estimate}，预算={prompt_budget_tokens}。"
-                                "本轮起停止工具调用，请基于已读取内容直接回答。"
-                            ),
-                        }
-                    )
-                    upstream_messages = build_upstream_messages_for_skills(
-                        request=request,
-                        active_skill_ids=active_skill_ids,
-                        explicit_skill_ids=skill_plan.required_skill_ids,
-                        implicit_skill_ids=skill_plan.optional_skill_ids,
-                        missing_skill_ids=skill_plan.missing_explicit_skill_ids,
-                        skill_context_by_skill=skill_context_by_skill,
-                        uploaded_files_context=uploaded_files_context,
-                        extra_messages=tool_trace_messages,
-                    )
+            tools_enabled = round_messages.tools_enabled
 
             merged_tool_calls: dict[int, dict[str, Any]] = {}
             assistant_content_parts: list[str] = []
 
             async for chunk_payload in stream_chat_completion(
                 model=request.model,
-                messages=upstream_messages,
+                messages=round_messages.upstream_messages,
                 tools=(
                     (
                         build_skill_tools(tooling_skill_ids[0])
@@ -589,13 +682,7 @@ async def stream_remote_chat_completion(
                     yield format_sse_event({"type": "error", "message": stream_error_message})
                     trace_recorder.add_event(
                         event_type="error",
-                        detail={
-                            "message": stream_error_message,
-                            "error_detail": {
-                                "type": "TimeoutError",
-                                "message": stream_error_message,
-                            },
-                        },
+                        detail=_build_timeout_error_detail(),
                     )
                     return
 
@@ -688,26 +775,18 @@ async def stream_remote_chat_completion(
             execution_result = await execute_tool_graph(
                 execution_input=ExecutionInput(
                     request=request,
-                    primary_request=primary_request,
-                    plan_decision=skill_plan,
-                    agent_state=agent_state,
-                    states_by_skill=states_by_skill,
-                    primary_skill_id=primary_skill_id,
-                    primary_state=primary_state,
+                    primary_request=skill_ctx.primary_request,
+                    plan_decision=skill_ctx.skill_plan,
+                    agent_state=skill_ctx.agent_state,
+                    states_by_skill=skill_ctx.states_by_skill,
+                    primary_skill_id=skill_ctx.primary_skill_id,
+                    primary_state=skill_ctx.primary_state,
                     tooling_skill_ids=tooling_skill_ids,
                     normalized_tool_calls=normalized_tool_calls,
                     executed_tool_calls=executed_tool_calls,
                     budget=execution_budget,
                 ),
-                deps=ExecutorDeps(
-                    build_tool_status_start=build_tool_status_start,
-                    build_tool_status_finish=build_tool_status_finish,
-                    build_tool_call_signature=build_tool_call_signature,
-                    get_tool_call_name=get_tool_call_name,
-                    detect_tool_call_progress=detect_tool_call_progress,
-                    execute_skill_tool_call=execute_skill_tool_call,
-                    execute_scoped_skill_tool_call=execute_scoped_skill_tool_call,
-                ),
+                deps=_build_executor_deps(),
             )
             executed_tool_calls = execution_result.executed_tool_calls
             tool_trace_messages.extend(execution_result.tool_trace_messages)
@@ -755,7 +834,7 @@ async def stream_remote_chat_completion(
             if execution_result.disable_tools:
                 tools_enabled = False
 
-            await save_conversation_state(agent_state, tenant_id=tenant_id)
+            await save_conversation_state(skill_ctx.agent_state, tenant_id=tenant_id)
     except OllamaNotConfiguredError as exc:
         stream_error_message = summarize_exception(exc)
         trace_recorder.add_event(
@@ -799,5 +878,4 @@ async def stream_remote_chat_completion(
         try:
             await trace_recorder.flush()
         except Exception:
-            # 审计落盘失败不影响主对话链路返回。
             pass

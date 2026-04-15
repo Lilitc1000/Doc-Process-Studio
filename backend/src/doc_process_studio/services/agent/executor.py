@@ -341,12 +341,188 @@ def _build_loaded_chunk_diff(
     return diff
 
 
+async def _execute_single_node(
+    *,
+    node: _TaskNode,
+    execution_input: ExecutionInput,
+    deps: ExecutorDeps,
+    result: ExecutionResult,
+    inflight_tool_calls: dict[str, asyncio.Task[tuple[dict[str, Any], list[Any], dict[str, Any], bool, str | None]]],
+    inflight_lock: asyncio.Lock,
+    semaphore: asyncio.Semaphore,
+) -> tuple[_TaskNode, dict[str, Any], list[Any], dict[str, Any], bool, str | None]:
+    tool_call = node.tool_call
+    result.status_events.append(
+        {
+            "type": "tool-status",
+            "phase": "start",
+            "tool_name": node.tool_name,
+            **deps.build_tool_status_start(
+                skill_id=execution_input.primary_skill_id,
+                tool_call=tool_call,
+            ),
+        }
+    )
+
+    tool_call_signature = deps.build_tool_call_signature(tool_call)
+    if tool_call_signature in result.executed_tool_calls:
+        cached_execution = result.executed_tool_calls[tool_call_signature]
+        tool_result = deepcopy(cached_execution["tool_result"])
+        tool_result["reused"] = True
+        return node, tool_result, [], tool_call, False, None
+    existing_task = None
+    task_owned_by_current_node = False
+    async with inflight_lock:
+        existing_task = inflight_tool_calls.get(tool_call_signature)
+        if existing_task is None:
+            task_owned_by_current_node = True
+
+            async def _execute_once():
+                async with semaphore:
+                    before_loaded_chunk_ids = _collect_loaded_chunk_signatures(
+                        execution_input.states_by_skill
+                    )
+                    (
+                        local_tool_result,
+                        local_attachments,
+                        local_resolved_tool_call,
+                        local_fallback_note,
+                    ) = await _run_tool_with_retry(
+                        node=node,
+                        execution_input=execution_input,
+                        deps=deps,
+                    )
+                    after_loaded_chunk_ids = _collect_loaded_chunk_signatures(
+                        execution_input.states_by_skill
+                    )
+
+                local_made_progress = deps.detect_tool_call_progress(
+                    tool_name=node.tool_name,
+                    before_loaded_chunk_ids=before_loaded_chunk_ids,
+                    after_loaded_chunk_ids=after_loaded_chunk_ids,
+                    tool_result=local_tool_result,
+                    next_attachments=local_attachments,
+                )
+                return (
+                    local_tool_result,
+                    local_attachments,
+                    local_resolved_tool_call,
+                    local_made_progress,
+                    local_fallback_note,
+                )
+
+            existing_task = asyncio.create_task(_execute_once())
+            inflight_tool_calls[tool_call_signature] = existing_task
+
+    assert existing_task is not None
+    try:
+        tool_result, attachments, resolved_tool_call, made_progress, fallback_note = await existing_task
+    finally:
+        if task_owned_by_current_node:
+            async with inflight_lock:
+                inflight_tool_calls.pop(tool_call_signature, None)
+
+    if task_owned_by_current_node:
+        result.executed_tool_calls[tool_call_signature] = {
+            "tool_result": deepcopy(tool_result),
+        }
+        return (
+            node,
+            tool_result,
+            attachments,
+            resolved_tool_call,
+            made_progress,
+            fallback_note,
+        )
+
+    reused_tool_result = deepcopy(tool_result)
+    reused_tool_result["reused"] = True
+    return node, reused_tool_result, [], resolved_tool_call, False, None
+
+
+def _collect_outcome(
+    *,
+    node: _TaskNode,
+    tool_result: dict[str, Any],
+    attachments: list[Any],
+    resolved_tool_call: dict[str, Any],
+    made_progress: bool,
+    fallback_note: str | None,
+    execution_input: ExecutionInput,
+    deps: ExecutorDeps,
+    result: ExecutionResult,
+) -> None:
+    result.tool_calls_consumed += 1
+    if attachments:
+        for attachment in attachments:
+            result.attachments.append(attachment)
+            result.status_events.append(
+                {
+                    "type": "attachment",
+                    "attachment": attachment.model_dump(
+                        mode="json",
+                    ),
+                }
+            )
+            result.state_diff.attachment_count_added += 1
+
+    if tool_result.get("reused"):
+        result.state_diff.reused_tool_calls += 1
+
+    if made_progress or attachments:
+        result.round_made_progress = True
+
+    if fallback_note:
+        tool_result = dict(tool_result)
+        tool_result["fallback"] = fallback_note
+
+    result.status_events.append(
+        {
+            "type": "tool-status",
+            "phase": "finish",
+            "tool_name": node.tool_name,
+            **deps.build_tool_status_finish(
+                request=execution_input.primary_request,
+                state=execution_input.primary_state,
+                tool_call=resolved_tool_call,
+                tool_result=tool_result,
+                attachments=attachments,
+            ),
+        }
+    )
+
+    result.tool_trace_messages.append(
+        {
+            "role": "tool",
+            "name": node.tool_name,
+            "content": json.dumps(tool_result, ensure_ascii=False),
+        }
+    )
+
+    _append_tool_history(
+        agent_state=execution_input.agent_state,
+        record=SkillToolHistoryRecord(
+            skill_id=node.skill_id,
+            tool_name=node.base_tool_name,
+            ok=bool(tool_result.get("ok")),
+            reused=bool(tool_result.get("reused")),
+            attachment_count=len(attachments),
+            error=(
+                str(tool_result.get("error"))
+                if not tool_result.get("ok") and tool_result.get("error") is not None
+                else None
+            ),
+            created_at=datetime.now(UTC),
+        ),
+    )
+    result.state_diff.tool_history_added += 1
+
+
 async def execute_tool_graph(
     *,
     execution_input: ExecutionInput,
     deps: ExecutorDeps,
 ) -> ExecutionResult:
-    """执行一轮工具图调度，返回执行结果和状态差异。"""
     budget = execution_input.budget
     if (
         budget.max_prompt_tokens > 0
@@ -386,95 +562,6 @@ async def execute_tool_graph(
     completed_indexes: set[int] = set()
     semaphore = asyncio.Semaphore(max(1, settings.agent_executor_max_parallel_reads))
 
-    async def _execute_single_node(node: _TaskNode) -> tuple[_TaskNode, dict[str, Any], list[Any], dict[str, Any], bool, str | None]:
-        tool_call = node.tool_call
-        result.status_events.append(
-            {
-                "type": "tool-status",
-                "phase": "start",
-                "tool_name": node.tool_name,
-                **deps.build_tool_status_start(
-                    skill_id=execution_input.primary_skill_id,
-                    tool_call=tool_call,
-                ),
-            }
-        )
-
-        tool_call_signature = deps.build_tool_call_signature(tool_call)
-        if tool_call_signature in result.executed_tool_calls:
-            cached_execution = result.executed_tool_calls[tool_call_signature]
-            tool_result = deepcopy(cached_execution["tool_result"])
-            tool_result["reused"] = True
-            return node, tool_result, [], tool_call, False, None
-        existing_task = None
-        task_owned_by_current_node = False
-        async with inflight_lock:
-            existing_task = inflight_tool_calls.get(tool_call_signature)
-            if existing_task is None:
-                task_owned_by_current_node = True
-
-                async def _execute_once():
-                    async with semaphore:
-                        before_loaded_chunk_ids = _collect_loaded_chunk_signatures(
-                            execution_input.states_by_skill
-                        )
-                        (
-                            local_tool_result,
-                            local_attachments,
-                            local_resolved_tool_call,
-                            local_fallback_note,
-                        ) = await _run_tool_with_retry(
-                            node=node,
-                            execution_input=execution_input,
-                            deps=deps,
-                        )
-                        after_loaded_chunk_ids = _collect_loaded_chunk_signatures(
-                            execution_input.states_by_skill
-                        )
-
-                    local_made_progress = deps.detect_tool_call_progress(
-                        tool_name=node.tool_name,
-                        before_loaded_chunk_ids=before_loaded_chunk_ids,
-                        after_loaded_chunk_ids=after_loaded_chunk_ids,
-                        tool_result=local_tool_result,
-                        next_attachments=local_attachments,
-                    )
-                    return (
-                        local_tool_result,
-                        local_attachments,
-                        local_resolved_tool_call,
-                        local_made_progress,
-                        local_fallback_note,
-                    )
-
-                existing_task = asyncio.create_task(_execute_once())
-                inflight_tool_calls[tool_call_signature] = existing_task
-
-        assert existing_task is not None
-        try:
-            tool_result, attachments, resolved_tool_call, made_progress, fallback_note = await existing_task
-        finally:
-            if task_owned_by_current_node:
-                async with inflight_lock:
-                    inflight_tool_calls.pop(tool_call_signature, None)
-
-        if task_owned_by_current_node:
-            result.executed_tool_calls[tool_call_signature] = {
-                "tool_result": deepcopy(tool_result),
-            }
-            return (
-                node,
-                tool_result,
-                attachments,
-                resolved_tool_call,
-                made_progress,
-                fallback_note,
-            )
-
-        reused_tool_result = deepcopy(tool_result)
-        reused_tool_result["reused"] = True
-        return node, reused_tool_result, [], resolved_tool_call, False, None
-
     while pending_by_index:
         elapsed = time.monotonic() - budget.started_monotonic
         if elapsed >= budget.max_time_seconds:
@@ -503,13 +590,29 @@ async def execute_tool_graph(
         parallel_outcomes: list[tuple[_TaskNode, dict[str, Any], list[Any], dict[str, Any], bool, str | None]] = []
         if parallel_ready_nodes:
             gathered = await asyncio.gather(
-                *[_execute_single_node(node) for node in parallel_ready_nodes]
+                *[_execute_single_node(
+                    node=node,
+                    execution_input=execution_input,
+                    deps=deps,
+                    result=result,
+                    inflight_tool_calls=inflight_tool_calls,
+                    inflight_lock=inflight_lock,
+                    semaphore=semaphore,
+                ) for node in parallel_ready_nodes]
             )
             parallel_outcomes.extend(gathered)
 
         serial_outcomes: list[tuple[_TaskNode, dict[str, Any], list[Any], dict[str, Any], bool, str | None]] = []
         for node in serial_ready_nodes:
-            serial_outcomes.append(await _execute_single_node(node))
+            serial_outcomes.append(await _execute_single_node(
+                node=node,
+                execution_input=execution_input,
+                deps=deps,
+                result=result,
+                inflight_tool_calls=inflight_tool_calls,
+                inflight_lock=inflight_lock,
+                semaphore=semaphore,
+            ))
 
         outcomes = sorted(
             [*parallel_outcomes, *serial_outcomes],
@@ -517,71 +620,17 @@ async def execute_tool_graph(
         )
 
         for node, tool_result, attachments, resolved_tool_call, made_progress, fallback_note in outcomes:
-            result.tool_calls_consumed += 1
-            if attachments:
-                for attachment in attachments:
-                    result.attachments.append(attachment)
-                    result.status_events.append(
-                        {
-                            "type": "attachment",
-                            "attachment": attachment.model_dump(
-                                mode="json",
-                            ),
-                        }
-                    )
-                    result.state_diff.attachment_count_added += 1
-
-            if tool_result.get("reused"):
-                result.state_diff.reused_tool_calls += 1
-
-            if made_progress or attachments:
-                result.round_made_progress = True
-
-            if fallback_note:
-                tool_result = dict(tool_result)
-                tool_result["fallback"] = fallback_note
-
-            result.status_events.append(
-                {
-                    "type": "tool-status",
-                    "phase": "finish",
-                    "tool_name": node.tool_name,
-                    **deps.build_tool_status_finish(
-                        request=execution_input.primary_request,
-                        state=execution_input.primary_state,
-                        tool_call=resolved_tool_call,
-                        tool_result=tool_result,
-                        attachments=attachments,
-                    ),
-                }
+            _collect_outcome(
+                node=node,
+                tool_result=tool_result,
+                attachments=attachments,
+                resolved_tool_call=resolved_tool_call,
+                made_progress=made_progress,
+                fallback_note=fallback_note,
+                execution_input=execution_input,
+                deps=deps,
+                result=result,
             )
-
-            result.tool_trace_messages.append(
-                {
-                    "role": "tool",
-                    "name": node.tool_name,
-                    "content": json.dumps(tool_result, ensure_ascii=False),
-                }
-            )
-
-            _append_tool_history(
-                agent_state=execution_input.agent_state,
-                record=SkillToolHistoryRecord(
-                    skill_id=node.skill_id,
-                    tool_name=node.base_tool_name,
-                    ok=bool(tool_result.get("ok")),
-                    reused=bool(tool_result.get("reused")),
-                    attachment_count=len(attachments),
-                    error=(
-                        str(tool_result.get("error"))
-                        if not tool_result.get("ok") and tool_result.get("error") is not None
-                        else None
-                    ),
-                    created_at=datetime.now(UTC),
-                ),
-            )
-            result.state_diff.tool_history_added += 1
-
             completed_indexes.add(node.index)
             pending_by_index.pop(node.index, None)
 

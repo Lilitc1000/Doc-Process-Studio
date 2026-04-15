@@ -22,7 +22,9 @@ from ...models.conversation.stream import ChatMessageInput, ChatStreamRequest
 from ...models.skill.interaction import SkillInteractionConfig, SkillInteractionStep
 from ...models.skill.runtime import SkillConversationState
 from ...services.agent.error_detail import build_exception_detail, summarize_exception
-from ...services.infra.dtutils import build_error_event_detail, parse_json_object, utcnow
+from ...services.infra.dtutils import utcnow
+from ...services.infra.error_utils import build_error_event_detail
+from ...services.infra.text_utils import parse_json_object
 from ...services.infra.tool_args import (
     build_normalized_tool_calls,
     extract_tool_name,
@@ -392,6 +394,156 @@ async def update_incident_report_session_title(
     return summary
 
 
+async def _save_generation_failure(
+    *,
+    detail: IncidentReportSessionDetail,
+    session_id: str,
+    trace_id: str,
+    recorder: AgentTraceRecorder,
+    fallback_used: bool,
+    polish_error: str | None,
+    failure_message: str,
+    done_reason: str,
+    exc: BaseException | None = None,
+) -> None:
+    failed_at = utcnow()
+    failed_summary = _build_summary_from_detail(
+        detail,
+        status="failed",
+        updated_at=failed_at,
+    )
+    failed_snapshot = IncidentReportSessionSnapshot(
+        form_answers=detail.snapshot.form_answers,
+        report_data=None,
+        generated_attachment=None,
+        generated_trace_id=trace_id,
+        generated_at=None,
+        is_locked=False,
+        fallback_used=fallback_used,
+        polish_error=(polish_error or failure_message),
+    )
+    await save_incident_session_summary(failed_summary)
+    await save_incident_session_snapshot(session_id, failed_snapshot)
+    await touch_incident_session_index(session_id, failed_at.timestamp())
+    error_detail = await build_error_event_detail(
+        message=failure_message,
+        exc=exc,
+        extra={
+            "ok": False,
+            "error": failure_message,
+            "fallback_used": fallback_used,
+        },
+    ) if exc is not None else {
+        "ok": False,
+        "error": failure_message,
+        "fallback_used": fallback_used,
+    }
+    recorder.add_event(
+        event_type="attachment_generated",
+        detail=error_detail,
+    )
+    recorder.set_final(done_reason=done_reason, error=failure_message)
+    await recorder.flush()
+
+
+async def _execute_skill_generation_rounds(
+    *,
+    model: str,
+    request: ChatStreamRequest,
+    state: SkillConversationState,
+    skill_tools: list[dict[str, Any]],
+    uploaded_files_context: str,
+    recorder: AgentTraceRecorder,
+    max_rounds: int,
+) -> tuple[list[Any], dict[str, Any]]:
+    tool_trace_messages: list[dict[str, Any]] = []
+    attachments: list[Any] = []
+    final_report_data: dict[str, Any] | None = None
+
+    for round_index in range(1, max_rounds + 1):
+        upstream_messages = build_upstream_messages_for_skills(
+            request=request,
+            active_skill_ids=[INCIDENT_REPORT_SKILL_ID],
+            explicit_skill_ids=[INCIDENT_REPORT_SKILL_ID],
+            uploaded_files_context=uploaded_files_context,
+            extra_messages=tool_trace_messages,
+        )
+        try:
+            assistant_content, round_tool_calls, done_reason = await _run_skill_chat_completion_round(
+                model=model,
+                messages=upstream_messages,
+                tools=skill_tools,
+            )
+        except httpx.HTTPError as exc:
+            raise RuntimeError(
+                f"incident-report skill 对话失败：{summarize_exception(exc)}"
+            ) from exc
+        native_tool_calls = build_normalized_tool_calls(round_tool_calls)
+        if assistant_content or native_tool_calls:
+            assistant_message: dict[str, Any] = {
+                "role": "assistant",
+                "content": assistant_content,
+            }
+            if native_tool_calls:
+                assistant_message["tool_calls"] = native_tool_calls
+            tool_trace_messages.append(assistant_message)
+
+        recorder.add_event(
+            event_type="skill_chat_round",
+            detail={
+                "round": round_index,
+                "tool_call_count": len(round_tool_calls),
+                "assistant_has_content": bool(assistant_content.strip()),
+                "done_reason": done_reason,
+            },
+        )
+        await _flush_trace_safely(recorder)
+        if not round_tool_calls:
+            if attachments:
+                break
+            raise RuntimeError(
+                "incident-report skill 未触发 generate_incident_report 工具调用。"
+            )
+
+        for tool_call in round_tool_calls:
+            tool_name = extract_tool_name(tool_call)
+            tool_result, next_attachments = execute_skill_tool_call(
+                request=request,
+                state=state,
+                tool_call=tool_call,
+            )
+            tool_trace_messages.append(
+                {
+                    "role": "tool",
+                    "name": tool_name or "unknown_tool",
+                    "content": json.dumps(tool_result, ensure_ascii=False),
+                }
+            )
+            if not tool_result.get("ok"):
+                raise RuntimeError(str(tool_result.get("error", "生成附件失败。")))
+
+            if tool_name == "generate_incident_report":
+                polished_report_data = _extract_report_data_from_tool_call(tool_call)
+                if polished_report_data is not None:
+                    final_report_data = polished_report_data
+            attachments.extend(next_attachments)
+
+        if attachments:
+            break
+
+    if not attachments:
+        raise RuntimeError("incident-report skill 对话结束后未生成任何附件。")
+
+    docx_attachment = next(
+        (item for item in attachments if _is_docx_attachment(item)),
+        None,
+    )
+    if docx_attachment is None:
+        raise RuntimeError("事故报告仅支持生成 DOCX 附件。")
+
+    return attachments, final_report_data
+
+
 async def generate_incident_report_session_attachment(
     *,
     session_id: str,
@@ -462,7 +614,6 @@ async def generate_incident_report_session_attachment(
 
     fallback_used = False
     polish_error: str | None = None
-    final_report_data = draft_report_data
 
     try:
         if not settings.ollama_base_url:
@@ -525,91 +676,26 @@ async def generate_incident_report_session_attachment(
             system_prompt=get_skill_interface(INCIDENT_REPORT_SKILL_ID).default_prompt,
         )
 
-        tool_trace_messages: list[dict[str, Any]] = []
-        attachments: list[Any] = []
-        max_rounds = max(1, settings.skill_tool_max_iterations)
         skill_tools = build_skill_tools(INCIDENT_REPORT_SKILL_ID)
-        for round_index in range(1, max_rounds + 1):
-            upstream_messages = build_upstream_messages_for_skills(
-                request=request,
-                active_skill_ids=[INCIDENT_REPORT_SKILL_ID],
-                explicit_skill_ids=[INCIDENT_REPORT_SKILL_ID],
-                uploaded_files_context=uploaded_files_context,
-                extra_messages=tool_trace_messages,
-            )
-            try:
-                assistant_content, round_tool_calls, done_reason = await _run_skill_chat_completion_round(
-                    model=model,
-                    messages=upstream_messages,
-                    tools=skill_tools,
-                )
-            except httpx.HTTPError as exc:
-                raise RuntimeError(
-                    f"incident-report skill 对话失败：{summarize_exception(exc)}"
-                ) from exc
-            native_tool_calls = build_normalized_tool_calls(round_tool_calls)
-            if assistant_content or native_tool_calls:
-                assistant_message: dict[str, Any] = {
-                    "role": "assistant",
-                    "content": assistant_content,
-                }
-                if native_tool_calls:
-                    assistant_message["tool_calls"] = native_tool_calls
-                tool_trace_messages.append(assistant_message)
+        max_rounds = max(1, settings.skill_tool_max_iterations)
+        attachments, final_report_data = await _execute_skill_generation_rounds(
+            model=model,
+            request=request,
+            state=state,
+            skill_tools=skill_tools,
+            uploaded_files_context=uploaded_files_context,
+            recorder=recorder,
+            max_rounds=max_rounds,
+        )
 
-            recorder.add_event(
-                event_type="skill_chat_round",
-                detail={
-                    "round": round_index,
-                    "tool_call_count": len(round_tool_calls),
-                    "assistant_has_content": bool(assistant_content.strip()),
-                    "done_reason": done_reason,
-                },
-            )
-            await _flush_trace_safely(recorder)
-            if not round_tool_calls:
-                if attachments:
-                    break
-                raise RuntimeError(
-                    "incident-report skill 未触发 generate_incident_report 工具调用。"
-                )
-
-            for tool_call in round_tool_calls:
-                tool_name = extract_tool_name(tool_call)
-                tool_result, next_attachments = execute_skill_tool_call(
-                    request=request,
-                    state=state,
-                    tool_call=tool_call,
-                )
-                tool_trace_messages.append(
-                    {
-                        "role": "tool",
-                        "name": tool_name or "unknown_tool",
-                        "content": json.dumps(tool_result, ensure_ascii=False),
-                    }
-                )
-                if not tool_result.get("ok"):
-                    raise RuntimeError(str(tool_result.get("error", "生成附件失败。")))
-
-                if tool_name == "generate_incident_report":
-                    polished_report_data = _extract_report_data_from_tool_call(tool_call)
-                    if polished_report_data is not None:
-                        final_report_data = polished_report_data
-                attachments.extend(next_attachments)
-
-            if attachments:
-                break
-
-        if not attachments:
-            raise RuntimeError("incident-report skill 对话结束后未生成任何附件。")
-
-        docx_attachment = next(
+        attachment = next(
             (item for item in attachments if _is_docx_attachment(item)),
             None,
         )
-        if docx_attachment is None:
+        if attachment is None:
             raise RuntimeError("事故报告仅支持生成 DOCX 附件。")
-        attachment = docx_attachment
+
+        final_report_data_resolved = final_report_data or draft_report_data
         generated_at = utcnow()
         next_summary = _build_summary_from_detail(
             detail,
@@ -618,7 +704,7 @@ async def generate_incident_report_session_attachment(
         )
         next_snapshot = IncidentReportSessionSnapshot(
             form_answers=detail.snapshot.form_answers,
-            report_data=final_report_data,
+            report_data=final_report_data_resolved,
             generated_attachment=attachment,
             generated_trace_id=trace_id,
             generated_at=generated_at,
@@ -646,72 +732,30 @@ async def generate_incident_report_session_attachment(
             trace_id=trace_id,
         )
     except asyncio.CancelledError:
-        failure_message = "生成任务已取消。"
-        failed_at = utcnow()
-        failed_summary = _build_summary_from_detail(
-            detail,
-            status="failed",
-            updated_at=failed_at,
-        )
-        failed_snapshot = IncidentReportSessionSnapshot(
-            form_answers=detail.snapshot.form_answers,
-            report_data=None,
-            generated_attachment=None,
-            generated_trace_id=trace_id,
-            generated_at=None,
-            is_locked=False,
+        await _save_generation_failure(
+            detail=detail,
+            session_id=session_id,
+            trace_id=trace_id,
+            recorder=recorder,
             fallback_used=fallback_used,
-            polish_error=failure_message,
+            polish_error=polish_error,
+            failure_message="生成任务已取消。",
+            done_reason="cancelled",
         )
-        await save_incident_session_summary(failed_summary)
-        await save_incident_session_snapshot(session_id, failed_snapshot)
-        await touch_incident_session_index(session_id, failed_at.timestamp())
-        recorder.add_event(
-            event_type="attachment_generated",
-            detail={
-                "ok": False,
-                "error": failure_message,
-                "fallback_used": fallback_used,
-            },
-        )
-        recorder.set_final(done_reason="cancelled", error=failure_message)
-        await recorder.flush()
         raise
     except Exception as exc:  # noqa: BLE001
         failure_message = summarize_exception(exc)
-        failed_at = utcnow()
-        failed_summary = _build_summary_from_detail(
-            detail,
-            status="failed",
-            updated_at=failed_at,
-        )
-        failed_snapshot = IncidentReportSessionSnapshot(
-            form_answers=detail.snapshot.form_answers,
-            report_data=None,
-            generated_attachment=None,
-            generated_trace_id=trace_id,
-            generated_at=None,
-            is_locked=False,
+        await _save_generation_failure(
+            detail=detail,
+            session_id=session_id,
+            trace_id=trace_id,
+            recorder=recorder,
             fallback_used=fallback_used,
-            polish_error=(polish_error or failure_message),
+            polish_error=polish_error,
+            failure_message=failure_message,
+            done_reason="error",
+            exc=exc,
         )
-        await save_incident_session_summary(failed_summary)
-        await save_incident_session_snapshot(session_id, failed_snapshot)
-        await touch_incident_session_index(session_id, failed_at.timestamp())
-        recorder.add_event(
-            event_type="attachment_generated",
-            detail=await build_error_event_detail(
-                message=failure_message,
-                exc=exc,
-                extra={
-                    "ok": False,
-                    "error": failure_message,
-                    "fallback_used": fallback_used,
-                },
-            ),
-        )
-        recorder.set_final(done_reason="error", error=failure_message)
-        await recorder.flush()
         raise
 
 
