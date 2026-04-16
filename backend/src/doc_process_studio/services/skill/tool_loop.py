@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -1150,7 +1151,6 @@ def _coerce_json_file_argument(
 
         normalized = _strip_wrapped_code_fence(normalized)
         parsed_value: Any = normalized
-        # 兼容模型把 JSON 对象当字符串、甚至双层字符串传回来的情况。
         for _ in range(2):
             if not isinstance(parsed_value, str):
                 break
@@ -1170,6 +1170,11 @@ def _coerce_json_file_argument(
             if isinstance(parsed_yaml, (dict, list)):
                 return parsed_yaml
 
+        if normalized.startswith(("[", "{")):
+            repaired = _try_repair_truncated_json(normalized)
+            if isinstance(repaired, (dict, list)):
+                return repaired
+
         normalized_value = _apply_json_file_text_normalizer(
             argument_name=argument_name,
             normalized_text=normalized,
@@ -1186,6 +1191,191 @@ def _coerce_json_file_argument(
     raise ValueError(
         f"参数 `{argument_name}` 需要是对象或数组，当前类型为 {type(argument_value).__name__}。"
     )
+
+
+_HEADING_PATTERN = re.compile(
+    r"^(?P<num>\d+(?:\.\d+)*\.?)\s+(?P<title>\S.*)$",
+)
+
+
+def _try_repair_truncated_json(text: str) -> dict | list | None:
+    """尝试修复模型输出被截断的 JSON 字符串。
+
+    模型在生成长 JSON 时可能超出 token 限制导致截断，
+    例如缺少闭合的 ] 或 }。本函数尝试补全缺失的括号。
+    """
+    stripped = text.strip()
+    if not stripped or not stripped[0] in ("[", "{"):
+        return None
+
+    try:
+        json.loads(stripped)
+        return None
+    except json.JSONDecodeError:
+        pass
+
+    open_stack: list[str] = []
+    in_string = False
+    escape_next = False
+
+    for ch in stripped:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "[":
+            open_stack.append("]")
+        elif ch == "{":
+            open_stack.append("}")
+        elif ch in ("]", "}"):
+            if open_stack and open_stack[-1] == ch:
+                open_stack.pop()
+
+    if in_string:
+        stripped += '"'
+
+    if stripped.endswith(","):
+        stripped = stripped[:-1]
+
+    if stripped.endswith(":"):
+        stripped = stripped[:-1]
+
+    open_stack2: list[str] = []
+    in_str2 = False
+    esc2 = False
+    for ch in stripped:
+        if esc2:
+            esc2 = False
+            continue
+        if ch == "\\" and in_str2:
+            esc2 = True
+            continue
+        if ch == '"':
+            in_str2 = not in_str2
+            continue
+        if in_str2:
+            continue
+        if ch == "[":
+            open_stack2.append("]")
+        elif ch == "{":
+            open_stack2.append("}")
+        elif ch in ("]", "}"):
+            if open_stack2 and open_stack2[-1] == ch:
+                open_stack2.pop()
+
+    closing = "".join(reversed(open_stack2))
+    repaired = stripped + closing
+
+    try:
+        result = json.loads(repaired)
+        if isinstance(result, (dict, list)):
+            return result
+    except (json.JSONDecodeError, Exception):
+        pass
+
+    return None
+
+
+def _restructure_doc_plan(value: dict | list) -> dict | list:
+    """修复模型输出的 doc_plan 结构。
+
+    常见问题：
+    1. 模型把子节标题大纲平铺在 content 字段中，而不是用 sections 嵌套。
+    2. 模型把同一章拆成两个条目：一个带标题+摘要（无 sections），
+       一个带内容+子节（无 title）。后者会被 render_custom_node 跳过。
+    本函数检测这些情况并自动修复。
+    """
+    chapters = value.get("chapters", value) if isinstance(value, dict) else value
+    if not isinstance(chapters, list):
+        return value
+
+    restructured = [_restructure_section(ch) for ch in chapters]
+    merged = _merge_titleless_chapters(restructured)
+    if isinstance(value, dict) and "chapters" in value:
+        value["chapters"] = merged
+        return value
+    return merged
+
+
+def _merge_titleless_chapters(chapters: list[dict]) -> list[dict]:
+    """将无标题的章节合并到前一个有标题的章节中。"""
+    if not chapters:
+        return chapters
+
+    result: list[dict] = []
+    for ch in chapters:
+        title = str(ch.get("title") or "").strip()
+        has_title = bool(title)
+
+        if has_title or not result:
+            result.append(ch)
+            continue
+
+        prev = result[-1]
+        prev_sections = prev.get("sections") or []
+
+        ch_sections = ch.get("sections") or []
+        ch_content = str(ch.get("content") or "").strip()
+
+        if ch_sections:
+            existing_sections = prev.get("sections") or []
+            prev["sections"] = [*existing_sections, *ch_sections]
+            if ch_content and not prev.get("content"):
+                prev["content"] = ch_content
+        elif ch_content:
+            existing_content = str(prev.get("content") or "").strip()
+            if existing_content:
+                prev["content"] = f"{existing_content}\n\n{ch_content}"
+            else:
+                prev["content"] = ch_content
+
+    return result
+
+
+def _restructure_section(section: dict) -> dict:
+    if not isinstance(section, dict):
+        return section
+
+    if isinstance(section.get("sections"), list):
+        section["sections"] = [_restructure_section(s) for s in section["sections"]]
+
+    content = section.get("content")
+    if not isinstance(content, str):
+        return section
+
+    lines = [line.strip() for line in content.split("\n") if line.strip()]
+    if not lines:
+        return section
+
+    heading_lines: list[tuple[str, str]] = []
+    non_heading_lines: list[str] = []
+    for line in lines:
+        m = _HEADING_PATTERN.match(line)
+        if m:
+            heading_lines.append((m.group("num"), m.group("title")))
+        else:
+            non_heading_lines.append(line)
+
+    if len(heading_lines) < 2:
+        return section
+
+    section["content"] = "\n".join(non_heading_lines) if non_heading_lines else ""
+    existing_sections = section.get("sections") or []
+    section["sections"] = [
+        *existing_sections,
+        *[
+            {"title": f"{num} {title}", "content": "", "sections": []}
+            for num, title in heading_lines
+        ],
+    ]
+    return section
 
 
 def _build_declared_tool_command(
@@ -1234,6 +1424,8 @@ def _build_declared_tool_command(
                 argument_value,
                 text_normalizer=binding.text_normalizer,
             )
+            if argument_name == "doc_plan" and isinstance(normalized_json_value, (dict, list)):
+                normalized_json_value = _restructure_doc_plan(normalized_json_value)
             json_file_path = temp_dir_path / f"{argument_name}.json"
             json_file_path.write_text(
                 json.dumps(normalized_json_value, ensure_ascii=False, indent=2),

@@ -908,21 +908,6 @@ def normalize_doc_plan(path: Path) -> list[dict]:
     else:
         data = load_json(path)
 
-    if isinstance(data, str):
-        normalized = data.strip()
-        reparsed = None
-        if normalized:
-            try:
-                reparsed = json.loads(normalized)
-            except json.JSONDecodeError:
-                if yaml is not None:
-                    try:
-                        reparsed = yaml.safe_load(normalized)
-                    except Exception:
-                        reparsed = None
-        if isinstance(reparsed, (dict, list)):
-            data = reparsed
-
     if isinstance(data, list):
         chapters = data
     elif isinstance(data, dict):

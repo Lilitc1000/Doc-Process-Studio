@@ -50,7 +50,7 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
                     "tool_calls": [
                         {
                             "function": {
-                                "name": "generate_architecture_doc",
+                                "name": "generate_document",
                                 "arguments": {
                                     "system_name": "交通系统",
                                     "document_title": "系统设计文档",
@@ -89,12 +89,12 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
 
     def fake_build_skill_tools(skill_id: str):
         assert skill_id == "project-architecture-docx"
-        return [{"type": "function", "function": {"name": "generate_architecture_doc"}}]
+        return [{"type": "function", "function": {"name": "generate_document"}}]
 
     def fake_execute_skill_tool_call(*, request, state, tool_call):
         assert request.skill_id == "project-architecture-docx"
         assert state.skill_id == "project-architecture-docx"
-        assert tool_call["function"]["name"] == "generate_architecture_doc"
+        assert tool_call["function"]["name"] == "generate_document"
         return (
             {
                 "ok": True,

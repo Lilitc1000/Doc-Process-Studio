@@ -6,7 +6,7 @@ from doc_process_studio.models.conversation.stream import ChatMessageInput, Chat
 from doc_process_studio.models.skill.catalog import SkillToolConfig
 from doc_process_studio.models.skill.runtime import SkillConversationState
 from doc_process_studio.services.skill import tool_loop as tool_loop_module
-from doc_process_studio.services.skill.tool_loop import _coerce_json_file_argument
+from doc_process_studio.services.skill.tool_loop import _coerce_json_file_argument, _restructure_doc_plan, _try_repair_truncated_json
 
 
 def test_coerce_json_file_argument_accepts_object_and_list() -> None:
@@ -271,3 +271,247 @@ def test_search_skill_context_limit_overflow_is_clamped(monkeypatch) -> None:
     assert tool_result["ok"] is True
     assert tool_result["limit"] == 16
     assert captured["limit"] == 16
+
+
+def test_restructure_doc_plan_splits_flat_heading_outlines() -> None:
+    flat = {
+        "chapters": [
+            {
+                "title": "1. 文档概述",
+                "content": "1.1 文档目的\n1.2 文档范围\n1.3 术语定义",
+            },
+            {
+                "title": "2. 需求分析",
+                "content": "2.1 业务需求\n2.2 功能需求",
+            },
+        ]
+    }
+    result = _restructure_doc_plan(flat)
+    ch1 = result["chapters"][0]
+    assert ch1["content"] == ""
+    assert len(ch1["sections"]) == 3
+    assert ch1["sections"][0]["title"] == "1.1 文档目的"
+    assert ch1["sections"][1]["title"] == "1.2 文档范围"
+    assert ch1["sections"][2]["title"] == "1.3 术语定义"
+
+    ch2 = result["chapters"][1]
+    assert len(ch2["sections"]) == 2
+
+
+def test_restructure_doc_plan_preserves_real_content() -> None:
+    good = {
+        "chapters": [
+            {
+                "title": "1. 概述",
+                "content": "本文档描述系统架构设计方案，覆盖核心模块与部署策略。",
+                "sections": [
+                    {"title": "1.1 背景", "content": "系统用于支撑业务场景。"},
+                ],
+            }
+        ]
+    }
+    result = _restructure_doc_plan(good)
+    ch = result["chapters"][0]
+    assert ch["content"] == "本文档描述系统架构设计方案，覆盖核心模块与部署策略。"
+    assert len(ch["sections"]) == 1
+    assert ch["sections"][0]["title"] == "1.1 背景"
+
+
+def test_restructure_doc_plan_content_list_not_restructured() -> None:
+    data = {
+        "chapters": [
+            {
+                "title": "1. 概述",
+                "content": ["段落一", "段落二"],
+            }
+        ]
+    }
+    result = _restructure_doc_plan(data)
+    ch = result["chapters"][0]
+    assert ch["content"] == ["段落一", "段落二"]
+
+
+def test_restructure_doc_plan_content_headings_with_existing_sections() -> None:
+    data = {
+        "chapters": [
+            {
+                "title": "1. 设计",
+                "content": "1.1 原则\n1.2 方案",
+                "sections": [
+                    {"title": "1.0 总则", "content": "遵循标准。"},
+                ],
+            }
+        ]
+    }
+    result = _restructure_doc_plan(data)
+    ch = result["chapters"][0]
+    assert ch["content"] == ""
+    assert len(ch["sections"]) == 3
+    assert ch["sections"][0]["title"] == "1.0 总则"
+    assert ch["sections"][1]["title"] == "1.1 原则"
+    assert ch["sections"][2]["title"] == "1.2 方案"
+
+
+def test_restructure_doc_plan_recursive_sections() -> None:
+    data = {
+        "chapters": [
+            {
+                "title": "1. 概述",
+                "content": "正文",
+                "sections": [
+                    {
+                        "title": "1.1 背景",
+                        "content": "1.1.1 历史\n1.1.2 现状",
+                    },
+                ],
+            }
+        ]
+    }
+    result = _restructure_doc_plan(data)
+    sub = result["chapters"][0]["sections"][0]
+    assert sub["content"] == ""
+    assert len(sub["sections"]) == 2
+    assert sub["sections"][0]["title"] == "1.1.1 历史"
+
+
+def test_restructure_doc_plan_mixed_content_and_headings() -> None:
+    mixed = {
+        "chapters": [
+            {
+                "title": "1. 总体设计",
+                "content": "系统采用微服务架构。\n1.1 架构原则\n1.2 技术选型",
+            }
+        ]
+    }
+    result = _restructure_doc_plan(mixed)
+    ch = result["chapters"][0]
+    assert ch["content"] == "系统采用微服务架构。"
+    assert len(ch["sections"]) == 2
+    assert ch["sections"][0]["title"] == "1.1 架构原则"
+
+
+def test_restructure_doc_plan_single_heading_not_restructured() -> None:
+    single = {
+        "chapters": [
+            {
+                "title": "1. 概述",
+                "content": "1.1 背景",
+            }
+        ]
+    }
+    result = _restructure_doc_plan(single)
+    ch = result["chapters"][0]
+    assert ch["content"] == "1.1 背景"
+    assert "sections" not in ch or not ch.get("sections")
+
+
+def test_restructure_doc_plan_array_form() -> None:
+    flat_array = [
+        {
+            "title": "1. 概述",
+            "content": "1.1 目的\n1.2 范围",
+        }
+    ]
+    result = _restructure_doc_plan(flat_array)
+    assert isinstance(result, list)
+    assert len(result[0]["sections"]) == 2
+
+
+def test_restructure_doc_plan_merges_titleless_chapters() -> None:
+    split = {
+        "chapters": [
+            {"title": "1. 概述", "content": "本文档定义系统架构。"},
+            {"title": "2. 整体架构", "content": "平台基于三级协同架构。"},
+            {
+                "content": "平台采用五层分层架构设计。",
+                "sections": [
+                    {"title": "2.1 设备接入层", "content": "支持多协议统一接入。"},
+                    {"title": "2.2 通信传输层", "content": "保障双向稳定通信。"},
+                ],
+            },
+            {"title": "3. 核心模块", "content": "平台核心模块包括设备管理。"},
+            {
+                "content": "详细模块描述。",
+                "sections": [
+                    {"title": "3.1 设备管理", "content": "全生命周期管理。"},
+                ],
+            },
+        ]
+    }
+    result = _restructure_doc_plan(split)
+    chapters = result["chapters"]
+    assert len(chapters) == 3
+
+    assert chapters[0]["title"] == "1. 概述"
+    assert "sections" not in chapters[0] or not chapters[0].get("sections")
+
+    assert chapters[1]["title"] == "2. 整体架构"
+    assert len(chapters[1]["sections"]) == 2
+    assert chapters[1]["sections"][0]["title"] == "2.1 设备接入层"
+
+    assert chapters[2]["title"] == "3. 核心模块"
+    assert len(chapters[2]["sections"]) == 1
+    assert chapters[2]["sections"][0]["title"] == "3.1 设备管理"
+
+
+def test_restructure_doc_plan_merges_titleless_chapter_content_only() -> None:
+    data = {
+        "chapters": [
+            {"title": "1. 概述", "content": "简短摘要。"},
+            {"content": "这是概述的详细正文内容，应该被合并到前一个章节。"},
+        ]
+    }
+    result = _restructure_doc_plan(data)
+    chapters = result["chapters"]
+    assert len(chapters) == 1
+    assert chapters[0]["title"] == "1. 概述"
+    assert "简短摘要" in chapters[0]["content"]
+    assert "详细正文内容" in chapters[0]["content"]
+
+
+def test_restructure_doc_plan_titleless_first_chapter_kept() -> None:
+    data = {
+        "chapters": [
+            {"content": "无标题的首章内容。", "sections": [{"title": "1.1 子节", "content": "子节内容。"}]},
+            {"title": "2. 架构", "content": "架构内容。"},
+        ]
+    }
+    result = _restructure_doc_plan(data)
+    chapters = result["chapters"]
+    assert len(chapters) == 2
+    assert chapters[0].get("title", "") == ""
+    assert len(chapters[0]["sections"]) == 1
+
+
+def test_try_repair_truncated_json_array() -> None:
+    truncated = '[{"title": "1. 概述", "content": "正文一"}, {"title": "2. 架构", "content": "正文二'
+    result = _try_repair_truncated_json(truncated)
+    assert isinstance(result, list)
+    assert len(result) == 2
+    assert result[0]["title"] == "1. 概述"
+    assert result[1]["title"] == "2. 架构"
+
+
+def test_try_repair_truncated_json_object() -> None:
+    truncated = '{"chapters": [{"title": "1. 概述", "content": "正文"}, {"title": "2. 架构", "content": "架构内容'
+    result = _try_repair_truncated_json(truncated)
+    assert isinstance(result, dict)
+    assert len(result["chapters"]) == 2
+
+
+def test_try_repair_truncated_json_returns_none_for_valid_json() -> None:
+    valid = '[{"title": "1. 概述", "content": "正文"}]'
+    result = _try_repair_truncated_json(valid)
+    assert result is None
+
+
+def test_try_repair_truncated_json_returns_none_for_non_json() -> None:
+    result = _try_repair_truncated_json("这是普通文本，不是JSON")
+    assert result is None
+
+
+def test_coerce_json_file_argument_repairs_truncated_json_string() -> None:
+    truncated = '[{"title": "1. 概述", "content": "正文一"}, {"title": "2. 架构", "content": "正文二'
+    result = _coerce_json_file_argument("doc_plan", truncated)
+    assert isinstance(result, list)
+    assert len(result) == 2

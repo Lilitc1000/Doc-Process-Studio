@@ -40,66 +40,20 @@ description: Generate a project-specific system architecture and design DOCX by 
 
 ## 生成命令
 
-常用命令：
+由後端自動組裝命令行，模型只需調用 `generate_document` 工具並傳入參數即可。腳本支持的關鍵參數：
 
-```bash
-python3 scripts/generate_architecture_doc.py \
-  --project-root . \
-  --document-title "系統架構與設計文檔" \
-  --output "./系統架構與設計文檔-V1.0.docx"
-```
-
-如果使用者提供系統名稱或版本號，顯式帶入：
-
-```bash
-python3 scripts/generate_architecture_doc.py \
-  --project-root . \
-  --system-name "XXX 系統" \
-  --document-title "詳細設計說明書" \
-  --version "2.3" \
-  --output "./XXX系統架構與設計文檔-V2.3.docx"
-```
-
-如果需要從 skill 目錄外直接執行，使用：
-
-```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/project-architecture-docx/scripts/generate_architecture_doc.py" \
-  --project-root . \
-  --document-title "系統架構與設計文檔" \
-  --output "./系統架構與設計文檔-V1.0.docx"
-```
-
-如果需要顯式控制刷新行為，可用：
-
-```bash
-python3 scripts/generate_architecture_doc.py \
-  --project-root . \
-  --refresh-with-word \
-  --output "./系統架構與設計文檔-V1.0.docx"
-```
-
-或：
-
-```bash
-python3 scripts/generate_architecture_doc.py \
-  --project-root . \
-  --no-refresh-with-word \
-  --output "./系統架構與設計文檔-V1.0.docx"
-```
+- `--project-root`：專案根目錄（後端自動注入）
+- `--system-name`：系統名稱
+- `--document-title`：文檔標題
+- `--version`：版本號，默認 1.0
+- `--doc-plan`：文檔章節結構（後端自動將 doc_plan 參數序列化為 JSON 文件並注入）
+- `--output`：輸出路徑（後端自動注入）
+- `--no-refresh-with-word`：禁用 Word 域刷新（後端自動注入）
 
 注意：
 
-- 正常正式生成時，不要主動加 `--no-refresh-with-word`，除非只是做版式或正文測試。
 - 腳本執行完成後會輸出「刷新後端」與「自動刷新」狀態，用來判斷這次是否真的調用了 Word/本機文檔引擎刷新。
-
-如果使用者已提供章節規劃，可先整理成 JSON 或 YAML，再帶入：
-
-```bash
-python3 scripts/generate_architecture_doc.py \
-  --project-root . \
-  --doc-plan ./doc-plan.yaml \
-  --output "./系統架構與設計文檔-V1.0.docx"
-```
+- `--doc-plan` 的內容由你在模型層整理為 `doc_plan` 參數（JSON 對象），後端會自動處理序列化與文件傳遞，不需要手動指定文件路徑。
 
 ## 輸出約定
 

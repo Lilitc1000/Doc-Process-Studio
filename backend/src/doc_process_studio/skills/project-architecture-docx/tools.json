@@ -27,16 +27,64 @@
           "doc_plan": {
             "anyOf": [
               {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "chapters": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "description": "章节标题"
+                        },
+                        "content": {
+                          "description": "该章节的正文内容，必须是完整的段落文字而非子节标题大纲。",
+                          "anyOf": [
+                            { "type": "string" },
+                            { "type": "array", "items": { "type": "string" } }
+                          ]
+                        },
+                        "sections": {
+                          "type": "array",
+                          "description": "子章节数组，递归结构。子节标题必须放在 sections 中，不能平铺在 content 里。",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "title": { "type": "string", "description": "子章节标题" },
+                              "content": {
+                                "description": "子章节正文内容",
+                                "anyOf": [
+                                  { "type": "string" },
+                                  { "type": "array", "items": { "type": "string" } }
+                                ]
+                              },
+                              "sections": {
+                                "type": "array",
+                                "description": "更深层的子章节",
+                                "items": { "type": "object" }
+                              }
+                            },
+                            "required": ["title", "content"]
+                          }
+                        }
+                      },
+                      "required": ["title", "content"]
+                    }
+                  }
+                },
+                "required": ["chapters"]
               },
               {
-                "type": "array"
+                "type": "array",
+                "description": "章节列表（无需 chapters 包裹）"
               },
               {
-                "type": "string"
+                "type": "string",
+                "description": "Markdown 或 JSON 文本格式的文档结构"
               }
             ],
-            "description": "完整文档结构。优先传对象或数组；若暂时只能生成字符串，也可传 JSON / YAML / Markdown 结构稿或正文草稿。"
+            "description": "完整文档结构，每个章节必须包含 title 和 content（正文段落），子章节放在 sections 数组中。示例：{\"chapters\":[{\"title\":\"1. 概述\",\"content\":\"本文档描述系统架构...\",\"sections\":[{\"title\":\"1.1 背景\",\"content\":\"系统用于...\"}]}]}。不要只传标题大纲，content 必须是该章节的完整正文内容。"
           }
         },
         "required": [
