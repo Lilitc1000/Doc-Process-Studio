@@ -1,51 +1,22 @@
-import { ref } from 'vue';
+import { useChatStore } from '../stores/chat';
 import { streamChatReply } from '../api/chat';
-import type {
-  ActiveGenerationState,
-  ChatAttachment,
-  ChatMessageNode,
-  ChatRequestSnapshot,
-  ChatToolStatus,
-} from '../types/chat';
+import type { ChatRequestSnapshot } from '../types/chat';
 
 interface UseChatStreamingOptions {
-  createAssistantVariant: (userMessageId: string) => ChatMessageNode;
-  appendMessageContent: (messageId: string, chunk: string) => void;
-  appendMessageAttachment: (
-    messageId: string,
-    attachment: ChatAttachment,
-  ) => void;
-  appendMessageToolStatus: (
-    messageId: string,
-    toolStatus: ChatToolStatus,
-  ) => void;
-  updateMessageTraceId: (messageId: string, traceId: string) => void;
-  updateMessageContent: (messageId: string, content: string) => void;
-  findMessageById: (messageId: string) => ChatMessageNode | null;
   scrollToBottom: () => void;
   persistCurrentSession: () => Promise<unknown>;
 }
 
 export const useChatStreaming = (options: UseChatStreamingOptions) => {
-  const isLoading = ref(false);
-  const activeGeneration = ref<ActiveGenerationState | null>(null);
-
-  const isMessageThinking = (message: ChatMessageNode) => {
-    return (
-      isLoading.value &&
-      message.role === 'assistant' &&
-      message.id === activeGeneration.value?.assistant_id &&
-      !message.content.trim()
-    );
-  };
+  const chatStore = useChatStore();
 
   const markGenerationStopped = () => {
-    if (!activeGeneration.value?.assistant_id) {
+    if (!chatStore.activeGeneration?.assistant_id) {
       return;
     }
 
-    const activeMessage = options.findMessageById(
-      activeGeneration.value.assistant_id,
+    const activeMessage = chatStore.findMessageById(
+      chatStore.activeGeneration.assistant_id,
     );
     if (!activeMessage) {
       return;
@@ -62,19 +33,19 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
   };
 
   const onStopGeneration = () => {
-    const currentGeneration = activeGeneration.value;
+    const currentGeneration = chatStore.activeGeneration;
     if (!currentGeneration?.controller) {
       return;
     }
     currentGeneration.controller.abort();
     markGenerationStopped();
-    activeGeneration.value = null;
-    isLoading.value = false;
+    chatStore.activeGeneration = null;
+    chatStore.isLoading = false;
     void options.persistCurrentSession();
   };
 
   const finalizeAssistantFallback = (assistantId: string) => {
-    const streamedAssistantMessage = options.findMessageById(assistantId);
+    const streamedAssistantMessage = chatStore.findMessageById(assistantId);
     if (!streamedAssistantMessage) {
       return;
     }
@@ -84,11 +55,11 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
     }
 
     if (streamedAssistantMessage.files?.length) {
-      options.updateMessageContent(assistantId, '已生成文件，请下载查看。');
+      chatStore.updateMessageContent(assistantId, '已生成文件，请下载查看。');
       return;
     }
 
-    options.updateMessageContent(
+    chatStore.updateMessageContent(
       assistantId,
       '模型已完成响应，但没有返回可显示的文本内容。',
     );
@@ -97,12 +68,15 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
   const executeAssistantGeneration = async (
     requestSnapshot: ChatRequestSnapshot,
   ) => {
-    const assistantNode = options.createAssistantVariant(
-      requestSnapshot.user_message_id,
-    );
+    const assistantNode = chatStore.createMessageNode({
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      parent_id: requestSnapshot.user_message_id,
+    });
     const abortController = new AbortController();
-    isLoading.value = true;
-    activeGeneration.value = {
+    chatStore.isLoading = true;
+    chatStore.activeGeneration = {
       assistant_id: assistantNode.id,
       user_message_id: requestSnapshot.user_message_id,
       controller: abortController,
@@ -123,7 +97,7 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
             typeof ollamaMessage?.content === 'string' &&
             ollamaMessage.content
           ) {
-            options.appendMessageContent(
+            chatStore.appendMessageContent(
               assistantNode.id,
               ollamaMessage.content,
             );
@@ -131,7 +105,7 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
           }
 
           if (payload.type === 'attachment' && payload.attachment) {
-            options.appendMessageAttachment(
+            chatStore.appendMessageAttachment(
               assistantNode.id,
               payload.attachment,
             );
@@ -139,7 +113,7 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
           }
 
           if (payload.type === 'uploaded-attachment' && payload.attachment) {
-            options.appendMessageAttachment(
+            chatStore.appendMessageAttachment(
               requestSnapshot.user_message_id,
               payload.attachment,
             );
@@ -151,7 +125,7 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
             typeof payload.trace_id === 'string' &&
             payload.trace_id.trim().length > 0
           ) {
-            options.updateMessageTraceId(
+            chatStore.updateMessageTraceId(
               assistantNode.id,
               payload.trace_id.trim(),
             );
@@ -161,7 +135,7 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
             payload.type === 'tool-status' &&
             typeof payload.message === 'string'
           ) {
-            options.appendMessageToolStatus(assistantNode.id, {
+            chatStore.appendMessageToolStatus(assistantNode.id, {
               id: `${assistantNode.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               tool_name: payload.tool_name,
               label: payload.label,
@@ -181,22 +155,19 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
 
       const errorMessage =
         error instanceof Error ? error.message : '聊天请求失败，请稍后重试。';
-      options.updateMessageContent(
+      chatStore.updateMessageContent(
         assistantNode.id,
         `请求失败：${errorMessage}`,
       );
     } finally {
-      activeGeneration.value = null;
-      isLoading.value = false;
+      chatStore.activeGeneration = null;
+      chatStore.isLoading = false;
       await options.persistCurrentSession();
     }
   };
 
   return {
-    activeGeneration,
     executeAssistantGeneration,
-    isLoading,
-    isMessageThinking,
     onStopGeneration,
   };
 };

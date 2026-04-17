@@ -1,13 +1,13 @@
 <template>
   <div class="chat-layout">
     <ChatSidebar
-      :models="availableModels"
-      :selected-model="selectedModel"
-      :selected-reranker-model="selectedRerankerModel"
+      :models="appStore.availableModels"
+      :selected-model="appStore.selectedModel"
+      :selected-reranker-model="appStore.selectedRerankerModel"
       :sessions="sidebarSessions"
       :active-session-id="sidebarActiveSessionId"
       :workspaces="workspaceTabs"
-      :active-workspace-id="activeWorkspaceId"
+      :active-workspace-id="appStore.activeWorkspaceId"
       :is-locked="isSidebarLocked"
       @select-workspace="onSelectWorkspace"
       @select-model="onSelectModel"
@@ -18,62 +18,76 @@
     />
     <div class="chat-main">
       <Transition name="workspace-switch" mode="out-in">
-        <div :key="activeWorkspaceId" class="workspace-panel">
-          <template v-if="activeWorkspaceId === 'chat'">
+        <div :key="appStore.activeWorkspaceId" class="workspace-panel">
+          <template v-if="appStore.activeWorkspaceId === 'chat'">
             <Transition name="session-switch" mode="out-in">
               <div
-                :key="sessionViewKey"
+                :key="chatStore.sessionViewKey"
                 ref="messageContainerRef"
                 class="chat-messages"
               >
                 <ChatMessage
-                  v-for="message in displayedMessages"
+                  v-for="message in chatStore.displayedMessages"
                   :key="message.id"
                   :message="message"
-                  :is-thinking="isMessageThinking(message)"
-                  :is-streaming="isMessageStreaming(message)"
-                  :version-index="getMessageVersionIndex(message.id)"
-                  :version-count="getMessageVersionCount(message.id)"
+                  :is-thinking="chatStore.isMessageThinking(message)"
+                  :is-streaming="chatStore.isMessageStreaming(message)"
+                  :version-index="chatStore.getMessageVersionIndex(message.id)"
+                  :version-count="chatStore.getMessageVersionCount(message.id)"
                   :show-version-switcher="
-                    getMessageVersionCount(message.id) > 1
+                    chatStore.getMessageVersionCount(message.id) > 1
                   "
-                  :can-go-prev="canSwitchMessageVersion(message.id, -1)"
-                  :can-go-next="canSwitchMessageVersion(message.id, 1)"
-                  :can-edit="message.role === 'user' && !isLoading"
-                  :can-regenerate="message.role === 'assistant' && !isLoading"
+                  :can-go-prev="
+                    chatStore.canSwitchMessageVersion(message.id, -1)
+                  "
+                  :can-go-next="
+                    chatStore.canSwitchMessageVersion(message.id, 1)
+                  "
+                  :can-edit="message.role === 'user' && !chatStore.isLoading"
+                  :can-regenerate="
+                    message.role === 'assistant' && !chatStore.isLoading
+                  "
                   :can-copy="message.content.trim().length > 0"
                   :can-download="
                     message.role === 'assistant' &&
                     message.content.trim().length > 0
                   "
-                  :is-version-locked="message.role !== 'system' && isLoading"
-                  :is-editing="editingMessageId === message.id"
-                  :editing-text="editingDraftText"
+                  :is-version-locked="
+                    message.role !== 'system' && chatStore.isLoading
+                  "
+                  :is-editing="chatStore.editingMessageId === message.id"
+                  :editing-text="chatStore.editingDraftText"
                   :editing-files="
-                    editingMessageId === message.id ? editingDraftFiles : []
+                    chatStore.editingMessageId === message.id
+                      ? chatStore.editingDraftFiles
+                      : []
                   "
                   :editing-skill-ids="
-                    editingMessageId === message.id ? editingDraftSkillIds : []
+                    chatStore.editingMessageId === message.id
+                      ? chatStore.editingDraftSkillIds
+                      : []
                   "
-                  :available-skills="processingModes"
-                  :can-confirm-edit="canConfirmEdit"
+                  :available-skills="appStore.processingModes"
+                  :can-confirm-edit="chatStore.canConfirmEdit"
                   :show-toolbar-by-default="
-                    message.id === lastAssistantMessageId
+                    message.id === chatStore.lastAssistantMessageId
                   "
-                  :cache-scope-id="activeSessionId ?? conversationId"
+                  :cache-scope-id="
+                    chatStore.activeSessionId ?? chatStore.conversationId
+                  "
                   :can-open-trace="
                     message.role === 'assistant' &&
                     typeof message.trace_id === 'string' &&
                     message.trace_id.trim().length > 0 &&
-                    !isMessageStreaming(message)
+                    !chatStore.isMessageStreaming(message)
                   "
                   :live-tool-status="
-                    message.id === activeGeneration?.assistant_id
-                      ? latestLiveToolStatus
+                    message.id === chatStore.activeGeneration?.assistant_id
+                      ? chatStore.latestLiveToolStatus
                       : null
                   "
-                  @prev-version="switchMessageVersion(message.id, -1)"
-                  @next-version="switchMessageVersion(message.id, 1)"
+                  @prev-version="chatStore.switchMessageVersion(message.id, -1)"
+                  @next-version="chatStore.switchMessageVersion(message.id, 1)"
                   @start-edit="startEditingMessage(message.id)"
                   @update-edit-text="updateEditingText"
                   @update-edit-skill-ids="updateEditingSkillIds"
@@ -112,11 +126,11 @@
               </div>
             </Transition>
             <ChatInput
-              v-model:text="inputText"
-              :files="selectedFiles"
-              :available-skills="processingModes"
-              :selected-skill-ids="selectedSkillIds"
-              :is-loading="isLoading"
+              v-model:text="chatStore.inputText"
+              :files="chatStore.selectedFiles"
+              :available-skills="appStore.processingModes"
+              :selected-skill-ids="chatStore.selectedSkillIds"
+              :is-loading="chatStore.isLoading"
               @update:selected-skill-ids="updateSelectedSkillIds"
               @upload-files="onFilesSelect"
               @send="onSendMessage"
@@ -128,12 +142,14 @@
 
           <template v-else>
             <IncidentReportWorkspace
-              :schema="incidentSchema"
-              :session="activeIncidentSession"
-              :is-generating="isIncidentGenerating"
-              :generation-state="generationState"
-              :generation-trace-id="incidentGenerationTraceId"
-              :generation-progress-lines="incidentGenerationProgress"
+              :schema="incidentStore.incidentSchema"
+              :session="incidentStore.activeIncidentSession"
+              :is-generating="incidentStore.isIncidentGenerating"
+              :generation-state="incidentStore.generationState"
+              :generation-trace-id="incidentStore.incidentGenerationTraceId"
+              :generation-progress-lines="
+                incidentStore.incidentGenerationProgress
+              "
               @start="onStartIncident"
               @update-answers="onIncidentAnswersUpdate"
               @generate="onIncidentGenerate"
@@ -161,56 +177,32 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
-import { downloadAttachment } from '../api/attachments';
+import { useAppStore } from '../stores/app';
+import { useChatStore } from '../stores/chat';
+import { useIncidentStore } from '../stores/incident';
 import { useCatalogLoader } from '../composables/useCatalogLoader';
 import { useChatSessions } from '../composables/useChatSessions';
 import { useChatStreaming } from '../composables/useChatStreaming';
 import { useCopyToast } from '../composables/useCopyToast';
 import { useIncidentReportSessions } from '../composables/useIncidentReportSessions';
 import { useMessageActions } from '../composables/useMessageActions';
-import { useMessageTree } from '../composables/useMessageTree';
 import { useTraceModal } from '../composables/useTraceModal';
-import type {
-  ChatEditAttachment,
-  ChatMessageNode,
-  ChatToolStatus,
-} from '../types/chat';
 import type { IncidentFormAnswer } from '../types/incident-report';
-import type { SkillOption } from '../types/skill';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatSidebar from './ChatSidebar.vue';
 import IncidentReportWorkspace from './IncidentReportWorkspace.vue';
 import TraceReplayModal from './TraceReplayModal.vue';
 
-const defaultModels = [
-  'gpt-4o-mini',
-  'gpt-4o',
-  'claude-3.5-sonnet',
-  'deepseek-v3',
-];
+const appStore = useAppStore();
+const chatStore = useChatStore();
+const incidentStore = useIncidentStore();
 
 const workspaceTabs = [
   { id: 'chat', label: '对话' },
   { id: 'incident-report', label: '事故报告' },
 ];
 
-const activeWorkspaceId = ref<'chat' | 'incident-report'>('chat');
-const inputText = ref('');
-const selectedFiles = ref<File[]>([]);
-const selectedSkillIds = ref<string[]>([]);
-const processingModes = ref<SkillOption[]>([]);
-const selectedModel = ref(defaultModels[0]);
-const selectedRerankerModel = ref(defaultModels[0]);
-const availableModels = ref(defaultModels);
-const messageNodes = ref<Record<string, ChatMessageNode>>({});
-const rootChildIds = ref<string[]>([]);
-const selectedRootChildId = ref<string | null>(null);
-const selectedChildIdByParent = ref<Record<string, string>>({});
-const editingMessageId = ref<string | null>(null);
-const editingDraftText = ref('');
-const editingDraftFiles = ref<ChatEditAttachment[]>([]);
-const editingDraftSkillIds = ref<string[]>([]);
 const { copyToastMessage, copyToastTitle, isCopyToastVisible, showCopyToast } =
   useCopyToast();
 
@@ -230,47 +222,6 @@ const {
   showCopyToast,
 });
 
-const resetEditingState = () => {
-  editingMessageId.value = null;
-  editingDraftText.value = '';
-  editingDraftFiles.value = [];
-  editingDraftSkillIds.value = [];
-};
-
-const {
-  canSwitchMessageVersion,
-  currentLeafMessageId,
-  displayedMessages,
-  findMessageById,
-  appendMessageAttachment,
-  appendMessageContent,
-  appendMessageToolStatus,
-  buildRequestSnapshotForUserMessage: buildRequestSnapshotBase,
-  createMessageNode,
-  getMessageVersionCount,
-  getMessageVersionIndex,
-  prewarmVisibleConversationCache,
-  switchMessageVersion,
-  updateMessageContent,
-  updateMessageTraceId,
-  lastAssistantMessageId,
-} = useMessageTree({
-  messageNodes,
-  rootChildIds,
-  selectedRootChildId,
-  selectedChildIdByParent,
-  isLoading: () => isLoading.value,
-});
-
-const buildRequestSnapshotForUserMessage = (userMessageId: string) => {
-  return buildRequestSnapshotBase(
-    userMessageId,
-    conversationId.value,
-    selectedModel.value,
-    selectedRerankerModel.value,
-  );
-};
-
 const scrollToBottom = () => {
   nextTick(() => {
     if (messageContainerRef.value) {
@@ -280,68 +231,20 @@ const scrollToBottom = () => {
   });
 };
 
-const createAssistantVariant = (userMessageId: string) => {
-  return createMessageNode({
-    role: 'assistant',
-    content: '',
-    timestamp: new Date(),
-    parent_id: userMessageId,
-  });
-};
-
 const {
-  activeGeneration,
-  executeAssistantGeneration,
-  isLoading,
-  isMessageThinking,
-  onStopGeneration,
-} = useChatStreaming({
-  createAssistantVariant,
-  appendMessageContent,
-  appendMessageAttachment,
-  appendMessageToolStatus,
-  updateMessageTraceId,
-  updateMessageContent,
-  findMessageById,
-  scrollToBottom,
-  persistCurrentSession: async () => {
-    await persistCurrentSession();
-  },
-});
-
-const {
-  activeSessionId,
-  conversationId,
   deleteChatSession,
   loadChatSession,
   loadSessionSummaries,
   persistCurrentSession,
   renameChatSession,
-  resetConversationState,
-  sessionSummaries,
-  sessionViewKey,
 } = useChatSessions({
-  messageNodes,
-  rootChildIds,
-  selectedRootChildId,
-  selectedChildIdByParent,
-  selectedModel,
-  selectedRerankerModel,
-  isChatLocked: () => isLoading.value,
-  getDisplayedMessages: () => displayedMessages.value,
-  resetEditingState: () => {
-    inputText.value = '';
-    selectedFiles.value = [];
-    selectedSkillIds.value = [];
-    resetEditingState();
-  },
   afterSessionLoaded: async () => {
-    inputText.value = '';
-    selectedFiles.value = [];
-    selectedSkillIds.value = [];
+    chatStore.inputText = '';
+    chatStore.selectedFiles = [];
+    chatStore.selectedSkillIds = [];
     await nextTick();
-    prewarmVisibleConversationCache(
-      activeSessionId.value ?? conversationId.value,
+    chatStore.prewarmVisibleConversationCache(
+      chatStore.activeSessionId ?? chatStore.conversationId,
     );
     scrollToBottom();
   },
@@ -350,93 +253,14 @@ const {
   },
 });
 
-const {
-  activeIncidentSession,
-  activeIncidentSessionId,
-  clearActiveIncidentSession,
-  closeGenerationNotice,
-  deleteIncident,
-  downloadGeneratedIncidentAttachment,
-  generateIncident,
-  generationState,
-  incidentGenerationProgress,
-  incidentGenerationTraceId,
-  incidentSchema,
-  incidentSidebarSessions,
-  isIncidentGenerating,
-  loadIncidentSchema,
-  loadIncidentSession,
-  loadIncidentSessionSummaries,
-  renameIncident,
-  startIncidentSession,
-  stopIncidentGeneration,
-  updateIncidentAnswers,
-} = useIncidentReportSessions();
-
-const isSidebarLocked = computed(() => {
-  return isLoading.value || isIncidentGenerating.value;
+const { executeAssistantGeneration, onStopGeneration } = useChatStreaming({
+  scrollToBottom,
+  persistCurrentSession: async () => {
+    await persistCurrentSession();
+  },
 });
-
-const sidebarSessions = computed(() => {
-  return activeWorkspaceId.value === 'chat'
-    ? sessionSummaries.value
-    : incidentSidebarSessions.value;
-});
-
-const sidebarActiveSessionId = computed(() => {
-  return activeWorkspaceId.value === 'chat'
-    ? activeSessionId.value
-    : activeIncidentSessionId.value;
-});
-
-const isMessageStreaming = (message: ChatMessageNode) => {
-  return (
-    isLoading.value &&
-    message.role === 'assistant' &&
-    message.id === activeGeneration.value?.assistant_id
-  );
-};
-
-const activeStreamingAssistantMessage = computed(() => {
-  const activeAssistantId = activeGeneration.value?.assistant_id;
-  if (!activeAssistantId) {
-    return null;
-  }
-  return findMessageById(activeAssistantId);
-});
-
-const liveToolStatuses = computed<ChatToolStatus[]>(() => {
-  return activeStreamingAssistantMessage.value?.tool_statuses ?? [];
-});
-
-const latestLiveToolStatus = computed<ChatToolStatus | null>(() => {
-  if (!isLoading.value || liveToolStatuses.value.length === 0) {
-    return null;
-  }
-
-  for (let index = liveToolStatuses.value.length - 1; index >= 0; index -= 1) {
-    const status = liveToolStatuses.value[index];
-    if (status?.phase === 'start') {
-      return status;
-    }
-  }
-  return liveToolStatuses.value[liveToolStatuses.value.length - 1] ?? null;
-});
-
-const openMessageTrace = async (messageId: string) => {
-  const targetMessage = findMessageById(messageId);
-  const traceId = targetMessage?.trace_id?.trim() ?? '';
-  if (!traceId) {
-    showCopyToast('这条回复还没有可查看的 trace_id。', {
-      title: '暂无链路信息',
-    });
-    return;
-  }
-  await openTraceModalByTraceId(traceId);
-};
 
 const {
-  canConfirmEdit,
   onFilesSelect,
   onRemoveFile,
   onClearAllFiles,
@@ -453,74 +277,96 @@ const {
   downloadAssistantMessage,
   downloadMessageFile,
 } = useMessageActions({
-  inputText,
-  selectedFiles,
-  selectedSkillIds,
-  editingMessageId,
-  editingDraftText,
-  editingDraftFiles,
-  editingDraftSkillIds,
-  isLoading,
-  activeSessionId,
-  conversationId,
-  rootChildIds,
-  messageNodes,
-  selectedRootChildId,
-  selectedChildIdByParent,
-  currentLeafMessageId,
-  findMessageById,
-  createMessageNode,
-  buildRequestSnapshotForUserMessage,
   executeAssistantGeneration,
+  scrollToBottom,
   persistCurrentSession: async () => {
     await persistCurrentSession();
   },
-  resetEditingState,
-  scrollToBottom,
   onStopGeneration,
-  resetConversationState,
   showCopyToast,
-  downloadAttachment,
 });
+
+const {
+  clearActiveIncidentSession,
+  closeGenerationNotice,
+  deleteIncident,
+  downloadGeneratedIncidentAttachment,
+  generateIncident,
+  loadIncidentSchema,
+  loadIncidentSession,
+  loadIncidentSessionSummaries,
+  renameIncident,
+  startIncidentSession,
+  stopIncidentGeneration,
+  updateIncidentAnswers,
+} = useIncidentReportSessions();
+
+const isSidebarLocked = computed(() => {
+  return chatStore.isLoading || incidentStore.isIncidentGenerating;
+});
+
+const sidebarSessions = computed(() => {
+  return appStore.activeWorkspaceId === 'chat'
+    ? chatStore.sessionSummaries
+    : incidentStore.incidentSidebarSessions;
+});
+
+const sidebarActiveSessionId = computed(() => {
+  return appStore.activeWorkspaceId === 'chat'
+    ? chatStore.activeSessionId
+    : incidentStore.activeIncidentSessionId;
+});
+
+const openMessageTrace = async (messageId: string) => {
+  const targetMessage = chatStore.findMessageById(messageId);
+  const traceId = targetMessage?.trace_id?.trim() ?? '';
+  if (!traceId) {
+    showCopyToast('这条回复还没有可查看的 trace_id。', {
+      title: '暂无链路信息',
+    });
+    return;
+  }
+  await openTraceModalByTraceId(traceId);
+};
 
 const onSelectWorkspace = async (workspaceId: string) => {
   if (workspaceId === 'chat') {
-    activeWorkspaceId.value = 'chat';
+    appStore.activeWorkspaceId = 'chat';
     onClearChat();
     return;
   }
 
-  activeWorkspaceId.value = 'incident-report';
+  appStore.activeWorkspaceId = 'incident-report';
   clearActiveIncidentSession();
 };
 
 const onSelectModel = (model: string) => {
-  selectedModel.value = model;
-  if (!availableModels.value.includes(selectedRerankerModel.value)) {
-    selectedRerankerModel.value = model;
+  appStore.selectedModel = model;
+  if (!appStore.availableModels.includes(appStore.selectedRerankerModel)) {
+    appStore.selectedRerankerModel = model;
   }
-  if (activeSessionId.value && rootChildIds.value.length > 0) {
+  if (chatStore.activeSessionId && chatStore.rootChildIds.length > 0) {
     void persistCurrentSession();
   }
 };
 
 const onSelectRerankerModel = (model: string) => {
-  selectedRerankerModel.value = model;
-  if (activeSessionId.value && rootChildIds.value.length > 0) {
+  appStore.selectedRerankerModel = model;
+  if (chatStore.activeSessionId && chatStore.rootChildIds.length > 0) {
     void persistCurrentSession();
   }
 };
 
 const updateSelectedSkillIds = (skillIds: string[]) => {
-  selectedSkillIds.value = [...skillIds];
+  chatStore.selectedSkillIds = [...skillIds];
 };
 
 const updateEditingSkillIds = (skillIds: string[]) => {
-  editingDraftSkillIds.value = [...skillIds];
+  chatStore.editingDraftSkillIds = [...skillIds];
 };
 
 const onLoadSession = async (sessionId: string) => {
-  if (activeWorkspaceId.value === 'chat') {
+  if (appStore.activeWorkspaceId === 'chat') {
     await loadChatSession(sessionId);
     return;
   }
@@ -531,7 +377,7 @@ const onRenameSession = async (payload: {
   sessionId: string;
   title: string;
 }) => {
-  if (activeWorkspaceId.value === 'chat') {
+  if (appStore.activeWorkspaceId === 'chat') {
     await renameChatSession(payload.sessionId, payload.title);
     return;
   }
@@ -539,7 +385,7 @@ const onRenameSession = async (payload: {
 };
 
 const onDeleteSession = async (sessionId: string) => {
-  if (activeWorkspaceId.value === 'chat') {
+  if (appStore.activeWorkspaceId === 'chat') {
     await deleteChatSession(sessionId);
     return;
   }
@@ -558,7 +404,10 @@ const onIncidentAnswersUpdate = (
 
 const onIncidentGenerate = async () => {
   try {
-    await generateIncident(selectedModel.value, selectedRerankerModel.value);
+    await generateIncident(
+      appStore.selectedModel,
+      appStore.selectedRerankerModel,
+    );
     await loadIncidentSessionSummaries();
   } catch (error) {
     const message =
@@ -585,12 +434,7 @@ const onIncidentOpenTrace = (traceId: string) => {
   void openTraceModalByTraceId(traceId);
 };
 
-const { loadAvailableModels, loadAvailableSkills } = useCatalogLoader({
-  availableModels,
-  selectedModel,
-  selectedRerankerModel,
-  processingModes,
-});
+const { loadAvailableModels, loadAvailableSkills } = useCatalogLoader();
 
 onMounted(() => {
   scrollToBottom();
@@ -599,8 +443,8 @@ onMounted(() => {
   void loadIncidentSessionSummaries();
   void loadAvailableSkills();
   void loadAvailableModels();
-  prewarmVisibleConversationCache(
-    activeSessionId.value ?? conversationId.value,
+  chatStore.prewarmVisibleConversationCache(
+    chatStore.activeSessionId ?? chatStore.conversationId,
   );
 });
 </script>

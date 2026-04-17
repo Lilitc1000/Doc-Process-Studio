@@ -1,48 +1,27 @@
-import { computed, type Ref } from 'vue';
+import { useChatStore } from '../stores/chat';
+import { useAppStore } from '../stores/app';
+import { downloadAttachment } from '../api/attachments';
 import type {
   ChatAttachment,
   ChatEditAttachment,
-  ChatMessageNode,
   ChatRequestSnapshot,
 } from '../types/chat';
 import { formatFileSize } from '../utils/file';
 
 interface UseMessageActionsOptions {
-  inputText: Ref<string>;
-  selectedFiles: Ref<File[]>;
-  selectedSkillIds: Ref<string[]>;
-  editingMessageId: Ref<string | null>;
-  editingDraftText: Ref<string>;
-  editingDraftFiles: Ref<ChatEditAttachment[]>;
-  editingDraftSkillIds: Ref<string[]>;
-  isLoading: Ref<boolean>;
-  activeSessionId: Ref<string | null>;
-  conversationId: Ref<string>;
-  rootChildIds: Ref<string[]>;
-  messageNodes: Ref<Record<string, ChatMessageNode>>;
-  selectedRootChildId: Ref<string | null>;
-  selectedChildIdByParent: Ref<Record<string, string>>;
-  currentLeafMessageId: Ref<string | null>;
-  findMessageById: (messageId: string) => ChatMessageNode | null;
-  createMessageNode: (
-    node: Omit<ChatMessageNode, 'id' | 'child_ids'> & { id?: string },
-  ) => ChatMessageNode;
-  buildRequestSnapshotForUserMessage: (
-    userMessageId: string,
-  ) => ChatRequestSnapshot;
   executeAssistantGeneration: (
     requestSnapshot: ChatRequestSnapshot,
   ) => Promise<void>;
-  persistCurrentSession: () => Promise<unknown>;
-  resetEditingState: () => void;
   scrollToBottom: () => void;
+  persistCurrentSession: () => Promise<unknown>;
   onStopGeneration: () => void;
-  resetConversationState: () => void;
   showCopyToast: (message: string, options?: { title?: string }) => void;
-  downloadAttachment: (attachmentId: string) => Promise<void>;
 }
 
 export const useMessageActions = (options: UseMessageActionsOptions) => {
+  const chatStore = useChatStore();
+  const appStore = useAppStore();
+
   const createAttachmentPreview = (files: File[]): ChatAttachment[] => {
     return files.map((file) => ({
       name: file.name,
@@ -83,53 +62,36 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     return `${trimmedText}\n${fileSummary}`;
   };
 
-  const canConfirmEdit = computed(() => {
-    return (
-      !options.isLoading.value &&
-      (options.editingDraftText.value.trim().length > 0 ||
-        options.editingDraftFiles.value.length > 0)
-    );
-  });
-
   const onFilesSelect = (files: File[]) => {
-    options.selectedFiles.value = [...options.selectedFiles.value, ...files];
+    chatStore.selectedFiles = [...chatStore.selectedFiles, ...files];
   };
 
   const onRemoveFile = (index: number) => {
-    options.selectedFiles.value.splice(index, 1);
+    chatStore.selectedFiles.splice(index, 1);
   };
 
   const onClearAllFiles = () => {
-    options.selectedFiles.value = [];
+    chatStore.selectedFiles = [];
   };
 
   const onClearChat = () => {
     options.onStopGeneration();
-    options.messageNodes.value = {};
-    options.rootChildIds.value = [];
-    options.selectedRootChildId.value = null;
-    options.selectedChildIdByParent.value = {};
-    options.selectedFiles.value = [];
-    options.selectedSkillIds.value = [];
-    options.resetConversationState();
-    options.resetEditingState();
+    chatStore.resetChatState();
   };
 
   const startEditingMessage = (messageId: string) => {
-    if (options.isLoading.value) {
+    if (chatStore.isLoading) {
       return;
     }
 
-    const messageNode = options.findMessageById(messageId);
+    const messageNode = chatStore.findMessageById(messageId);
     if (!messageNode || messageNode.role !== 'user') {
       return;
     }
 
-    options.editingMessageId.value = messageId;
-    options.editingDraftText.value = messageNode.content;
-    options.editingDraftSkillIds.value = [
-      ...(messageNode.request_skill_ids ?? []),
-    ];
+    chatStore.editingMessageId = messageId;
+    chatStore.editingDraftText = messageNode.content;
+    chatStore.editingDraftSkillIds = [...(messageNode.request_skill_ids ?? [])];
     const requestFileEntries: Array<[string, File]> = (
       messageNode.request_files ?? []
     ).map((file: File) => [`${file.name}::${formatFileSize(file)}`, file]);
@@ -139,7 +101,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
         ? messageNode.files
         : createAttachmentPreview(messageNode.request_files ?? []);
 
-    options.editingDraftFiles.value = sourceFiles.map<ChatEditAttachment>(
+    chatStore.editingDraftFiles = sourceFiles.map<ChatEditAttachment>(
       (file) => ({
         ...file,
         request_file:
@@ -149,43 +111,41 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
   };
 
   const updateEditingText = (value: string) => {
-    options.editingDraftText.value = value;
+    chatStore.editingDraftText = value;
   };
 
   const appendEditingFiles = (files: File[]) => {
-    options.editingDraftFiles.value = [
-      ...options.editingDraftFiles.value,
+    chatStore.editingDraftFiles = [
+      ...chatStore.editingDraftFiles,
       ...createEditableAttachmentPreview(files),
     ];
   };
 
   const removeEditingFile = (index: number) => {
-    options.editingDraftFiles.value.splice(index, 1);
+    chatStore.editingDraftFiles.splice(index, 1);
   };
 
   const cancelEditingMessage = () => {
-    options.resetEditingState();
+    chatStore.resetEditingState();
   };
 
   const confirmEditingMessage = async () => {
-    if (!options.editingMessageId.value || !canConfirmEdit.value) {
+    if (!chatStore.editingMessageId || !chatStore.canConfirmEdit) {
       return;
     }
 
-    const sourceMessage = options.findMessageById(
-      options.editingMessageId.value,
-    );
+    const sourceMessage = chatStore.findMessageById(chatStore.editingMessageId);
     if (!sourceMessage || sourceMessage.role !== 'user') {
-      options.resetEditingState();
+      chatStore.resetEditingState();
       return;
     }
 
-    const nextText = options.editingDraftText.value.trim();
-    const nextFiles = options.editingDraftFiles.value.flatMap((file) => {
+    const nextText = chatStore.editingDraftText.trim();
+    const nextFiles = chatStore.editingDraftFiles.flatMap((file) => {
       return file.request_file ? [file.request_file] : [];
     });
-    const nextSkillIds = [...options.editingDraftSkillIds.value];
-    const nextAttachments = options.editingDraftFiles.value.map((file) => ({
+    const nextSkillIds = [...chatStore.editingDraftSkillIds];
+    const nextAttachments = chatStore.editingDraftFiles.map((file) => ({
       name: file.name,
       size_label: file.size_label,
       attachment_id: file.attachment_id,
@@ -195,7 +155,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       source: file.source,
     }));
 
-    const editedUserMessage = options.createMessageNode({
+    const editedUserMessage = chatStore.createMessageNode({
       role: 'user',
       content: nextText,
       api_content: createUserApiContent(nextText, nextAttachments),
@@ -206,27 +166,31 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       parent_id: sourceMessage.parent_id,
     });
 
-    options.resetEditingState();
+    chatStore.resetEditingState();
     options.scrollToBottom();
     await options.persistCurrentSession();
 
     await options.executeAssistantGeneration(
-      options.buildRequestSnapshotForUserMessage(editedUserMessage.id),
+      chatStore.buildRequestSnapshotForUserMessage(
+        editedUserMessage.id,
+        appStore.selectedModel,
+        appStore.selectedRerankerModel,
+      ),
     );
   };
 
   const onSendMessage = async () => {
-    const text = options.inputText.value.trim();
+    const text = chatStore.inputText.trim();
     if (
-      (!text && options.selectedFiles.value.length === 0) ||
-      options.isLoading.value
+      (!text && chatStore.selectedFiles.length === 0) ||
+      chatStore.isLoading
     ) {
       return;
     }
 
-    const currentRequestFiles = [...options.selectedFiles.value];
-    const currentRequestSkillIds = [...options.selectedSkillIds.value];
-    const userMessage = options.createMessageNode({
+    const currentRequestFiles = [...chatStore.selectedFiles];
+    const currentRequestSkillIds = [...chatStore.selectedSkillIds];
+    const userMessage = chatStore.createMessageNode({
       role: 'user',
       content: text,
       api_content: createUserApiContent(text, currentRequestFiles),
@@ -234,39 +198,47 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       request_files: currentRequestFiles,
       request_skill_ids: currentRequestSkillIds,
       timestamp: new Date(),
-      parent_id: options.currentLeafMessageId.value,
+      parent_id: chatStore.currentLeafMessageId,
     });
     options.scrollToBottom();
 
-    options.inputText.value = '';
-    options.selectedFiles.value = [];
-    options.selectedSkillIds.value = [];
-    options.activeSessionId.value = options.conversationId.value;
+    chatStore.inputText = '';
+    chatStore.selectedFiles = [];
+    chatStore.selectedSkillIds = [];
+    chatStore.activeSessionId = chatStore.conversationId;
     await options.persistCurrentSession();
 
     await options.executeAssistantGeneration(
-      options.buildRequestSnapshotForUserMessage(userMessage.id),
+      chatStore.buildRequestSnapshotForUserMessage(
+        userMessage.id,
+        appStore.selectedModel,
+        appStore.selectedRerankerModel,
+      ),
     );
   };
 
   const onRegenerate = async (assistantMessageId: string) => {
-    if (options.isLoading.value) {
+    if (chatStore.isLoading) {
       return;
     }
 
-    const assistantNode = options.findMessageById(assistantMessageId);
+    const assistantNode = chatStore.findMessageById(assistantMessageId);
     if (!assistantNode?.parent_id || assistantNode.role !== 'assistant') {
       return;
     }
 
     await options.persistCurrentSession();
     await options.executeAssistantGeneration(
-      options.buildRequestSnapshotForUserMessage(assistantNode.parent_id),
+      chatStore.buildRequestSnapshotForUserMessage(
+        assistantNode.parent_id,
+        appStore.selectedModel,
+        appStore.selectedRerankerModel,
+      ),
     );
   };
 
   const copyMessage = async (messageId: string) => {
-    const messageNode = options.findMessageById(messageId);
+    const messageNode = chatStore.findMessageById(messageId);
     if (!messageNode?.content.trim() || !navigator.clipboard) {
       return;
     }
@@ -280,7 +252,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
   };
 
   const downloadAssistantMessage = (assistantMessageId: string) => {
-    const assistantNode = options.findMessageById(assistantMessageId);
+    const assistantNode = chatStore.findMessageById(assistantMessageId);
     if (!assistantNode?.content.trim()) {
       return;
     }
@@ -306,7 +278,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     }
 
     try {
-      await options.downloadAttachment(file.attachment_id);
+      await downloadAttachment(file.attachment_id);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : '下载文件失败，请稍后重试。';
@@ -315,7 +287,6 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
   };
 
   return {
-    canConfirmEdit,
     onFilesSelect,
     onRemoveFile,
     onClearAllFiles,

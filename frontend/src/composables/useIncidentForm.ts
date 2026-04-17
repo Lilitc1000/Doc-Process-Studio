@@ -1,20 +1,9 @@
-import { ref } from 'vue';
+import { useIncidentStore } from '../stores/incident';
 import {
   fetchIncidentFormSchema,
   saveIncidentSessionSnapshot,
 } from '../api/incident-report';
-import type {
-  IncidentFormAnswer,
-  IncidentFormSchemaPayload,
-  IncidentSessionDetail,
-  IncidentSessionSummary,
-} from '../types/incident-report';
-
-export interface IncidentFormDeps {
-  activeIncidentSessionId: ReturnType<typeof ref<string | null>>;
-  activeIncidentSession: ReturnType<typeof ref<IncidentSessionDetail | null>>;
-  mergeSummary: (summary: IncidentSessionSummary) => void;
-}
+import type { IncidentFormAnswer } from '../types/incident-report';
 
 const cloneFormAnswers = (answers: Record<string, IncidentFormAnswer>) => {
   return JSON.parse(JSON.stringify(answers)) as Record<
@@ -23,10 +12,8 @@ const cloneFormAnswers = (answers: Record<string, IncidentFormAnswer>) => {
   >;
 };
 
-export const useIncidentForm = (deps: IncidentFormDeps) => {
-  const { activeIncidentSessionId, activeIncidentSession, mergeSummary } = deps;
-
-  const incidentSchema = ref<IncidentFormSchemaPayload | null>(null);
+export const useIncidentForm = () => {
+  const incidentStore = useIncidentStore();
 
   let saveDebounceTimer: number | null = null;
   let hasQueuedSnapshotSave = false;
@@ -35,7 +22,7 @@ export const useIncidentForm = (deps: IncidentFormDeps) => {
 
   const loadIncidentSchema = async () => {
     try {
-      incidentSchema.value = await fetchIncidentFormSchema();
+      incidentStore.incidentSchema = await fetchIncidentFormSchema();
     } catch (error) {
       console.error('加载事故报告表单定义失败。', error);
     }
@@ -56,8 +43,8 @@ export const useIncidentForm = (deps: IncidentFormDeps) => {
       while (shouldContinue) {
         hasQueuedSnapshotSave = false;
 
-        const session = activeIncidentSession.value;
-        const sessionId = activeIncidentSessionId.value;
+        const session = incidentStore.activeIncidentSession;
+        const sessionId = incidentStore.activeIncidentSessionId;
         if (!session || !sessionId || session.snapshot.is_locked) {
           return;
         }
@@ -72,17 +59,17 @@ export const useIncidentForm = (deps: IncidentFormDeps) => {
           }
 
           if (
-            activeIncidentSessionId.value !== sessionId ||
-            activeIncidentSession.value?.id !== sessionId
+            incidentStore.activeIncidentSessionId !== sessionId ||
+            incidentStore.activeIncidentSession?.id !== sessionId
           ) {
             return;
           }
 
-          if (hasQueuedSnapshotSave && activeIncidentSession.value) {
+          if (hasQueuedSnapshotSave && incidentStore.activeIncidentSession) {
             const latestLocalAnswers = cloneFormAnswers(
-              activeIncidentSession.value.snapshot.form_answers,
+              incidentStore.activeIncidentSession.snapshot.form_answers,
             );
-            activeIncidentSession.value = {
+            incidentStore.activeIncidentSession = {
               ...detail,
               snapshot: {
                 ...detail.snapshot,
@@ -90,10 +77,10 @@ export const useIncidentForm = (deps: IncidentFormDeps) => {
               },
             };
           } else {
-            activeIncidentSession.value = detail;
+            incidentStore.activeIncidentSession = detail;
           }
 
-          mergeSummary({
+          incidentStore.mergeSummary({
             id: detail.id,
             title: detail.title,
             status: detail.status,
@@ -128,15 +115,15 @@ export const useIncidentForm = (deps: IncidentFormDeps) => {
     answers: Record<string, IncidentFormAnswer>,
   ) => {
     if (
-      !activeIncidentSession.value ||
-      activeIncidentSession.value.snapshot.is_locked
+      !incidentStore.activeIncidentSession ||
+      incidentStore.activeIncidentSession.snapshot.is_locked
     ) {
       return;
     }
-    activeIncidentSession.value = {
-      ...activeIncidentSession.value,
+    incidentStore.activeIncidentSession = {
+      ...incidentStore.activeIncidentSession,
       snapshot: {
-        ...activeIncidentSession.value.snapshot,
+        ...incidentStore.activeIncidentSession.snapshot,
         form_answers: cloneFormAnswers(answers),
       },
       status: 'draft',
@@ -156,7 +143,6 @@ export const useIncidentForm = (deps: IncidentFormDeps) => {
   };
 
   return {
-    incidentSchema,
     loadIncidentSchema,
     updateIncidentAnswers,
     flushSaveIncidentSnapshot,

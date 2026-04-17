@@ -1,14 +1,11 @@
-import { ref } from 'vue';
 import { downloadAttachment } from '../api/attachments';
 import {
   fetchIncidentSessionDetail,
   generateIncidentAttachment,
 } from '../api/incident-report';
 import { fetchAgentTraceReplay } from '../api/trace';
-import type {
-  IncidentSessionDetail,
-  IncidentSessionSummary,
-} from '../types/incident-report';
+import { useIncidentStore } from '../stores/incident';
+import type { IncidentSessionDetail } from '../types/incident-report';
 
 const INCIDENT_DOCX_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -96,27 +93,14 @@ const formatTraceEventLine = (event: {
   return timestamp ? `${timestamp} ${message}` : message;
 };
 
-export interface IncidentGenerationDeps {
-  activeIncidentSessionId: ReturnType<typeof ref<string | null>>;
-  activeIncidentSession: ReturnType<typeof ref<IncidentSessionDetail | null>>;
-  applyIncidentDetail: (detail: IncidentSessionDetail) => void;
-  mergeSummary: (summary: IncidentSessionSummary) => void;
+interface UseIncidentGenerationOptions {
   flushSaveIncidentSnapshot: () => Promise<void>;
 }
 
-export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
-  const {
-    activeIncidentSessionId,
-    activeIncidentSession,
-    applyIncidentDetail,
-    flushSaveIncidentSnapshot,
-  } = deps;
-
-  const isIncidentGenerating = ref(false);
-  const generationState = ref<'idle' | 'generating' | 'done'>('idle');
-  const incidentErrorMessage = ref('');
-  const incidentGenerationTraceId = ref('');
-  const incidentGenerationProgress = ref<string[]>([]);
+export const useIncidentGeneration = (
+  options: UseIncidentGenerationOptions,
+) => {
+  const incidentStore = useIncidentStore();
 
   let generationAbortController: AbortController | null = null;
   let generationMonitorTimer: number | null = null;
@@ -140,10 +124,12 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
       const response = await fetchAgentTraceReplay(normalizedTraceId);
       const events = response.payload.events ?? [];
       if (!events.length) {
-        incidentGenerationProgress.value = ['链路已创建，等待阶段事件...'];
+        incidentStore.incidentGenerationProgress = [
+          '链路已创建，等待阶段事件...',
+        ];
         return;
       }
-      incidentGenerationProgress.value = events.map((event) =>
+      incidentStore.incidentGenerationProgress = events.map((event) =>
         formatTraceEventLine(event),
       );
     } catch {
@@ -156,14 +142,14 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
   ): Promise<boolean> => {
     try {
       const detail = await fetchIncidentSessionDetail(sessionId);
-      if (activeIncidentSessionId.value !== sessionId) {
+      if (incidentStore.activeIncidentSessionId !== sessionId) {
         return true;
       }
-      applyIncidentDetail(detail);
+      incidentStore.applyIncidentDetail(detail);
 
       const traceId = (detail.snapshot.generated_trace_id ?? '').trim();
       if (traceId) {
-        incidentGenerationTraceId.value = traceId;
+        incidentStore.incidentGenerationTraceId = traceId;
         await refreshGenerationTraceProgress(traceId);
       }
 
@@ -172,21 +158,21 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
       }
 
       if (detail.status === 'generated') {
-        if (generationState.value === 'generating') {
-          generationState.value = 'done';
+        if (incidentStore.generationState === 'generating') {
+          incidentStore.generationState = 'done';
         }
-        isIncidentGenerating.value = false;
+        incidentStore.isIncidentGenerating = false;
         return true;
       }
 
       if (detail.status === 'failed') {
-        if (generationState.value === 'generating') {
-          generationState.value = 'idle';
+        if (incidentStore.generationState === 'generating') {
+          incidentStore.generationState = 'idle';
         }
         if (detail.snapshot.polish_error) {
-          incidentErrorMessage.value = detail.snapshot.polish_error;
+          incidentStore.incidentErrorMessage = detail.snapshot.polish_error;
         }
-        isIncidentGenerating.value = false;
+        incidentStore.isIncidentGenerating = false;
         return true;
       }
 
@@ -231,21 +217,26 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
   };
 
   const generateIncident = async (model: string, reranker_model?: string) => {
-    if (!activeIncidentSessionId.value || !activeIncidentSession.value) {
+    if (
+      !incidentStore.activeIncidentSessionId ||
+      !incidentStore.activeIncidentSession
+    ) {
       return;
     }
-    const sessionId = activeIncidentSessionId.value;
-    await flushSaveIncidentSnapshot();
+    const sessionId = incidentStore.activeIncidentSessionId;
+    await options.flushSaveIncidentSnapshot();
     generationAbortController = new AbortController();
-    isIncidentGenerating.value = true;
-    generationState.value = 'generating';
-    incidentErrorMessage.value = '';
-    incidentGenerationProgress.value = ['正在提交生成请求...'];
-    incidentGenerationTraceId.value = (
-      activeIncidentSession.value.snapshot.generated_trace_id ?? ''
+    incidentStore.isIncidentGenerating = true;
+    incidentStore.generationState = 'generating';
+    incidentStore.incidentErrorMessage = '';
+    incidentStore.incidentGenerationProgress = ['正在提交生成请求...'];
+    incidentStore.incidentGenerationTraceId = (
+      incidentStore.activeIncidentSession.snapshot.generated_trace_id ?? ''
     ).trim();
-    if (incidentGenerationTraceId.value) {
-      await refreshGenerationTraceProgress(incidentGenerationTraceId.value);
+    if (incidentStore.incidentGenerationTraceId) {
+      await refreshGenerationTraceProgress(
+        incidentStore.incidentGenerationTraceId,
+      );
     }
     startGenerationMonitor(sessionId, INCIDENT_GENERATION_ACTIVE_TRACK_MS);
 
@@ -260,24 +251,26 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
           signal: generationAbortController.signal,
         },
       );
-      applyIncidentDetail({
+      incidentStore.applyIncidentDetail({
         ...response.session,
         snapshot: response.snapshot,
       });
-      incidentGenerationTraceId.value = (
-        response.trace_id || incidentGenerationTraceId.value
+      incidentStore.incidentGenerationTraceId = (
+        response.trace_id || incidentStore.incidentGenerationTraceId
       ).trim();
-      if (incidentGenerationTraceId.value) {
-        await refreshGenerationTraceProgress(incidentGenerationTraceId.value);
+      if (incidentStore.incidentGenerationTraceId) {
+        await refreshGenerationTraceProgress(
+          incidentStore.incidentGenerationTraceId,
+        );
       }
-      generationState.value = 'done';
+      incidentStore.generationState = 'done';
       clearGenerationMonitor();
     } catch (error) {
       if (isRequestCanceled(error)) {
-        generationState.value = 'idle';
-        incidentErrorMessage.value = '';
-        incidentGenerationProgress.value = [
-          ...incidentGenerationProgress.value,
+        incidentStore.generationState = 'idle';
+        incidentStore.incidentErrorMessage = '';
+        incidentStore.incidentGenerationProgress = [
+          ...incidentStore.incidentGenerationProgress,
           '已停止当前请求，正在同步后台状态…',
         ];
         startGenerationMonitor(
@@ -286,34 +279,34 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
         );
         return;
       }
-      generationState.value = 'idle';
-      incidentErrorMessage.value =
+      incidentStore.generationState = 'idle';
+      incidentStore.incidentErrorMessage =
         error instanceof Error ? error.message : '生成附件失败';
       throw error;
     } finally {
       generationAbortController = null;
-      if (generationState.value !== 'generating') {
-        isIncidentGenerating.value = false;
+      if (incidentStore.generationState !== 'generating') {
+        incidentStore.isIncidentGenerating = false;
       }
     }
   };
 
   const stopIncidentGeneration = () => {
-    if (!isIncidentGenerating.value && !generationAbortController) {
+    if (!incidentStore.isIncidentGenerating && !generationAbortController) {
       return;
     }
     generationAbortController?.abort();
     generationAbortController = null;
-    isIncidentGenerating.value = false;
-    generationState.value = 'idle';
-    incidentErrorMessage.value = '';
-    incidentGenerationProgress.value = [
-      ...incidentGenerationProgress.value,
+    incidentStore.isIncidentGenerating = false;
+    incidentStore.generationState = 'idle';
+    incidentStore.incidentErrorMessage = '';
+    incidentStore.incidentGenerationProgress = [
+      ...incidentStore.incidentGenerationProgress,
       '已停止当前请求，正在同步后台状态…',
     ];
-    if (activeIncidentSessionId.value) {
+    if (incidentStore.activeIncidentSessionId) {
       startGenerationMonitor(
-        activeIncidentSessionId.value,
+        incidentStore.activeIncidentSessionId,
         INCIDENT_GENERATION_BACKGROUND_TRACK_MS,
       );
     }
@@ -321,7 +314,8 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
 
   const downloadGeneratedIncidentAttachment = async () => {
     const attachment =
-      activeIncidentSession.value?.snapshot.generated_attachment ?? null;
+      incidentStore.activeIncidentSession?.snapshot.generated_attachment ??
+      null;
     if (!attachment) {
       return;
     }
@@ -336,18 +330,14 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
   };
 
   const closeGenerationNotice = () => {
-    generationState.value = 'idle';
+    incidentStore.generationState = 'idle';
   };
 
   const resetGenerationState = () => {
     generationAbortController?.abort();
     generationAbortController = null;
     clearGenerationMonitor();
-    generationState.value = 'idle';
-    incidentErrorMessage.value = '';
-    incidentGenerationTraceId.value = '';
-    incidentGenerationProgress.value = [];
-    isIncidentGenerating.value = false;
+    incidentStore.resetGenerationState();
   };
 
   const resumeGenerationMonitorIfNeeded = (
@@ -355,18 +345,13 @@ export const useIncidentGeneration = (deps: IncidentGenerationDeps) => {
     status: string,
   ) => {
     if (status === 'generating') {
-      isIncidentGenerating.value = true;
-      generationState.value = 'generating';
+      incidentStore.isIncidentGenerating = true;
+      incidentStore.generationState = 'generating';
       startGenerationMonitor(sessionId, INCIDENT_GENERATION_ACTIVE_TRACK_MS);
     }
   };
 
   return {
-    isIncidentGenerating,
-    generationState,
-    incidentErrorMessage,
-    incidentGenerationTraceId,
-    incidentGenerationProgress,
     generateIncident,
     stopIncidentGeneration,
     closeGenerationNotice,

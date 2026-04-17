@@ -1,15 +1,9 @@
-import type { Ref } from 'vue';
 import { fetchAvailableModels, fetchAvailableSkills } from '../api/catalog';
-import type { SkillOption } from '../types/skill';
+import { useAppStore } from '../stores/app';
 
-interface UseCatalogLoaderOptions {
-  availableModels: Ref<string[]>;
-  selectedModel: Ref<string>;
-  selectedRerankerModel: Ref<string>;
-  processingModes: Ref<SkillOption[]>;
-}
+export const useCatalogLoader = () => {
+  const appStore = useAppStore();
 
-export const useCatalogLoader = (options: UseCatalogLoaderOptions) => {
   const loadAvailableModels = async () => {
     try {
       const modelNames = await fetchAvailableModels();
@@ -17,12 +11,12 @@ export const useCatalogLoader = (options: UseCatalogLoaderOptions) => {
         return;
       }
 
-      options.availableModels.value = modelNames;
-      if (!modelNames.includes(options.selectedModel.value)) {
-        options.selectedModel.value = modelNames[0];
+      appStore.availableModels = modelNames;
+      if (!modelNames.includes(appStore.selectedModel)) {
+        appStore.selectedModel = modelNames[0];
       }
-      if (!modelNames.includes(options.selectedRerankerModel.value)) {
-        options.selectedRerankerModel.value = options.selectedModel.value;
+      if (!modelNames.includes(appStore.selectedRerankerModel)) {
+        appStore.selectedRerankerModel = appStore.selectedModel;
       }
     } catch (error) {
       console.error('加载远程模型列表失败，继续使用前端兜底模型列表。', error);
@@ -38,7 +32,7 @@ export const useCatalogLoader = (options: UseCatalogLoaderOptions) => {
       const filteredSkills = nextSkills.filter((skill) => {
         return skill.id !== 'document-assistant' && skill.skill_type === 'chat';
       });
-      options.processingModes.value = filteredSkills;
+      appStore.processingModes = filteredSkills;
     } catch (error) {
       console.error('加载 skill 列表失败，继续使用前端兜底选项。', error);
     }

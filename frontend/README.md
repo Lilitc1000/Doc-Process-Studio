@@ -1,6 +1,6 @@
 # Frontend 开发指南
 
-本项目是基于 `Vue 3 + Vite + TypeScript` 的单页聊天前端。
+本项目是基于 `Vue 3 + Vite + TypeScript + Pinia` 的单页聊天前端。
 
 这份文档的目标不是介绍通用 Vue 用法，而是说明当前 `frontend` 目录里这套代码是如何组织的、后续应该按什么方式继续维护，避免把这次已经整理好的结构再慢慢堆回单文件大组件。
 
@@ -40,7 +40,7 @@ npm run test
 
 ## 目录约定
 
-当前前端目录按“组件 / 类型 / API / 工具 / 样式 / 组合式逻辑”分层：
+当前前端目录按"组件 / 类型 / API / 工具 / 样式 / 组合式逻辑 / 状态管理"分层：
 
 ```text
 frontend/
@@ -48,6 +48,7 @@ frontend/
     api/            # 所有 HTTP 请求封装
     components/     # 页面组件与 UI 组件
     composables/    # 可复用状态逻辑
+    stores/         # Pinia 全局状态管理
     styles/         # 全局样式与组件样式
     types/          # 跨组件共享类型
     utils/          # 纯函数、渲染工具、格式化工具
@@ -63,15 +64,105 @@ frontend/
 - `api/` 只负责请求与响应映射，不负责页面状态。
 - `types/` 只放跨文件共享的类型；组件内部临时类型不必硬抽。
 - `utils/` 放无状态纯函数，避免依赖 Vue 生命周期。
-- `composables/` 放“和页面状态有关，但已经重到不适合继续留在组件里”的逻辑。
+- `composables/` 放"和页面状态有关，但已经重到不适合继续留在组件里"的逻辑。
+- `stores/` 放跨组件共享的响应式状态，使用 Pinia 管理。
 - `styles/components/` 放组件对应的样式文件，避免超长 `<style>` 继续堆在 `.vue` 里。
+
+## 状态管理（Pinia）
+
+项目使用 [Pinia](https://pinia.vuejs.org/) 作为全局状态管理方案，配合 [pinia-plugin-persistedstate](https://prazdevs.github.io/pinia-plugin-persistedstate/) 实现关键数据的 localStorage 持久化。
+
+### 三个核心 Store
+
+#### `useAppStore`（持久化）
+
+文件：[stores/app.ts](/frontend/src/stores/app.ts)
+
+存储用户偏好和配置缓存，**页面刷新后自动恢复**：
+
+| 字段 | 说明 | 持久化 |
+|------|------|--------|
+| `selectedModel` | 当前选中的聊天模型 | ✅ |
+| `selectedRerankerModel` | 当前选中的重排序模型 | ✅ |
+| `activeWorkspaceId` | 当前工作区（`chat` / `incident-report`） | ✅ |
+| `availableModels` | 可用模型列表缓存 | ✅ |
+| `processingModes` | 可用 skill 列表缓存 | ✅ |
+
+持久化策略：所有字段均通过 `pinia-plugin-persistedstate` 写入 `localStorage`，页面打开时立即恢复上次选择，无需等待 API 返回即可渲染 UI。
+
+#### `useChatStore`（不持久化）
+
+文件：[stores/chat.ts](/frontend/src/stores/chat.ts)
+
+聊天工作区的全部运行时状态，数据来源于后端 API 会话快照：
+
+- 消息树状态（`messageNodes`、`rootChildIds`、`selectedRootChildId`、`selectedChildIdByParent`）
+- 会话状态（`activeSessionId`、`conversationId`、`sessionSummaries`、`sessionViewKey`）
+- 流式生成状态（`isLoading`、`activeGeneration`）
+- 输入状态（`inputText`、`selectedFiles`、`selectedSkillIds`）
+- 编辑状态（`editingMessageId`、`editingDraftText`、`editingDraftFiles`、`editingDraftSkillIds`）
+
+核心计算属性（getters）：
+
+- `displayedMessages`：当前可见消息列表
+- `currentLeafMessageId`：当前叶子消息 ID
+- `lastAssistantMessageId`：最后一条 assistant 消息 ID
+- `activeStreamingAssistantMessage`：正在流式输出的 assistant 消息
+- `latestLiveToolStatus`：最新实时工具状态
+- `canConfirmEdit`：是否可确认编辑
+
+核心方法（actions）：
+
+- 消息树操作：`createMessageNode`、`findMessageById`、`updateMessageContent`、`appendMessageContent`、`switchMessageVersion` 等
+- 会话快照：`hydrateSessionSnapshot`、`buildSessionSnapshotPayload`、`buildTitleSourceMessages`
+- 状态重置：`resetChatState`、`resetConversationState`、`resetEditingState`
+- 缓存预热：`prewarmVisibleConversationCache`
+
+#### `useIncidentStore`（不持久化）
+
+文件：[stores/incident.ts](/frontend/src/stores/incident.ts)
+
+事故报告工作区的全部运行时状态：
+
+- 会话状态（`activeIncidentSessionId`、`activeIncidentSession`、`incidentSessionSummaries`）
+- 表单定义（`incidentSchema`）
+- 生成状态（`isIncidentGenerating`、`generationState`、`incidentErrorMessage`、`incidentGenerationTraceId`、`incidentGenerationProgress`）
+
+计算属性：
+
+- `incidentSidebarSessions`：侧栏会话列表（统一为 `ChatSessionSummary` 格式）
+
+### Store 与 Composable 的关系
+
+Store 负责**状态持有和基础操作**，Composable 负责**业务逻辑编排**：
+
+```
+ChatLayout.vue
+  ├── useAppStore()          ← 用户偏好（持久化）
+  ├── useChatStore()         ← 聊天状态
+  ├── useIncidentStore()     ← 事故报告状态
+  ├── useChatSessions()      ← 会话 CRUD（读写 chatStore/appStore）
+  ├── useChatStreaming()     ← 流式生成（读写 chatStore）
+  ├── useMessageActions()    ← 消息操作（读写 chatStore/appStore）
+  ├── useCatalogLoader()     ← 目录加载（写入 appStore）
+  └── useIncidentReportSessions() ← 事故报告会话（读写 incidentStore）
+       ├── useIncidentForm()      ← 表单逻辑（读写 incidentStore）
+       └── useIncidentGeneration() ← 生成逻辑（读写 incidentStore）
+```
+
+### 新增 Store 的原则
+
+- 只有**跨组件共享**或**需要持久化**的状态才放入 Store。
+- 组件局部 UI 状态（如弹窗开关、下拉展开）继续用 `ref()` 管理。
+- 不要为了"统一"把所有状态都搬进 Store——局部状态留在组件里更清晰。
+- 需要持久化的数据只限用户偏好和缓存，不要把运行时数据（如消息树、流式状态）持久化。
 
 ## 当前核心结构
 
 ### 1. 组件层
 
 - [ChatLayout.vue](/frontend/src/components/ChatLayout.vue)
-  页面主控组件，负责页面编排与事件串联，重逻辑已下沉到 composables/utils。
+  页面主控组件，负责页面编排与事件串联。状态从 Pinia Store 读取，业务逻辑由 composables 提供。
 - [ChatMessage.vue](/frontend/src/components/ChatMessage.vue)
   单条消息装配组件，负责拼装消息子组件与事件透传。
 - [components/message/*](/frontend/src/components/message)
@@ -79,38 +170,45 @@ frontend/
 - [ChatInput.vue](/frontend/src/components/ChatInput.vue)
   底部输入区、文件选择、`$skill` 多选输入。
 - [ChatSidebar.vue](/frontend/src/components/ChatSidebar.vue)
-  左侧历史会话与模型选择区域（包含“聊天模型”和“重排序模型”两个下拉）。
+  左侧历史会话与模型选择区域（包含"聊天模型"和"重排序模型"两个下拉）。
 - [IncidentReportWorkspace.vue](/frontend/src/components/IncidentReportWorkspace.vue)
   事故报告工作区页面，包含欢迎向导、全量表单、生成弹窗、下载与链路回放。
 
-### 2. 组合式逻辑
+### 2. 状态管理层
+
+- [stores/app.ts](/frontend/src/stores/app.ts)
+  用户偏好与配置缓存，使用 `pinia-plugin-persistedstate` 持久化到 localStorage。
+- [stores/chat.ts](/frontend/src/stores/chat.ts)
+  聊天工作区状态：消息树、会话、流式生成、输入、编辑。包含消息树操作、快照构建/恢复、缓存预热等核心逻辑。
+- [stores/incident.ts](/frontend/src/stores/incident.ts)
+  事故报告工作区状态：会话、表单定义、生成状态。
+
+### 3. 组合式逻辑
 
 - [useChatSessions.ts](/frontend/src/composables/useChatSessions.ts)
-  历史会话加载、保存、重命名、删除、会话切换后的状态恢复。
+  历史会话加载、保存、重命名、删除、会话切换后的状态恢复。通过 `useChatStore` 和 `useAppStore` 管理状态。
 - [useIncidentReportSessions.ts](/frontend/src/composables/useIncidentReportSessions.ts)
   事故报告会话加载、创建、重命名、删除。组合 `useIncidentForm` 和 `useIncidentGeneration`，对外提供统一接口。
 - [useIncidentForm.ts](/frontend/src/composables/useIncidentForm.ts)
-  事故报告表单 schema 加载、答案更新、debounce 快照保存。
+  事故报告表单 schema 加载、答案更新、debounce 快照保存。通过 `useIncidentStore` 管理状态。
 - [useIncidentGeneration.ts](/frontend/src/composables/useIncidentGeneration.ts)
-  事故报告生成流程、轮询监控、trace 进度追踪、下载。
+  事故报告生成流程、轮询监控、trace 进度追踪、下载。通过 `useIncidentStore` 管理状态。
 - [useChatStreaming.ts](/frontend/src/composables/useChatStreaming.ts)
-  流式生成、停止生成、流式内容回填。
-- [useMessageTree.ts](/frontend/src/composables/useMessageTree.ts)
-  消息树 CRUD、版本切换、请求快照构建、渲染缓存预热。从 ChatLayout 拆出，负责消息节点的增删改查和树结构维护。
+  流式生成、停止生成、流式内容回填。通过 `useChatStore` 管理状态。
 - [useMessageActions.ts](/frontend/src/composables/useMessageActions.ts)
-  发送、编辑、重生、附件下载、复制等消息操作聚合。
+  发送、编辑、重生、附件下载、复制等消息操作聚合。通过 `useChatStore` 和 `useAppStore` 管理状态。
 - [useTraceModal.ts](/frontend/src/composables/useTraceModal.ts)
-  链路回放弹窗的打开/关闭/重试/复制逻辑，含 404 短轮询重试。从 ChatLayout 拆出。
+  链路回放弹窗的打开/关闭/重试/复制逻辑，含 404 短轮询重试。
 - [useCopyToast.ts](/frontend/src/composables/useCopyToast.ts)
   顶部复制成功提示。
 - [useCatalogLoader.ts](/frontend/src/composables/useCatalogLoader.ts)
-  模型与 skill 列表加载，负责 catalog 拉取与 system skill 过滤。
+  模型与 skill 列表加载，负责 catalog 拉取与 system skill 过滤。通过 `useAppStore` 管理状态。
 - [useSkillMentionSelector.ts](/frontend/src/composables/useSkillMentionSelector.ts)
   统一的 `$skill` 触发、候选过滤、键盘导航、token 删除逻辑，供输入框与编辑态复用。
 - [composables/message/*](/frontend/src/composables/message)
   消息局部逻辑：`useMessageRender`（懒渲染/缓存）、`useMessageEdit`（编辑态自适应输入）。
 
-### 3. 请求层
+### 4. 请求层
 
 - [api/client.ts](/frontend/src/api/client.ts)
   `axios` 实例。
@@ -127,7 +225,7 @@ frontend/
 - [api/trace.ts](/frontend/src/api/trace.ts)
   链路回放查询接口封装（`/api/system/agent-traces/{trace_id}`）。
 
-### 4. 类型层
+### 5. 类型层
 
 - [types/chat.ts](/frontend/src/types/chat.ts)
   消息节点、聊天请求、流式事件等类型。
@@ -140,7 +238,7 @@ frontend/
 - [types/skill.ts](/frontend/src/types/skill.ts)
   skill 选项与 catalog 结构。
 
-### 5. 工具层
+### 6. 工具层
 
 - [utils/render-markdown.ts](/frontend/src/utils/render-markdown.ts)
   Markdown 渲染、高亮语言按需加载、消息渲染缓存、预热逻辑。
@@ -163,6 +261,21 @@ frontend/
 
 当前有 4 个 TS 配置文件，这属于正常拆分：
 
+- [tsconfig.base.json](/frontend/tsconfig.base.json)
+  公共编译选项。
+- [tsconfig.json](/frontend/tsconfig.json)
+  前端应用默认配置，编辑器主要吃这个。
+- [tsconfig.app.json](/frontend/tsconfig.app.json)
+  应用代码入口别名，和当前项目结构保持一致。
+- [tsconfig.node.json](/frontend/tsconfig.node.json)
+  给 `vite.config.mts`、`vitest.config.ts` 这类 Node 侧配置文件使用。
+
+如果后续出现"命令行没报错，但编辑器局部红线"的情况，优先检查：
+
+1. 新文件是否落在 `tsconfig.json` / `tsconfig.app.json` 的 `include` 范围内。
+2. 是否缺少 `.d.ts` 模块声明。
+3. 是否把 Node 配置文件误放进了应用配置里。
+
 ## 字段命名约定
 
 前后端统一使用 `snake_case` 作为字段命名格式：
@@ -173,21 +286,6 @@ frontend/
 - 不要在 API 层写 `normalize` 函数做字段映射。
 
 如果后端新增了字段，前端直接用 `snake_case` 对应即可，不需要额外转换。
-
-- [tsconfig.base.json](/frontend/tsconfig.base.json)
-  公共编译选项。
-- [tsconfig.json](/frontend/tsconfig.json)
-  前端应用默认配置，编辑器主要吃这个。
-- [tsconfig.app.json](/frontend/tsconfig.app.json)
-  应用代码入口别名，和当前项目结构保持一致。
-- [tsconfig.node.json](/frontend/tsconfig.node.json)
-  给 `vite.config.mts`、`vitest.config.ts` 这类 Node 侧配置文件使用。
-
-如果后续出现“命令行没报错，但编辑器局部红线”的情况，优先检查：
-
-1. 新文件是否落在 `tsconfig.json` / `tsconfig.app.json` 的 `include` 范围内。
-2. 是否缺少 `.d.ts` 模块声明。
-3. 是否把 Node 配置文件误放进了应用配置里。
 
 ## 样式约定
 
@@ -247,7 +345,7 @@ cacheScopeId + messageId + role + contentHash
 如果后续还要继续优化这一块，优先顺序建议是：
 
 1. 保持现有缓存链路稳定
-2. 只扩大“预热范围”而不是推翻渲染结构
+2. 只扩大"预热范围"而不是推翻渲染结构
 3. 真到超长会话明显卡顿时，再考虑消息列表虚拟滚动
 
 ## 消息展示约定
@@ -256,14 +354,14 @@ cacheScopeId + messageId + role + contentHash
 
 ### 1. 实时工具状态显示在当前 AI 消息内
 
-- assistant 消息在流式生成期间，实时 `tool-status` 显示在“当前这条 AI 回复”的气泡内。
+- assistant 消息在流式生成期间，实时 `tool-status` 显示在"当前这条 AI 回复"的气泡内。
 - 回答完成或主动停止后，实时状态不再单独悬浮显示，而是收敛到该消息自己的处理过程区。
 - 不要再把实时工具状态做回页面底部全局提示条，否则用户在长消息生成时需要来回移动视线。
 
 ### 2. AI 附件默认显示在正文之后
 
 - assistant 消息如果同时有正文和附件，先显示正文，再显示附件文件框。
-- 这样可以避免附件把正文顶到下方，也能减少“模型正文里还在解释附件，但文件框已经跑到最前面”的视觉割裂感。
+- 这样可以避免附件把正文顶到下方，也能减少"模型正文里还在解释附件，但文件框已经跑到最前面"的视觉割裂感。
 - 如果后续新增新的附件展示样式，优先保持这个顺序。
 
 ### 3. 附件图标按常见文件类型细分显示
@@ -274,7 +372,7 @@ cacheScopeId + messageId + role + contentHash
 
 ### 4. 链路回放入口
 
-- assistant 消息在收到后端 `trace` 事件后会绑定 `trace_id`，并在该条消息流式结束后显示“查看链路”按钮。
+- assistant 消息在收到后端 `trace` 事件后会绑定 `trace_id`，并在该条消息流式结束后显示"查看链路"按钮。
 - 点击后会打开回放弹窗，调用 `api/trace.ts` 拉取详情；后端刚写入时若短暂 404，前端会做短轮询重试。
 - 会话快照中统一持久化 `trace_id`，切换历史会话后仍可查看对应链路。
 
@@ -292,13 +390,13 @@ cacheScopeId + messageId + role + contentHash
 
 事故报告走独立页面流程：
 
-1. 侧栏切换到“事故报告”后显示欢迎向导。
-2. 点击“开始”会创建事故报告会话，标题格式：`事故报告-YYYY/MM/DD HH:MM`。
+1. 侧栏切换到"事故报告"后显示欢迎向导。
+2. 点击"开始"会创建事故报告会话，标题格式：`事故报告-YYYY/MM/DD HH:MM`。
 3. 页面渲染 `interaction.json` 中全部步骤为完整表单。
 4. 日期字段使用 `datetime-local`，按浏览器本地时区输入与展示。
 5. 生成前先做必填校验，缺项在表单内高亮提示。
-6. 生成中显示“正在生成中，请稍候”并锁定页面操作。
-7. 生成完成后显示“附件已生成，请下载”，按钮切换为下载。
+6. 生成中显示"正在生成中，请稍候"并锁定页面操作。
+7. 生成完成后显示"附件已生成，请下载"，按钮切换为下载。
 8. 仅允许下载 `.docx` 附件。
 9. 若 LLM 润色失败，自动回退原始表单数据生成，并可在链路回放中看到回退状态。
 
@@ -321,6 +419,8 @@ cacheScopeId + messageId + role + contentHash
 - 超过一个组件会用
 - 或者虽然只有一个组件在用，但状态和副作用已经明显让组件变重
 
+如果状态需要跨组件共享或需要持久化，优先放入 Pinia Store。
+
 ### 新增工具函数
 
 如果是纯格式化、纯映射、纯解析逻辑，优先放 `src/utils/`，不要放进组件。
@@ -334,6 +434,8 @@ cacheScopeId + messageId + role + contentHash
 - `happy-dom`
 
 测试目录在 [tests](/frontend/tests)。
+
+测试环境通过 [tests/setup.ts](/frontend/tests/setup.ts) 自动初始化 Pinia，确保组件挂载时 Store 可用。
 
 目前已经覆盖的方向包括：
 
@@ -351,22 +453,24 @@ cacheScopeId + messageId + role + contentHash
 3. 编辑后重新发送
 4. Markdown 缓存 / 预热逻辑
 5. 流式输出回填
+6. Pinia Store 状态持久化与恢复
 
 ## 维护时尽量避免的事
 
 - 不要把 API 请求重新塞回 `.vue`
 - 不要把共享类型重新写回组件内部
 - 不要把长样式块再塞回 SFC
-- 不要为了"规范"过早上 Pinia 或更重的状态架构
 - 不要在消息渲染链路里随意去掉缓存、懒渲染和按需加载
 - 不要在类型或 API 层重新引入 camelCase 兼容代码（normalize 函数、别名双写字段）
+- 不要把组件局部 UI 状态（如弹窗开关、下拉展开）搬进 Store
+- 不要把运行时数据（消息树、流式状态）持久化到 localStorage
 
 ## 当前建议的维护顺序
 
 如果以后继续整理前端，建议优先级如下：
 
 1. 保持 `ChatLayout.vue` 不再回涨
-2. 新逻辑优先落到 `api / utils / composables`
+2. 新逻辑优先落到 `api / utils / composables / stores`
 3. 补测试而不是堆更多手工回归
 4. 真出现长会话性能瓶颈时，再考虑虚拟滚动
 
