@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""通过 Windows Word 自动刷新目录、页码与日期域。"""
+"""通过 Word 或 LibreOffice 自动刷新目录、页码与日期域。"""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
+import zipfile
 from pathlib import Path
 
 from docx import Document
@@ -21,23 +23,37 @@ from docx.text.paragraph import Paragraph
 SCRIPT_DIR = Path(__file__).resolve().parent
 PS_SCRIPT = SCRIPT_DIR / "refresh_with_word.ps1"
 
+LIBREOFFICE_BIN_CANDIDATES = [
+    "libreoffice",
+    "soffice",
+    "/usr/bin/libreoffice",
+    "/usr/bin/soffice",
+    "/snap/bin/libreoffice",
+]
+
 
 def is_wsl() -> bool:
-    """判断当前是否运行在 WSL。"""
     return "WSL_DISTRO_NAME" in os.environ or "microsoft" in platform.release().lower()
 
 
+def _find_libreoffice_binary() -> str | None:
+    for candidate in LIBREOFFICE_BIN_CANDIDATES:
+        if shutil.which(candidate):
+            return candidate
+    return None
+
+
 def detect_refresh_backend() -> str | None:
-    """检测当前环境可用的文档刷新后端。"""
-    if sys.platform.startswith("win") and shutil.which("powershell"):
-        return "windows-word"
     if is_wsl() and shutil.which("powershell.exe") and shutil.which("wslpath"):
         return "windows-word"
+    if sys.platform.startswith("win") and shutil.which("powershell"):
+        return "windows-word"
+    if _find_libreoffice_binary():
+        return "libreoffice"
     return None
 
 
 def wsl_to_windows_path(path: Path) -> str:
-    """把 WSL 路径转换成 Windows 路径，供 powershell.exe 使用。"""
     completed = subprocess.run(
         ["wslpath", "-w", str(path)],
         check=True,
@@ -48,11 +64,99 @@ def wsl_to_windows_path(path: Path) -> str:
 
 
 def refresh_document(document_path: Path) -> None:
-    """调用 Windows Word 打开文档、更新字段并保存。"""
     backend = detect_refresh_backend()
-    if backend != "windows-word":
-        raise RuntimeError("当前环境没有可用的 Word 自动刷新能力。")
+    if backend == "libreoffice":
+        _refresh_with_libreoffice(document_path)
+        return
+    if backend == "windows-word":
+        _refresh_with_windows_word(document_path)
+        return
+    raise RuntimeError("当前环境没有可用的文档刷新后端（Word 或 LibreOffice）。")
 
+
+def _build_libreoffice_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["SAL_DISABLE_SYNCHRONOUS_PRINTER_DETECTION"] = "1"
+    home = env.get("HOME", "")
+    if not home or not os.path.isdir(home) or not os.access(home, os.W_OK):
+        env["HOME"] = tempfile.gettempdir()
+    return env
+
+
+def _read_docx_xml(document_path: Path, member_name: str) -> str:
+    try:
+        with zipfile.ZipFile(document_path) as archive:
+            return archive.read(member_name).decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def _document_has_toc_field(document_path: Path) -> bool:
+    document_xml = _read_docx_xml(document_path, "word/document.xml")
+    if not document_xml:
+        return False
+    return "TOC \\o" in document_xml or "TOC \\\\o" in document_xml
+
+
+def _document_has_static_toc_entries(document_path: Path) -> bool:
+    document_xml = _read_docx_xml(document_path, "word/document.xml")
+    if not document_xml:
+        return False
+    return 'w:anchor="_Toc' in document_xml
+
+
+def _refresh_with_libreoffice(document_path: Path) -> None:
+    libreoffice_bin = _find_libreoffice_binary()
+    if not libreoffice_bin:
+        raise RuntimeError("未找到 LibreOffice 可执行文件。")
+
+    lo_env = _build_libreoffice_env()
+    has_toc_field_before = _document_has_toc_field(document_path)
+
+    with tempfile.TemporaryDirectory(prefix="lo_refresh_") as tmpdir:
+        result = subprocess.run(
+            [
+                libreoffice_bin,
+                "--headless",
+                "--norestore",
+                "--nocrashreport",
+                "--writer",
+                "--convert-to",
+                "docx",
+                "--outdir",
+                tmpdir,
+                str(document_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=lo_env,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"LibreOffice 刷新失败（退出码 {result.returncode}）：{result.stderr or result.stdout}"
+            )
+
+        converted = Path(tmpdir) / document_path.name
+        if not converted.exists():
+            raise RuntimeError(
+                f"LibreOffice 未生成输出文件。stdout: {result.stdout}, stderr: {result.stderr}"
+            )
+
+        if has_toc_field_before:
+            has_toc_field_after = _document_has_toc_field(converted)
+            has_static_toc_after = _document_has_static_toc_entries(converted)
+            if not has_toc_field_after and not has_static_toc_after:
+                raise RuntimeError(
+                    "LibreOffice 刷新后目录字段丢失，已保留原始文档。"
+                    "请改用 Windows Word 刷新，或保持原文件在打开时自动更新目录。"
+                )
+
+        shutil.copy2(str(converted), str(document_path))
+
+
+def _refresh_with_windows_word(document_path: Path) -> None:
     if sys.platform.startswith("win"):
         subprocess.run(
             [
@@ -87,8 +191,6 @@ def refresh_document(document_path: Path) -> None:
 
 
 def patch_revision_history_table_fonts(document_path: Path) -> None:
-    """用 python-docx 做合法结构修改，避免手写 XML 造成 Word 修复提示。"""
-
     def set_run_font(run) -> None:
         run.font.name = "Times New Roman"
         run.font.size = run.font.size or None
@@ -178,7 +280,7 @@ def patch_revision_history_table_fonts(document_path: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="通过 Windows Word 刷新 docx 文档中的域。")
+    parser = argparse.ArgumentParser(description="通过 Word 或 LibreOffice 刷新 docx 文档中的域。")
     parser.add_argument("--document", help="要刷新的 docx 路径")
     parser.add_argument("--check", action="store_true", help="只检查当前环境是否支持自动刷新")
     return parser.parse_args()
@@ -186,8 +288,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    backend = detect_refresh_backend()
     if args.check:
-        backend = detect_refresh_backend()
         if backend:
             print(backend)
             return
@@ -203,7 +305,7 @@ def main() -> None:
         patch_revision_history_table_fonts(document_path)
     except Exception as exc:
         raise SystemExit(f"文档刷新失败：{exc}") from exc
-    print(f"已通过 Word 刷新文档：{document_path}")
+    print(f"已通过 {backend} 刷新文档：{document_path}")
 
 
 if __name__ == "__main__":

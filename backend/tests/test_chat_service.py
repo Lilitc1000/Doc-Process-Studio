@@ -3,6 +3,7 @@ from doc_process_studio.services.chat.streaming import (
     build_upstream_messages_for_skills,
     extract_done_reason,
     extract_delta_text,
+    merge_stream_tool_calls,
 )
 from doc_process_studio.models.conversation.stream import (
     ChatMessageInput,
@@ -66,3 +67,73 @@ def test_build_upstream_messages_for_skills_prepends_system_prompt() -> None:
         "role": "user",
         "content": "请解释这份文档",
     }
+
+
+def test_merge_stream_tool_calls_splits_reused_index_complete_calls() -> None:
+    merged: dict[int, dict] = {}
+    merge_stream_tool_calls(
+        merged,
+        [
+            {
+                "index": 0,
+                "type": "function",
+                "function": {
+                    "name": "list_skill_directory",
+                    "arguments": {"relative_path": "."},
+                },
+            }
+        ],
+    )
+    merge_stream_tool_calls(
+        merged,
+        [
+            {
+                "index": 0,
+                "type": "function",
+                "function": {
+                    "name": "list_skill_directory",
+                    "arguments": {"relative_path": "references"},
+                },
+            }
+        ],
+    )
+
+    assert len(merged) == 2
+    assert merged[0]["function"]["name"] == "list_skill_directory"
+    assert merged[1]["function"]["name"] == "list_skill_directory"
+    assert '"relative_path": "."' in merged[0]["function"]["arguments"]
+    assert '"relative_path": "references"' in merged[1]["function"]["arguments"]
+
+
+def test_merge_stream_tool_calls_keeps_progressive_single_call() -> None:
+    merged: dict[int, dict] = {}
+    merge_stream_tool_calls(
+        merged,
+        [
+            {
+                "index": 0,
+                "type": "function",
+                "function": {
+                    "name": "generate_document",
+                    "arguments": {},
+                },
+            }
+        ],
+    )
+    merge_stream_tool_calls(
+        merged,
+        [
+            {
+                "index": 0,
+                "type": "function",
+                "function": {
+                    "name": "generate_document",
+                    "arguments": {"system_name": "交通系统"},
+                },
+            }
+        ],
+    )
+
+    assert len(merged) == 1
+    assert merged[0]["function"]["name"] == "generate_document"
+    assert '"system_name": "交通系统"' in merged[0]["function"]["arguments"]

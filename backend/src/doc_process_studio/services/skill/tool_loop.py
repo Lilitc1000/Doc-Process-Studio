@@ -1134,6 +1134,57 @@ def _apply_json_file_text_normalizer(
     )
 
 
+def _try_parse_json_like_value(raw_text: str) -> dict | list | None:
+    """尝试解析 JSON 文本（含双重编码场景）。"""
+    parsed_value: Any = raw_text
+    for _ in range(2):
+        if not isinstance(parsed_value, str):
+            break
+        try:
+            parsed_value = json.loads(parsed_value)
+        except json.JSONDecodeError:
+            return None
+
+    if isinstance(parsed_value, (dict, list)):
+        return parsed_value
+    return None
+
+
+def _normalize_json_like_punctuation(text: str) -> str:
+    """把 JSON 结构符号中的中文标点规整为英文标点（仅在字符串外生效）。"""
+    normalized_chars: list[str] = []
+    in_string = False
+    escape_next = False
+
+    for ch in text:
+        if escape_next:
+            normalized_chars.append(ch)
+            escape_next = False
+            continue
+
+        if ch == "\\" and in_string:
+            normalized_chars.append(ch)
+            escape_next = True
+            continue
+
+        if ch == '"':
+            normalized_chars.append(ch)
+            in_string = not in_string
+            continue
+
+        if not in_string:
+            if ch == "，":
+                normalized_chars.append(",")
+                continue
+            if ch == "：":
+                normalized_chars.append(":")
+                continue
+
+        normalized_chars.append(ch)
+
+    return "".join(normalized_chars)
+
+
 def _coerce_json_file_argument(
     argument_name: str,
     argument_value: Any,
@@ -1150,17 +1201,27 @@ def _coerce_json_file_argument(
             raise ValueError(f"参数 `{argument_name}` 不能为空字符串。")
 
         normalized = _strip_wrapped_code_fence(normalized)
-        parsed_value: Any = normalized
-        for _ in range(2):
-            if not isinstance(parsed_value, str):
-                break
-            try:
-                parsed_value = json.loads(parsed_value)
-            except json.JSONDecodeError:
-                break
+        parsed_json_value = _try_parse_json_like_value(normalized)
+        if isinstance(parsed_json_value, (dict, list)):
+            return parsed_json_value
 
-        if isinstance(parsed_value, (dict, list)):
-            return parsed_value
+        json_like = normalized.startswith(("[", "{"))
+        if json_like:
+            normalized_punctuation = _normalize_json_like_punctuation(normalized)
+            if normalized_punctuation != normalized:
+                parsed_with_punctuation_fix = _try_parse_json_like_value(normalized_punctuation)
+                if isinstance(parsed_with_punctuation_fix, (dict, list)):
+                    return parsed_with_punctuation_fix
+
+                repaired_with_punctuation_fix = _try_repair_truncated_json(
+                    normalized_punctuation
+                )
+                if isinstance(repaired_with_punctuation_fix, (dict, list)):
+                    return repaired_with_punctuation_fix
+
+            repaired = _try_repair_truncated_json(normalized)
+            if isinstance(repaired, (dict, list)):
+                return repaired
 
         if yaml is not None:
             try:
@@ -1170,10 +1231,11 @@ def _coerce_json_file_argument(
             if isinstance(parsed_yaml, (dict, list)):
                 return parsed_yaml
 
-        if normalized.startswith(("[", "{")):
-            repaired = _try_repair_truncated_json(normalized)
-            if isinstance(repaired, (dict, list)):
-                return repaired
+        if json_like:
+            raise ValueError(
+                f"参数 `{argument_name}` 看起来是 JSON，但解析失败。"
+                "请检查是否存在中文逗号/冒号、缺失引号或截断。"
+            )
 
         normalized_value = _apply_json_file_text_normalizer(
             argument_name=argument_name,

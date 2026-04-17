@@ -48,7 +48,7 @@ description: Generate a project-specific system architecture and design DOCX by 
 - `--version`：版本號，默認 1.0
 - `--doc-plan`：文檔章節結構（後端自動將 doc_plan 參數序列化為 JSON 文件並注入）
 - `--output`：輸出路徑（後端自動注入）
-- `--no-refresh-with-word`：禁用 Word 域刷新（後端自動注入）
+- `--refresh-with-word`：嘗試使用可用後端刷新目錄與頁碼（後端自動注入）
 
 注意：
 
@@ -95,9 +95,10 @@ description: Generate a project-specific system architecture and design DOCX by 
 - 用 `python-docx` 產出接近參考文檔觀感的 `.docx`。
 - 默認自動探測是否可刷新文檔域；若當前環境支持，會自動更新目錄、頁碼和日期域後再保存。
 - 目前已支持：
+  - Linux + LibreOffice（若刷新後檢測到目錄字段丟失，會自動保留原文檔並降級）
   - WSL + Windows Word
   - 原生 Windows + Word
-- 若在普通 Linux 環境中沒有可用的 Word 刷新能力，腳本會自動跳過該步驟，不會報錯中斷。
+- 若在普通 Linux 環境中沒有可用刷新能力，腳本會自動跳過該步驟，不會報錯中斷。
 - `--doc-plan` 是正文生成的主入口；正常使用時應始終由你先生成完整 `doc-plan` 再調腳本。
 - 繁體中文轉換必須使用成熟後端：
   - 優先使用當前 Python 環境可導入的 `OpenCC`

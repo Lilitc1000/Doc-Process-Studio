@@ -1101,11 +1101,17 @@ def main() -> None:
     )
 
     refresh_with_word = args.refresh_with_word
-    fail_on_refresh_error = args.refresh_with_word is True
     refresh_backend = detect_refresh_backend_name()
     if refresh_with_word is None:
         refresh_with_word = refresh_backend is not None
         fail_on_refresh_error = False
+    elif refresh_with_word and refresh_backend is None:
+        print(f"警告：指定了 --refresh-with-word，但当前环境无可用的刷新后端，将跳过刷新。")
+        refresh_with_word = False
+        fail_on_refresh_error = False
+    else:
+        # Windows Word 刷新稳定性较高，保持严格失败；LibreOffice 刷新失败时降级保留原文档。
+        fail_on_refresh_error = refresh_backend == "windows-word"
 
     refresh_completed = build_document(
         project_root=project_root,

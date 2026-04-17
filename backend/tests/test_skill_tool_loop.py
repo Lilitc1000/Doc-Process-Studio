@@ -24,6 +24,18 @@ def test_coerce_json_file_argument_accepts_json_string() -> None:
     assert parsed["chapters"][0]["title"] == "章节一"
 
 
+def test_coerce_json_file_argument_accepts_json_string_with_chinese_punctuation() -> None:
+    payload = (
+        '[{"title":"1. 概述","content":"正文一"}，'
+        '{"title":"2. 架构","content":"正文二"}]'
+    )
+    parsed = _coerce_json_file_argument("doc_plan", payload)
+    assert isinstance(parsed, list)
+    assert len(parsed) == 2
+    assert parsed[0]["title"] == "1. 概述"
+    assert parsed[1]["title"] == "2. 架构"
+
+
 def test_coerce_json_file_argument_accepts_double_encoded_json_string() -> None:
     payload = json.dumps('{"chapters":[{"title":"章节一"}]}')
     parsed = _coerce_json_file_argument("outline_payload", payload)
@@ -79,6 +91,19 @@ def test_coerce_json_file_argument_rejects_invalid_string() -> None:
 def test_coerce_json_file_argument_rejects_plain_text_without_text_normalizer() -> None:
     with pytest.raises(ValueError, match="JSON/YAML"):
         _coerce_json_file_argument("outline_payload", "这是普通文本")
+
+
+def test_coerce_json_file_argument_rejects_invalid_json_like_even_with_text_normalizer() -> None:
+    payload = (
+        '{"chapters":[{"title":"1. 概述","content":"正文"}]，'
+        '{"title":"2. 架构","content":"正文二"}}'
+    )
+    with pytest.raises(ValueError, match="看起来是 JSON"):
+        _coerce_json_file_argument(
+            "doc_plan",
+            payload,
+            text_normalizer="chaptered_document",
+        )
 
 
 def test_builtin_tool_rejects_unknown_arguments() -> None:
