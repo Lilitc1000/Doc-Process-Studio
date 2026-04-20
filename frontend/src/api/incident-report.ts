@@ -1,7 +1,8 @@
 import { apiClient } from './client';
 import type {
+  IncidentBodyGenerateResponse,
   IncidentFormSchemaPayload,
-  IncidentGenerateResponse,
+  IncidentPreviewResponse,
   IncidentSessionDetail,
   IncidentSessionSummary,
   IncidentSnapshot,
@@ -50,20 +51,66 @@ export const saveIncidentSessionSnapshot = async (
   return response.data;
 };
 
-export const generateIncidentAttachment = async (
+export const quickGenerateIncidentBody = async (
   sessionId: string,
   payload: {
     model: string;
     reranker_model?: string;
-    output_name?: string;
   },
   options?: {
     signal?: AbortSignal;
   },
 ) => {
-  const response = await apiClient.post<IncidentGenerateResponse>(
-    `/incident-report/sessions/${sessionId}/generate`,
+  const response = await apiClient.post<IncidentBodyGenerateResponse>(
+    `/incident-report/sessions/${sessionId}/body/quick-generate`,
     payload,
+    {
+      signal: options?.signal,
+    },
+  );
+  return response.data;
+};
+
+export const generateIncidentBodySection = async (
+  sessionId: string,
+  payload: {
+    model: string;
+    reranker_model?: string;
+    section_id: string;
+    timeline_index?: number;
+  },
+  options?: {
+    signal?: AbortSignal;
+  },
+) => {
+  const response = await apiClient.post<IncidentBodyGenerateResponse>(
+    `/incident-report/sessions/${sessionId}/body/section-generate`,
+    payload,
+    {
+      signal: options?.signal,
+    },
+  );
+  return response.data;
+};
+
+export const previewIncidentAttachment = async (
+  sessionId: string,
+  payload?: {
+    version?: number;
+    model?: string;
+    reranker_model?: string;
+  },
+  options?: {
+    signal?: AbortSignal;
+  },
+) => {
+  const response = await apiClient.post<IncidentPreviewResponse>(
+    `/incident-report/sessions/${sessionId}/preview`,
+    {
+      version: payload?.version ?? null,
+      model: payload?.model ?? null,
+      reranker_model: payload?.reranker_model ?? null,
+    },
     {
       signal: options?.signal,
     },

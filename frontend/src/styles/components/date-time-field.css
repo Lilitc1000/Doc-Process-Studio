@@ -14,8 +14,8 @@
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  justify-content: flex-start;
+  gap: 0.58rem;
   box-shadow:
     0 10px 24px rgba(15, 23, 42, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
@@ -42,6 +42,7 @@
 }
 
 .date-time-trigger-text {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -63,6 +64,30 @@
     color 0.22s ease,
     background 0.22s ease,
     border-color 0.22s ease;
+}
+
+.date-time-trigger-chevron {
+  width: 1.4rem;
+  height: 1.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  flex-shrink: 0;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
+}
+
+.date-time-trigger-chevron.open {
+  color: #1d4ed8;
+  transform: rotate(180deg);
+}
+
+.date-time-trigger-chevron-svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  display: block;
 }
 
 .date-time-trigger-icon-svg {
@@ -375,7 +400,9 @@
 }
 
 .date-time-action-btn.is-primary:hover:not(:disabled) {
-  color: #60a5fa;
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
 }
 
 .date-time-action-btn:disabled {

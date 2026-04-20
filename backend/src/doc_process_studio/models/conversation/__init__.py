@@ -3,8 +3,6 @@ from .file_context import UploadedFileContext
 from .incident_report import (
     IncidentFormAnswer,
     IncidentReportFormSchemaResponse,
-    IncidentReportGenerateRequest,
-    IncidentReportGenerateResponse,
     IncidentReportSessionCreateRequest,
     IncidentReportSessionDetail,
     IncidentReportSessionListResponse,
@@ -41,8 +39,6 @@ __all__ = [
     "ChatAttachmentMetadata",
     "IncidentFormAnswer",
     "IncidentReportFormSchemaResponse",
-    "IncidentReportGenerateRequest",
-    "IncidentReportGenerateResponse",
     "IncidentReportSessionCreateRequest",
     "IncidentReportSessionDetail",
     "IncidentReportSessionListResponse",

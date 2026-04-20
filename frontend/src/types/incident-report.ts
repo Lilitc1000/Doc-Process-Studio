@@ -27,15 +27,25 @@ export interface IncidentFormStep {
 }
 
 export interface IncidentFormAnswer {
-  value?: string | string[] | null;
+  value?: unknown;
   custom_value?: string;
+}
+
+export interface IncidentGeneratedVersion {
+  version: number;
+  label: string;
+  generated_at: string;
+  attachment: ChatAttachment;
+  report_data: Record<string, unknown>;
 }
 
 export interface IncidentSnapshot {
   form_answers: Record<string, IncidentFormAnswer>;
   report_data?: Record<string, unknown> | null;
   generated_attachment?: ChatAttachment | null;
+  generated_versions?: IncidentGeneratedVersion[];
   generated_trace_id?: string | null;
+  section_trace_ids?: Record<string, string>;
   generated_at?: string | null;
   is_locked: boolean;
   fallback_used: boolean;
@@ -59,8 +69,21 @@ export interface IncidentFormSchemaPayload {
   steps: IncidentFormStep[];
 }
 
-export interface IncidentGenerateResponse {
+export interface IncidentBodyGenerateResponse {
   session: IncidentSessionSummary;
   snapshot: IncidentSnapshot;
   trace_id: string;
+  section_id: string;
+  timeline_index?: number | null;
+}
+
+export interface IncidentPreviewResponse {
+  source: 'draft' | 'version';
+  version?: number | null;
+  label: string;
+  html: string;
+  docx_base64?: string | null;
+  docx_file_name?: string | null;
+  pdf_base64?: string | null;
+  warnings: string[];
 }

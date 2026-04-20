@@ -38,7 +38,9 @@ vi.mock('../src/api/incident-report', () => ({
   createIncidentSession: vi.fn(),
   fetchIncidentSessionDetail: vi.fn(),
   saveIncidentSessionSnapshot: vi.fn(),
-  generateIncidentAttachment: vi.fn(),
+  quickGenerateIncidentBody: vi.fn(),
+  generateIncidentBodySection: vi.fn(),
+  previewIncidentAttachment: vi.fn(),
   renameIncidentSession: vi.fn(),
   removeIncidentSession: vi.fn(),
 }));

@@ -339,30 +339,39 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
 
 事故报告后端接口：
 
-- `GET /api/incident-report/schema`：获取欢迎文案与表单步骤（来自 `agents/interaction.json`）。
+- `GET /api/incident-report/schema`：获取事故报告工作区内建欢迎文案与表单定义（当前 `steps` 固定为空，由前端新表单逻辑驱动）。
 - `GET /api/incident-report/sessions`：获取事故报告会话列表。
-- `POST /api/incident-report/sessions`：创建事故报告会话。
+- `POST /api/incident-report/sessions`：创建事故报告会话，并自动生成可预览/可下载的 `V1` 初始历史版本。
 - `GET /api/incident-report/sessions/{session_id}`：读取会话详情与表单快照。
 - `PUT /api/incident-report/sessions/{session_id}`：实时保存表单答案。
-- `POST /api/incident-report/sessions/{session_id}/generate`：触发附件生成。
+- `POST /api/incident-report/sessions/{session_id}/body/quick-generate`：快填正文生成（返回可直接回填完整模式的字段）。
+- `POST /api/incident-report/sessions/{session_id}/body/section-generate`：完整模式分段生成（支持 timeline_item 按条生成）。
+- `POST /api/incident-report/sessions/{session_id}/preview`：预览附件（未传版本号时按当前草稿实时生成预览并返回可下载 DOCX；传版本号时预览对应历史版本）。
 - `PATCH /api/incident-report/sessions/{session_id}/title`：修改标题。
 - `DELETE /api/incident-report/sessions/{session_id}`：删除会话并清理附件/trace。
 
-生成链路说明：
+正文生成链路（涉及 LLM）：
 
-1. 先做表单必填校验，缺项时返回明确错误。
-2. 将表单答案映射为结构化 `incident_data.json`（对齐 `examples/incident_data.json`）。
-3. 把该 `incident_data.json` 作为会话上传文件注入 incident-report skill 对话上下文。
-4. 由 incident-report skill 驱动模型读取该文件，润色叙述型字段后调用 `generate_incident_report`。
-5. 后端从工具参数中提取润色后的 `report_data` 回写快照，并保存生成附件。
-6. 只接受 `.docx`（Word）附件作为最终产物。
+1. 快填模式仅输入简述文本，调用 `body/quick-generate`。
+2. 模型返回 JSON（事故简述、时间线、影响、根因、后续动作等），后端统一回填到完整模式字段。
+3. 完整模式支持 `description/timeline/impact/root_cause/follow_up/timeline_item` 分段生成。
+4. 每次正文生成都会记录 `trace_id` 并落入 `section_trace_ids`，前端可就近回放链路。
 
-会话状态约定：
+预览与导出链路：
 
-- `draft`：可编辑未生成。
-- `generating`：正在生成，页面与侧栏应锁定。
-- `generated`：已生成，表单锁定。
-- `failed`：生成失败，可继续修正后重试。
+1. 后端从当前表单快照构建 `report_data`。
+2. 若正文/附录包含中文，使用当前请求模型将内容翻译为英文（保持日期/时间/ID 不变）。
+3. 使用 `generate_incident_report` 脚本按参考模板生成 DOCX（清理模板示例正文，仅保留章节标题与用户填写内容；Impact 附表默认清空）。
+4. 预览接口默认走草稿实时链路：直接返回本次预览 DOCX（base64）和 PDF/HTML 预览内容，前端下载与预览保持一致。
+5. 新建会话仍会初始化 `V1` 历史版本，供需要时回看。
+
+表单与模板映射约定：
+
+- 手工首页前端标签可中文化，但后端 `report_data` 仍按英文模板字段写入，确保生成文档与参考模板一致。
+- 所有日期字段统一归一为 `DD/MM/YYYY`；时间线时间支持 `HH:MM`、`YYYY-MM-DDTHH:MM`、`DD/MM/YYYY HH:MM`、`AM/PM` 等格式。
+- 附录支持富文本（HTML + 内嵌图片 data URL），后端会解析为：
+  - `appendix.notes`（纯文本）
+  - `appendix.images`（图片列表）
 
 ## Tool Calling 与 Skill 上下文
 当前主链路已升级为“分层规划 + 会话级 Agent 状态 + 执行器调度 + 生产级可靠性防护（阶段4）”。

@@ -19,7 +19,7 @@ const formatIncidentStatusLabel = (
   if (status === 'failed') {
     return '失败';
   }
-  return '未生成';
+  return '';
 };
 
 export const useIncidentStore = defineStore('incident', () => {
@@ -29,9 +29,20 @@ export const useIncidentStore = defineStore('incident', () => {
   const incidentSchema = ref<IncidentFormSchemaPayload | null>(null);
   const isIncidentGenerating = ref(false);
   const generationState = ref<'idle' | 'generating' | 'done'>('idle');
+  const generationTask = ref<'none' | 'attachment' | 'quick-body' | 'section'>(
+    'none',
+  );
   const incidentErrorMessage = ref('');
   const incidentGenerationTraceId = ref('');
   const incidentGenerationProgress = ref<string[]>([]);
+  const incidentPreviewHtml = ref('');
+  const incidentPreviewPdfBase64 = ref('');
+  const incidentPreviewSource = ref<'draft' | 'version' | ''>('');
+  const incidentPreviewDocxBase64 = ref('');
+  const incidentPreviewDocxFileName = ref('');
+  const incidentPreviewLoading = ref(false);
+  const incidentPreviewError = ref('');
+  const incidentPreviewVersion = ref<number | null>(null);
 
   const incidentSidebarSessions = computed<ChatSessionSummary[]>(() => {
     return incidentSessionSummaries.value.map((summary) => ({
@@ -77,14 +88,34 @@ export const useIncidentStore = defineStore('incident', () => {
   const clearActiveIncidentSession = () => {
     activeIncidentSessionId.value = null;
     activeIncidentSession.value = null;
+    incidentPreviewHtml.value = '';
+    incidentPreviewPdfBase64.value = '';
+    incidentPreviewSource.value = '';
+    incidentPreviewDocxBase64.value = '';
+    incidentPreviewDocxFileName.value = '';
+    incidentPreviewLoading.value = false;
+    incidentPreviewError.value = '';
+    incidentPreviewVersion.value = null;
   };
 
   const resetGenerationState = () => {
     generationState.value = 'idle';
+    generationTask.value = 'none';
     incidentErrorMessage.value = '';
     incidentGenerationTraceId.value = '';
     incidentGenerationProgress.value = [];
     isIncidentGenerating.value = false;
+  };
+
+  const resetPreviewState = () => {
+    incidentPreviewHtml.value = '';
+    incidentPreviewPdfBase64.value = '';
+    incidentPreviewSource.value = '';
+    incidentPreviewDocxBase64.value = '';
+    incidentPreviewDocxFileName.value = '';
+    incidentPreviewLoading.value = false;
+    incidentPreviewError.value = '';
+    incidentPreviewVersion.value = null;
   };
 
   return {
@@ -93,14 +124,24 @@ export const useIncidentStore = defineStore('incident', () => {
     applyIncidentDetail,
     clearActiveIncidentSession,
     generationState,
+    generationTask,
     incidentErrorMessage,
     incidentGenerationProgress,
     incidentGenerationTraceId,
+    incidentPreviewError,
+    incidentPreviewSource,
+    incidentPreviewDocxBase64,
+    incidentPreviewDocxFileName,
+    incidentPreviewHtml,
+    incidentPreviewPdfBase64,
+    incidentPreviewLoading,
+    incidentPreviewVersion,
     incidentSchema,
     incidentSessionSummaries,
     incidentSidebarSessions,
     isIncidentGenerating,
     mergeSummary,
     resetGenerationState,
+    resetPreviewState,
   };
 });

@@ -1,12 +1,11 @@
 import asyncio
 from datetime import UTC, datetime
-from types import SimpleNamespace
-
-import pytest
 
 import doc_process_studio.services.chat.incident_reports as incident_reports_module
 from doc_process_studio.models.conversation.attachments import ChatAttachment
 from doc_process_studio.models.conversation.incident_report import (
+    IncidentFormAnswer,
+    IncidentGeneratedVersion,
     IncidentReportSessionDetail,
     IncidentReportSessionSnapshot,
     IncidentReportSessionSummary,
@@ -31,27 +30,6 @@ class _FakeRecorder:
         return None
 
 
-def _build_detail() -> IncidentReportSessionDetail:
-    now = datetime.now(UTC)
-    return IncidentReportSessionDetail(
-        id="incident-session-1",
-        title="事故报告-2026/04/14 12:30",
-        status="draft",
-        created_at=now,
-        updated_at=now,
-        snapshot=IncidentReportSessionSnapshot(
-            form_answers={},
-            report_data=None,
-            generated_attachment=None,
-            generated_trace_id=None,
-            generated_at=None,
-            is_locked=False,
-            fallback_used=False,
-            polish_error=None,
-        ),
-    )
-
-
 def _build_docx_attachment(attachment_id: str, name: str) -> ChatAttachment:
     return ChatAttachment(
         attachment_id=attachment_id,
@@ -65,194 +43,35 @@ def _build_docx_attachment(attachment_id: str, name: str) -> ChatAttachment:
     )
 
 
-def test_generate_incident_attachment_runs_skill_chat_with_uploaded_json(monkeypatch) -> None:
-    detail = _build_detail()
-    generated_attachment = _build_docx_attachment(
-        "generated-attachment-1",
-        "incident-report.docx",
-    )
-    uploaded_attachment = _build_docx_attachment(
-        "uploaded-attachment-1",
-        "incident_data.json",
-    ).model_copy(
-        update={
-            "source": "uploaded",
-            "mime_type": "application/json",
-        }
-    )
-
-    draft_report_data = {
-        "detailed_description": "payment timeout",
-        "root_cause": "db lock",
-    }
-    polished_report_data = {
-        "detailed_description": "Payment timeout occurred during peak traffic.",
-        "root_cause": "Database lock contention after deployment.",
-    }
-    captured = {
-        "saved_summaries": [],
-        "saved_snapshots": [],
-        "stream_calls": 0,
-    }
-
-    async def fake_get_incident_report_session(session_id: str):
-        assert session_id == "incident-session-1"
-        return detail
-
-    def fake_build_incident_interaction_config():
-        return SimpleNamespace(steps=[object(), object()])
-
-    def fake_build_report_data_from_snapshot(*, config, snapshot):
-        assert len(config.steps) == 2
-        assert snapshot is detail.snapshot
-        return draft_report_data, []
-
-    async def fake_save_incident_session_summary(summary: IncidentReportSessionSummary) -> None:
-        captured["saved_summaries"].append(summary)
-
-    async def fake_save_incident_session_snapshot(session_id: str, snapshot: IncidentReportSessionSnapshot) -> None:
-        assert session_id == "incident-session-1"
-        captured["saved_snapshots"].append(snapshot)
-
-    async def fake_touch_incident_session_index(session_id: str, score: float) -> None:
-        assert session_id == "incident-session-1"
-        assert score > 0
-
-    def fake_save_uploaded_attachment(
-        *,
-        raw_bytes: bytes,
-        conversation_id: str,
-        skill_id: str,
-        file_name: str,
-        mime_type: str | None,
-        extracted_text: str | None = None,
-    ):
-        assert conversation_id == "incident-session-1"
-        assert skill_id == "incident-report"
-        assert file_name == "incident_data.json"
-        assert mime_type == "application/json"
-        assert raw_bytes.decode("utf-8").strip().startswith("{")
-        assert extracted_text and '"detailed_description"' in extracted_text
-        return uploaded_attachment
-
-    def fake_build_persisted_uploaded_files_context(attachment_ids: list[str]) -> str | None:
-        assert attachment_ids == ["uploaded-attachment-1"]
-        return "uploaded-context"
-
-    def fake_get_skill_interface(_skill_id: str):
-        return SimpleNamespace(default_prompt="incident prompt")
-
-    def fake_build_upstream_messages_for_skills(
-        *,
-        request,
-        active_skill_ids,
-        explicit_skill_ids,
-        uploaded_files_context=None,
-        extra_messages=None,
-        **_kwargs,
-    ):
-        assert active_skill_ids == ["incident-report"]
-        assert explicit_skill_ids == ["incident-report"]
-        messages = [{"role": "system", "content": "incident prompt"}]
-        if uploaded_files_context:
-            messages.append({"role": "user", "content": uploaded_files_context})
-        messages.extend([message.model_dump() for message in request.messages])
-        if extra_messages:
-            messages.extend(extra_messages)
-        return messages
-
-    def fake_build_skill_tools(_skill_id: str):
-        return [{"type": "function", "function": {"name": "generate_incident_report"}}]
-
-    async def fake_stream_chat_completion(*, model: str, messages: list[dict], tools):
-        captured["stream_calls"] += 1
-        assert model == "qwen3-coder-next:latest"
-        assert any(message.get("content") == "uploaded-context" for message in messages)
-        assert any("incident_data.json" in str(message.get("content", "")) for message in messages)
-        assert tools
-        yield {
-            "message": {
-                "role": "assistant",
-                "content": "已完成润色并准备调用工具。",
-                "tool_calls": [
-                    {
-                        "id": "tool-generate-1",
-                        "function": {
-                            "name": "generate_incident_report",
-                            "arguments": {
-                                "report_data": polished_report_data,
-                                "output_name": "incident-report.docx",
-                            },
-                        },
-                    }
-                ],
+def _build_detail() -> IncidentReportSessionDetail:
+    now = datetime.now(UTC)
+    return IncidentReportSessionDetail(
+        id="incident-session-1",
+        title="事故报告-2026/04/14 12:30",
+        status="draft",
+        created_at=now,
+        updated_at=now,
+        snapshot=IncidentReportSessionSnapshot(
+            form_answers={
+                "quick_narrative": IncidentFormAnswer(
+                    value="3月12日下午3点客户说下单报错。", custom_value=""
+                ),
             },
-            "done": False,
-        }
-        yield {
-            "message": {"role": "assistant", "content": ""},
-            "done": True,
-            "done_reason": "tool_calls",
-        }
-        yield None
-
-    def fake_execute_skill_tool_call(*, request, state, tool_call):
-        assert request.conversation_id == "incident-session-1"
-        assert request.attachment_ids == ["uploaded-attachment-1"]
-        assert request.reranker_model == "nomic-embed-text:latest"
-        assert state.skill_id == "incident-report"
-        assert tool_call["function"]["name"] == "generate_incident_report"
-        return {"ok": True}, [generated_attachment]
-
-    monkeypatch.setattr(incident_reports_module, "AgentTraceRecorder", _FakeRecorder)
-    monkeypatch.setattr(incident_reports_module, "get_incident_report_session", fake_get_incident_report_session)
-    monkeypatch.setattr(incident_reports_module, "_build_incident_interaction_config", fake_build_incident_interaction_config)
-    monkeypatch.setattr(incident_reports_module, "_build_report_data_from_snapshot", fake_build_report_data_from_snapshot)
-    monkeypatch.setattr(incident_reports_module, "save_incident_session_summary", fake_save_incident_session_summary)
-    monkeypatch.setattr(incident_reports_module, "save_incident_session_snapshot", fake_save_incident_session_snapshot)
-    monkeypatch.setattr(incident_reports_module, "touch_incident_session_index", fake_touch_incident_session_index)
-    monkeypatch.setattr(incident_reports_module, "save_uploaded_attachment", fake_save_uploaded_attachment)
-    monkeypatch.setattr(
-        incident_reports_module,
-        "build_persisted_uploaded_files_context",
-        fake_build_persisted_uploaded_files_context,
-    )
-    monkeypatch.setattr(incident_reports_module, "get_skill_interface", fake_get_skill_interface)
-    monkeypatch.setattr(
-        incident_reports_module,
-        "build_upstream_messages_for_skills",
-        fake_build_upstream_messages_for_skills,
-    )
-    monkeypatch.setattr(incident_reports_module, "build_skill_tools", fake_build_skill_tools)
-    monkeypatch.setattr(incident_reports_module, "stream_chat_completion", fake_stream_chat_completion)
-    monkeypatch.setattr(incident_reports_module, "execute_skill_tool_call", fake_execute_skill_tool_call)
-    monkeypatch.setattr(incident_reports_module.settings, "ollama_base_url", "http://ollama.local")
-    monkeypatch.setattr(incident_reports_module.settings, "skill_tool_max_iterations", 3)
-
-    result = asyncio.run(
-        incident_reports_module.generate_incident_report_session_attachment(
-            session_id="incident-session-1",
-            model="qwen3-coder-next:latest",
-            reranker_model="nomic-embed-text:latest",
-        )
+            report_data=None,
+            generated_attachment=None,
+            generated_versions=[],
+            generated_trace_id=None,
+            section_trace_ids={},
+            generated_at=None,
+            is_locked=False,
+            fallback_used=False,
+            polish_error=None,
+        ),
     )
 
-    assert result is not None
-    assert result.session.status == "generated"
-    assert result.snapshot.is_locked is True
-    assert result.snapshot.generated_attachment is not None
-    assert result.snapshot.generated_attachment.attachment_id == "generated-attachment-1"
-    assert result.snapshot.report_data == polished_report_data
-    assert captured["stream_calls"] == 1
-    assert captured["saved_summaries"][-1].status == "generated"
-    assert captured["saved_snapshots"][-1].report_data == polished_report_data
 
-
-def test_generate_incident_attachment_fails_when_skill_does_not_call_tool(monkeypatch) -> None:
+def test_quick_generate_body_updates_form_answers_and_trace(monkeypatch) -> None:
     detail = _build_detail()
-    draft_report_data = {
-        "detailed_description": "payment timeout",
-    }
     captured = {
         "saved_summaries": [],
         "saved_snapshots": [],
@@ -262,16 +81,15 @@ def test_generate_incident_attachment_fails_when_skill_does_not_call_tool(monkey
         assert session_id == "incident-session-1"
         return detail
 
-    def fake_build_incident_interaction_config():
-        return SimpleNamespace(steps=[object()])
-
-    def fake_build_report_data_from_snapshot(*_args, **_kwargs):
-        return draft_report_data, []
-
-    async def fake_save_incident_session_summary(summary: IncidentReportSessionSummary) -> None:
+    async def fake_save_incident_session_summary(
+        summary: IncidentReportSessionSummary,
+    ) -> None:
         captured["saved_summaries"].append(summary)
 
-    async def fake_save_incident_session_snapshot(session_id: str, snapshot: IncidentReportSessionSnapshot) -> None:
+    async def fake_save_incident_session_snapshot(
+        session_id: str,
+        snapshot: IncidentReportSessionSnapshot,
+    ) -> None:
         assert session_id == "incident-session-1"
         captured["saved_snapshots"].append(snapshot)
 
@@ -279,35 +97,20 @@ def test_generate_incident_attachment_fails_when_skill_does_not_call_tool(monkey
         assert session_id == "incident-session-1"
         assert score > 0
 
-    def fake_save_uploaded_attachment(**_kwargs):
-        return _build_docx_attachment("uploaded-attachment-1", "incident_data.json").model_copy(
-            update={"source": "uploaded", "mime_type": "application/json"}
-        )
-
-    def fake_build_persisted_uploaded_files_context(_attachment_ids: list[str]) -> str | None:
-        return "uploaded-context"
-
-    def fake_get_skill_interface(_skill_id: str):
-        return SimpleNamespace(default_prompt="incident prompt")
-
-    def fake_build_upstream_messages_for_skills(*, request, extra_messages=None, **_kwargs):
-        messages = [{"role": "system", "content": "incident prompt"}]
-        messages.extend([message.model_dump() for message in request.messages])
-        if extra_messages:
-            messages.extend(extra_messages)
-        return messages
-
-    def fake_build_skill_tools(_skill_id: str):
-        return [{"type": "function", "function": {"name": "generate_incident_report"}}]
-
-    async def fake_stream_chat_completion(*, model: str, messages: list[dict], tools):
+    async def fake_stream_chat_completion(*, model: str, messages, tools):
         assert model == "qwen3-coder-next:latest"
         assert messages
-        assert tools
+        assert tools == []
         yield {
             "message": {
                 "role": "assistant",
-                "content": "我已经整理好了内容。",
+                "content": (
+                    '{"description":"客户反馈下单报错，定位数据库CPU打满。",'
+                    '"affected_date_summary":"12/03/2026 15:00 - 12/03/2026 16:00",'
+                    '"timeline":[{"time":"12/03/2026 15:00","event":"客户报错","resolution":"服务降级","evidence":"监控告警"}],'
+                    '"impact_scope":"下单链路","impact_severity":"High","business_impact":"下单受阻",'
+                    '"trigger":"慢查询未命中索引","root_cause":"新版本慢查询未建索引","follow_up_actions":"加强 code review"}'
+                ),
             },
             "done": False,
         }
@@ -319,38 +122,350 @@ def test_generate_incident_attachment_fails_when_skill_does_not_call_tool(monkey
         yield None
 
     monkeypatch.setattr(incident_reports_module, "AgentTraceRecorder", _FakeRecorder)
-    monkeypatch.setattr(incident_reports_module, "get_incident_report_session", fake_get_incident_report_session)
-    monkeypatch.setattr(incident_reports_module, "_build_incident_interaction_config", fake_build_incident_interaction_config)
-    monkeypatch.setattr(incident_reports_module, "_build_report_data_from_snapshot", fake_build_report_data_from_snapshot)
-    monkeypatch.setattr(incident_reports_module, "save_incident_session_summary", fake_save_incident_session_summary)
-    monkeypatch.setattr(incident_reports_module, "save_incident_session_snapshot", fake_save_incident_session_snapshot)
-    monkeypatch.setattr(incident_reports_module, "touch_incident_session_index", fake_touch_incident_session_index)
-    monkeypatch.setattr(incident_reports_module, "save_uploaded_attachment", fake_save_uploaded_attachment)
     monkeypatch.setattr(
         incident_reports_module,
-        "build_persisted_uploaded_files_context",
-        fake_build_persisted_uploaded_files_context,
+        "get_incident_report_session",
+        fake_get_incident_report_session,
     )
-    monkeypatch.setattr(incident_reports_module, "get_skill_interface", fake_get_skill_interface)
     monkeypatch.setattr(
         incident_reports_module,
-        "build_upstream_messages_for_skills",
-        fake_build_upstream_messages_for_skills,
+        "save_incident_session_summary",
+        fake_save_incident_session_summary,
     )
-    monkeypatch.setattr(incident_reports_module, "build_skill_tools", fake_build_skill_tools)
-    monkeypatch.setattr(incident_reports_module, "stream_chat_completion", fake_stream_chat_completion)
+    monkeypatch.setattr(
+        incident_reports_module,
+        "save_incident_session_snapshot",
+        fake_save_incident_session_snapshot,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "touch_incident_session_index",
+        fake_touch_incident_session_index,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "stream_chat_completion",
+        fake_stream_chat_completion,
+    )
     monkeypatch.setattr(incident_reports_module.settings, "ollama_base_url", "http://ollama.local")
-    monkeypatch.setattr(incident_reports_module.settings, "skill_tool_max_iterations", 2)
 
-    with pytest.raises(RuntimeError, match="未触发 generate_incident_report 工具调用"):
-        asyncio.run(
-            incident_reports_module.generate_incident_report_session_attachment(
-                session_id="incident-session-1",
-                model="qwen3-coder-next:latest",
-            )
+    result = asyncio.run(
+        incident_reports_module.generate_incident_report_body_from_quick_input(
+            session_id="incident-session-1",
+            model="qwen3-coder-next:latest",
+            reranker_model="nomic-embed-text:latest",
         )
+    )
 
-    assert captured["saved_summaries"][-1].status == "failed"
-    assert captured["saved_snapshots"][-1].is_locked is False
-    assert captured["saved_snapshots"][-1].generated_attachment is None
-    assert captured["saved_snapshots"][-1].polish_error is not None
+    assert result is not None
+    assert result.section_id == "quick"
+    assert result.trace_id != ""
+    assert result.snapshot.generated_trace_id == result.trace_id
+    assert result.snapshot.section_trace_ids.get("quick") == result.trace_id
+    assert (
+        result.snapshot.form_answers["body_description"].value
+        == "客户反馈下单报错，定位数据库CPU打满。"
+    )
+    assert isinstance(result.snapshot.form_answers["body_timeline"].value, list)
+
+
+def test_preview_incident_report_attachment_uses_version_attachment(monkeypatch) -> None:
+    detail = _build_detail()
+    detail.snapshot.generated_versions = [
+        IncidentGeneratedVersion(
+            version=1,
+            label="V1 2026-04-14 12:40:00",
+            generated_at=datetime.now(UTC),
+            attachment=_build_docx_attachment(
+                "generated-attachment-1",
+                "incident-report-v1.docx",
+            ),
+            report_data={},
+        )
+    ]
+
+    async def fake_get_incident_report_session(session_id: str):
+        assert session_id == "incident-session-1"
+        return detail
+
+    def fake_load_docx_bytes_from_attachment(attachment_id: str):
+        assert attachment_id == "generated-attachment-1"
+        return b"fake-docx-bytes"
+
+    def fake_build_preview_payload_from_docx_bytes(docx_bytes: bytes):
+        assert docx_bytes == b"fake-docx-bytes"
+        return "<p>preview-html</p>", "cGRmLWJhc2U2NA==", ["warn-1"]
+
+    monkeypatch.setattr(
+        incident_reports_module,
+        "get_incident_report_session",
+        fake_get_incident_report_session,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_load_docx_bytes_from_attachment",
+        fake_load_docx_bytes_from_attachment,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_build_preview_payload_from_docx_bytes",
+        fake_build_preview_payload_from_docx_bytes,
+    )
+
+    result = asyncio.run(
+        incident_reports_module.preview_incident_report_attachment(
+            session_id="incident-session-1",
+            version=1,
+        )
+    )
+
+    assert result is not None
+    assert result.source == "version"
+    assert result.version == 1
+    assert result.html == "<p>preview-html</p>"
+    assert result.pdf_base64 == "cGRmLWJhc2U2NA=="
+    assert result.warnings == ["warn-1"]
+
+
+def test_preview_incident_report_attachment_draft_hits_cache(monkeypatch) -> None:
+    detail = _build_detail()
+    translate_calls = {"count": 0}
+    render_calls = {"count": 0}
+    preview_calls = {"count": 0}
+
+    async def fake_get_incident_report_session(session_id: str):
+        assert session_id == "incident-session-1"
+        return detail
+
+    def fake_build_report_data_from_snapshot(*_args, **_kwargs):
+        return {
+            "reference_no": "DAS-20260417-001",
+            "body": {"description": "中文描述"},
+        }, []
+
+    async def fake_translate_report_data_to_english(*, report_data: dict, model: str | None):
+        translate_calls["count"] += 1
+        assert model == "qwen3-coder-next:latest"
+        return report_data
+
+    def fake_render_docx_bytes_from_report_data(report_data: dict):
+        render_calls["count"] += 1
+        assert report_data["reference_no"] == "DAS-20260417-001"
+        return b"fake-draft-docx"
+
+    def fake_build_preview_payload_from_docx_bytes(docx_bytes: bytes):
+        preview_calls["count"] += 1
+        assert docx_bytes == b"fake-draft-docx"
+        return "<p>draft-preview</p>", "cGRmLWJhc2U2NA==", []
+
+    monkeypatch.setattr(
+        incident_reports_module,
+        "get_incident_report_session",
+        fake_get_incident_report_session,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_build_report_data_from_snapshot",
+        fake_build_report_data_from_snapshot,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_translate_report_data_to_english",
+        fake_translate_report_data_to_english,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_render_docx_bytes_from_report_data",
+        fake_render_docx_bytes_from_report_data,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_build_preview_payload_from_docx_bytes",
+        fake_build_preview_payload_from_docx_bytes,
+    )
+
+    incident_reports_module._PREVIEW_RESULT_CACHE.clear()
+    incident_reports_module._TRANSLATION_CACHE.clear()
+
+    first = asyncio.run(
+        incident_reports_module.preview_incident_report_attachment(
+            session_id="incident-session-1",
+            model="qwen3-coder-next:latest",
+        )
+    )
+    second = asyncio.run(
+        incident_reports_module.preview_incident_report_attachment(
+            session_id="incident-session-1",
+            model="qwen3-coder-next:latest",
+        )
+    )
+
+    assert first is not None
+    assert second is not None
+    assert first.html == "<p>draft-preview</p>"
+    assert second.html == "<p>draft-preview</p>"
+    assert translate_calls["count"] == 1
+    assert render_calls["count"] == 1
+    assert preview_calls["count"] == 1
+
+
+def test_translate_report_data_to_english_uses_python_library_and_cache(
+    monkeypatch,
+) -> None:
+    call_counter = {"batch": 0, "single": 0}
+
+    class _FakeTranslator:
+        def __init__(self, **_kwargs):
+            return
+
+        def translate_batch(self, texts: list[str]) -> list[str]:
+            call_counter["batch"] += 1
+            translated: list[str] = []
+            for text in texts:
+                if text == "客户反馈下单报错":
+                    translated.append("Customer reported order placement errors")
+                else:
+                    translated.append(text)
+            return translated
+
+        def translate(self, text: str) -> str:
+            call_counter["single"] += 1
+            if text == "客户反馈下单报错":
+                return "Customer reported order placement errors"
+            return text
+
+    monkeypatch.setattr(incident_reports_module, "GoogleTranslator", _FakeTranslator)
+    incident_reports_module._TRANSLATION_CACHE.clear()
+
+    report_data = {
+        "reference_no": "DAS-20260420-001",
+        "report_body": {
+            "description": "客户反馈下单报错",
+        },
+    }
+
+    translated_once = asyncio.run(
+        incident_reports_module._translate_report_data_to_english(
+            report_data=report_data,
+            model="any-model-name",
+        )
+    )
+    translated_twice = asyncio.run(
+        incident_reports_module._translate_report_data_to_english(
+            report_data=report_data,
+            model="another-model-name",
+        )
+    )
+
+    assert translated_once["reference_no"] == "DAS-20260420-001"
+    assert (
+        translated_once["report_body"]["description"]
+        == "Customer reported order placement errors"
+    )
+    assert (
+        translated_twice["report_body"]["description"]
+        == "Customer reported order placement errors"
+    )
+    assert call_counter["batch"] == 1
+    assert call_counter["single"] == 0
+
+
+def test_build_report_data_supports_rich_text_appendix() -> None:
+    snapshot = IncidentReportSessionSnapshot(
+        form_answers={
+            "appendix_notes": IncidentFormAnswer(
+                value=(
+                    "<p>附录说明第一行</p><p>附录说明第二行</p>"
+                    "<p><img alt='chart.png' src='data:image/png;base64,AAAA' /></p>"
+                ),
+                custom_value="",
+            ),
+        }
+    )
+    report_data, missing = incident_reports_module._build_report_data_from_snapshot(
+        snapshot,
+        strict_required=False,
+    )
+
+    assert report_data is not None
+    assert isinstance(missing, list)
+    assert report_data["appendix"]["notes"] == "附录说明第一行\n附录说明第二行"
+    assert report_data["appendix"]["images"] == [
+        {
+            "name": "chart.png",
+            "data_url": "data:image/png;base64,AAAA",
+        }
+    ]
+
+
+def test_create_incident_report_session_initializes_v1_version(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_save_incident_session_summary(
+        summary: IncidentReportSessionSummary,
+    ) -> None:
+        captured["summary"] = summary
+
+    async def fake_save_incident_session_snapshot(
+        session_id: str,
+        snapshot: IncidentReportSessionSnapshot,
+    ) -> None:
+        captured["session_id"] = session_id
+        captured["snapshot"] = snapshot
+
+    async def fake_touch_incident_session_index(session_id: str, score: float) -> None:
+        captured["touch"] = (session_id, score)
+
+    def fake_build_report_data_from_snapshot(*_args, **_kwargs):
+        return {"reference_no": "DAS-20260417-001"}, []
+
+    def fake_render_docx_bytes_from_report_data(report_data: dict):
+        assert report_data["reference_no"] == "DAS-20260417-001"
+        return b"fake-docx-bytes"
+
+    def fake_save_docx_bytes_as_generated_attachment(**kwargs):
+        assert kwargs["docx_bytes"] == b"fake-docx-bytes"
+        return _build_docx_attachment("generated-attachment-v1", "incident-report-v1.docx")
+
+    monkeypatch.setattr(
+        incident_reports_module,
+        "save_incident_session_summary",
+        fake_save_incident_session_summary,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "save_incident_session_snapshot",
+        fake_save_incident_session_snapshot,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "touch_incident_session_index",
+        fake_touch_incident_session_index,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_build_report_data_from_snapshot",
+        fake_build_report_data_from_snapshot,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_render_docx_bytes_from_report_data",
+        fake_render_docx_bytes_from_report_data,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_save_docx_bytes_as_generated_attachment",
+        fake_save_docx_bytes_as_generated_attachment,
+    )
+
+    result = asyncio.run(
+        incident_reports_module.create_incident_report_session(title="事故报告-测试"),
+    )
+
+    assert result.id != ""
+    snapshot = captured.get("snapshot")
+    assert isinstance(snapshot, IncidentReportSessionSnapshot)
+    assert len(snapshot.generated_versions) == 1
+    assert snapshot.generated_versions[0].version == 1
+    assert snapshot.generated_attachment is not None
+    assert snapshot.generated_attachment.attachment_id == "generated-attachment-v1"

@@ -1,19 +1,36 @@
 #!/usr/bin/env python3
 """
-DAS Fault Log Form Generator
-Generates Word document matching the exact DAS Fault Log Form template
+DAS Fault Log Form Generator (Template-aligned)
+使用参考 DOCX 模板直接填充，尽量保持与参考文档版式一致。
 """
 
-from docx import Document
-from docx.shared import Pt, RGBColor, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
-from datetime import datetime
+from __future__ import annotations
+
+import base64
+import hashlib
+import io
 import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from docx import Document
+from docx.shared import Cm
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REFERENCE_TEMPLATE_PATH = (
+    SCRIPT_DIR.parent
+    / "references"
+    / "DAS2 Fault Log Form Template.docx"
+)
+
+_IMAGE_DECODE_CACHE_MAX_ENTRIES = 48
+_IMAGE_DECODE_CACHE_MAX_BYTES = 8 * 1024 * 1024
+_IMAGE_DECODE_CACHE: dict[str, bytes] = {}
+_IMAGE_DECODE_CACHE_ORDER: list[str] = []
 
 
-def _to_text(value, default='N/A'):
+def _to_text(value: Any, default: str = "N/A") -> str:
     if value is None:
         return default
     if isinstance(value, str):
@@ -22,1033 +39,603 @@ def _to_text(value, default='N/A'):
     if isinstance(value, (int, float, bool)):
         return str(value)
     if isinstance(value, list):
-        parts = [_to_text(item, '').strip() for item in value]
-        parts = [part for part in parts if part]
-        return '; '.join(parts) if parts else default
+        items = [_to_text(item, "").strip() for item in value]
+        items = [item for item in items if item]
+        return "; ".join(items) if items else default
     if isinstance(value, dict):
         parts = []
         for key, item in value.items():
-            item_text = _to_text(item, '').strip()
+            item_text = _to_text(item, "").strip()
             if not item_text:
                 continue
-            key_text = str(key).replace('_', ' ').strip()
-            if key_text:
-                parts.append(f'{key_text}: {item_text}')
-            else:
-                parts.append(item_text)
-        return '；'.join(parts) if parts else default
+            key_text = str(key).replace("_", " ").strip()
+            parts.append(f"{key_text}: {item_text}" if key_text else item_text)
+        return "；".join(parts) if parts else default
     return str(value)
 
 
-def _to_text_list(value):
+def _to_lines(value: Any) -> list[str]:
     if value is None:
         return []
     if isinstance(value, list):
-        return [_to_text(item, '').strip() for item in value if _to_text(item, '').strip()]
-    if isinstance(value, str):
-        cleaned = value.strip()
-        if not cleaned:
-            return []
-        if '\n' in cleaned:
-            return [line.strip('- ').strip() for line in cleaned.splitlines() if line.strip()]
-        if ';' in cleaned:
-            return [item.strip() for item in cleaned.split(';') if item.strip()]
-        return [cleaned]
-    return [_to_text(value)]
-
-
-def _normalize_event_sequence(value):
-    if value is None:
+        lines = []
+        for item in value:
+            text = _to_text(item, "").strip()
+            if text:
+                lines.append(text)
+        return lines
+    text = _to_text(value, "").strip()
+    if not text:
         return []
-    if not isinstance(value, list):
-        return [
-            {
-                'time': 'N/A',
-                'event': _to_text(value),
-                'evidence': 'N/A',
-            }
-        ]
-
-    normalized = []
-    for item in value:
-        if isinstance(item, dict):
-            normalized.append(
-                {
-                    'time': _to_text(item.get('time', 'N/A')),
-                    'event': _to_text(
-                        item.get('event', item.get('description', item.get('detail', 'N/A')))
-                    ),
-                    'evidence': _to_text(
-                        item.get('evidence', item.get('source', item.get('proof', 'N/A')))
-                    ),
-                }
-            )
-            continue
-
-        normalized.append(
-            {
-                'time': 'N/A',
-                'event': _to_text(item),
-                'evidence': 'N/A',
-            }
-        )
-    return normalized
+    if "\n" in text:
+        rows = [line.strip("- ").strip() for line in text.splitlines()]
+        return [row for row in rows if row]
+    if ";" in text:
+        rows = [line.strip() for line in text.split(";")]
+        return [row for row in rows if row]
+    return [text]
 
 
-def _normalize_actions(value, action_type):
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        return [
-            {
-                'action': _to_text(value),
-                'by': 'N/A' if action_type == 'immediate' else '',
-                'owner': 'N/A' if action_type != 'immediate' else '',
-                'time': 'N/A' if action_type == 'immediate' else '',
-                'due_date': 'N/A' if action_type != 'immediate' else '',
-                'status': 'Planned' if action_type != 'immediate' else 'Completed',
-            }
-        ]
-
-    normalized = []
-    for item in value:
-        if isinstance(item, dict):
-            normalized.append(
-                {
-                    'action': _to_text(item.get('action', item.get('description', 'N/A'))),
-                    'by': _to_text(item.get('by', item.get('taken_by', 'N/A'))),
-                    'owner': _to_text(item.get('owner', item.get('by', 'N/A'))),
-                    'time': _to_text(item.get('time', item.get('taken_at', 'N/A'))),
-                    'due_date': _to_text(item.get('due_date', item.get('time', 'N/A'))),
-                    'status': _to_text(item.get('status', 'N/A')),
-                }
-            )
-            continue
-
-        normalized.append(
-            {
-                'action': _to_text(item),
-                'by': 'N/A',
-                'owner': 'N/A',
-                'time': 'N/A',
-                'due_date': 'N/A',
-                'status': 'N/A',
-            }
-        )
-    return normalized
-
-
-def _first_non_empty(*values, default='N/A'):
-    for value in values:
-        text_value = _to_text(value, '').strip()
-        if text_value:
-            return text_value
-    return default
-
-
-def _is_placeholder(value):
-    normalized = _to_text(value, '').strip().lower()
-    return normalized in {'', 'n/a', 'na', 'none', 'null', '-'}
-
-
-def _split_date_time(date_time_value):
-    normalized = _to_text(date_time_value, '').strip()
+def _split_date_time(date_time_value: Any) -> tuple[str, str]:
+    normalized = _to_text(date_time_value, "").strip()
     if not normalized:
-        return 'N/A', 'N/A'
-
+        return "N/A", "N/A"
     parts = normalized.split()
     if len(parts) >= 2:
         return parts[0], parts[1]
-
-    if ':' in normalized and '/' not in normalized:
-        return 'N/A', normalized
-
-    return normalized, 'N/A'
+    if ":" in normalized and "/" not in normalized:
+        return "N/A", normalized
+    return normalized, "N/A"
 
 
-def _build_reference_no():
+def _first_non_empty(*values: Any, default: str = "N/A") -> str:
+    for value in values:
+        text = _to_text(value, "").strip()
+        if text:
+            return text
+    return default
+
+
+def _normalize_event_sequence(value: Any) -> list[dict[str, str]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        return [{"time": "N/A", "event": _to_text(value), "evidence": "N/A"}]
+
+    normalized = []
+    for item in value:
+        if isinstance(item, dict):
+            normalized.append(
+                {
+                    "time": _to_text(item.get("time", "N/A")),
+                    "event": _to_text(
+                        item.get("event", item.get("description", item.get("detail", "N/A")))
+                    ),
+                    "evidence": _to_text(
+                        item.get("evidence", item.get("source", item.get("proof", "N/A")))
+                    ),
+                }
+            )
+        else:
+            normalized.append({"time": "N/A", "event": _to_text(item), "evidence": "N/A"})
+    return normalized
+
+
+def _normalize_actions(value: Any, action_type: str) -> list[dict[str, str]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        return [{"action": _to_text(value)}]
+
+    normalized = []
+    for item in value:
+        if isinstance(item, dict):
+            normalized.append(
+                {
+                    "action": _to_text(item.get("action", item.get("description", "")), ""),
+                }
+            )
+        else:
+            normalized.append({"action": _to_text(item, "")})
+    return normalized
+
+
+def _extract_action_lines(actions: Any) -> list[str]:
+    lines: list[str] = []
+    if isinstance(actions, list):
+        for item in actions:
+            if isinstance(item, dict):
+                text = _to_text(item.get("action"), "").strip()
+            else:
+                text = _to_text(item, "").strip()
+            if text:
+                lines.append(text)
+    elif isinstance(actions, dict):
+        text = _to_text(actions.get("action"), "").strip()
+        if text:
+            lines.append(text)
+    else:
+        text = _to_text(actions, "").strip()
+        if text:
+            lines.append(text)
+    return lines
+
+
+def _build_reference_no() -> str:
     return f"DAS-{datetime.now().strftime('%Y%m%d')}-001"
 
 
-def _has_valid_event_sequence(events):
+def _is_placeholder(value: Any) -> bool:
+    normalized = _to_text(value, "").strip().lower()
+    return normalized in {"", "n/a", "na", "none", "null", "-"}
+
+
+def _has_valid_event_sequence(events: Any) -> bool:
     if not isinstance(events, list) or not events:
         return False
     for event in events:
         if not isinstance(event, dict):
             continue
-        if not _is_placeholder(event.get('event')):
+        if not _is_placeholder(event.get("event")):
             return True
     return False
 
 
-def _has_valid_actions(actions):
+def _has_valid_actions(actions: Any) -> bool:
     if not isinstance(actions, list) or not actions:
         return False
     for action in actions:
         if not isinstance(action, dict):
             continue
-        if not _is_placeholder(action.get('action')):
+        if not _is_placeholder(action.get("action")):
             return True
     return False
 
 
-def validate_required_sections(data):
+def validate_required_sections(data: dict[str, Any]) -> list[str]:
     missing_sections = []
 
-    if _is_placeholder(data.get('detailed_description')):
-        missing_sections.append('1. Description of the Incident')
+    if _is_placeholder(data.get("detailed_description")):
+        missing_sections.append("1. Description of the Incident")
+    if any(_is_placeholder(data.get(field)) for field in ("start_time", "detection_time", "resolution_time")):
+        missing_sections.append("2. Affected Date")
+    if not _has_valid_event_sequence(data.get("event_sequence", [])):
+        missing_sections.append("3. Event Sequence")
 
-    if any(
-        _is_placeholder(data.get(field_name))
-        for field_name in ('start_time', 'detection_time', 'resolution_time')
+    impact = data.get("impact", {})
+    if not isinstance(impact, dict) or _is_placeholder(impact.get("systems")) or _is_placeholder(
+        impact.get("severity")
     ):
-        missing_sections.append('2. Affected Date')
+        missing_sections.append("4. Impact")
 
-    if not _has_valid_event_sequence(data.get('event_sequence', [])):
-        missing_sections.append('3. Event Sequence')
+    if _is_placeholder(data.get("trigger")) or _is_placeholder(data.get("root_cause")):
+        missing_sections.append("5. Root Cause")
 
-    impact = data.get('impact', {})
-    if not isinstance(impact, dict) or _is_placeholder(impact.get('systems')) or _is_placeholder(
-        impact.get('severity')
+    if not _has_valid_actions(data.get("immediate_actions")) and not _has_valid_actions(
+        data.get("preventive_actions")
     ):
-        missing_sections.append('4. Impact')
-
-    if _is_placeholder(data.get('trigger')) or _is_placeholder(data.get('root_cause')):
-        missing_sections.append('5. Root Cause')
-
-    immediate_actions = data.get('immediate_actions', [])
-    preventive_actions = data.get('preventive_actions', [])
-    if not _has_valid_actions(immediate_actions) and not _has_valid_actions(preventive_actions):
-        missing_sections.append('6. Follow-Up Actions')
-
+        missing_sections.append("6. Follow-Up Actions")
     return missing_sections
 
 
-def normalize_incident_data(raw_data):
-    source = dict(raw_data) if isinstance(raw_data, dict) else {'detailed_description': _to_text(raw_data)}
+def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
+    source = dict(raw_data) if isinstance(raw_data, dict) else {"detailed_description": _to_text(raw_data)}
 
-    key_facts_raw = source.get('key_facts', {})
-    key_facts_map = key_facts_raw if isinstance(key_facts_raw, dict) else {}
-    key_facts_text = '' if isinstance(key_facts_raw, dict) else _to_text(key_facts_raw, '')
-
-    impact_raw = source.get('impact', {})
+    impact_raw = source.get("impact", {})
     impact_map = impact_raw if isinstance(impact_raw, dict) else {}
-    impact_text = '' if isinstance(impact_raw, dict) else _to_text(impact_raw, '')
-
-    start_time = _first_non_empty(
-        source.get('start_time'),
-        source.get('incident_start_time'),
-        default='N/A',
-    )
-    detection_time = _first_non_empty(
-        source.get('detection_time'),
-        source.get('detected_at'),
-        default='N/A',
-    )
-    resolution_time = _first_non_empty(
-        source.get('resolution_time'),
-        source.get('resolved_at'),
-        default='N/A',
-    )
-    derived_fault_date, derived_fault_time = _split_date_time(start_time)
-
-    system_value = _first_non_empty(
-        key_facts_map.get('system'),
-        source.get('system'),
-        default='N/A',
-    )
-    detection_method_value = _first_non_empty(
-        key_facts_map.get('detection_method'),
-        source.get('detection_method'),
-        default='N/A',
-    )
-    symptoms_value = _first_non_empty(
-        key_facts_map.get('symptoms'),
-        key_facts_text,
-        source.get('fault_details'),
-        source.get('detailed_description'),
-        default='N/A',
-    )
-
-    impact_systems = _first_non_empty(
-        impact_map.get('systems'),
-        impact_text,
-        system_value,
-        default='N/A',
-    )
-    impact_users = _first_non_empty(
-        impact_map.get('users'),
-        source.get('affected_users'),
-        default='N/A',
-    )
-    impact_region = _first_non_empty(
-        impact_map.get('region'),
-        source.get('site_id'),
-        source.get('location'),
-        default='N/A',
-    )
-    impact_severity = _first_non_empty(
-        impact_map.get('severity'),
-        source.get('severity'),
-        default='N/A',
-    )
-    business_impact = _to_text_list(
-        impact_map.get('business_impact', source.get('business_impact', impact_text))
-    )
-    if not business_impact:
-        business_impact = ['Service disruption reported']
-
-    event_sequence = _normalize_event_sequence(source.get('event_sequence'))
-    five_whys = _to_text_list(source.get('five_whys'))
-    immediate_actions = _normalize_actions(source.get('immediate_actions'), 'immediate')
-    preventive_actions = _normalize_actions(source.get('preventive_actions'), 'preventive')
-
-    detailed_description = _first_non_empty(
-        source.get('detailed_description'),
-        source.get('description'),
-        source.get('fault_details'),
-        default='N/A',
-    )
-    root_cause_raw = source.get('root_cause')
+    body_raw = source.get("report_body", {})
+    body_map = body_raw if isinstance(body_raw, dict) else {}
+    root_cause_raw = source.get("root_cause")
     root_cause_map = root_cause_raw if isinstance(root_cause_raw, dict) else {}
-    root_cause = _first_non_empty(
-        root_cause_map.get('technical'),
-        root_cause_map.get('root_cause'),
-        root_cause_map.get('proximate_cause'),
-        root_cause_raw,
-        source.get('fault_cause'),
-        default='N/A',
+
+    start_time = _first_non_empty(source.get("start_time"), default="N/A")
+    detection_time = _first_non_empty(source.get("detection_time"), default=start_time)
+    resolution_time = _first_non_empty(source.get("resolution_time"), default=detection_time)
+
+    fault_date, fault_time = _split_date_time(
+        _first_non_empty(source.get("fault_date"), start_time, default="N/A")
     )
-    trigger_value = _first_non_empty(
-        source.get('trigger'),
-        root_cause_map.get('proximate_cause'),
-        root_cause_map.get('trigger'),
-        source.get('fault_cause'),
-        default='N/A',
-    )
-    root_cause_evidence = _first_non_empty(
-        source.get('root_cause_evidence'),
-        root_cause_map.get('evidence'),
-        root_cause_map.get('process_gap'),
-        source.get('evidence'),
-        default='See Fault Log Form Section B',
-    )
+
+    event_sequence = _normalize_event_sequence(source.get("event_sequence"))
+    immediate_actions = _normalize_actions(source.get("immediate_actions"), "immediate")
+    preventive_actions = _normalize_actions(source.get("preventive_actions"), "preventive")
 
     repair_details_default = (
-        immediate_actions[0].get('action', 'N/A') if immediate_actions else detailed_description
+        immediate_actions[0].get("action", "N/A") if immediate_actions else _to_text(source.get("detailed_description"))
     )
 
-    normalized_data = {
-        'reference_no': _first_non_empty(
-            source.get('reference_no'),
-            source.get('reference'),
-            default=_build_reference_no(),
-        ),
-        'detailed_description': detailed_description,
-        'key_facts': {
-            'system': system_value,
-            'detection_method': detection_method_value,
-            'symptoms': symptoms_value,
-        },
-        'start_time': start_time,
-        'detection_time': detection_time,
-        'resolution_time': resolution_time,
-        'total_duration': _first_non_empty(source.get('total_duration'), source.get('duration')),
-        'fault_date': _first_non_empty(source.get('fault_date'), default=derived_fault_date),
-        'fault_time': _first_non_empty(source.get('fault_time'), default=derived_fault_time),
-        'event_sequence': event_sequence,
-        'impact': {
-            'systems': impact_systems,
-            'users': impact_users,
-            'region': impact_region,
-            'severity': impact_severity,
-            'business_impact': business_impact,
-        },
-        'trigger': trigger_value,
-        'root_cause': root_cause,
-        'root_cause_evidence': root_cause_evidence,
-        'five_whys': five_whys,
-        'immediate_actions': immediate_actions,
-        'preventive_actions': preventive_actions,
-        'allow_incomplete': bool(source.get('allow_incomplete', False)),
-        'reporting_person': _first_non_empty(
-            source.get('reporting_person'),
-            detection_method_value,
-        ),
-        'verified_by': _first_non_empty(source.get('verified_by')),
-        'site_id': _first_non_empty(source.get('site_id'), impact_region),
-        'system': system_value,
-        'location': _first_non_empty(source.get('location'), impact_region),
-        'fault_details': _first_non_empty(source.get('fault_details'), detailed_description),
-        'arrival_datetime': _first_non_empty(source.get('arrival_datetime'), start_time),
-        'clearance_datetime': _first_non_empty(source.get('clearance_datetime'), resolution_time),
-        'service_person': _first_non_empty(source.get('service_person')),
-        'fault_cause': _first_non_empty(source.get('fault_cause'), root_cause),
-        'materials_used': _first_non_empty(source.get('materials_used'), default='Nil'),
-        'repair_details': _first_non_empty(source.get('repair_details'), repair_details_default),
-        'contractor_staff': _first_non_empty(source.get('contractor_staff')),
-        'contractor_date': _first_non_empty(
-            source.get('contractor_date'),
-            source.get('fault_date'),
-            default=derived_fault_date,
-        ),
-        'status': _first_non_empty(source.get('status'), default='Fault has been Cleared'),
-        'severity': impact_severity,
-        'comments': _first_non_empty(source.get('comments')),
-        'employer_rep': _first_non_empty(source.get('employer_rep')),
-        'closeout_date': _first_non_empty(
-            source.get('closeout_date'),
-            source.get('fault_date'),
-            default=derived_fault_date,
-        ),
-    }
+    appendix = source.get("appendix", {})
+    if not isinstance(appendix, dict):
+        appendix = {"notes": _to_text(appendix), "images": []}
+    appendix_images = appendix.get("images")
+    if not isinstance(appendix_images, list):
+        appendix_images = []
 
+    normalized_data = {
+        "reference_no": _first_non_empty(source.get("reference_no"), default=_build_reference_no()),
+        "fault_date": fault_date,
+        "fault_time": _first_non_empty(source.get("fault_time"), default=fault_time),
+        "key_facts": {
+            "system": _first_non_empty(
+                source.get("key_facts", {}).get("system")
+                if isinstance(source.get("key_facts"), dict)
+                else None,
+                source.get("system"),
+                default="",
+            ),
+            "detection_method": _first_non_empty(
+                source.get("key_facts", {}).get("detection_method")
+                if isinstance(source.get("key_facts"), dict)
+                else None,
+                source.get("detection_method"),
+                default="",
+            ),
+            "symptoms": _first_non_empty(
+                source.get("key_facts", {}).get("symptoms")
+                if isinstance(source.get("key_facts"), dict)
+                else None,
+                source.get("fault_details"),
+                source.get("detailed_description"),
+                default="",
+            ),
+        },
+        "reporting_person": _first_non_empty(source.get("reporting_person"), default="N/A"),
+        "verified_by": _first_non_empty(source.get("verified_by"), default=""),
+        "site_id": _first_non_empty(source.get("site_id"), impact_map.get("region"), default="N/A"),
+        "system": _first_non_empty(source.get("system"), impact_map.get("systems"), default="N/A"),
+        "location": _first_non_empty(source.get("location"), source.get("site_id"), impact_map.get("region"), default="N/A"),
+        "fault_details": _first_non_empty(
+            source.get("fault_details"),
+            source.get("key_facts", {}).get("symptoms") if isinstance(source.get("key_facts"), dict) else None,
+            source.get("detailed_description"),
+            default="",
+        ),
+        "arrival_datetime": _first_non_empty(source.get("arrival_datetime"), start_time),
+        "clearance_datetime": _first_non_empty(source.get("clearance_datetime"), resolution_time),
+        "service_person": _first_non_empty(source.get("service_person"), default=""),
+        "fault_cause": _first_non_empty(source.get("fault_cause"), source.get("root_cause"), default=""),
+        "materials_used": _first_non_empty(source.get("materials_used"), default=""),
+        "repair_details": _first_non_empty(source.get("repair_details"), default=repair_details_default),
+        "contractor_staff": _first_non_empty(source.get("contractor_staff"), default=""),
+        "contractor_date": _first_non_empty(source.get("contractor_date"), source.get("fault_date"), default=fault_date),
+        "status": _first_non_empty(source.get("status"), default="Fault has been Cleared"),
+        "severity": _first_non_empty(source.get("severity"), impact_map.get("severity"), default=""),
+        "comments": _first_non_empty(source.get("comments"), default=""),
+        "employer_rep": _first_non_empty(source.get("employer_rep"), default=""),
+        "closeout_date": _first_non_empty(source.get("closeout_date"), source.get("fault_date"), default=fault_date),
+        "detailed_description": _first_non_empty(
+            source.get("detailed_description"), body_map.get("description"), source.get("fault_details"), default=""
+        ),
+        "affected_date_summary": _first_non_empty(
+            source.get("affected_date_summary"),
+            body_map.get("affected_date_summary"),
+            default=f"{start_time} - {resolution_time}",
+        ),
+        "start_time": start_time,
+        "detection_time": detection_time,
+        "resolution_time": resolution_time,
+        "total_duration": _first_non_empty(source.get("total_duration"), default=""),
+        "event_sequence": event_sequence,
+        "impact": {
+            "systems": _first_non_empty(impact_map.get("systems"), body_map.get("impact_scope"), source.get("system"), default=""),
+            "users": _first_non_empty(impact_map.get("users"), default=""),
+            "region": _first_non_empty(impact_map.get("region"), source.get("site_id"), default=""),
+            "severity": _first_non_empty(impact_map.get("severity"), body_map.get("impact_severity"), source.get("severity"), default=""),
+            "business_impact": _to_lines(
+                impact_map.get("business_impact", body_map.get("business_impact", ""))
+            ),
+        },
+        "trigger": _first_non_empty(
+            source.get("trigger"),
+            root_cause_map.get("proximate_cause"),
+            root_cause_map.get("trigger"),
+            body_map.get("trigger"),
+            source.get("fault_cause"),
+            default="",
+        ),
+        "root_cause": _first_non_empty(
+            root_cause_map.get("technical"),
+            root_cause_map.get("root_cause"),
+            root_cause_map.get("proximate_cause"),
+            source.get("root_cause"),
+            body_map.get("root_cause"),
+            source.get("fault_cause"),
+            default="",
+        ),
+        "root_cause_evidence": _first_non_empty(
+            source.get("root_cause_evidence"),
+            root_cause_map.get("evidence"),
+            root_cause_map.get("process_gap"),
+            source.get("evidence"),
+            default="",
+        ),
+        "immediate_actions": immediate_actions,
+        "preventive_actions": preventive_actions,
+        "allow_incomplete": bool(source.get("allow_incomplete", False)),
+        "appendix": {
+            "notes": _first_non_empty(appendix.get("notes"), default=""),
+            "images": appendix_images,
+        },
+        "report_body": {
+            "description": _first_non_empty(body_map.get("description"), source.get("detailed_description"), default=""),
+            "affected_date_summary": _first_non_empty(
+                body_map.get("affected_date_summary"),
+                source.get("affected_date_summary"),
+                default="",
+            ),
+            "timeline": body_map.get("timeline", []),
+            "impact_scope": _first_non_empty(body_map.get("impact_scope"), impact_map.get("systems"), default=""),
+            "impact_severity": _first_non_empty(
+                body_map.get("impact_severity"),
+                impact_map.get("severity"),
+                default="",
+            ),
+            "root_cause": _first_non_empty(body_map.get("root_cause"), source.get("root_cause"), default=""),
+            "follow_up_actions": _to_lines(body_map.get("follow_up_actions")),
+            "business_impact": _to_lines(body_map.get("business_impact")),
+            "trigger": _first_non_empty(body_map.get("trigger"), source.get("trigger"), default=""),
+        },
+    }
     return normalized_data
 
 
+def _set_paragraph_text(paragraph, text: str) -> None:
+    text_value = _to_text(text, default="")
+    if paragraph.runs:
+        paragraph.runs[0].text = text_value
+        for run in paragraph.runs[1:]:
+            run.text = ""
+    else:
+        paragraph.add_run(text_value)
+
+
+def _set_cell_text(cell, text: str) -> None:
+    if not cell.paragraphs:
+        paragraph = cell.add_paragraph()
+        _set_paragraph_text(paragraph, text)
+        return
+    _set_paragraph_text(cell.paragraphs[0], text)
+    for paragraph in cell.paragraphs[1:]:
+        _set_paragraph_text(paragraph, "")
+
+
+def _decode_data_url_to_bytes(data_url: str) -> bytes | None:
+    if not isinstance(data_url, str):
+        return None
+    if not data_url.startswith("data:"):
+        return None
+    cache_key = hashlib.sha256(data_url.encode("utf-8")).hexdigest()
+    cached = _IMAGE_DECODE_CACHE.get(cache_key)
+    if cached is not None:
+        if cache_key in _IMAGE_DECODE_CACHE_ORDER:
+            _IMAGE_DECODE_CACHE_ORDER.remove(cache_key)
+        _IMAGE_DECODE_CACHE_ORDER.append(cache_key)
+        return cached
+
+    marker = ";base64,"
+    index = data_url.find(marker)
+    if index < 0:
+        return None
+    encoded = data_url[index + len(marker) :]
+    try:
+        decoded = base64.b64decode(encoded)
+    except Exception:
+        return None
+    if len(decoded) > _IMAGE_DECODE_CACHE_MAX_BYTES:
+        return decoded
+
+    _IMAGE_DECODE_CACHE[cache_key] = decoded
+    if cache_key in _IMAGE_DECODE_CACHE_ORDER:
+        _IMAGE_DECODE_CACHE_ORDER.remove(cache_key)
+    _IMAGE_DECODE_CACHE_ORDER.append(cache_key)
+    while len(_IMAGE_DECODE_CACHE_ORDER) > _IMAGE_DECODE_CACHE_MAX_ENTRIES:
+        stale_key = _IMAGE_DECODE_CACHE_ORDER.pop(0)
+        _IMAGE_DECODE_CACHE.pop(stale_key, None)
+    return decoded
+
+
 class FaultLogFormGenerator:
-    """Generates DAS Fault Log Form as Word document"""
-    
-    def __init__(self):
-        self.doc = Document()
-        self.setup_page()
-        
-    def setup_page(self):
-        """Setup page margins"""
-        sections = self.doc.sections
-        for section in sections:
-            section.top_margin = Cm(1.5)
-            section.bottom_margin = Cm(1.5)
-            section.left_margin = Cm(1.5)
-            section.right_margin = Cm(1.5)
-    
-    def set_cell_shading(self, cell, color):
-        """Set cell background color"""
-        shading_elm = OxmlElement('w:shd')
-        shading_elm.set(qn('w:fill'), color)
-        cell._tc.get_or_add_tcPr().append(shading_elm)
-    
-    def set_cell_border(self, cell):
-        """Set cell borders"""
-        tc = cell._tc
-        tcPr = tc.get_or_add_tcPr()
-        tcBorders = OxmlElement('w:tcBorders')
-        for border_name in ['top', 'left', 'bottom', 'right']:
-            border = OxmlElement(f'w:{border_name}')
-            border.set(qn('w:val'), 'single')
-            border.set(qn('w:sz'), '4')
-            border.set(qn('w:color'), '000000')
-            tcBorders.append(border)
-        tcPr.append(tcBorders)
-    
-    def format_cell_text(self, cell, text, bold=False, font_size=10):
-        """Format cell text"""
-        cell.text = text
-        for paragraph in cell.paragraphs:
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            for run in paragraph.runs:
-                run.font.name = 'Arial'
-                run.font.size = Pt(font_size)
-                run.bold = bold
-    
-    def generate_form(self, data, output_path=None):
-        """Generate Fault Log Form"""
-        
-        # Title
-        title = self.doc.add_paragraph()
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = title.add_run('Fault Log Form')
-        run.font.name = 'Arial'
-        run.font.size = Pt(16)
-        run.font.bold = True
-        
-        # Reference No. row
-        ref_table = self.doc.add_table(rows=1, cols=4)
-        ref_table.style = 'Table Grid'
-        ref_cells = ref_table.rows[0].cells
-        
-        self.format_cell_text(ref_cells[0], 'Reference No.', bold=True, font_size=10)
-        self.set_cell_shading(ref_cells[0], 'D9D9D9')
-        self.set_cell_border(ref_cells[0])
-        
-        ref_cells[1].merge(ref_cells[3])
-        self.format_cell_text(ref_cells[1], data.get('reference_no', ''), font_size=10)
-        self.set_cell_border(ref_cells[1])
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # Section A: Fault Reporting
-        section_a_table = self.doc.add_table(rows=1, cols=4)
-        section_a_table.style = 'Table Grid'
-        
-        # Section A Header
-        row = section_a_table.rows[0]
-        row_cells = row.cells
-        row_cells[0].merge(row_cells[3])
-        self.format_cell_text(row_cells[0], 'Section A: Fault Reporting (Filled by Operator)', bold=True, font_size=11)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        # Row 1: Date and Time of Fault Reporting
-        row = section_a_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Date of Fault\nReporting\n(DD/MM/YYYY):', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        self.format_cell_text(row_cells[1], data.get('fault_date', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        self.format_cell_text(row_cells[2], 'Time of Fault\nReporting (HH:MM):', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[2], 'D9D9D9')
-        self.set_cell_border(row_cells[2])
-        
-        self.format_cell_text(row_cells[3], data.get('fault_time', ''), font_size=10)
-        self.set_cell_border(row_cells[3])
-        
-        # Row 2: Name and Verified By
-        row = section_a_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Name and Title of\nReporting Person:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        self.format_cell_text(row_cells[1], data.get('reporting_person', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        self.format_cell_text(row_cells[2], 'Verified By:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[2], 'D9D9D9')
-        self.set_cell_border(row_cells[2])
-        
-        self.format_cell_text(row_cells[3], data.get('verified_by', ''), font_size=10)
-        self.set_cell_border(row_cells[3])
-        
-        # Row 3: Site ID and System
-        row = section_a_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Site ID:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        self.format_cell_text(row_cells[1], data.get('site_id', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        self.format_cell_text(row_cells[2], 'System/ Subsystems:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[2], 'D9D9D9')
-        self.set_cell_border(row_cells[2])
-        
-        self.format_cell_text(row_cells[3], data.get('system', ''), font_size=10)
-        self.set_cell_border(row_cells[3])
-        
-        # Row 4: Location of Fault
-        row = section_a_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Location of Fault:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], data.get('location', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        # Row 5: Details of Fault Symptom
-        row = section_a_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Details of Fault\nSymptom:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        details = data.get('fault_details', '')
-        self.format_cell_text(row_cells[1], details, font_size=10)
-        self.set_cell_border(row_cells[1])
-        # Set row height for details
-        row.height = Pt(60)
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # Section B: Fault Clearance
-        section_b_table = self.doc.add_table(rows=1, cols=4)
-        section_b_table.style = 'Table Grid'
-        
-        # Section B Header
-        row = section_b_table.rows[0]
-        row_cells = row.cells
-        row_cells[0].merge(row_cells[3])
-        self.format_cell_text(row_cells[0], 'Section B: Fault Clearance (Filled by Contractor)', bold=True, font_size=11)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        # Row 1: Date and Time
-        row = section_b_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Date and Time of\narrival:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        self.format_cell_text(row_cells[1], data.get('arrival_datetime', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        self.format_cell_text(row_cells[2], 'Date & Time of fault\nclearance:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[2], 'D9D9D9')
-        self.set_cell_border(row_cells[2])
-        
-        self.format_cell_text(row_cells[3], data.get('clearance_datetime', ''), font_size=10)
-        self.set_cell_border(row_cells[3])
-        
-        # Row 2: Service Person and Attribution
-        row = section_b_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Name of Service\nPerson:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        self.format_cell_text(row_cells[1], data.get('service_person', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        self.format_cell_text(row_cells[2], 'Attribution/ Cause of\nFault:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[2], 'D9D9D9')
-        self.set_cell_border(row_cells[2])
-        
-        self.format_cell_text(row_cells[3], data.get('fault_cause', ''), font_size=10)
-        self.set_cell_border(row_cells[3])
-        
-        # Row 3: Materials used
-        row = section_b_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Details of materials\nused and replaced and\nitems fitted (if any):', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], data.get('materials_used', 'Nil'), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        # Row 4: Repair details header
-        row = section_b_table.add_row()
-        row_cells = row.cells
-        row_cells[0].merge(row_cells[3])
-        self.format_cell_text(row_cells[0], 'Details of repair works, and verification carried out: (Please use separate sheet if not sufficient space)', 
-                             bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        # Row 5: Repair details content
-        row = section_b_table.add_row()
-        row_cells = row.cells
-        row_cells[0].merge(row_cells[3])
-        repair_details = data.get('repair_details', '')
-        self.format_cell_text(row_cells[0], repair_details, font_size=10)
-        self.set_cell_border(row_cells[0])
-        row.height = Pt(80)
-        
-        # Row 6: Contractor Staff
-        row = section_b_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], "Name & Title of\nContractor's Staff:", bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], data.get('contractor_staff', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        # Row 7: Signature
-        row = section_b_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Signature:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], '', font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        # Row 8: Date
-        row = section_b_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Date:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], data.get('contractor_date', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # Section C: Close out
-        section_c_table = self.doc.add_table(rows=1, cols=4)
-        section_c_table.style = 'Table Grid'
-        
-        # Section C Header
-        row = section_c_table.rows[0]
-        row_cells = row.cells
-        row_cells[0].merge(row_cells[3])
-        self.format_cell_text(row_cells[0], 'Section C: Close out of Fault Report (Filled by Representative of the Employer)', 
-                             bold=True, font_size=11)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        # Row 1: Status
-        row = section_c_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Status:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        status_text = data.get('status', 'Fault has been Cleared/ Temporarily fixed / Follow up action required (Ref No.')
-        self.format_cell_text(row_cells[1], status_text, font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        # Row 2: Severity Level
-        row = section_c_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Severity Level:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        severity = data.get('severity', 'Not Applicable')
-        severity_text = f"[ ] Not Applicable    [ ] Minor    [X] {severity}" if severity not in ['Not Applicable', 'Minor', 'Major'] else f"[ ] Not Applicable    [ ] Minor    [ ] Major"
-        self.format_cell_text(row_cells[1], severity_text, font_size=10)
-        self.set_cell_border(row_cells[1])
-        row_cells[2].merge(row_cells[3])
-        self.set_cell_border(row_cells[2])
-        
-        # Row 3: Comments
-        row = section_c_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Comments:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], data.get('comments', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        row.height = Pt(40)
-        
-        # Row 4: Name & Title
-        row = section_c_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Name & Title:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], data.get('employer_rep', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        # Row 5: Signature
-        row = section_c_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Signature:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], '', font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        # Row 6: Date
-        row = section_c_table.add_row()
-        row_cells = row.cells
-        
-        self.format_cell_text(row_cells[0], 'Date:', bold=True, font_size=9)
-        self.set_cell_shading(row_cells[0], 'D9D9D9')
-        self.set_cell_border(row_cells[0])
-        
-        row_cells[1].merge(row_cells[3])
-        self.format_cell_text(row_cells[1], data.get('closeout_date', ''), font_size=10)
-        self.set_cell_border(row_cells[1])
-        
-        # Page 2: Detailed Incident Report (6 Required Sections)
-        self.doc.add_page_break()
-        self.add_detailed_report(data)
-        
-        # Save document
+    """按参考模板填充并输出文档。"""
+
+    def __init__(self, template_path: str | Path | None = None):
+        resolved_template = Path(template_path) if template_path else REFERENCE_TEMPLATE_PATH
+        if not resolved_template.is_file():
+            raise FileNotFoundError(f"参考模板不存在：{resolved_template}")
+        self.doc = Document(str(resolved_template))
+        # 新逻辑仅支持最新版 incident-report 参考模板。
+        if len(self.doc.tables) != 1 or len(self.doc.paragraphs) > 24:
+            raise RuntimeError("参考模板结构不匹配：当前仅支持新版 incident-report 模板。")
+
+    def _set_paragraph_if_exists(self, index: int, text: str) -> None:
+        if index < 0 or index >= len(self.doc.paragraphs):
+            return
+        _set_paragraph_text(self.doc.paragraphs[index], text)
+
+    def _find_paragraph_index_by_prefix(self, prefix: str) -> int | None:
+        target = prefix.strip().lower()
+        if not target:
+            return None
+        for index, paragraph in enumerate(self.doc.paragraphs):
+            text = _to_text(paragraph.text, "").strip().lower()
+            if text.startswith(target):
+                return index
+        return None
+
+    def _set_section_text_after_heading(self, heading_prefix: str, text: str) -> None:
+        heading_index = self._find_paragraph_index_by_prefix(heading_prefix)
+        if heading_index is None:
+            return
+        self._set_paragraph_if_exists(heading_index + 1, text)
+
+    def _fill_page_one(self, data: dict[str, Any]) -> None:
+        table = self.doc.tables[0]
+        rows = table.rows
+
+        _set_cell_text(rows[0].cells[1], data.get("reference_no", ""))
+        _set_cell_text(rows[2].cells[1], data.get("fault_date", ""))
+        _set_cell_text(rows[2].cells[4], data.get("fault_time", ""))
+        _set_cell_text(rows[3].cells[1], data.get("reporting_person", ""))
+        _set_cell_text(rows[3].cells[4], data.get("verified_by", ""))
+        _set_cell_text(rows[4].cells[1], data.get("site_id", ""))
+        _set_cell_text(rows[4].cells[4], data.get("system", ""))
+        _set_cell_text(rows[5].cells[1], data.get("location", ""))
+
+        detail_lines = []
+        detailed_description = _to_text(data.get("detailed_description"), "").strip()
+        fault_details = _to_text(data.get("fault_details"), "").strip()
+        if detailed_description:
+            detail_lines.append(detailed_description)
+        if fault_details:
+            detail_lines.append(fault_details)
+        detail_text = "\n".join(detail_lines)
+        _set_cell_text(rows[6].cells[0], detail_text)
+
+        _set_cell_text(rows[8].cells[1], data.get("arrival_datetime", ""))
+        _set_cell_text(rows[8].cells[4], data.get("clearance_datetime", ""))
+        _set_cell_text(rows[9].cells[1], data.get("service_person", ""))
+        _set_cell_text(rows[9].cells[4], data.get("fault_cause", ""))
+        _set_cell_text(rows[10].cells[1], data.get("materials_used", ""))
+
+        # 根据当前事故报告需求，Section B 该说明行不保留固定模板文案，仅保留空白可填写区。
+        _set_cell_text(rows[11].cells[0], "")
+
+        _set_cell_text(rows[12].cells[1], data.get("contractor_staff", ""))
+        _set_cell_text(rows[14].cells[1], data.get("contractor_date", ""))
+        _set_cell_text(rows[16].cells[1], data.get("status", ""))
+
+        severity = _to_text(data.get("severity"), "").lower()
+        _set_cell_text(rows[17].cells[1], "[X] Not Applicable" if severity in {"n/a", "not applicable"} else "[ ] Not Applicable")
+        _set_cell_text(rows[17].cells[2], "[X] Minor" if severity in {"minor", "low"} else "[ ] Minor")
+        _set_cell_text(rows[17].cells[4], "[X] Major" if severity in {"major", "high", "critical"} else "[ ] Major")
+
+        _set_cell_text(rows[18].cells[1], data.get("comments", ""))
+        _set_cell_text(rows[21].cells[1], data.get("employer_rep", ""))
+        _set_cell_text(rows[23].cells[1], data.get("closeout_date", ""))
+
+    def _fill_body_sections(self, data: dict[str, Any]) -> None:
+        impact = data.get("impact", {}) if isinstance(data.get("impact"), dict) else {}
+        report_body = data.get("report_body", {}) if isinstance(data.get("report_body"), dict) else {}
+
+        description_text = _to_text(data.get("detailed_description"), "")
+        self._set_section_text_after_heading("Description of the Incident:", description_text)
+
+        affected_summary = _to_text(data.get("affected_date_summary"), "")
+        timeline_lines: list[str] = []
+        events = data.get("event_sequence", [])
+        if isinstance(events, list):
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                time_text = _to_text(event.get("time"), "").strip()
+                event_text = _to_text(event.get("event"), "").strip()
+                if not time_text and not event_text:
+                    continue
+                timeline_lines.append(
+                    f"{time_text} - {event_text}".strip(" -")
+                    if time_text and event_text
+                    else (event_text or time_text)
+                )
+        affected_lines = [affected_summary] if affected_summary else []
+        if timeline_lines:
+            affected_lines.append("Timeline:")
+            affected_lines.extend(timeline_lines)
+        self._set_section_text_after_heading("Affected Date:", "\n".join(affected_lines))
+
+        impact_lines: list[str] = []
+        impact_scope = _to_text(impact.get("systems"), "").strip()
+        if impact_scope:
+            impact_lines.append(f"Scope: {impact_scope}")
+        impact_severity = _to_text(impact.get("severity"), "").strip()
+        if impact_severity:
+            impact_lines.append(f"Severity: {impact_severity}")
+        business_impact_lines = _to_lines(impact.get("business_impact"))
+        if business_impact_lines:
+            impact_lines.append("Business Impact:")
+            impact_lines.extend([f"- {line}" for line in business_impact_lines if line.strip()])
+        self._set_section_text_after_heading("Impact:", "\n".join(impact_lines))
+
+        root_lines: list[str] = []
+        trigger_text = _to_text(data.get("trigger"), "").strip()
+        if trigger_text:
+            root_lines.append(f"Trigger: {trigger_text}")
+        root_cause_text = _to_text(data.get("root_cause"), "").strip()
+        if root_cause_text:
+            root_lines.append(f"Root Cause: {root_cause_text}")
+        root_evidence = _to_text(data.get("root_cause_evidence"), "").strip()
+        if root_evidence:
+            root_lines.append(f"Evidence: {root_evidence}")
+        self._set_section_text_after_heading("Root Cause:", "\n".join(root_lines))
+
+        follow_lines = _to_lines(report_body.get("follow_up_actions"))
+        if not follow_lines:
+            follow_lines = _extract_action_lines(data.get("preventive_actions"))
+        self._set_section_text_after_heading(
+            "Follow-Up Actions:",
+            "\n".join([f"- {line}" for line in follow_lines if line.strip()]),
+        )
+
+    def _fill_appendix(self, data: dict[str, Any]) -> None:
+        appendix = data.get("appendix", {})
+        if not isinstance(appendix, dict):
+            appendix = {}
+        notes = _to_text(appendix.get("notes"), "")
+        images = appendix.get("images")
+        if not isinstance(images, list):
+            images = []
+
+        self._set_section_text_after_heading("Appendix:", notes)
+
+        for image in images:
+            if not isinstance(image, dict):
+                continue
+            image_bytes = _decode_data_url_to_bytes(_to_text(image.get("data_url"), ""))
+            if image_bytes is None:
+                continue
+            try:
+                image_paragraph = self.doc.add_paragraph("")
+                image_run = image_paragraph.add_run()
+                image_run.add_picture(io.BytesIO(image_bytes), width=Cm(15))
+            except Exception:
+                # 个别格式（如部分 webp/svg 转码失败）不应阻断整份事故报告预览。
+                continue
+
+    def generate_form(self, data: dict[str, Any], output_path: str | Path | None = None):
+        self._fill_page_one(data)
+        self._fill_body_sections(data)
+        self._fill_appendix(data)
+
         if output_path:
-            self.doc.save(output_path)
+            self.doc.save(str(output_path))
             print(f"[OK] Fault Log Form saved to: {output_path}")
-        
         return self.doc
-    
-    def add_detailed_report(self, data):
-        """Add detailed incident report with 6 required sections"""
-        
-        # Title
-        title = self.doc.add_heading('INCIDENT REPORT', level=0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        for run in title.runs:
-            run.font.name = 'Arial'
-            run.font.size = Pt(18)
-            run.font.bold = True
-            run.font.color.rgb = RGBColor(0, 51, 102)
-        
-        # Reference link
-        ref_para = self.doc.add_paragraph()
-        ref_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = ref_para.add_run(f"Reference: {data.get('reference_no', 'N/A')}")
-        run.font.name = 'Arial'
-        run.font.size = Pt(11)
-        run.italic = True
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # 1. Description of the Incident
-        self.doc.add_heading('1. Description of the Incident', level=2)
-        desc = data.get('detailed_description', data.get('fault_details', 'N/A'))
-        self.add_content_paragraph(desc)
-        
-        # Key Facts
-        self.add_sub_heading('Key Facts:')
-        facts = data.get('key_facts', {})
-        self.add_bullet(f"System/Service: {facts.get('system', data.get('system', 'N/A'))}")
-        self.add_bullet(f"Detection Method: {facts.get('detection_method', 'Fault reported by operator')}")
-        self.add_bullet(f"Symptoms: {facts.get('symptoms', data.get('fault_details', 'N/A'))}")
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # 2. Affected Date
-        self.doc.add_heading('2. Affected Date', level=2)
-        self.add_date_table(data)
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # 3. Event Sequence
-        self.doc.add_heading('3. Event Sequence', level=2)
-        self.add_event_sequence_table(data)
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # 4. Impact
-        self.doc.add_heading('4. Impact', level=2)
-        self.add_sub_heading('Scope:')
-        impact = data.get('impact', {})
-        self.add_bullet(f"Affected Systems: {impact.get('systems', data.get('system', 'N/A'))}")
-        self.add_bullet(f"Affected Users: {impact.get('users', 'N/A')}")
-        self.add_bullet(f"Geographic Region: {impact.get('region', data.get('site_id', 'N/A'))}")
-        
-        self.add_sub_heading(f"Severity: {impact.get('severity', data.get('severity', 'N/A'))}")
-        
-        self.add_sub_heading('Business Impact:')
-        business_impact = impact.get('business_impact', [])
-        if business_impact:
-            for item in business_impact:
-                self.add_bullet(item)
-        else:
-            self.add_bullet('Service disruption reported')
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # 5. Root Cause
-        self.doc.add_heading('5. Root Cause', level=2)
-        
-        self.add_sub_heading('Trigger:')
-        self.add_content_paragraph(data.get('trigger', data.get('fault_cause', 'N/A')))
-        
-        self.add_sub_heading('Root Cause:')
-        root_cause = data.get('root_cause', data.get('fault_cause', 'N/A'))
-        self.add_content_paragraph(root_cause)
-        
-        self.add_sub_heading('Evidence:')
-        evidence = data.get('root_cause_evidence', 'See Fault Log Form Section B')
-        self.add_content_paragraph(evidence)
-        
-        # 5 Whys
-        if data.get('five_whys'):
-            self.add_sub_heading('5-Whys Analysis:')
-            for i, why in enumerate(data['five_whys'], 1):
-                self.add_bullet(f"{i}. Why? → {why}")
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # 6. Follow-Up Actions
-        self.doc.add_heading('6. Follow-Up Actions', level=2)
-        
-        # Immediate Actions
-        self.add_sub_heading('Immediate Actions (Completed):')
-        self.add_actions_table(data.get('immediate_actions', []), 'immediate')
-        
-        self.doc.add_paragraph()  # Spacing
-        
-        # Preventive Actions
-        self.add_sub_heading('Preventive Actions (Planned):')
-        self.add_actions_table(data.get('preventive_actions', []), 'preventive')
-    
-    def add_content_paragraph(self, text):
-        """Add a content paragraph"""
-        para = self.doc.add_paragraph()
-        run = para.add_run(_to_text(text))
-        run.font.name = 'Arial'
-        run.font.size = Pt(11)
-    
-    def add_sub_heading(self, text):
-        """Add a sub-heading"""
-        para = self.doc.add_paragraph()
-        run = para.add_run(text)
-        run.font.name = 'Arial'
-        run.font.size = Pt(11)
-        run.bold = True
-    
-    def add_bullet(self, text):
-        """Add a bullet point"""
-        para = self.doc.add_paragraph(style='List Bullet')
-        run = para.add_run(_to_text(text))
-        run.font.name = 'Arial'
-        run.font.size = Pt(11)
-    
-    def add_date_table(self, data):
-        """Add date table"""
-        table = self.doc.add_table(rows=4, cols=2)
-        table.style = 'Table Grid'
-        
-        dates = [
-            ('Incident Start Time', data.get('start_time', 'N/A')),
-            ('Detection Time', data.get('detection_time', 'N/A')),
-            ('Resolution Time', data.get('resolution_time', 'N/A')),
-            ('Total Duration', data.get('total_duration', 'N/A'))
-        ]
-        
-        for i, (label, value) in enumerate(dates):
-            row = table.rows[i]
-            row.cells[0].text = label
-            row.cells[1].text = _to_text(value)
-            
-            # Format cells
-            for paragraph in row.cells[0].paragraphs:
-                for run in paragraph.runs:
-                    run.font.bold = True
-                    run.font.name = 'Arial'
-                    run.font.size = Pt(10)
-            
-            for paragraph in row.cells[1].paragraphs:
-                for run in paragraph.runs:
-                    run.font.name = 'Arial'
-                    run.font.size = Pt(10)
-    
-    def add_event_sequence_table(self, data):
-        """Add event sequence table"""
-        events = data.get('event_sequence', [])
-        
-        if not events:
-            self.add_content_paragraph('No events recorded.')
-            return
-        
-        table = self.doc.add_table(rows=len(events) + 1, cols=3)
-        table.style = 'Table Grid'
-        
-        # Header row
-        header = table.rows[0]
-        headers = ['Time', 'Event', 'Evidence']
-        for i, h in enumerate(headers):
-            header.cells[i].text = h
-            for paragraph in header.cells[i].paragraphs:
-                for run in paragraph.runs:
-                    run.font.bold = True
-                    run.font.name = 'Arial'
-                    run.font.size = Pt(10)
-        
-        # Data rows
-        for i, event in enumerate(events):
-            row = table.rows[i + 1]
-            row.cells[0].text = _to_text(event.get('time', 'N/A'))
-            row.cells[1].text = _to_text(event.get('event', 'N/A'))
-            row.cells[2].text = _to_text(event.get('evidence', 'N/A'))
-            
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    for run in paragraph.runs:
-                        run.font.name = 'Arial'
-                        run.font.size = Pt(10)
-    
-    def add_actions_table(self, actions, action_type):
-        """Add actions table"""
-        if not actions:
-            self.add_content_paragraph('No actions recorded.')
-            return
-        
-        if action_type == 'immediate':
-            headers = ['Action', 'Taken By', 'Time', 'Status']
-        else:
-            headers = ['Action', 'Owner', 'Due Date', 'Status']
-        
-        table = self.doc.add_table(rows=len(actions) + 1, cols=4)
-        table.style = 'Table Grid'
-        
-        # Header row
-        header = table.rows[0]
-        for i, h in enumerate(headers):
-            header.cells[i].text = h
-            for paragraph in header.cells[i].paragraphs:
-                for run in paragraph.runs:
-                    run.font.bold = True
-                    run.font.name = 'Arial'
-                    run.font.size = Pt(10)
-        
-        # Data rows
-        for i, action in enumerate(actions):
-            row = table.rows[i + 1]
-            row.cells[0].text = _to_text(action.get('action', 'N/A'))
-            row.cells[1].text = _to_text(action.get('by', action.get('owner', 'N/A')))
-            row.cells[2].text = _to_text(action.get('time', action.get('due_date', 'N/A')))
-            row.cells[3].text = _to_text(action.get('status', 'N/A'))
-            
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    for run in paragraph.runs:
-                        run.font.name = 'Arial'
-                        run.font.size = Pt(10)
 
 
-def main():
-    """Main function"""
+def main() -> None:
     import argparse
-    
-    parser = argparse.ArgumentParser(description='Generate DAS Fault Log Form')
-    parser.add_argument('--json', required=True, type=str, help='Load data from JSON file')
-    parser.add_argument('--output', '-o', type=str, default='Fault_Log_Form.docx', help='Output file path')
-    
+
+    parser = argparse.ArgumentParser(description="Generate DAS Fault Log Form")
+    parser.add_argument("--json", required=True, type=str, help="Load data from JSON file")
+    parser.add_argument("--output", "-o", type=str, default="Fault_Log_Form.docx", help="Output file path")
     args = parser.parse_args()
-    
-    # 仅保留工具调用所需的生产链路：从 JSON 文件读取数据。
+
     print(f"Loading data from {args.json}...")
-    with open(args.json, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    with open(args.json, "r", encoding="utf-8") as file:
+        data = json.load(file)
 
-    data = normalize_incident_data(data)
-
-    if not data.get('allow_incomplete'):
-        missing_sections = validate_required_sections(data)
+    normalized = normalize_incident_data(data)
+    if not normalized.get("allow_incomplete"):
+        missing_sections = validate_required_sections(normalized)
         if missing_sections:
-            missing_text = '; '.join(missing_sections)
+            missing_text = "; ".join(missing_sections)
             raise SystemExit(
                 f"报告信息不完整，缺少以下章节：{missing_text}。"
-                "请先按 6 步补齐信息后再生成；如用户明确接受缺省项，可在 report_data 中设置 allow_incomplete=true。"
+                "请先补齐正文必填信息；如用户明确接受缺省项，可在 report_data 中设置 allow_incomplete=true。"
             )
-    
-    # Generate form
+
     generator = FaultLogFormGenerator()
-    generator.generate_form(data, args.output)
-    
+    generator.generate_form(normalized, args.output)
     print(f"\n[OK] Fault Log Form generated: {args.output}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

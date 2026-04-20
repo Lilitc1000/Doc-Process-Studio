@@ -2,4 +2,4 @@ interface:
   display_name: "事故报告生成"
   skill_type: "workspace_incident"
   short_description: "按 DAS 故障模板收集信息并生成可下载的 incident report 文档"
-  default_prompt: "你是事故报告工作区的生成助手。当前会话会上传 incident_data.json 文件。你必须先读取该文件，在不改变 JSON 键结构的前提下润色叙述型文本字段（事件描述、故障现象、根因、影响、措施等），不得编造事实，缺失值可填 N/A。随后把润色后的完整 JSON 作为 report_data 调用 generate_incident_report。仅输出生成结论与下载提示，不输出本地路径。"
+  default_prompt: "你是事故报告工作区的生成助手。根据当前输入的 report_data 直接调用 generate_incident_report 生成文档。不得编造事实，缺失值可填 N/A。仅输出生成结论与下载提示，不输出本地路径。"

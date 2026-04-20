@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException
 
 from ...models.conversation.incident_report import (
+    IncidentBodyGenerateResponse,
+    IncidentBodyQuickGenerateRequest,
+    IncidentBodySectionGenerateRequest,
     IncidentReportFormSchemaResponse,
-    IncidentReportGenerateRequest,
-    IncidentReportGenerateResponse,
+    IncidentReportPreviewRequest,
+    IncidentReportPreviewResponse,
     IncidentReportSessionCreateRequest,
     IncidentReportSessionDetail,
     IncidentReportSessionListResponse,
@@ -14,10 +17,12 @@ from ...models.conversation.incident_report import (
 from ...services.chat.incident_reports import (
     create_incident_report_session,
     delete_incident_report_session,
-    generate_incident_report_session_attachment,
+    generate_incident_report_body_from_quick_input,
     get_incident_report_form_schema,
     get_incident_report_session,
     list_incident_report_sessions,
+    preview_incident_report_attachment,
+    polish_incident_report_section,
     update_incident_report_session_title,
     update_incident_report_session_snapshot,
 )
@@ -68,19 +73,67 @@ async def update_session(
 
 
 @router.post(
-    "/sessions/{session_id}/generate",
-    response_model=IncidentReportGenerateResponse,
+    "/sessions/{session_id}/body/quick-generate",
+    response_model=IncidentBodyGenerateResponse,
 )
-async def generate_session_attachment(
+async def quick_generate_body(
     session_id: str,
-    payload: IncidentReportGenerateRequest,
-) -> IncidentReportGenerateResponse:
+    payload: IncidentBodyQuickGenerateRequest,
+) -> IncidentBodyGenerateResponse:
     try:
-        response = await generate_incident_report_session_attachment(
+        response = await generate_incident_report_body_from_quick_input(
             session_id=session_id,
             model=payload.model,
             reranker_model=payload.reranker_model,
-            output_name=payload.output_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if response is None:
+        raise HTTPException(status_code=404, detail="未找到对应事故报告会话。")
+    return response
+
+
+@router.post(
+    "/sessions/{session_id}/body/section-generate",
+    response_model=IncidentBodyGenerateResponse,
+)
+async def generate_body_section(
+    session_id: str,
+    payload: IncidentBodySectionGenerateRequest,
+) -> IncidentBodyGenerateResponse:
+    try:
+        response = await polish_incident_report_section(
+            session_id=session_id,
+            model=payload.model,
+            reranker_model=payload.reranker_model,
+            section_id=payload.section_id,
+            timeline_index=payload.timeline_index,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if response is None:
+        raise HTTPException(status_code=404, detail="未找到对应事故报告会话。")
+    return response
+
+
+@router.post(
+    "/sessions/{session_id}/preview",
+    response_model=IncidentReportPreviewResponse,
+)
+async def preview_session_attachment(
+    session_id: str,
+    payload: IncidentReportPreviewRequest,
+) -> IncidentReportPreviewResponse:
+    try:
+        response = await preview_incident_report_attachment(
+            session_id=session_id,
+            version=payload.version,
+            model=payload.model,
+            reranker_model=payload.reranker_model,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -13,7 +13,29 @@
       </span>
       <span class="date-time-trigger-icon" aria-hidden="true">
         <svg
-          v-if="!isOpen"
+          v-if="mode === 'time'"
+          viewBox="0 0 20 20"
+          class="date-time-trigger-icon-svg"
+        >
+          <circle
+            cx="10"
+            cy="10"
+            r="6.75"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <path
+            d="M10 6.8V10.2L12.4 11.8"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+          />
+        </svg>
+        <svg
+          v-else
           viewBox="0 0 20 20"
           class="date-time-trigger-icon-svg"
         >
@@ -28,7 +50,7 @@
             stroke-width="1.5"
           />
           <path
-            d="M6.5 3.25V6M13.5 3.25V6M3.25 7.5H16.75M7.5 11L10 13.5L12.5 11"
+            d="M6.5 3.25V6M13.5 3.25V6M3.25 7.5H16.75"
             fill="none"
             stroke="currentColor"
             stroke-linecap="round"
@@ -36,24 +58,16 @@
             stroke-width="1.5"
           />
         </svg>
-        <svg v-else viewBox="0 0 20 20" class="date-time-trigger-icon-svg">
-          <rect
-            x="3.25"
-            y="4.5"
-            width="13.5"
-            height="12.25"
-            rx="2.25"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          />
+      </span>
+      <span class="date-time-trigger-chevron" :class="{ open: isOpen }">
+        <svg viewBox="0 0 16 16" class="date-time-trigger-chevron-svg">
           <path
-            d="M6.5 3.25V6M13.5 3.25V6M3.25 7.5H16.75M7.5 13L10 10.5L12.5 13"
+            d="M3.5 6.25L8 10.75L12.5 6.25"
             fill="none"
             stroke="currentColor"
             stroke-linecap="round"
             stroke-linejoin="round"
-            stroke-width="1.5"
+            stroke-width="2"
           />
         </svg>
       </span>
@@ -68,48 +82,51 @@
           :style="panelStyle"
           @click.stop
         >
-          <div class="date-time-calendar-header">
-            <button
-              type="button"
-              class="date-time-nav-btn"
-              @click="goPrevMonth"
-            >
-              ‹
-            </button>
-            <span class="date-time-month-label">{{ monthLabel }}</span>
-            <button
-              type="button"
-              class="date-time-nav-btn"
-              @click="goNextMonth"
-            >
-              ›
-            </button>
-          </div>
+          <template v-if="mode !== 'time'">
+            <div class="date-time-calendar-header">
+              <button
+                type="button"
+                class="date-time-nav-btn"
+                @click="goPrevMonth"
+              >
+                ‹
+              </button>
+              <span class="date-time-month-label">{{ monthLabel }}</span>
+              <button
+                type="button"
+                class="date-time-nav-btn"
+                @click="goNextMonth"
+              >
+                ›
+              </button>
+            </div>
 
-          <div class="date-time-weekday-row">
-            <span v-for="weekday in weekdays" :key="weekday">
-              {{ weekday }}
-            </span>
-          </div>
+            <div class="date-time-weekday-row">
+              <span v-for="weekday in weekdays" :key="weekday">
+                {{ weekday }}
+              </span>
+            </div>
 
-          <div class="date-time-day-grid">
-            <button
-              v-for="day in calendarDays"
-              :key="day.key"
-              type="button"
-              class="date-time-day-btn"
-              :class="{
-                muted: !day.inCurrentMonth,
-                selected: isSelectedDay(day.date),
-                today: isToday(day.date),
-              }"
-              @click="pickDay(day.date)"
-            >
-              {{ day.label }}
-            </button>
-          </div>
+            <div class="date-time-day-grid">
+              <button
+                v-for="day in calendarDays"
+                :key="day.key"
+                type="button"
+                class="date-time-day-btn"
+                :class="{
+                  muted: !day.inCurrentMonth,
+                  selected: isSelectedDay(day.date),
+                  today: isToday(day.date),
+                }"
+                @click="pickDay(day.date)"
+              >
+                {{ day.label }}
+              </button>
+            </div>
+          </template>
 
           <div
+            v-if="mode !== 'date'"
             class="date-time-time-row"
             :class="{ open: openTimeDropdown !== null }"
           >
@@ -236,7 +253,7 @@
             <button
               type="button"
               class="date-time-action-btn is-primary"
-              :disabled="!pendingDate"
+              :disabled="confirmDisabled"
               @click="confirmValue"
             >
               确定
@@ -251,15 +268,19 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
+type DateTimeFieldMode = 'datetime' | 'date' | 'time';
+
 const props = withDefaults(
   defineProps<{
     modelValue: string;
     disabled?: boolean;
     placeholder?: string;
+    mode?: DateTimeFieldMode;
   }>(),
   {
     disabled: false,
     placeholder: '请选择日期和时间',
+    mode: 'datetime',
   },
 );
 
@@ -289,34 +310,129 @@ const pendingDate = ref<Date | null>(null);
 const selectedHour = ref('00');
 const selectedMinute = ref('00');
 
-const parseDateTimeValue = (value: string) => {
-  const matched = value
-    .trim()
-    .match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
-  if (!matched) {
-    return null;
+const mode = computed<DateTimeFieldMode>(() => props.mode ?? 'datetime');
+
+const parseDateTimeCandidate = (value: string): Date | null => {
+  const normalized = value.trim();
+  const isoMatched = normalized.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2}))?/,
+  );
+  if (isoMatched) {
+    const [, yearText, monthText, dayText, hourText = '00', minuteText = '00'] =
+      isoMatched;
+    const year = Number(yearText);
+    const month = Number(monthText) - 1;
+    const day = Number(dayText);
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    const date = new Date(year, month, day, hour, minute, 0, 0);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date;
   }
-  const [, yearText, monthText, dayText, hourText, minuteText] = matched;
-  const year = Number(yearText);
-  const month = Number(monthText) - 1;
-  const day = Number(dayText);
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  const date = new Date(year, month, day, hour, minute, 0, 0);
-  if (Number.isNaN(date.getTime())) {
-    return null;
+
+  const slashMatched = normalized.match(
+    /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/,
+  );
+  if (slashMatched) {
+    const [, dayText, monthText, yearText, hourText = '00', minuteText = '00'] =
+      slashMatched;
+    const year = Number(yearText);
+    const month = Number(monthText) - 1;
+    const day = Number(dayText);
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    const date = new Date(year, month, day, hour, minute, 0, 0);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date;
   }
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-  return date;
+
+  return null;
 };
 
-const formatStorageValue = (value: Date) => {
+const parseTimeCandidate = (value: string): { hour: string; minute: string } | null => {
+  const normalized = value.trim();
+  const applyAmpm = (rawHour: number, rawAmpm: string) => {
+    let hour = rawHour;
+    const ampm = rawAmpm.toLowerCase();
+    if (ampm === 'pm' && hour >= 1 && hour <= 11) {
+      hour += 12;
+    } else if (ampm === 'am' && hour === 12) {
+      hour = 0;
+    }
+    return hour;
+  };
+
+  const timeMatched = normalized.match(
+    /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:[:：时hH点])\s*(?<minute>\d{1,2})(?:\s*(?:分|m|M))?\s*(?<ampm>am|pm)?/i,
+  );
+  if (timeMatched?.groups) {
+    const hour = applyAmpm(Number(timeMatched.groups.hour), timeMatched.groups.ampm ?? '');
+    const minute = Number(timeMatched.groups.minute);
+    if (Number.isNaN(hour) || Number.isNaN(minute) || minute < 0 || minute > 59) {
+      return null;
+    }
+    if (hour < 0 || hour > 23) {
+      return null;
+    }
+    return {
+      hour: String(hour).padStart(2, '0'),
+      minute: String(minute).padStart(2, '0'),
+    };
+  }
+
+  const halfMatched = normalized.match(
+    /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:点|时|h|H)\s*半\s*(?<ampm>am|pm)?/i,
+  );
+  if (halfMatched?.groups) {
+    const hour = applyAmpm(Number(halfMatched.groups.hour), halfMatched.groups.ampm ?? '');
+    if (Number.isNaN(hour) || hour < 0 || hour > 23) {
+      return null;
+    }
+    return {
+      hour: String(hour).padStart(2, '0'),
+      minute: '30',
+    };
+  }
+
+  const hourOnlyMatched = normalized.match(
+    /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:点|时|h|H)\s*(?<ampm>am|pm)?/i,
+  );
+  if (!hourOnlyMatched?.groups) {
+    return null;
+  }
+  const hour = applyAmpm(Number(hourOnlyMatched.groups.hour), hourOnlyMatched.groups.ampm ?? '');
+  if (Number.isNaN(hour) || hour < 0 || hour > 23) {
+    return null;
+  }
+  return {
+    hour: String(hour).padStart(2, '0'),
+    minute: '00',
+  };
+};
+
+const formatDateStorageValue = (value: Date) => {
+  const year = String(value.getFullYear());
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateDisplayValue = (value: Date) => {
+  const year = String(value.getFullYear());
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}/${month}/${day}`;
+};
+
+const formatTimeStorageValue = () => {
+  return `${selectedHour.value}:${selectedMinute.value}`;
+};
+
+const formatDateTimeStorageValue = (value: Date) => {
   const year = String(value.getFullYear());
   const month = String(value.getMonth() + 1).padStart(2, '0');
   const day = String(value.getDate()).padStart(2, '0');
@@ -325,7 +441,7 @@ const formatStorageValue = (value: Date) => {
   return `${year}-${month}-${day}T${hour}:${minute}`;
 };
 
-const formatDisplayValue = (value: Date) => {
+const formatDateTimeDisplayValue = (value: Date) => {
   const year = String(value.getFullYear());
   const month = String(value.getMonth() + 1).padStart(2, '0');
   const day = String(value.getDate()).padStart(2, '0');
@@ -335,11 +451,20 @@ const formatDisplayValue = (value: Date) => {
 };
 
 const displayText = computed(() => {
-  const parsed = parseDateTimeValue(props.modelValue);
-  if (!parsed) {
+  if (mode.value === 'time') {
+    const parsedTime = parseTimeCandidate(props.modelValue);
+    return parsedTime
+      ? `${parsedTime.hour}:${parsedTime.minute}`
+      : props.placeholder;
+  }
+  const parsedDate = parseDateTimeCandidate(props.modelValue);
+  if (!parsedDate) {
     return props.placeholder;
   }
-  return formatDisplayValue(parsed);
+  if (mode.value === 'date') {
+    return formatDateDisplayValue(parsedDate);
+  }
+  return formatDateTimeDisplayValue(parsedDate);
 });
 
 const monthLabel = computed(() => {
@@ -347,15 +472,20 @@ const monthLabel = computed(() => {
 });
 
 const syncPendingStateFromModel = () => {
-  const parsed = parseDateTimeValue(props.modelValue);
-  const baseDate = parsed ?? new Date();
+  const parsed = parseDateTimeCandidate(props.modelValue);
+  const parsedTime = parseTimeCandidate(props.modelValue);
+  const now = new Date();
+  const baseDate = parsed ?? now;
   displayYear.value = baseDate.getFullYear();
   displayMonth.value = baseDate.getMonth();
-  pendingDate.value = parsed
-    ? new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate())
-    : null;
-  selectedHour.value = String(baseDate.getHours()).padStart(2, '0');
-  selectedMinute.value = String(baseDate.getMinutes()).padStart(2, '0');
+  pendingDate.value =
+    mode.value === 'time'
+      ? null
+      : new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+  selectedHour.value =
+    parsedTime?.hour ?? String(baseDate.getHours()).padStart(2, '0');
+  selectedMinute.value =
+    parsedTime?.minute ?? String(baseDate.getMinutes()).padStart(2, '0');
 };
 
 const calendarDays = computed(() => {
@@ -404,9 +534,10 @@ const updatePanelPosition = () => {
   }
 
   const triggerRect = rootRef.value.getBoundingClientRect();
-  const desiredWidth = Math.max(triggerRect.width, 320);
+  const desiredWidth = Math.max(triggerRect.width, mode.value === 'time' ? 290 : 320);
   const margin = 10;
-  const estimatedPanelHeight = 380;
+  const estimatedPanelHeight =
+    mode.value === 'datetime' ? 380 : mode.value === 'date' ? 330 : 220;
 
   let left = triggerRect.left;
   if (left + desiredWidth + margin > window.innerWidth) {
@@ -510,10 +641,27 @@ const selectMinute = (minute: string) => {
   closeTimeDropdowns();
 };
 
+const confirmDisabled = computed(() => {
+  return mode.value !== 'time' && !pendingDate.value;
+});
+
 const confirmValue = () => {
+  if (mode.value === 'time') {
+    emit('update:modelValue', formatTimeStorageValue());
+    closePanel();
+    return;
+  }
+
   if (!pendingDate.value) {
     return;
   }
+
+  if (mode.value === 'date') {
+    emit('update:modelValue', formatDateStorageValue(pendingDate.value));
+    closePanel();
+    return;
+  }
+
   const combinedDate = new Date(
     pendingDate.value.getFullYear(),
     pendingDate.value.getMonth(),
@@ -523,7 +671,7 @@ const confirmValue = () => {
     0,
     0,
   );
-  emit('update:modelValue', formatStorageValue(combinedDate));
+  emit('update:modelValue', formatDateTimeStorageValue(combinedDate));
   closePanel();
 };
 
@@ -575,6 +723,10 @@ watch(
     }
   },
 );
+
+watch(mode, () => {
+  syncPendingStateFromModel();
+});
 
 watch(isOpen, (opened) => {
   if (opened) {

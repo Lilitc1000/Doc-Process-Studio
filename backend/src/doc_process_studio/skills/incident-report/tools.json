@@ -17,7 +17,7 @@
                 "type": "string"
               }
             ],
-            "description": "事故报告结构化数据。优先传对象；也可传 JSON/YAML 字符串。字段尽量严格对齐 examples/incident_data.json，关键键位缺失时请填 N/A 或空数组。若用户明确接受缺省项，可在 report_data 中设置 allow_incomplete=true。"
+            "description": "事故报告结构化数据。优先传对象；也可传 JSON/YAML 字符串。字段需与当前 incident-report 表单映射保持一致；关键键位缺失时请填 N/A 或空数组。若用户明确接受缺省项，可在 report_data 中设置 allow_incomplete=true。"
           },
           "output_name": {
             "type": "string",

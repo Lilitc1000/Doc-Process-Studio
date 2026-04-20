@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import ChatLayout from '../src/components/ChatLayout.vue';
 
 const streamChatReplyMock = vi.hoisted(() => vi.fn());
-const downloadAttachmentMock = vi.hoisted(() => vi.fn());
 const fetchAvailableModelsMock = vi.hoisted(() => vi.fn());
 const fetchAvailableSkillsMock = vi.hoisted(() => vi.fn());
 const fetchSessionSummariesMock = vi.hoisted(() => vi.fn());
@@ -12,15 +11,16 @@ const fetchIncidentFormSchemaMock = vi.hoisted(() => vi.fn());
 const fetchIncidentSessionSummariesMock = vi.hoisted(() => vi.fn());
 const createIncidentSessionMock = vi.hoisted(() => vi.fn());
 const fetchIncidentSessionDetailMock = vi.hoisted(() => vi.fn());
-const generateIncidentAttachmentMock = vi.hoisted(() => vi.fn());
-const fetchAgentTraceReplayMock = vi.hoisted(() => vi.fn());
+const quickGenerateIncidentBodyMock = vi.hoisted(() => vi.fn());
+const generateIncidentBodySectionMock = vi.hoisted(() => vi.fn());
+const previewIncidentAttachmentMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../src/api/chat', () => ({
   streamChatReply: streamChatReplyMock,
 }));
 
 vi.mock('../src/api/attachments', () => ({
-  downloadAttachment: downloadAttachmentMock,
+  downloadAttachment: vi.fn(),
 }));
 
 vi.mock('../src/api/catalog', () => ({
@@ -42,36 +42,59 @@ vi.mock('../src/api/incident-report', () => ({
   createIncidentSession: createIncidentSessionMock,
   fetchIncidentSessionDetail: fetchIncidentSessionDetailMock,
   saveIncidentSessionSnapshot: vi.fn(),
-  generateIncidentAttachment: generateIncidentAttachmentMock,
+  quickGenerateIncidentBody: quickGenerateIncidentBodyMock,
+  generateIncidentBodySection: generateIncidentBodySectionMock,
+  previewIncidentAttachment: previewIncidentAttachmentMock,
   renameIncidentSession: vi.fn(),
   removeIncidentSession: vi.fn(),
 }));
 
 vi.mock('../src/api/trace', () => ({
-  fetchAgentTraceReplay: fetchAgentTraceReplayMock,
+  fetchAgentTraceReplay: vi.fn(),
 }));
 
+const buildBaseSnapshot = () => ({
+  form_answers: {
+    manual_fault_date: { value: '12/03/2026', custom_value: '' },
+    manual_fault_time: { value: '15:00', custom_value: '' },
+    manual_reporting_person: { value: 'SOC', custom_value: '' },
+    manual_site_id: { value: 'CHT', custom_value: '' },
+    manual_system: { value: 'Payment Service', custom_value: '' },
+    manual_location: { value: 'CHT', custom_value: '' },
+    manual_fault_symptom: { value: '下单报错', custom_value: '' },
+    body_description: { value: '客户反馈下单报错，定位数据库 CPU 打满。', custom_value: '' },
+    body_impact_scope: { value: '下单链路', custom_value: '' },
+    body_impact_severity: { value: 'High', custom_value: '' },
+    body_root_cause: { value: '慢查询缺失索引', custom_value: '' },
+    body_follow_up_actions: { value: '加强 code review', custom_value: '' },
+    body_timeline: {
+      value: [
+        { time: '12/03/2026 15:00', event: '客户报错', resolution: '', evidence: '' },
+      ],
+      custom_value: '',
+    },
+    quick_narrative: { value: '3月12日下午3点客户下单报错。', custom_value: '' },
+  },
+  report_data: null,
+  generated_attachment: null,
+  generated_versions: [],
+  generated_trace_id: null,
+  section_trace_ids: {},
+  generated_at: null,
+  is_locked: false,
+  fallback_used: false,
+  polish_error: null,
+});
+
 describe('incident workspace flow', () => {
-  it('可在事故报告专区开始会话并生成附件', async () => {
+  it('支持快填生成正文并触发实时预览', async () => {
     fetchAvailableModelsMock.mockResolvedValue(['qwen3-coder-next:latest']);
     fetchAvailableSkillsMock.mockResolvedValue({ skills: [] });
     fetchSessionSummariesMock.mockResolvedValue([]);
     fetchIncidentSessionSummariesMock.mockResolvedValue([]);
     fetchIncidentFormSchemaMock.mockResolvedValue({
       intro_message: '欢迎来到事故报告向导',
-      steps: [
-        {
-          id: 'incident_type',
-          title: 'Step 1/1 事故类型',
-          prompt: '请选择事故类型',
-          field_path: 'detailed_description',
-          kind: 'single_select',
-          options: [{ value: 'A', label: 'A' }],
-          allow_custom: true,
-          required: true,
-          placeholder: '',
-        },
-      ],
+      steps: [],
     });
 
     createIncidentSessionMock.mockResolvedValue({
@@ -88,53 +111,38 @@ describe('incident workspace flow', () => {
       status: 'draft',
       created_at: '2026-04-14T12:30:00Z',
       updated_at: '2026-04-14T12:30:00Z',
-      snapshot: {
-        form_answers: {},
-        report_data: null,
-        generated_attachment: null,
-        generated_trace_id: '',
-        generated_at: null,
-        is_locked: false,
-        fallback_used: false,
-        polish_error: null,
-      },
+      snapshot: buildBaseSnapshot(),
     });
 
-    generateIncidentAttachmentMock.mockResolvedValue({
+    quickGenerateIncidentBodyMock.mockResolvedValue({
       session: {
         id: 'incident-session-1',
         title: '事故报告-2026/04/14 12:30',
-        status: 'generated',
+        status: 'draft',
         created_at: '2026-04-14T12:30:00Z',
-        updated_at: '2026-04-14T12:40:00Z',
+        updated_at: '2026-04-14T12:35:00Z',
       },
       snapshot: {
-        form_answers: {
-          incident_type: { value: 'A', custom_value: '' },
+        ...buildBaseSnapshot(),
+        generated_trace_id: 'trace-quick-1',
+        section_trace_ids: {
+          quick: 'trace-quick-1',
         },
-        report_data: {},
-        generated_attachment: {
-          attachment_id: 'incident-attachment-1',
-          name: 'incident-report.docx',
-          source: 'generated',
-          size_label: '20 KB',
-          download_url: '/api/attachments/incident-attachment-1/download',
-          mime_type:
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          expires_at: '2026-04-15T00:00:00Z',
-        },
-        generated_trace_id: 'trace-incident-1',
-        generated_at: '2026-04-14T12:40:00Z',
-        is_locked: true,
-        fallback_used: false,
-        polish_error: null,
       },
-      trace_id: 'trace-incident-1',
+      trace_id: 'trace-quick-1',
+      section_id: 'quick',
+      timeline_index: null,
     });
-    fetchAgentTraceReplayMock.mockResolvedValue({
-      payload: {
-        events: [],
-      },
+
+    previewIncidentAttachmentMock.mockResolvedValue({
+      source: 'draft',
+      version: null,
+      label: 'Realtime Draft Preview',
+      html: '<p>preview</p>',
+      docx_base64: 'ZHVtbXk=',
+      docx_file_name: 'incident-report.docx',
+      pdf_base64: null,
+      warnings: [],
     });
 
     const wrapper = mount(ChatLayout);
@@ -147,8 +155,6 @@ describe('incident workspace flow', () => {
     await incidentTab!.trigger('click');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('事故报告助手');
-
     const startButton = wrapper.find('.incident-primary-btn');
     await startButton.trigger('click');
     await flushPromises();
@@ -158,24 +164,14 @@ describe('incident workspace flow', () => {
       'incident-session-1',
     );
 
-    const selectTrigger = wrapper.find('.incident-select-trigger');
-    await selectTrigger.trigger('click');
+    const quickGenerateButton = wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('一键生成正文'));
+    expect(quickGenerateButton).toBeTruthy();
+    await quickGenerateButton!.trigger('click');
     await flushPromises();
 
-    const optionA = wrapper
-      .findAll('.incident-select-option')
-      .find((node) => node.text().trim() === 'A');
-    expect(optionA).toBeTruthy();
-    await optionA!.trigger('click');
-    await flushPromises();
-
-    const generateButton = wrapper.find(
-      '.incident-form-actions .incident-primary-btn',
-    );
-    await generateButton.trigger('click');
-    await flushPromises();
-
-    expect(generateIncidentAttachmentMock).toHaveBeenCalledWith(
+    expect(quickGenerateIncidentBodyMock).toHaveBeenCalledWith(
       'incident-session-1',
       {
         model: 'qwen3-coder-next:latest',
@@ -185,6 +181,28 @@ describe('incident workspace flow', () => {
         signal: expect.any(Object),
       }),
     );
-    expect(wrapper.text()).toContain('下载附件');
+
+    const previewButton = wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('预览附件'));
+    expect(previewButton).toBeTruthy();
+    await previewButton!.trigger('click');
+    await flushPromises();
+
+    expect(previewIncidentAttachmentMock).toHaveBeenCalledWith(
+      'incident-session-1',
+      {
+        version: undefined,
+        model: 'qwen3-coder-next:latest',
+        reranker_model: 'qwen3-coder-next:latest',
+      },
+      expect.objectContaining({
+        signal: expect.any(Object),
+      }),
+    );
+    const generateAttachmentButton = wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('生成附件（新增版本）'));
+    expect(generateAttachmentButton).toBeUndefined();
   });
 });

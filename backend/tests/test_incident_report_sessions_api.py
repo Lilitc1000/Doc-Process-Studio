@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 import doc_process_studio.main as main_module
 import doc_process_studio.routers.conversation.incident_reports as incident_router_module
 from doc_process_studio.models.conversation.incident_report import (
-    IncidentReportGenerateResponse,
+    IncidentReportPreviewResponse,
     IncidentReportSessionDetail,
     IncidentReportSessionListResponse,
     IncidentReportSessionSnapshot,
@@ -88,33 +88,30 @@ def test_api_incident_report_session_update(monkeypatch) -> None:
     assert response.json()["id"] == "incident-session-1"
 
 
-def test_api_incident_report_generate(monkeypatch) -> None:
-    async def fake_generate_incident_report_session_attachment(**kwargs) -> IncidentReportGenerateResponse:
+def test_api_incident_report_preview(monkeypatch) -> None:
+    async def fake_preview_incident_report_attachment(**kwargs) -> IncidentReportPreviewResponse:
         assert kwargs["session_id"] == "incident-session-1"
-        assert kwargs["model"] == "qwen3-coder-next:latest"
-        assert kwargs["reranker_model"] == "nomic-embed-text:latest"
-        summary = _build_summary(status="generated")
-        snapshot = _build_snapshot()
-        return IncidentReportGenerateResponse(
-            session=summary,
-            snapshot=snapshot,
-            trace_id="trace-incident-1",
+        assert kwargs["version"] == 1
+        return IncidentReportPreviewResponse(
+            source="version",
+            version=1,
+            label="V1 2026-04-14 12:40:00",
+            html="<p>preview</p>",
+            warnings=[],
         )
 
     monkeypatch.setattr(
         incident_router_module,
-        "generate_incident_report_session_attachment",
-        fake_generate_incident_report_session_attachment,
+        "preview_incident_report_attachment",
+        fake_preview_incident_report_attachment,
     )
 
     client = TestClient(main_module.app)
     response = client.post(
-        "/api/incident-report/sessions/incident-session-1/generate",
-        json={
-            "model": "qwen3-coder-next:latest",
-            "reranker_model": "nomic-embed-text:latest",
-        },
+        "/api/incident-report/sessions/incident-session-1/preview",
+        json={"version": 1},
     )
 
     assert response.status_code == 200
-    assert response.json()["trace_id"] == "trace-incident-1"
+    assert response.json()["source"] == "version"
+    assert response.json()["html"] == "<p>preview</p>"

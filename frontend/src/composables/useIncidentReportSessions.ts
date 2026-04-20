@@ -46,23 +46,21 @@ export const useIncidentReportSessions = () => {
 
   const loadIncidentSession = async (sessionId: string) => {
     try {
+      if (
+        incidentStore.activeIncidentSessionId &&
+        incidentStore.activeIncidentSessionId !== sessionId
+      ) {
+        try {
+          await form.flushSaveIncidentSnapshot();
+        } catch (error) {
+          console.error('切换会话前保存当前事故报告失败。', error);
+        }
+        form.clearFormTimers();
+      }
       const detail = await fetchIncidentSessionDetail(sessionId);
       incidentStore.activeIncidentSessionId = sessionId;
       incidentStore.applyIncidentDetail(detail);
       generation.resetGenerationState();
-
-      incidentStore.incidentGenerationTraceId = (
-        detail.snapshot.generated_trace_id ?? ''
-      ).trim();
-      if (incidentStore.incidentGenerationTraceId) {
-        await generation.refreshGenerationTraceProgress(
-          incidentStore.incidentGenerationTraceId,
-        );
-      } else {
-        incidentStore.incidentGenerationProgress = [];
-      }
-
-      generation.resumeGenerationMonitorIfNeeded(sessionId, detail.status);
     } catch (error) {
       console.error('加载事故报告会话失败。', error);
       incidentStore.incidentErrorMessage =
@@ -77,6 +75,14 @@ export const useIncidentReportSessions = () => {
   };
 
   const startIncidentSession = async () => {
+    if (incidentStore.activeIncidentSessionId) {
+      try {
+        await form.flushSaveIncidentSnapshot();
+      } catch (error) {
+        console.error('新建会话前保存当前事故报告失败。', error);
+      }
+      form.clearFormTimers();
+    }
     const summary = await createIncidentSession({
       title: buildIncidentSessionTitle(),
     });
@@ -108,13 +114,14 @@ export const useIncidentReportSessions = () => {
   };
 
   return {
+    cancelIncidentPreview: generation.cancelIncidentPreview,
     clearActiveIncidentSession,
-    closeGenerationNotice: generation.closeGenerationNotice,
     deleteIncident,
-    downloadGeneratedIncidentAttachment:
-      generation.downloadGeneratedIncidentAttachment,
+    downloadIncidentPreviewDocx: generation.downloadIncidentPreviewDocx,
     flushSaveIncidentSnapshot: form.flushSaveIncidentSnapshot,
-    generateIncident: generation.generateIncident,
+    generateBodySection: generation.generateBodySection,
+    loadIncidentPreview: generation.loadIncidentPreview,
+    quickGenerateBody: generation.quickGenerateBody,
     loadIncidentSchema: form.loadIncidentSchema,
     loadIncidentSession,
     loadIncidentSessionSummaries,

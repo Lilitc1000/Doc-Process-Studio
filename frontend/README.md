@@ -126,7 +126,8 @@ frontend/
 
 - 会话状态（`activeIncidentSessionId`、`activeIncidentSession`、`incidentSessionSummaries`）
 - 表单定义（`incidentSchema`）
-- 生成状态（`isIncidentGenerating`、`generationState`、`incidentErrorMessage`、`incidentGenerationTraceId`、`incidentGenerationProgress`）
+- 生成状态（`isIncidentGenerating`、`generationState`、`generationTask`、`incidentErrorMessage`、`incidentGenerationTraceId`、`incidentGenerationProgress`）
+- 附件预览状态（`incidentPreviewHtml`、`incidentPreviewPdfBase64`、`incidentPreviewLoading`、`incidentPreviewError`、`incidentPreviewVersion`）
 
 计算属性：
 
@@ -172,7 +173,7 @@ ChatLayout.vue
 - [ChatSidebar.vue](/frontend/src/components/ChatSidebar.vue)
   左侧历史会话与模型选择区域（包含"聊天模型"和"重排序模型"两个下拉）。
 - [IncidentReportWorkspace.vue](/frontend/src/components/IncidentReportWorkspace.vue)
-  事故报告工作区页面，包含欢迎向导、全量表单、生成弹窗、下载与链路回放。
+  事故报告工作区页面，包含手工首页 / AI 正文 / 附录分区、快填与完整模式、附件预览与版本下载。
 
 ### 2. 状态管理层
 
@@ -192,7 +193,7 @@ ChatLayout.vue
 - [useIncidentForm.ts](/frontend/src/composables/useIncidentForm.ts)
   事故报告表单 schema 加载、答案更新、debounce 快照保存。通过 `useIncidentStore` 管理状态。
 - [useIncidentGeneration.ts](/frontend/src/composables/useIncidentGeneration.ts)
-  事故报告生成流程、轮询监控、trace 进度追踪、下载。通过 `useIncidentStore` 管理状态。
+  事故报告正文生成、附件生成、停止生成、附件预览加载、版本下载。通过 `useIncidentStore` 管理状态。
 - [useChatStreaming.ts](/frontend/src/composables/useChatStreaming.ts)
   流式生成、停止生成、流式内容回填。通过 `useChatStore` 管理状态。
 - [useMessageActions.ts](/frontend/src/composables/useMessageActions.ts)
@@ -219,7 +220,7 @@ ChatLayout.vue
 - [api/chat.ts](/frontend/src/api/chat.ts)
   聊天流式请求封装（透传 `model` 与 `reranker_model`）。
 - [api/incident-report.ts](/frontend/src/api/incident-report.ts)
-  事故报告工作区接口封装（schema/sessions/generate/title/delete）。
+  事故报告工作区接口封装（schema/sessions/body-generate/preview/title/delete）。
 - [api/attachments.ts](/frontend/src/api/attachments.ts)
   附件下载接口封装（统一使用 `attachment` 语义）。
 - [api/trace.ts](/frontend/src/api/trace.ts)
@@ -392,13 +393,18 @@ cacheScopeId + messageId + role + contentHash
 
 1. 侧栏切换到"事故报告"后显示欢迎向导。
 2. 点击"开始"会创建事故报告会话，标题格式：`事故报告-YYYY/MM/DD HH:MM`。
-3. 页面渲染 `interaction.json` 中全部步骤为完整表单。
-4. 日期字段使用 `datetime-local`，按浏览器本地时区输入与展示。
-5. 生成前先做必填校验，缺项在表单内高亮提示。
-6. 生成中显示"正在生成中，请稍候"并锁定页面操作。
-7. 生成完成后显示"附件已生成，请下载"，按钮切换为下载。
-8. 仅允许下载 `.docx` 附件。
-9. 若 LLM 润色失败，自动回退原始表单数据生成，并可在链路回放中看到回退状态。
+3. 页面分区为：`手工首页 / AI 正文 / 附录 / 预览附件`。
+4. 手工首页标签使用 `中文（English）`，字段键保持模板英文映射。
+5. 自定义日期时间控件支持三种模式：`仅日期 / 仅时间 / 日期时间`，并带独立展开/收起图标。
+6. AI 正文支持双模式：
+   快填模式：单输入框 + 一键生成（支持“正在生成中”弹窗与停止）。
+   完整模式：按段生成（事故简述、时间线、影响、根因、后续动作、时间线单条）。
+7. 时间线使用结构化控件编辑：时间线条目为时间输入；受影响日期摘要为日期 + 从/至时间。
+8. AI 回填后会同步更新时间线条目时间与内容（支持 `HH:MM`、单数字小时、AM/PM 等时间格式）。
+9. 附录使用富文本输入框，可输入文本并插入图片（不再使用独立附录图片区）。
+10. 预览区仅保留“预览附件”，不再暴露“生成附件（新增版本）”入口。
+11. 打开预览弹窗后，表单编辑会实时刷新预览内容（草稿预览链路）。
+12. 预览附件弹窗优先显示 PDF 风格预览（后端返回 `pdf_base64`），下载按钮始终下载“当前预览文档”。
 
 ## 新功能开发建议
 

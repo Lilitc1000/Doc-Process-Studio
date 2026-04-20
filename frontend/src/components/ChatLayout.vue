@@ -146,17 +146,21 @@
               :session="incidentStore.activeIncidentSession"
               :is-generating="incidentStore.isIncidentGenerating"
               :generation-state="incidentStore.generationState"
-              :generation-trace-id="incidentStore.incidentGenerationTraceId"
-              :generation-progress-lines="
-                incidentStore.incidentGenerationProgress
-              "
+              :generation-task="incidentStore.generationTask"
+              :preview-html="incidentStore.incidentPreviewHtml"
+              :preview-pdf-base64="incidentStore.incidentPreviewPdfBase64"
+              :preview-docx-base64="incidentStore.incidentPreviewDocxBase64"
+              :preview-loading="incidentStore.incidentPreviewLoading"
+              :preview-error="incidentStore.incidentPreviewError"
               @start="onStartIncident"
               @update-answers="onIncidentAnswersUpdate"
-              @generate="onIncidentGenerate"
-              @stop-generation="onIncidentStopGeneration"
-              @download="onIncidentDownload"
+              @quick-generate-body="onIncidentQuickGenerateBody"
+              @generate-section="onIncidentGenerateSection"
+              @download-preview-docx="onIncidentDownloadPreviewDocx"
               @open-trace="onIncidentOpenTrace"
-              @close-notice="closeGenerationNotice"
+              @stop-generation="onIncidentStopGeneration"
+              @request-preview="onIncidentRequestPreview"
+              @cancel-preview="onIncidentCancelPreview"
             />
           </template>
         </div>
@@ -287,17 +291,20 @@ const {
 });
 
 const {
+  cancelIncidentPreview,
   clearActiveIncidentSession,
-  closeGenerationNotice,
   deleteIncident,
-  downloadGeneratedIncidentAttachment,
-  generateIncident,
+  downloadIncidentPreviewDocx,
+  generateBodySection,
+  loadIncidentPreview,
+  quickGenerateBody,
   loadIncidentSchema,
   loadIncidentSession,
   loadIncidentSessionSummaries,
   renameIncident,
   startIncidentSession,
   stopIncidentGeneration,
+  flushSaveIncidentSnapshot,
   updateIncidentAnswers,
 } = useIncidentReportSessions();
 
@@ -330,6 +337,20 @@ const openMessageTrace = async (messageId: string) => {
 };
 
 const onSelectWorkspace = async (workspaceId: string) => {
+  const shouldFlushIncident =
+    appStore.activeWorkspaceId === 'incident-report' ||
+    workspaceId === 'incident-report';
+  if (shouldFlushIncident) {
+    try {
+      await flushSaveIncidentSnapshot();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '切换工作区前保存事故报告失败。';
+      showCopyToast(message, { title: '保存失败' });
+      return;
+    }
+  }
+
   if (workspaceId === 'chat') {
     appStore.activeWorkspaceId = 'chat';
     onClearChat();
@@ -337,6 +358,7 @@ const onSelectWorkspace = async (workspaceId: string) => {
   }
 
   appStore.activeWorkspaceId = 'incident-report';
+  // 保持原有交互：每次点击“事故报告”都回到欢迎态，点击“开始”后新建会话。
   clearActiveIncidentSession();
 };
 
@@ -402,17 +424,32 @@ const onIncidentAnswersUpdate = (
   updateIncidentAnswers(answers);
 };
 
-const onIncidentGenerate = async () => {
+const onIncidentQuickGenerateBody = async () => {
   try {
-    await generateIncident(
+    await quickGenerateBody(
       appStore.selectedModel,
       appStore.selectedRerankerModel,
     );
-    await loadIncidentSessionSummaries();
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : '生成附件失败，请稍后重试。';
-    showCopyToast(message, { title: '生成失败' });
+      error instanceof Error ? error.message : '正文生成失败，请稍后重试。';
+    showCopyToast(message, { title: '正文生成失败' });
+  }
+};
+
+const onIncidentGenerateSection = async (payload: {
+  sectionId: string;
+  timelineIndex?: number;
+}) => {
+  try {
+    await generateBodySection(appStore.selectedModel, payload.sectionId, {
+      reranker_model: appStore.selectedRerankerModel,
+      timeline_index: payload.timelineIndex,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : '分段生成失败，请稍后重试。';
+    showCopyToast(message, { title: '分段生成失败' });
   }
 };
 
@@ -420,9 +457,26 @@ const onIncidentStopGeneration = () => {
   stopIncidentGeneration();
 };
 
-const onIncidentDownload = async () => {
+const onIncidentCancelPreview = () => {
+  cancelIncidentPreview();
+};
+
+const onIncidentRequestPreview = async () => {
   try {
-    await downloadGeneratedIncidentAttachment();
+    await loadIncidentPreview({
+      model: appStore.selectedModel,
+      reranker_model: appStore.selectedRerankerModel,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : '附件预览加载失败，请稍后重试。';
+    showCopyToast(message, { title: '预览失败' });
+  }
+};
+
+const onIncidentDownloadPreviewDocx = async () => {
+  try {
+    await downloadIncidentPreviewDocx();
   } catch (error) {
     const message =
       error instanceof Error ? error.message : '下载失败，请稍后重试。';

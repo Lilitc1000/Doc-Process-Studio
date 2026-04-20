@@ -23,6 +23,16 @@ def _read_cell(table, row_index: int, cell_index: int) -> str:
     return table.rows[row_index].cells[cell_index].text.strip()
 
 
+def _find_paragraph_after_heading(document: Document, heading_prefix: str) -> str:
+    target = heading_prefix.strip().lower()
+    for index, paragraph in enumerate(document.paragraphs):
+        if paragraph.text.strip().lower().startswith(target):
+            if index + 1 < len(document.paragraphs):
+                return document.paragraphs[index + 1].text.strip()
+            return ""
+    return ""
+
+
 def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monkeypatch):
     monkeypatch.setattr(
         attachments_module.settings,
@@ -57,7 +67,11 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
         "detection_time": "08/04/2026 09:12",
         "resolution_time": "08/04/2026 09:40",
         "severity": "P2",
-        "impact": "Users cannot complete payment transactions",
+        "impact": {
+            "systems": "Payment Gateway",
+            "severity": "High",
+            "business_impact": ["Users cannot complete payment transactions"],
+        },
         "event_sequence": ["09:12 Monitoring alert triggered"],
         "root_cause": {
             "technical": "Missing DB index caused full table scan",
@@ -66,6 +80,7 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
         },
         "immediate_actions": ["Restarted payment service"],
         "preventive_actions": ["Add payment timeout alert rule"],
+        "allow_incomplete": True,
     }
     tool_call = _build_tool_call(
         {
@@ -95,19 +110,24 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
     assert attachment_path.is_file()
 
     document = Document(str(attachment_path))
-    assert len(document.tables) >= 4
+    # 新参考模板为“1 张首页表格 + 正文段落”结构。
+    assert len(document.tables) == 1
 
-    reference_table = document.tables[0]
-    section_a_table = document.tables[1]
-    section_c_table = document.tables[3]
+    page_one_table = document.tables[0]
 
     # 断言 Page 1 关键字段单元格不是空字符串，避免“模板区域空白”回归。
-    assert _read_cell(reference_table, 0, 1) != ""
-    assert _read_cell(section_a_table, 3, 1) != ""  # Site ID
-    assert _read_cell(section_a_table, 4, 1) != ""  # Location of Fault
-    assert _read_cell(section_a_table, 5, 1) != ""  # Details of Fault Symptom
-    assert _read_cell(section_c_table, 1, 1) != ""  # Status
+    assert _read_cell(page_one_table, 0, 1) != ""  # Reference No.
+    assert _read_cell(page_one_table, 4, 1) != ""  # Site ID
+    assert _read_cell(page_one_table, 5, 1) != ""  # Location of Fault
+    assert _read_cell(page_one_table, 6, 0) != ""  # Details of Fault Symptom
+    assert _read_cell(page_one_table, 16, 1) != ""  # Status
+
+    # 正文段落应写入核心章节内容。
+    assert _find_paragraph_after_heading(document, "Description of the Incident:") != ""
+    assert _find_paragraph_after_heading(document, "Affected Date:") != ""
+    assert _find_paragraph_after_heading(document, "Impact:") != ""
+    assert _find_paragraph_after_heading(document, "Root Cause:") != ""
+    assert _find_paragraph_after_heading(document, "Follow-Up Actions:") != ""
 
     all_paragraph_text = "\n".join(paragraph.text for paragraph in document.paragraphs)
     assert '{"process_gap"' not in all_paragraph_text
-
