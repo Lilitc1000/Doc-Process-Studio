@@ -1,8 +1,9 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import IncidentReportWorkspace from '../src/components/IncidentReportWorkspace.vue';
+import type { IncidentSessionDetail } from '../src/types/incident-report';
 
-const buildSession = () => ({
+const buildSession = (): IncidentSessionDetail => ({
   id: 'incident-session-1',
   title: '事故报告-2026/04/14 12:30',
   status: 'generated',
@@ -158,5 +159,31 @@ describe('incident report generation modal', () => {
     expect(downloadButton).toBeTruthy();
     await downloadButton!.trigger('click');
     expect(wrapper.emitted('download-preview-docx')).toHaveLength(1);
+  });
+
+  it('完整模式分段生成时显示生成中弹窗并支持停止', async () => {
+    const wrapper = mount(IncidentReportWorkspace, {
+      global: {
+        stubs: {
+          teleport: true,
+        },
+      },
+      props: {
+        schema: null,
+        session: buildSession(),
+        isGenerating: true,
+        generationState: 'generating',
+        generationTask: 'section',
+      },
+    });
+
+    expect(wrapper.text()).toContain('正在根据当前分段参考生成内容，请稍候。');
+
+    const stopButton = wrapper
+      .findAll('button')
+      .find((node) => node.text().includes('停止'));
+    expect(stopButton).toBeTruthy();
+    await stopButton!.trigger('click');
+    expect(wrapper.emitted('stop-generation')).toHaveLength(1);
   });
 });

@@ -152,7 +152,7 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
         "build_skill_tools",
         fake_build_skill_tools,
     )
-    async def fake_plan_skill_activation(**_kwargs):
+    async def fake_select_for_chat_skills(**_kwargs):
         return SkillPlanDecision(
             planner_model="qwen3-coder-next:latest",
             required_skill_ids=["project-architecture-docx"],
@@ -168,8 +168,8 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch) -> None
 
     monkeypatch.setattr(
         chat_stream_module,
-        "plan_skill_activation",
-        fake_plan_skill_activation,
+        "select_for_chat_skills",
+        fake_select_for_chat_skills,
     )
     monkeypatch.setattr(
         chat_stream_module,

@@ -10,6 +10,7 @@ from doc_process_studio.models.conversation.incident_report import (
     IncidentReportSessionSnapshot,
     IncidentReportSessionSummary,
 )
+from doc_process_studio.models.skill.runtime import SkillPlanDecision
 
 
 class _FakeRecorder:
@@ -97,10 +98,42 @@ def test_quick_generate_body_updates_form_answers_and_trace(monkeypatch) -> None
         assert session_id == "incident-session-1"
         assert score > 0
 
+    async def fake_detect_generation_language_with_model(**kwargs):
+        assert kwargs["section_id"] == "quick"
+        return "zh", "mock_detect_zh"
+
+    async def fake_verify_generation_language_with_model(**kwargs):
+        assert kwargs["expected_language"] == "zh"
+        return True, "zh", "mock_verify_ok"
+
+    async def fake_select_for_workspace_reference(**kwargs):
+        available_skills = kwargs["available_skills"]
+        available_ids = {item.id for item in available_skills}
+        assert "body-sections/quick-mode.md" in available_ids
+        assert "body-sections/common.md" in available_ids
+        assert kwargs["reference_select_limit"] == 4
+        return SkillPlanDecision(
+            planner_model="qwen3-coder-next:latest",
+            required_skill_ids=["body-sections/common.md"],
+            optional_skill_ids=["body-sections/quick-mode.md"],
+            missing_explicit_skill_ids=[],
+            active_skill_ids=["body-sections/common.md", "body-sections/quick-mode.md"],
+            primary_skill_id="body-sections/common.md",
+            confidence=0.92,
+            reasons={"planner": "planner:统一规划器选择了 common + quick-mode"},
+            candidates=[],
+            created_at=datetime.now(UTC),
+        )
+
     async def fake_stream_chat_completion(*, model: str, messages, tools):
         assert model == "qwen3-coder-next:latest"
         assert messages
         assert tools == []
+        assert "系统级技能提示（document-assistant）" in messages[0]["content"]
+        assert "本次输出语言已确定为中文（简体中文）" in messages[0]["content"]
+        assert "语言策略：本次输出语言已确定为中文（简体中文）" in messages[-1]["content"]
+        assert "参考文档" in messages[-1]["content"]
+        assert "quick-mode.md" in messages[-1]["content"]
         yield {
             "message": {
                 "role": "assistant",
@@ -144,8 +177,23 @@ def test_quick_generate_body_updates_form_answers_and_trace(monkeypatch) -> None
     )
     monkeypatch.setattr(
         incident_reports_module,
+        "_detect_generation_language_with_model",
+        fake_detect_generation_language_with_model,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_verify_generation_language_with_model",
+        fake_verify_generation_language_with_model,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
         "stream_chat_completion",
         fake_stream_chat_completion,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "select_for_workspace_reference",
+        fake_select_for_workspace_reference,
     )
     monkeypatch.setattr(incident_reports_module.settings, "ollama_base_url", "http://ollama.local")
 
@@ -167,6 +215,317 @@ def test_quick_generate_body_updates_form_answers_and_trace(monkeypatch) -> None
         == "客户反馈下单报错，定位数据库CPU打满。"
     )
     assert isinstance(result.snapshot.form_answers["body_timeline"].value, list)
+
+
+def test_quick_generate_body_respects_english_input_language(monkeypatch) -> None:
+    detail = _build_detail()
+    detail.snapshot.form_answers["quick_narrative"] = IncidentFormAnswer(
+        value="At 3 PM, users reported checkout failures on the order service.",
+        custom_value="",
+    )
+
+    async def fake_get_incident_report_session(session_id: str):
+        assert session_id == "incident-session-1"
+        return detail
+
+    async def fake_save_incident_session_summary(
+        _summary: IncidentReportSessionSummary,
+    ) -> None:
+        return None
+
+    async def fake_save_incident_session_snapshot(
+        _session_id: str,
+        _snapshot: IncidentReportSessionSnapshot,
+    ) -> None:
+        return None
+
+    async def fake_touch_incident_session_index(_session_id: str, _score: float) -> None:
+        return None
+
+    async def fake_detect_generation_language_with_model(**kwargs):
+        assert kwargs["section_id"] == "quick"
+        return "en", "mock_detect_en"
+
+    async def fake_verify_generation_language_with_model(**kwargs):
+        assert kwargs["expected_language"] == "en"
+        return True, "en", "mock_verify_ok"
+
+    async def fake_select_for_workspace_reference(**_kwargs):
+        return SkillPlanDecision(
+            planner_model="qwen3-coder-next:latest",
+            required_skill_ids=["body-sections/common.md"],
+            optional_skill_ids=["body-sections/quick-mode.md"],
+            missing_explicit_skill_ids=[],
+            active_skill_ids=["body-sections/common.md", "body-sections/quick-mode.md"],
+            primary_skill_id="body-sections/common.md",
+            confidence=0.9,
+            reasons={},
+            candidates=[],
+            created_at=datetime.now(UTC),
+        )
+
+    async def fake_stream_chat_completion(*, model: str, messages, tools):
+        assert model == "qwen3-coder-next:latest"
+        assert tools == []
+        assert "系统级技能提示（document-assistant）" in messages[0]["content"]
+        assert "本次输出语言已确定为英文（English）" in messages[0]["content"]
+        assert "语言策略：本次输出语言已确定为英文（English）" in messages[-1]["content"]
+        yield {
+            "message": {
+                "role": "assistant",
+                "content": (
+                    '{"description":"Users experienced checkout failures on the order service.",'
+                    '"affected_date_summary":"12/03/2026 15:00 - 12/03/2026 16:00",'
+                    '"timeline":[{"time":"12/03/2026 15:00","event":"Users reported checkout failures","resolution":"Traffic was shifted to a safe version","evidence":"Alert from API error dashboard"}],'
+                    '"impact_scope":"Checkout flow","impact_severity":"High","business_impact":"Order conversion dropped during peak hours",'
+                    '"trigger":"A slow query path was introduced in the new release","root_cause":"Missing index on a hot table after deployment","follow_up_actions":"Add release SQL checklist"}'
+                ),
+            },
+            "done": False,
+        }
+        yield {
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "done_reason": "stop",
+        }
+        yield None
+
+    monkeypatch.setattr(incident_reports_module, "AgentTraceRecorder", _FakeRecorder)
+    monkeypatch.setattr(
+        incident_reports_module,
+        "get_incident_report_session",
+        fake_get_incident_report_session,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "save_incident_session_summary",
+        fake_save_incident_session_summary,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "save_incident_session_snapshot",
+        fake_save_incident_session_snapshot,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "touch_incident_session_index",
+        fake_touch_incident_session_index,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_detect_generation_language_with_model",
+        fake_detect_generation_language_with_model,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_verify_generation_language_with_model",
+        fake_verify_generation_language_with_model,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "stream_chat_completion",
+        fake_stream_chat_completion,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "select_for_workspace_reference",
+        fake_select_for_workspace_reference,
+    )
+    monkeypatch.setattr(incident_reports_module.settings, "ollama_base_url", "http://ollama.local")
+
+    result = asyncio.run(
+        incident_reports_module.generate_incident_report_body_from_quick_input(
+            session_id="incident-session-1",
+            model="qwen3-coder-next:latest",
+        )
+    )
+
+    assert result is not None
+    assert (
+        result.snapshot.form_answers["body_description"].value
+        == "Users experienced checkout failures on the order service."
+    )
+
+
+def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
+    async def fake_select_for_workspace_reference(**kwargs):
+        planner_messages = kwargs["messages"]
+        assert planner_messages
+        assert "incident-report SKILL.md" in planner_messages[0].content
+        return SkillPlanDecision(
+            planner_model="qwen3-coder-next:latest",
+            required_skill_ids=["body-sections/common.md"],
+            optional_skill_ids=["body-sections/impact.md"],
+            missing_explicit_skill_ids=[],
+            active_skill_ids=["body-sections/common.md", "body-sections/impact.md"],
+            primary_skill_id="body-sections/common.md",
+            confidence=0.88,
+            reasons={"planner": "planner:统一规划器选择了 impact 参考"},
+            candidates=[],
+            created_at=datetime.now(UTC),
+        )
+
+    monkeypatch.setattr(
+        incident_reports_module,
+        "select_for_workspace_reference",
+        fake_select_for_workspace_reference,
+    )
+
+    reference_context, selected_files, selection_reason = asyncio.run(
+        incident_reports_module._resolve_generation_reference_context(
+            model="qwen3-coder-next:latest",
+            section_id="impact",
+            timeline_index=None,
+            prompt="仅生成影响范围与严重级别",
+            context_json='{"impact_scope":"下单链路"}',
+        )
+    )
+
+    assert "body-sections/impact.md" in selected_files
+    assert "impact.md" in reference_context
+    assert selection_reason.startswith("planner:")
+
+
+def test_quick_generate_retries_when_language_verification_mismatch(monkeypatch) -> None:
+    detail = _build_detail()
+    detail.snapshot.form_answers["quick_narrative"] = IncidentFormAnswer(
+        value="Checkout fails after deployment.",
+        custom_value="",
+    )
+
+    async def fake_get_incident_report_session(session_id: str):
+        assert session_id == "incident-session-1"
+        return detail
+
+    async def fake_save_incident_session_summary(_summary: IncidentReportSessionSummary) -> None:
+        return None
+
+    async def fake_save_incident_session_snapshot(
+        _session_id: str,
+        _snapshot: IncidentReportSessionSnapshot,
+    ) -> None:
+        return None
+
+    async def fake_touch_incident_session_index(_session_id: str, _score: float) -> None:
+        return None
+
+    async def fake_select_for_workspace_reference(**_kwargs):
+        return SkillPlanDecision(
+            planner_model="qwen3-coder-next:latest",
+            required_skill_ids=["body-sections/common.md"],
+            optional_skill_ids=["body-sections/quick-mode.md"],
+            missing_explicit_skill_ids=[],
+            active_skill_ids=["body-sections/common.md", "body-sections/quick-mode.md"],
+            primary_skill_id="body-sections/common.md",
+            confidence=0.9,
+            reasons={},
+            candidates=[],
+            created_at=datetime.now(UTC),
+        )
+
+    async def fake_detect_generation_language_with_model(**_kwargs):
+        return "en", "mock_detect_en"
+
+    verify_counter = {"value": 0}
+
+    async def fake_verify_generation_language_with_model(**_kwargs):
+        verify_counter["value"] += 1
+        if verify_counter["value"] == 1:
+            return False, "zh", "mock_mismatch"
+        return True, "en", "mock_match"
+
+    stream_counter = {"value": 0}
+
+    async def fake_stream_chat_completion(*, model: str, messages, tools):
+        assert model == "qwen3-coder-next:latest"
+        assert tools == []
+        stream_counter["value"] += 1
+        if stream_counter["value"] == 2:
+            assert "上一次输出语言不符合要求" in messages[0]["content"]
+        if stream_counter["value"] == 1:
+            payload = (
+                '{"description":"故障描述",'
+                '"affected_date_summary":"12/03/2026 15:00 - 12/03/2026 16:00",'
+                '"timeline":[{"time":"12/03/2026 15:00","event":"事件","resolution":"恢复","evidence":"告警"}],'
+                '"impact_scope":"范围","impact_severity":"High","business_impact":"影响",'
+                '"trigger":"触发","root_cause":"根因","follow_up_actions":"动作"}'
+            )
+        else:
+            payload = (
+                '{"description":"English description",'
+                '"affected_date_summary":"12/03/2026 15:00 - 12/03/2026 16:00",'
+                '"timeline":[{"time":"12/03/2026 15:00","event":"Incident","resolution":"Recovered","evidence":"Alert"}],'
+                '"impact_scope":"Checkout","impact_severity":"High","business_impact":"Conversion impacted",'
+                '"trigger":"Deployment issue","root_cause":"Missing index","follow_up_actions":"Add checks"}'
+            )
+        yield {
+            "message": {
+                "role": "assistant",
+                "content": payload,
+            },
+            "done": False,
+        }
+        yield {
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "done_reason": "stop",
+        }
+        yield None
+
+    monkeypatch.setattr(incident_reports_module, "AgentTraceRecorder", _FakeRecorder)
+    monkeypatch.setattr(
+        incident_reports_module,
+        "get_incident_report_session",
+        fake_get_incident_report_session,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "save_incident_session_summary",
+        fake_save_incident_session_summary,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "save_incident_session_snapshot",
+        fake_save_incident_session_snapshot,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "touch_incident_session_index",
+        fake_touch_incident_session_index,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_detect_generation_language_with_model",
+        fake_detect_generation_language_with_model,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "_verify_generation_language_with_model",
+        fake_verify_generation_language_with_model,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "stream_chat_completion",
+        fake_stream_chat_completion,
+    )
+    monkeypatch.setattr(
+        incident_reports_module,
+        "select_for_workspace_reference",
+        fake_select_for_workspace_reference,
+    )
+    monkeypatch.setattr(incident_reports_module.settings, "ollama_base_url", "http://ollama.local")
+
+    result = asyncio.run(
+        incident_reports_module.generate_incident_report_body_from_quick_input(
+            session_id="incident-session-1",
+            model="qwen3-coder-next:latest",
+        )
+    )
+
+    assert result is not None
+    assert stream_counter["value"] == 2
+    assert verify_counter["value"] == 2
+    assert result.snapshot.form_answers["body_description"].value == "English description"
 
 
 def test_preview_incident_report_attachment_uses_version_attachment(monkeypatch) -> None:
@@ -394,6 +753,31 @@ def test_build_report_data_supports_rich_text_appendix() -> None:
         {
             "name": "chart.png",
             "data_url": "data:image/png;base64,AAAA",
+        }
+    ]
+
+
+def test_build_report_data_rich_text_appendix_image_only_does_not_fallback_raw_html() -> None:
+    snapshot = IncidentReportSessionSnapshot(
+        form_answers={
+            "appendix_notes": IncidentFormAnswer(
+                value="<p><img alt='photo.png' src='data:image/png;base64,BBBB' /></p>",
+                custom_value="",
+            ),
+        }
+    )
+    report_data, missing = incident_reports_module._build_report_data_from_snapshot(
+        snapshot,
+        strict_required=False,
+    )
+
+    assert report_data is not None
+    assert isinstance(missing, list)
+    assert report_data["appendix"]["notes"] == ""
+    assert report_data["appendix"]["images"] == [
+        {
+            "name": "photo.png",
+            "data_url": "data:image/png;base64,BBBB",
         }
     ]
 

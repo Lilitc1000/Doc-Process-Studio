@@ -10,7 +10,9 @@ import base64
 import hashlib
 import io
 import json
+import re
 from datetime import datetime
+from html import unescape
 from pathlib import Path
 from typing import Any
 
@@ -165,6 +167,59 @@ def _build_reference_no() -> str:
     return f"DAS-{datetime.now().strftime('%Y%m%d')}-001"
 
 
+STATUS_OPTION_FAULT_CLEARED = "fault_cleared"
+STATUS_OPTION_TEMPORARILY_FIXED = "temporarily_fixed"
+STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED = "follow_up_action_required"
+
+SEVERITY_OPTION_NOT_APPLICABLE = "not_applicable"
+SEVERITY_OPTION_MINOR = "minor"
+SEVERITY_OPTION_MAJOR = "major"
+
+
+def _normalize_status_option(value: Any) -> str:
+    normalized = _to_text(value, "").strip().lower()
+    if not normalized:
+        return STATUS_OPTION_FAULT_CLEARED
+    if normalized in {
+        STATUS_OPTION_FAULT_CLEARED,
+        STATUS_OPTION_TEMPORARILY_FIXED,
+        STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED,
+    }:
+        return normalized
+    if "follow" in normalized or "后续" in normalized or "跟进" in normalized:
+        return STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED
+    if "temporar" in normalized or "临时" in normalized:
+        return STATUS_OPTION_TEMPORARILY_FIXED
+    if "clear" in normalized or "cleared" in normalized or "已清除" in normalized:
+        return STATUS_OPTION_FAULT_CLEARED
+    return STATUS_OPTION_FAULT_CLEARED
+
+
+def _normalize_severity_option(value: Any) -> str:
+    normalized = _to_text(value, "").strip().lower()
+    if not normalized:
+        return SEVERITY_OPTION_NOT_APPLICABLE
+    if normalized in {
+        SEVERITY_OPTION_NOT_APPLICABLE,
+        SEVERITY_OPTION_MINOR,
+        SEVERITY_OPTION_MAJOR,
+    }:
+        return normalized
+    if (
+        "major" in normalized
+        or "high" in normalized
+        or "critical" in normalized
+        or "严重" in normalized
+        or "重大" in normalized
+    ):
+        return SEVERITY_OPTION_MAJOR
+    if "minor" in normalized or "low" in normalized or "轻微" in normalized:
+        return SEVERITY_OPTION_MINOR
+    if "not applicable" in normalized or normalized in {"n/a", "na", "不适用"}:
+        return SEVERITY_OPTION_NOT_APPLICABLE
+    return SEVERITY_OPTION_NOT_APPLICABLE
+
+
 def _is_placeholder(value: Any) -> bool:
     normalized = _to_text(value, "").strip().lower()
     return normalized in {"", "n/a", "na", "none", "null", "-"}
@@ -239,10 +294,8 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
     event_sequence = _normalize_event_sequence(source.get("event_sequence"))
     immediate_actions = _normalize_actions(source.get("immediate_actions"), "immediate")
     preventive_actions = _normalize_actions(source.get("preventive_actions"), "preventive")
-
-    repair_details_default = (
-        immediate_actions[0].get("action", "N/A") if immediate_actions else _to_text(source.get("detailed_description"))
-    )
+    status_option = _normalize_status_option(source.get("status_option", source.get("status")))
+    severity_option = _normalize_severity_option(source.get("severity_option", source.get("severity")))
 
     appendix = source.get("appendix", {})
     if not isinstance(appendix, dict):
@@ -293,15 +346,20 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
         "arrival_datetime": _first_non_empty(source.get("arrival_datetime"), start_time),
         "clearance_datetime": _first_non_empty(source.get("clearance_datetime"), resolution_time),
         "service_person": _first_non_empty(source.get("service_person"), default=""),
-        "fault_cause": _first_non_empty(source.get("fault_cause"), source.get("root_cause"), default=""),
+        "fault_cause": _first_non_empty(source.get("fault_cause"), default=""),
         "materials_used": _first_non_empty(source.get("materials_used"), default=""),
-        "repair_details": _first_non_empty(source.get("repair_details"), default=repair_details_default),
+        "repair_details": _first_non_empty(source.get("repair_details"), default=""),
         "contractor_staff": _first_non_empty(source.get("contractor_staff"), default=""),
+        "contractor_signature": _first_non_empty(source.get("contractor_signature"), default=""),
         "contractor_date": _first_non_empty(source.get("contractor_date"), source.get("fault_date"), default=fault_date),
+        "status_option": status_option,
+        "status_ref_no": _first_non_empty(source.get("status_ref_no"), default=""),
         "status": _first_non_empty(source.get("status"), default="Fault has been Cleared"),
+        "severity_option": severity_option,
         "severity": _first_non_empty(source.get("severity"), impact_map.get("severity"), default=""),
         "comments": _first_non_empty(source.get("comments"), default=""),
         "employer_rep": _first_non_empty(source.get("employer_rep"), default=""),
+        "employer_signature": _first_non_empty(source.get("employer_signature"), default=""),
         "closeout_date": _first_non_empty(source.get("closeout_date"), source.get("fault_date"), default=fault_date),
         "detailed_description": _first_non_empty(
             source.get("detailed_description"), body_map.get("description"), source.get("fault_details"), default=""
@@ -399,6 +457,92 @@ def _set_cell_text(cell, text: str) -> None:
         _set_paragraph_text(paragraph, "")
 
 
+def _append_cell_text_block(cell, text: str) -> None:
+    """在单元格末尾追加内容，避免覆盖模板中的固定标题与占位线。"""
+    text_value = _to_text(text, "").strip()
+    if not text_value:
+        return
+
+    lines = [line.strip() for line in text_value.splitlines() if line.strip()]
+    if not lines:
+        lines = [text_value]
+
+    for line in lines:
+        paragraph = cell.add_paragraph()
+        paragraph.paragraph_format.left_indent = None
+        paragraph.paragraph_format.first_line_indent = None
+        _set_paragraph_text(paragraph, line)
+
+
+def _set_status_cell_text(cell, *, status_option: str, status_ref_no: str) -> None:
+    if not cell.paragraphs:
+        paragraph = cell.add_paragraph()
+    else:
+        paragraph = cell.paragraphs[0]
+
+    template_run = None
+    for run in paragraph.runs:
+        if (run.text or "").strip():
+            template_run = run
+            break
+    if template_run is None and paragraph.runs:
+        template_run = paragraph.runs[0]
+
+    template_font_name = template_run.font.name if template_run is not None else None
+    template_font_size = template_run.font.size if template_run is not None else None
+    template_bold = template_run.bold if template_run is not None else None
+    template_italic = template_run.italic if template_run is not None else None
+
+    if paragraph.runs:
+        for run in paragraph.runs:
+            run.text = ""
+        first_run = paragraph.runs[0]
+    else:
+        first_run = paragraph.add_run("")
+
+    checked = "☑"
+    unchecked = "☐"
+    normalized_status_ref = status_ref_no.strip()
+    status_ref_display = (
+        "_________________"
+        if _is_placeholder(normalized_status_ref)
+        else normalized_status_ref
+    )
+
+    first_run.text = (
+        f"{checked if status_option == STATUS_OPTION_FAULT_CLEARED else unchecked} Fault has been Cleared / "
+        f"{checked if status_option == STATUS_OPTION_TEMPORARILY_FIXED else unchecked} Temporarily fixed / "
+        f"{checked if status_option == STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED else unchecked} "
+        "Follow up action required (Ref No. "
+    )
+    if template_font_name:
+        first_run.font.name = template_font_name
+    if template_font_size is not None:
+        first_run.font.size = template_font_size
+    first_run.bold = template_bold
+    first_run.italic = template_italic
+
+    ref_run = paragraph.add_run(status_ref_display)
+    ref_run.underline = True
+    if template_font_name:
+        ref_run.font.name = template_font_name
+    if template_font_size is not None:
+        ref_run.font.size = template_font_size
+    ref_run.bold = template_bold
+    ref_run.italic = template_italic
+
+    end_run = paragraph.add_run(")")
+    if template_font_name:
+        end_run.font.name = template_font_name
+    if template_font_size is not None:
+        end_run.font.size = template_font_size
+    end_run.bold = template_bold
+    end_run.italic = template_italic
+
+    for extra_paragraph in cell.paragraphs[1:]:
+        _set_paragraph_text(extra_paragraph, "")
+
+
 def _decode_data_url_to_bytes(data_url: str) -> bytes | None:
     if not isinstance(data_url, str):
         return None
@@ -432,6 +576,20 @@ def _decode_data_url_to_bytes(data_url: str) -> bytes | None:
         stale_key = _IMAGE_DECODE_CACHE_ORDER.pop(0)
         _IMAGE_DECODE_CACHE.pop(stale_key, None)
     return decoded
+
+
+def _sanitize_appendix_notes(notes: Any) -> str:
+    raw = _to_text(notes, "").strip()
+    if not raw:
+        return ""
+    text_value = re.sub(r"(?i)<img[^>]*>", "", raw)
+    text_value = re.sub(r"(?i)<br\s*/?>", "\n", text_value)
+    text_value = re.sub(r"(?i)</p\s*>", "\n", text_value)
+    text_value = re.sub(r"(?i)</div\s*>", "\n", text_value)
+    text_value = re.sub(r"</?[A-Za-z][^>]*>", "", text_value)
+    text_value = re.sub(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", "", text_value)
+    lines = [unescape(line).strip() for line in text_value.splitlines() if unescape(line).strip()]
+    return "\n".join(lines)
 
 
 class FaultLogFormGenerator:
@@ -473,44 +631,56 @@ class FaultLogFormGenerator:
 
         _set_cell_text(rows[0].cells[1], data.get("reference_no", ""))
         _set_cell_text(rows[2].cells[1], data.get("fault_date", ""))
-        _set_cell_text(rows[2].cells[4], data.get("fault_time", ""))
+        _set_cell_text(rows[2].cells[3], data.get("fault_time", ""))
         _set_cell_text(rows[3].cells[1], data.get("reporting_person", ""))
-        _set_cell_text(rows[3].cells[4], data.get("verified_by", ""))
+        _set_cell_text(rows[3].cells[3], data.get("verified_by", ""))
         _set_cell_text(rows[4].cells[1], data.get("site_id", ""))
-        _set_cell_text(rows[4].cells[4], data.get("system", ""))
+        _set_cell_text(rows[4].cells[3], data.get("system", ""))
         _set_cell_text(rows[5].cells[1], data.get("location", ""))
 
-        detail_lines = []
-        detailed_description = _to_text(data.get("detailed_description"), "").strip()
-        fault_details = _to_text(data.get("fault_details"), "").strip()
-        if detailed_description:
-            detail_lines.append(detailed_description)
-        if fault_details:
-            detail_lines.append(fault_details)
-        detail_text = "\n".join(detail_lines)
-        _set_cell_text(rows[6].cells[0], detail_text)
+        detail_text = _to_text(data.get("fault_details"), "").strip() or _to_text(
+            data.get("detailed_description"), ""
+        ).strip()
+        _set_cell_text(rows[6].cells[1], detail_text)
 
         _set_cell_text(rows[8].cells[1], data.get("arrival_datetime", ""))
-        _set_cell_text(rows[8].cells[4], data.get("clearance_datetime", ""))
+        _set_cell_text(rows[8].cells[3], data.get("clearance_datetime", ""))
         _set_cell_text(rows[9].cells[1], data.get("service_person", ""))
-        _set_cell_text(rows[9].cells[4], data.get("fault_cause", ""))
+        _set_cell_text(rows[9].cells[3], data.get("fault_cause", ""))
         _set_cell_text(rows[10].cells[1], data.get("materials_used", ""))
 
-        # 根据当前事故报告需求，Section B 该说明行不保留固定模板文案，仅保留空白可填写区。
-        _set_cell_text(rows[11].cells[0], "")
+        _set_cell_text(rows[11].cells[1], data.get("repair_details", ""))
 
         _set_cell_text(rows[12].cells[1], data.get("contractor_staff", ""))
+        _set_cell_text(rows[13].cells[1], data.get("contractor_signature", ""))
         _set_cell_text(rows[14].cells[1], data.get("contractor_date", ""))
-        _set_cell_text(rows[16].cells[1], data.get("status", ""))
 
-        severity = _to_text(data.get("severity"), "").lower()
-        _set_cell_text(rows[17].cells[1], "[X] Not Applicable" if severity in {"n/a", "not applicable"} else "[ ] Not Applicable")
-        _set_cell_text(rows[17].cells[2], "[X] Minor" if severity in {"minor", "low"} else "[ ] Minor")
-        _set_cell_text(rows[17].cells[4], "[X] Major" if severity in {"major", "high", "critical"} else "[ ] Major")
+        status_option = _normalize_status_option(data.get("status_option", data.get("status")))
+        status_ref_no = _to_text(data.get("status_ref_no"), "").strip()
+        _set_status_cell_text(
+            rows[16].cells[1],
+            status_option=status_option,
+            status_ref_no=status_ref_no,
+        )
+
+        severity_option = _normalize_severity_option(data.get("severity_option", data.get("severity")))
+        _set_cell_text(
+            rows[17].cells[1],
+            f"{'☑' if severity_option == SEVERITY_OPTION_NOT_APPLICABLE else '☐'} Not Applicable",
+        )
+        _set_cell_text(
+            rows[17].cells[2],
+            f"{'☑' if severity_option == SEVERITY_OPTION_MINOR else '☐'} Minor",
+        )
+        _set_cell_text(
+            rows[17].cells[3],
+            f"{'☑' if severity_option == SEVERITY_OPTION_MAJOR else '☐'} Major",
+        )
 
         _set_cell_text(rows[18].cells[1], data.get("comments", ""))
-        _set_cell_text(rows[21].cells[1], data.get("employer_rep", ""))
-        _set_cell_text(rows[23].cells[1], data.get("closeout_date", ""))
+        _set_cell_text(rows[19].cells[1], data.get("employer_rep", ""))
+        _set_cell_text(rows[20].cells[1], data.get("employer_signature", ""))
+        _set_cell_text(rows[21].cells[1], data.get("closeout_date", ""))
 
     def _fill_body_sections(self, data: dict[str, Any]) -> None:
         impact = data.get("impact", {}) if isinstance(data.get("impact"), dict) else {}
@@ -578,7 +748,7 @@ class FaultLogFormGenerator:
         appendix = data.get("appendix", {})
         if not isinstance(appendix, dict):
             appendix = {}
-        notes = _to_text(appendix.get("notes"), "")
+        notes = _sanitize_appendix_notes(appendix.get("notes"))
         images = appendix.get("images")
         if not isinstance(images, list):
             images = []

@@ -345,7 +345,9 @@ const onSelectWorkspace = async (workspaceId: string) => {
       await flushSaveIncidentSnapshot();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : '切换工作区前保存事故报告失败。';
+        error instanceof Error
+          ? error.message
+          : '切换工作区前保存事故报告失败。';
       showCopyToast(message, { title: '保存失败' });
       return;
     }

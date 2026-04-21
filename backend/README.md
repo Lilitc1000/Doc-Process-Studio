@@ -373,6 +373,33 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
   - `appendix.notes`（纯文本）
   - `appendix.images`（图片列表）
 
+## incident-report 正文生成机制（开发约定）
+`incident-report` 工作区正文生成采用“显式 skill + 渐进披露”两阶段：
+
+1. 生成请求进入 `services/chat/incident_reports.py` 后，先识别本次目标 section（`quick` / `description` / `timeline` / `timeline_item` / `impact` / `root_cause` / `follow_up`）。
+2. 第一阶段做参考选择：
+   - 输入：`incident-report/SKILL.md` + `references/body-sections/*.md` 的目录摘要 + 本次 section 上下文。
+   - 实现：统一走 `services/skill/selector.py` 的场景模板 `select_for_workspace_reference`，内部再复用 `plan_skill_activation`（统一词法召回 + 模型重排范式）。
+   - 输出：本次实际加载的 reference 文件列表（1~4 个）。
+   - 异常时：回退到后端启发式选择，保证生成不中断。
+3. 第二阶段做正文生成：
+   - 仅注入第一阶段选中的 reference 正文（不再一次性注入全量参考）。
+   - 快填模式生成并回填完整模式全部字段；完整模式仅更新当前 section。
+   - 语言策略采用“两阶段模型判定”：
+     第一步由模型先输出 `zh/en` 目标语言；
+     第二步正文生成严格按该语言输出，并由模型二次校验，必要时自动重试一次。
+   - 语言输出不做字符计数硬编码；系统级 `document-assistant` 提示会注入到正文生成 system prompt。
+4. trace 中会记录本次 reference 选择结果，便于回放与排查。
+
+扩展要求：
+- 新增正文分段时，优先新增 `references/body-sections/*.md` 文档并在 `SKILL.md` 写清用途，不要在 Python 里新增硬编码映射。
+- 保持 reference 文档“单一职责”：每个文件只描述一个分段或通用规则。
+- 若要调整选择策略，优先修改统一规划器参数（候选上限、置信度阈值、显式项）而不是分叉新实现。
+- 聊天工作区与 incident-report 工作区都必须通过 `services/skill/selector.py` 的场景模板进入选择流程：
+- `select_for_chat_skills`
+- `select_for_workspace_reference`
+- 不要在业务模块里直接散落调用 planner。
+
 ## Tool Calling 与 Skill 上下文
 当前主链路已升级为“分层规划 + 会话级 Agent 状态 + 执行器调度 + 生产级可靠性防护（阶段4）”。
 
@@ -444,7 +471,8 @@ Skill 内容来自 [skills](/backend/src/doc_process_studio/skills) 目录。
   - `chaptered_document`（输出章节树结构）
 
 ### 关键实现位置
-- 规划：`services/skill/planner.py`
+- 通用选择入口：`services/skill/selector.py`
+- 规划核心：`services/skill/planner.py`
 - 检索：`services/skill/context.py`
 - 层级记忆：`services/skill/context_packer.py`
 - 执行器：`services/agent/executor.py`

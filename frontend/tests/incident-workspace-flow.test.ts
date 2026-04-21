@@ -62,18 +62,29 @@ const buildBaseSnapshot = () => ({
     manual_system: { value: 'Payment Service', custom_value: '' },
     manual_location: { value: 'CHT', custom_value: '' },
     manual_fault_symptom: { value: '下单报错', custom_value: '' },
-    body_description: { value: '客户反馈下单报错，定位数据库 CPU 打满。', custom_value: '' },
+    body_description: {
+      value: '客户反馈下单报错，定位数据库 CPU 打满。',
+      custom_value: '',
+    },
     body_impact_scope: { value: '下单链路', custom_value: '' },
     body_impact_severity: { value: 'High', custom_value: '' },
     body_root_cause: { value: '慢查询缺失索引', custom_value: '' },
     body_follow_up_actions: { value: '加强 code review', custom_value: '' },
     body_timeline: {
       value: [
-        { time: '12/03/2026 15:00', event: '客户报错', resolution: '', evidence: '' },
+        {
+          time: '12/03/2026 15:00',
+          event: '客户报错',
+          resolution: '',
+          evidence: '',
+        },
       ],
       custom_value: '',
     },
-    quick_narrative: { value: '3月12日下午3点客户下单报错。', custom_value: '' },
+    quick_narrative: {
+      value: '3月12日下午3点客户下单报错。',
+      custom_value: '',
+    },
   },
   report_data: null,
   generated_attachment: null,

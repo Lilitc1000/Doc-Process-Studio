@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from collections import OrderedDict
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
@@ -40,6 +41,7 @@ from ...models.conversation.incident_report import (
     IncidentReportSessionSummary,
     build_empty_incident_snapshot,
 )
+from ...models.skill.runtime import SkillPlanDecision
 from ...services.agent.error_detail import summarize_exception
 from ...services.agent.trace_store import (
     AgentTraceRecorder,
@@ -48,8 +50,20 @@ from ...services.agent.trace_store import (
 from ...services.infra.dtutils import utcnow
 from ...services.infra.text_utils import parse_json_object
 from ...settings import settings
+from ..infra.language_policy import (
+    LANGUAGE_ZH,
+    describe_language,
+    detect_language_with_model,
+    verify_text_language_with_model,
+)
 from ..infra.ollama_client import stream_chat_completion
 from ..skill.conversation_store import clear_conversation_state
+from ..skill.registry import get_skill_interface
+from ..skill.selector import (
+    SelectorOption,
+    build_selector_skill_interfaces,
+    select_for_workspace_reference,
+)
 from .attachments import (
     delete_attachments_for_conversation,
     resolve_attachment_path,
@@ -77,6 +91,17 @@ INCIDENT_REPORT_SCRIPT_PATH = (
     / "scripts"
     / "generate_incident_report.py"
 )
+INCIDENT_REPORT_SKILL_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "skills"
+    / "incident-report"
+)
+INCIDENT_REPORT_SKILL_MD_PATH = INCIDENT_REPORT_SKILL_DIR / "SKILL.md"
+INCIDENT_REPORT_REFERENCE_DIR = (
+    INCIDENT_REPORT_SKILL_DIR / "references"
+)
+INCIDENT_REPORT_BODY_REFERENCE_DIR = INCIDENT_REPORT_REFERENCE_DIR / "body-sections"
+INCIDENT_REPORT_REFERENCE_SELECT_LIMIT = 4
 
 # 手工首页字段
 MANUAL_REFERENCE_NO = "manual_reference_no"
@@ -95,11 +120,14 @@ MANUAL_FAULT_CAUSE = "manual_fault_cause"
 MANUAL_MATERIALS_USED = "manual_materials_used"
 MANUAL_REPAIR_DETAILS = "manual_repair_details"
 MANUAL_CONTRACTOR_STAFF = "manual_contractor_staff"
+MANUAL_CONTRACTOR_SIGNATURE = "manual_contractor_signature"
 MANUAL_CONTRACTOR_DATE = "manual_contractor_date"
 MANUAL_STATUS = "manual_status"
+MANUAL_STATUS_REF_NO = "manual_status_ref_no"
 MANUAL_SEVERITY = "manual_severity"
 MANUAL_COMMENTS = "manual_comments"
 MANUAL_EMPLOYER_REP = "manual_employer_rep"
+MANUAL_EMPLOYER_SIGNATURE = "manual_employer_signature"
 MANUAL_CLOSEOUT_DATE = "manual_closeout_date"
 
 # 快填字段
@@ -128,6 +156,13 @@ APPENDIX_IMAGES = "appendix_images"
 INCIDENT_REPORT_SCHEMA_INTRO = (
     "欢迎使用事故报告专区。支持快填生成正文、完整分段润色、附录富文本编辑与多版本附件历史。"
 )
+SYSTEM_DOCUMENT_SKILL_ID = "document-assistant"
+
+
+@dataclass
+class _PlannerMessage:
+    role: str
+    content: str
 
 
 def _is_docx_attachment(attachment: Any) -> bool:
@@ -186,6 +221,84 @@ def _split_lines(value: Any) -> list[str]:
         rows = [line.strip() for line in text.split(";")]
         return [row for row in rows if row]
     return [text]
+
+
+def _resolve_document_assistant_prompt() -> str:
+    try:
+        return _normalize_text(get_skill_interface(SYSTEM_DOCUMENT_SKILL_ID).default_prompt)
+    except Exception:
+        return ""
+
+
+def _build_language_policy_instruction() -> str:
+    return (
+        "请你自行判断当前用户在本次上下文里主要使用的语言，并使用同一种语言输出正文字段。"
+        "如果用户主要使用英文，就输出英文；如果主要使用中文，就输出中文；"
+        "若出现中英文混合，以用户最近一轮明确输入的主语言为准。"
+    )
+
+
+def _build_language_detection_context(
+    *,
+    section_id: str,
+    timeline_index: int | None,
+    prompt: str,
+    context_json: str,
+) -> str:
+    return json.dumps(
+        {
+            "workspace": "incident-report",
+            "section_id": section_id,
+            "timeline_index": timeline_index,
+            "prompt": prompt,
+            "context": parse_json_object(context_json) or context_json,
+        },
+        ensure_ascii=False,
+    )
+
+
+def _build_enforced_language_instruction(language: str) -> str:
+    normalized = language.strip().lower()
+    if normalized == "en":
+        return f"本次输出语言已确定为{describe_language(normalized)}，所有正文内容必须使用该语言。"
+    return f"本次输出语言已确定为{describe_language(LANGUAGE_ZH)}，所有正文内容必须使用该语言。"
+
+
+async def _detect_generation_language_with_model(
+    *,
+    model: str,
+    section_id: str,
+    timeline_index: int | None,
+    prompt: str,
+    context_json: str,
+) -> tuple[str | None, str]:
+    detection_context = _build_language_detection_context(
+        section_id=section_id,
+        timeline_index=timeline_index,
+        prompt=prompt,
+        context_json=context_json,
+    )
+    language, reason = await detect_language_with_model(
+        model=model,
+        context_text=detection_context,
+        task_name="incident-report-body-generation",
+    )
+    return language, reason
+
+
+async def _verify_generation_language_with_model(
+    *,
+    model: str,
+    expected_language: str,
+    generated_text: str,
+    section_id: str,
+) -> tuple[bool | None, str | None, str]:
+    return await verify_text_language_with_model(
+        model=model,
+        expected_language=expected_language,
+        text=generated_text,
+        task_name=f"incident-report-{section_id}",
+    )
 
 
 def _parse_date_time(value: str) -> datetime | None:
@@ -422,6 +535,13 @@ def _extract_appendix_from_rich_text(value: Any) -> tuple[str, list[dict[str, st
     return "\n".join(normalized_lines), images
 
 
+def _contains_html_tag(value: Any) -> bool:
+    text = _normalize_text(value)
+    if not text:
+        return False
+    return re.search(r"</?[A-Za-z][^>]*>", text) is not None
+
+
 def _merge_appendix_images(*image_groups: list[Any]) -> list[dict[str, str]]:
     merged: list[dict[str, str]] = []
     seen_urls: set[str] = set()
@@ -534,6 +654,75 @@ def _answer_value(snapshot: IncidentReportSessionSnapshot, key: str) -> Any:
 
 def _answer_text(snapshot: IncidentReportSessionSnapshot, key: str) -> str:
     return _normalize_text(_answer_value(snapshot, key))
+
+
+STATUS_OPTION_FAULT_CLEARED = "fault_cleared"
+STATUS_OPTION_TEMPORARILY_FIXED = "temporarily_fixed"
+STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED = "follow_up_action_required"
+
+SEVERITY_OPTION_NOT_APPLICABLE = "not_applicable"
+SEVERITY_OPTION_MINOR = "minor"
+SEVERITY_OPTION_MAJOR = "major"
+
+
+def _normalize_status_option(value: str) -> str:
+    normalized = _normalize_text(value).lower()
+    if not normalized:
+        return STATUS_OPTION_FAULT_CLEARED
+    if normalized in {
+        STATUS_OPTION_FAULT_CLEARED,
+        STATUS_OPTION_TEMPORARILY_FIXED,
+        STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED,
+    }:
+        return normalized
+    if "follow" in normalized or "跟进" in normalized or "后续" in normalized:
+        return STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED
+    if "temporar" in normalized or "临时" in normalized:
+        return STATUS_OPTION_TEMPORARILY_FIXED
+    if "clear" in normalized or "cleared" in normalized or "已清除" in normalized:
+        return STATUS_OPTION_FAULT_CLEARED
+    return STATUS_OPTION_FAULT_CLEARED
+
+
+def _status_option_to_text(option: str) -> str:
+    if option == STATUS_OPTION_TEMPORARILY_FIXED:
+        return "Temporarily fixed"
+    if option == STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED:
+        return "Follow up action required"
+    return "Fault has been Cleared"
+
+
+def _normalize_severity_option(value: str) -> str:
+    normalized = _normalize_text(value).lower()
+    if not normalized:
+        return SEVERITY_OPTION_NOT_APPLICABLE
+    if normalized in {
+        SEVERITY_OPTION_NOT_APPLICABLE,
+        SEVERITY_OPTION_MINOR,
+        SEVERITY_OPTION_MAJOR,
+    }:
+        return normalized
+    if (
+        "major" in normalized
+        or "high" in normalized
+        or "critical" in normalized
+        or "严重" in normalized
+        or "重大" in normalized
+    ):
+        return SEVERITY_OPTION_MAJOR
+    if "minor" in normalized or "low" in normalized or "轻微" in normalized:
+        return SEVERITY_OPTION_MINOR
+    if "not applicable" in normalized or normalized in {"n/a", "na", "不适用"}:
+        return SEVERITY_OPTION_NOT_APPLICABLE
+    return SEVERITY_OPTION_NOT_APPLICABLE
+
+
+def _severity_option_to_text(option: str) -> str:
+    if option == SEVERITY_OPTION_MAJOR:
+        return "Major"
+    if option == SEVERITY_OPTION_MINOR:
+        return "Minor"
+    return "Not Applicable"
 
 
 def _set_answer(
@@ -686,15 +875,21 @@ def _build_report_data_from_snapshot(
         for line in follow_up_lines
     ]
 
+    appendix_raw_value = _answer_value(snapshot, APPENDIX_NOTES)
     appendix_notes, rich_text_images = _extract_appendix_from_rich_text(
-        _answer_value(snapshot, APPENDIX_NOTES)
+        appendix_raw_value
     )
-    if not appendix_notes:
-        appendix_notes = _answer_text(snapshot, APPENDIX_NOTES)
+    if not appendix_notes and not _contains_html_tag(appendix_raw_value):
+        appendix_notes = _normalize_text(appendix_raw_value)
     appendix_images = _merge_appendix_images(
         rich_text_images,
         _safe_json_list(_answer_value(snapshot, APPENDIX_IMAGES)),
     )
+
+    status_option = _normalize_status_option(_answer_text(snapshot, MANUAL_STATUS))
+    status_ref_no = _answer_text(snapshot, MANUAL_STATUS_REF_NO)
+    severity_raw = _answer_text(snapshot, MANUAL_SEVERITY) or body_impact_severity
+    severity_option = _normalize_severity_option(severity_raw)
 
     report_data = {
         "reference_no": _answer_text(snapshot, MANUAL_REFERENCE_NO) or _build_reference_no(),
@@ -713,16 +908,21 @@ def _build_report_data_from_snapshot(
         )
         or resolution_time,
         "service_person": _answer_text(snapshot, MANUAL_SERVICE_PERSON),
-        "fault_cause": _answer_text(snapshot, MANUAL_FAULT_CAUSE) or body_root_cause,
+        "fault_cause": _answer_text(snapshot, MANUAL_FAULT_CAUSE),
         "materials_used": _answer_text(snapshot, MANUAL_MATERIALS_USED),
         "repair_details": _answer_text(snapshot, MANUAL_REPAIR_DETAILS),
         "contractor_staff": _answer_text(snapshot, MANUAL_CONTRACTOR_STAFF),
+        "contractor_signature": _answer_text(snapshot, MANUAL_CONTRACTOR_SIGNATURE),
         "contractor_date": _format_date_text(_answer_text(snapshot, MANUAL_CONTRACTOR_DATE))
         or manual_fault_date,
-        "status": _answer_text(snapshot, MANUAL_STATUS),
-        "severity": _answer_text(snapshot, MANUAL_SEVERITY) or body_impact_severity,
+        "status_option": status_option,
+        "status_ref_no": status_ref_no,
+        "status": _status_option_to_text(status_option),
+        "severity_option": severity_option,
+        "severity": _severity_option_to_text(severity_option) or body_impact_severity,
         "comments": _answer_text(snapshot, MANUAL_COMMENTS),
         "employer_rep": _answer_text(snapshot, MANUAL_EMPLOYER_REP),
+        "employer_signature": _answer_text(snapshot, MANUAL_EMPLOYER_SIGNATURE),
         "closeout_date": _format_date_text(_answer_text(snapshot, MANUAL_CLOSEOUT_DATE))
         or manual_fault_date,
         "detailed_description": body_description,
@@ -947,6 +1147,8 @@ def _build_preview_payload_from_docx_bytes(
     return html, pdf_base64, warnings
 
 
+_CJK_CHAR_PATTERN = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3000-\u303F]")
+
 _TRANSLATION_SKIP_KEYS = {
     "reference_no",
     "fault_date",
@@ -1069,6 +1271,8 @@ def _collect_translation_targets(
         return
     if _should_skip_translation(path, normalized):
         return
+    if not _CJK_CHAR_PATTERN.search(normalized):
+        return
     targets[".".join(path)] = normalized
 
 
@@ -1103,6 +1307,36 @@ def _set_nested_string_value(payload: Any, path_key: str, value: str) -> bool:
     return False
 
 
+async def _translate_batch_via_google(
+    source_texts: list[str],
+) -> list[str]:
+    try:
+        translator = GoogleTranslator(source="auto", target="en")
+        translated_batch = await asyncio.to_thread(
+            translator.translate_batch,
+            source_texts,
+        )
+        if isinstance(translated_batch, list) and len(translated_batch) == len(source_texts):
+            return [
+                _normalize_text(item) if isinstance(item, str) else ""
+                for item in translated_batch
+            ]
+    except Exception:
+        pass
+
+    results: list[str] = []
+    for source_text in source_texts:
+        try:
+            translator = GoogleTranslator(source="auto", target="en")
+            translated_value = _normalize_text(
+                await asyncio.to_thread(translator.translate, source_text)
+            )
+            results.append(translated_value)
+        except Exception:
+            results.append("")
+    return results
+
+
 async def _translate_report_data_to_english(
     *,
     report_data: dict[str, Any],
@@ -1133,38 +1367,20 @@ async def _translate_report_data_to_english(
     if pending_targets:
         pending_items = list(pending_targets.items())
         chunk_size = 48
+        chunks: list[list[tuple[str, str]]] = []
         for start in range(0, len(pending_items), chunk_size):
-            chunk_items = pending_items[start : start + chunk_size]
-            source_texts = [source_text for _, source_text in chunk_items]
-            translated_texts: list[str] = []
+            chunks.append(pending_items[start : start + chunk_size])
 
-            try:
-                translator = GoogleTranslator(source="auto", target="en")
-                translated_batch = await asyncio.to_thread(
-                    translator.translate_batch,
-                    source_texts,
+        batch_results = await asyncio.gather(
+            *(
+                _translate_batch_via_google(
+                    [text for _, text in chunk_items]
                 )
-                if isinstance(translated_batch, list):
-                    translated_texts = [
-                        _normalize_text(item) if isinstance(item, str) else ""
-                        for item in translated_batch
-                    ]
-            except Exception:
-                translated_texts = []
+                for chunk_items in chunks
+            )
+        )
 
-            if len(translated_texts) != len(source_texts):
-                translated_texts = []
-                for source_text in source_texts:
-                    translated_value = ""
-                    try:
-                        translator = GoogleTranslator(source="auto", target="en")
-                        translated_value = _normalize_text(
-                            await asyncio.to_thread(translator.translate, source_text)
-                        )
-                    except Exception:
-                        translated_value = ""
-                    translated_texts.append(translated_value)
-
+        for chunk_items, translated_texts in zip(chunks, batch_results):
             for (path_key, source_text), translated_text in zip(
                 chunk_items,
                 translated_texts,
@@ -1200,33 +1416,95 @@ def _apply_quick_generation_payload(
     form_answers: dict[str, IncidentFormAnswer],
     payload: dict[str, Any],
 ) -> None:
-    _set_answer(form_answers, BODY_DESCRIPTION, _normalize_text(payload.get("description")))
+    def _pick_non_empty_text(*values: Any) -> str:
+        for value in values:
+            text = _normalize_text(value)
+            if text:
+                return text
+        return ""
+
+    _set_answer(
+        form_answers,
+        BODY_DESCRIPTION,
+        _pick_non_empty_text(
+            payload.get("description"),
+            _answer_value_from_answers(form_answers, BODY_DESCRIPTION),
+            _answer_value_from_answers(form_answers, QUICK_NARRATIVE),
+        ),
+    )
     _set_answer(
         form_answers,
         BODY_AFFECTED_DATE,
-        _normalize_text(payload.get("affected_date_summary")),
+        _pick_non_empty_text(
+            payload.get("affected_date_summary"),
+            _answer_value_from_answers(form_answers, BODY_AFFECTED_DATE),
+        ),
     )
     timeline = _normalize_timeline_items(payload.get("timeline"))
+    if not timeline:
+        timeline = _normalize_timeline_items(
+            _answer_value_from_answers(form_answers, BODY_TIMELINE)
+        )
+    if not timeline:
+        timeline = _normalize_timeline_items(
+            _answer_value_from_answers(form_answers, QUICK_TIMELINE)
+        )
     if timeline:
         _set_answer(form_answers, BODY_TIMELINE, timeline)
         _set_answer(form_answers, QUICK_TIMELINE, timeline)
-    _set_answer(form_answers, BODY_IMPACT_SCOPE, _normalize_text(payload.get("impact_scope")))
+    _set_answer(
+        form_answers,
+        BODY_IMPACT_SCOPE,
+        _pick_non_empty_text(
+            payload.get("impact_scope"),
+            _answer_value_from_answers(form_answers, BODY_IMPACT_SCOPE),
+            _answer_value_from_answers(form_answers, QUICK_IMPACT_SCOPE),
+        ),
+    )
     _set_answer(
         form_answers,
         BODY_IMPACT_SEVERITY,
-        _normalize_text(payload.get("impact_severity")),
+        _pick_non_empty_text(
+            payload.get("impact_severity"),
+            _answer_value_from_answers(form_answers, BODY_IMPACT_SEVERITY),
+            _answer_value_from_answers(form_answers, QUICK_IMPACT_SEVERITY),
+        ),
     )
     _set_answer(
         form_answers,
         BODY_BUSINESS_IMPACT,
-        "\n".join(_split_lines(payload.get("business_impact"))),
+        _pick_non_empty_text(
+            "\n".join(_split_lines(payload.get("business_impact"))),
+            _answer_value_from_answers(form_answers, BODY_BUSINESS_IMPACT),
+        ),
     )
-    _set_answer(form_answers, BODY_TRIGGER, _normalize_text(payload.get("trigger")))
-    _set_answer(form_answers, BODY_ROOT_CAUSE, _normalize_text(payload.get("root_cause")))
+    _set_answer(
+        form_answers,
+        BODY_TRIGGER,
+        _pick_non_empty_text(
+            payload.get("trigger"),
+            _answer_value_from_answers(form_answers, BODY_TRIGGER),
+            payload.get("root_cause"),
+            _answer_value_from_answers(form_answers, QUICK_ROOT_CAUSE_GUESS),
+        ),
+    )
+    _set_answer(
+        form_answers,
+        BODY_ROOT_CAUSE,
+        _pick_non_empty_text(
+            payload.get("root_cause"),
+            _answer_value_from_answers(form_answers, BODY_ROOT_CAUSE),
+            _answer_value_from_answers(form_answers, QUICK_ROOT_CAUSE_GUESS),
+        ),
+    )
     _set_answer(
         form_answers,
         BODY_FOLLOW_UP,
-        "\n".join(_split_lines(payload.get("follow_up_actions"))),
+        _pick_non_empty_text(
+            "\n".join(_split_lines(payload.get("follow_up_actions"))),
+            _answer_value_from_answers(form_answers, BODY_FOLLOW_UP),
+            _answer_value_from_answers(form_answers, QUICK_FOLLOW_UP_ACTION),
+        ),
     )
 
     if timeline:
@@ -1241,26 +1519,288 @@ def _apply_quick_generation_payload(
                 _set_answer(form_answers, MANUAL_FAULT_TIME, matched.group("time"))
 
 
-def _build_quick_generation_prompt(snapshot: IncidentReportSessionSnapshot) -> str:
-    narrative = _answer_text(snapshot, QUICK_NARRATIVE)
-    timeline = _normalize_timeline_items(_answer_value(snapshot, QUICK_TIMELINE))
-    impact_scope = _answer_text(snapshot, QUICK_IMPACT_SCOPE)
-    severity = _answer_text(snapshot, QUICK_IMPACT_SEVERITY)
-    root_cause_guess = _answer_text(snapshot, QUICK_ROOT_CAUSE_GUESS)
-    follow_up = _answer_text(snapshot, QUICK_FOLLOW_UP_ACTION)
+def _normalize_section_key(section_id: str) -> str:
+    return section_id.strip().lower()
+
+
+def _load_text_file(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+
+def _load_incident_skill_markdown() -> str:
+    text = _load_text_file(INCIDENT_REPORT_SKILL_MD_PATH)
+    if text:
+        return text
     return (
-        "你是事故报告正文生成助手。基于给定输入提炼并润色正文，禁止编造事实。"
-        "请仅输出 JSON 对象，不要输出额外说明。"
-        "JSON 键必须为：description, affected_date_summary, timeline, impact_scope, impact_severity, "
-        "business_impact, trigger, root_cause, follow_up_actions。"
-        "timeline 为数组，每项包含 time,event,resolution,evidence。\n"
-        f"事故简述：{narrative or 'N/A'}\n"
-        f"时间线输入：{json.dumps(timeline, ensure_ascii=False)}\n"
-        f"影响范围：{impact_scope or 'N/A'}\n"
-        f"严重级别：{severity or 'N/A'}\n"
-        f"根因猜测：{root_cause_guess or 'N/A'}\n"
-        f"后续动作：{follow_up or 'N/A'}"
+        "# incident-report\n"
+        "事故报告 skill，用于根据当前生成目标选择参考文档并输出结构化正文。"
     )
+
+
+def _extract_reference_summary(text: str, *, max_lines: int = 3) -> str:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    filtered = [line for line in lines if not line.startswith("#")]
+    selected = filtered[:max_lines] or lines[:max_lines]
+    return " ".join(selected)[:260]
+
+
+def _build_incident_reference_catalog() -> list[dict[str, str]]:
+    if not INCIDENT_REPORT_BODY_REFERENCE_DIR.is_dir():
+        return []
+    catalog: list[dict[str, str]] = []
+    for path in sorted(INCIDENT_REPORT_BODY_REFERENCE_DIR.glob("*.md")):
+        text = _load_text_file(path)
+        if not text:
+            continue
+        relative_path = path.relative_to(INCIDENT_REPORT_REFERENCE_DIR).as_posix()
+        title = path.stem
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                title = stripped.lstrip("#").strip() or title
+                break
+        catalog.append(
+            {
+                "path": relative_path,
+                "title": title,
+                "summary": _extract_reference_summary(text),
+            }
+        )
+    return catalog
+
+
+def _select_references_by_heuristic(
+    *,
+    section_id: str,
+    available_paths: list[str],
+) -> list[str]:
+    section_key = _normalize_section_key(section_id)
+    tokens = [
+        token
+        for token in re.split(r"[_\-\s]+", section_key)
+        if token
+    ]
+    selected: list[str] = []
+
+    for path in available_paths:
+        if path.endswith("/common.md"):
+            selected.append(path)
+            break
+
+    for path in available_paths:
+        filename = path.rsplit("/", 1)[-1].lower()
+        if any(token in filename for token in tokens):
+            selected.append(path)
+
+    if section_key == "quick":
+        for path in available_paths:
+            if "quick" in path:
+                selected.append(path)
+                break
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for path in selected:
+        if path in seen:
+            continue
+        seen.add(path)
+        deduped.append(path)
+
+    if not deduped and available_paths:
+        deduped.append(available_paths[0])
+    return deduped[:INCIDENT_REPORT_REFERENCE_SELECT_LIMIT]
+
+
+def _build_reference_planner_query(
+    *,
+    section_id: str,
+    timeline_index: int | None,
+    prompt: str,
+    context_json: str,
+    skill_markdown: str,
+) -> str:
+    planner_payload = {
+        "skill_id": INCIDENT_REPORT_SKILL_ID,
+        "target_section": section_id,
+        "timeline_index": timeline_index,
+        "generation_prompt": prompt,
+        "generation_context": context_json,
+        "selection_goal": "选择最小必要参考文档集合用于当前正文生成",
+    }
+    return (
+        f"incident-report SKILL.md:\n{skill_markdown}\n\n"
+        f"本次参考选择请求:\n{json.dumps(planner_payload, ensure_ascii=False)}"
+    )
+
+
+def _build_reference_selector_options(
+    reference_catalog: list[dict[str, str]],
+) -> list[SelectorOption]:
+    options: list[SelectorOption] = []
+    for item in reference_catalog:
+        path = _normalize_text(item.get("path"))
+        title = _normalize_text(item.get("title"))
+        summary = _normalize_text(item.get("summary"))
+        if not path:
+            continue
+        options.append(
+            SelectorOption(
+                id=path,
+                display_name=title or path,
+                short_description=summary or title or path,
+                default_prompt=summary or title or path,
+            )
+        )
+    return options
+
+
+def _select_reference_files_from_plan(
+    *,
+    decision: SkillPlanDecision,
+    available_paths: list[str],
+    system_skill_id: str,
+) -> list[str]:
+    allowed_set = set(available_paths)
+    selected: list[str] = []
+    for skill_id in decision.active_skill_ids:
+        if skill_id == system_skill_id:
+            continue
+        if skill_id not in allowed_set:
+            continue
+        if skill_id not in selected:
+            selected.append(skill_id)
+    return selected[:INCIDENT_REPORT_REFERENCE_SELECT_LIMIT]
+
+
+async def _resolve_generation_reference_context(
+    *,
+    model: str,
+    section_id: str,
+    timeline_index: int | None,
+    prompt: str,
+    context_json: str,
+) -> tuple[str, list[str], str]:
+    reference_catalog = _build_incident_reference_catalog()
+    available_paths = [item["path"] for item in reference_catalog]
+    if not available_paths:
+        return "[fallback]\n未找到可用参考文档，按上下文生成。", [], "fallback:no_reference_catalog"
+
+    system_reference_skill_id = "__incident_reference_system__"
+    explicit_reference_paths: list[str] = []
+    if "body-sections/common.md" in available_paths:
+        explicit_reference_paths.append("body-sections/common.md")
+
+    selection_reason = "fallback:heuristic"
+    selected_files = _select_references_by_heuristic(
+        section_id=section_id,
+        available_paths=available_paths,
+    )
+
+    try:
+        planner_query = _build_reference_planner_query(
+            section_id=section_id,
+            timeline_index=timeline_index,
+            prompt=prompt,
+            context_json=context_json,
+            skill_markdown=_load_incident_skill_markdown(),
+        )
+        plan_decision = await select_for_workspace_reference(
+            model=model,
+            messages=[_PlannerMessage(role="user", content=planner_query)],
+            available_skills=build_selector_skill_interfaces(
+                options=_build_reference_selector_options(reference_catalog),
+                skill_type="workspace_incident_reference",
+            ),
+            explicit_skill_ids=explicit_reference_paths,
+            system_skill_id=system_reference_skill_id,
+            reference_select_limit=INCIDENT_REPORT_REFERENCE_SELECT_LIMIT,
+            min_confidence=0.2,
+        )
+        selected_from_plan = _select_reference_files_from_plan(
+            decision=plan_decision,
+            available_paths=available_paths,
+            system_skill_id=system_reference_skill_id,
+        )
+        if selected_from_plan:
+            if len(selected_from_plan) <= len(explicit_reference_paths):
+                merged_files = list(selected_from_plan)
+                for path in selected_files:
+                    if path in merged_files:
+                        continue
+                    merged_files.append(path)
+                    if len(merged_files) >= INCIDENT_REPORT_REFERENCE_SELECT_LIMIT:
+                        break
+                selected_files = merged_files
+            else:
+                selected_files = selected_from_plan
+        planner_reason = _normalize_text(plan_decision.reasons.get("planner"))
+        selection_reason = planner_reason or "planner:select_for_workspace_reference"
+    except Exception as exc:
+        selection_reason = f"fallback:{summarize_exception(exc)}"
+
+    blocks: list[str] = []
+    for relative_path in selected_files:
+        text = _load_text_file(INCIDENT_REPORT_REFERENCE_DIR / relative_path)
+        if not text:
+            continue
+        blocks.append(f"[{relative_path}]\n{text}")
+    if not blocks:
+        return "[fallback]\n参考文档为空，按上下文生成。", selected_files, selection_reason
+    return "\n\n".join(blocks), selected_files, selection_reason
+
+
+def _build_quick_generation_context(
+    snapshot: IncidentReportSessionSnapshot,
+) -> dict[str, Any]:
+    return {
+        "quick_inputs": {
+            "narrative": _answer_text(snapshot, QUICK_NARRATIVE),
+            "timeline": _normalize_timeline_items(_answer_value(snapshot, QUICK_TIMELINE)),
+            "impact_scope": _answer_text(snapshot, QUICK_IMPACT_SCOPE),
+            "impact_severity": _answer_text(snapshot, QUICK_IMPACT_SEVERITY),
+            "root_cause_guess": _answer_text(snapshot, QUICK_ROOT_CAUSE_GUESS),
+            "follow_up_action": _answer_text(snapshot, QUICK_FOLLOW_UP_ACTION),
+        },
+        "manual_cover_context": {
+            "fault_date": _answer_text(snapshot, MANUAL_FAULT_DATE),
+            "fault_time": _answer_text(snapshot, MANUAL_FAULT_TIME),
+            "site_id": _answer_text(snapshot, MANUAL_SITE_ID),
+            "system": _answer_text(snapshot, MANUAL_SYSTEM),
+            "location": _answer_text(snapshot, MANUAL_LOCATION),
+            "fault_symptom": _answer_text(snapshot, MANUAL_FAULT_SYMPTOM),
+        },
+        "existing_full_body": {
+            "description": _answer_text(snapshot, BODY_DESCRIPTION),
+            "affected_date_summary": _answer_text(snapshot, BODY_AFFECTED_DATE),
+            "timeline": _normalize_timeline_items(_answer_value(snapshot, BODY_TIMELINE)),
+            "impact_scope": _answer_text(snapshot, BODY_IMPACT_SCOPE),
+            "impact_severity": _answer_text(snapshot, BODY_IMPACT_SEVERITY),
+            "business_impact": _answer_text(snapshot, BODY_BUSINESS_IMPACT),
+            "trigger": _answer_text(snapshot, BODY_TRIGGER),
+            "root_cause": _answer_text(snapshot, BODY_ROOT_CAUSE),
+            "follow_up_actions": _answer_text(snapshot, BODY_FOLLOW_UP),
+        },
+    }
+
+
+def _build_quick_generation_request(
+    snapshot: IncidentReportSessionSnapshot,
+) -> tuple[str, str]:
+    prompt = (
+        "你将执行“快填模式 -> 完整模式”生成。"
+        "请根据参考文档规范，把快填输入扩展为完整模式字段。"
+        "禁止编造上下文不存在的事实；若信息不足可使用保守但可执行的表达。"
+        "只输出 JSON，不要输出解释。"
+        "JSON 键必须是：description, affected_date_summary, timeline, impact_scope, impact_severity, "
+        "business_impact, trigger, root_cause, follow_up_actions。"
+        "timeline 是数组，每项必须包含 time,event,resolution,evidence。"
+    )
+    return prompt, json.dumps(_build_quick_generation_context(snapshot), ensure_ascii=False)
 
 
 def _build_section_generation_prompt(
@@ -1285,29 +1825,29 @@ def _build_section_generation_prompt(
 
     if section_key == "description":
         return (
-            "仅润色事故简述。返回 JSON：{\"body_description\":\"...\"}。",
+            "仅生成事故简述段。只输出 JSON：{\"body_description\":\"...\"}。不要修改其它章节。",
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "timeline":
         return (
-            "仅润色时间线。返回 JSON：{\"body_timeline\":[{\"time\":\"\",\"event\":\"\",\"resolution\":\"\",\"evidence\":\"\"}],"
-            "\"body_affected_date_summary\":\"...\"}。",
+            "仅生成时间线段。只输出 JSON：{\"body_timeline\":[{\"time\":\"\",\"event\":\"\",\"resolution\":\"\",\"evidence\":\"\"}],"
+            "\"body_affected_date_summary\":\"...\"}。不要修改其它章节。",
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "impact":
         return (
-            "仅润色影响范围和严重级别。返回 JSON：{\"body_impact_scope\":\"...\",\"body_impact_severity\":\"...\","
-            "\"body_business_impact\":\"按换行分隔\"}。",
+            "仅生成影响范围/严重级别/业务影响。只输出 JSON：{\"body_impact_scope\":\"...\","
+            "\"body_impact_severity\":\"...\",\"body_business_impact\":\"按换行分隔\"}。不要修改其它章节。",
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "root_cause":
         return (
-            "仅润色根因段。返回 JSON：{\"body_trigger\":\"...\",\"body_root_cause\":\"...\"}。",
+            "仅生成触发原因与根因。只输出 JSON：{\"body_trigger\":\"...\",\"body_root_cause\":\"...\"}。不要修改其它章节。",
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "follow_up":
         return (
-            "仅润色后续动作段。返回 JSON：{\"body_follow_up_actions\":\"按换行分隔\"}。",
+            "仅生成后续动作段。只输出 JSON：{\"body_follow_up_actions\":\"按换行分隔\"}。不要修改其它章节。",
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "timeline_item":
@@ -1315,7 +1855,8 @@ def _build_section_generation_prompt(
         if timeline_index is None or timeline_index < 0 or timeline_index >= len(timeline):
             raise ValueError("无效的时间线条目索引。")
         return (
-            "仅润色指定时间线条目。返回 JSON：{\"item\":{\"time\":\"\",\"event\":\"\",\"resolution\":\"\",\"evidence\":\"\"}}。",
+            "仅生成指定时间线条目。只输出 JSON：{\"item\":{\"time\":\"\",\"event\":\"\",\"resolution\":\"\",\"evidence\":\"\"}}。"
+            "禁止改写其它时间线条目。",
             json.dumps(
                 {
                     "target_item": timeline[timeline_index],
@@ -1329,6 +1870,16 @@ def _build_section_generation_prompt(
     raise ValueError("不支持的 section_id。")
 
 
+def _set_answer_if_non_empty(
+    form_answers: dict[str, IncidentFormAnswer],
+    key: str,
+    value: Any,
+) -> None:
+    text = _normalize_text(value)
+    if text:
+        _set_answer(form_answers, key, text)
+
+
 def _apply_section_payload(
     *,
     form_answers: dict[str, IncidentFormAnswer],
@@ -1338,40 +1889,40 @@ def _apply_section_payload(
 ) -> None:
     section_key = section_id.strip().lower()
     if section_key == "description":
-        _set_answer(form_answers, BODY_DESCRIPTION, _normalize_text(payload.get("body_description")))
+        _set_answer_if_non_empty(form_answers, BODY_DESCRIPTION, payload.get("body_description"))
         return
     if section_key == "timeline":
         timeline = _normalize_timeline_items(payload.get("body_timeline"))
         if timeline:
             _set_answer(form_answers, BODY_TIMELINE, timeline)
-        _set_answer(
+        _set_answer_if_non_empty(
             form_answers,
             BODY_AFFECTED_DATE,
-            _normalize_text(payload.get("body_affected_date_summary")),
+            payload.get("body_affected_date_summary"),
         )
         return
     if section_key == "impact":
-        _set_answer(form_answers, BODY_IMPACT_SCOPE, _normalize_text(payload.get("body_impact_scope")))
-        _set_answer(
+        _set_answer_if_non_empty(form_answers, BODY_IMPACT_SCOPE, payload.get("body_impact_scope"))
+        _set_answer_if_non_empty(
             form_answers,
             BODY_IMPACT_SEVERITY,
-            _normalize_text(payload.get("body_impact_severity")),
+            payload.get("body_impact_severity"),
         )
-        _set_answer(
+        _set_answer_if_non_empty(
             form_answers,
             BODY_BUSINESS_IMPACT,
-            _normalize_text(payload.get("body_business_impact")),
+            payload.get("body_business_impact"),
         )
         return
     if section_key == "root_cause":
-        _set_answer(form_answers, BODY_TRIGGER, _normalize_text(payload.get("body_trigger")))
-        _set_answer(form_answers, BODY_ROOT_CAUSE, _normalize_text(payload.get("body_root_cause")))
+        _set_answer_if_non_empty(form_answers, BODY_TRIGGER, payload.get("body_trigger"))
+        _set_answer_if_non_empty(form_answers, BODY_ROOT_CAUSE, payload.get("body_root_cause"))
         return
     if section_key == "follow_up":
-        _set_answer(
+        _set_answer_if_non_empty(
             form_answers,
             BODY_FOLLOW_UP,
-            _normalize_text(payload.get("body_follow_up_actions")),
+            payload.get("body_follow_up_actions"),
         )
         return
     if section_key == "timeline_item":
@@ -1402,15 +1953,52 @@ def _answer_value_from_answers(form_answers: dict[str, IncidentFormAnswer], key:
     return answer.value
 
 
-def _build_body_generation_messages(prompt: str, context_json: str) -> list[dict[str, Any]]:
+def _build_body_generation_messages(
+    *,
+    prompt: str,
+    context_json: str,
+    reference_context: str,
+    enforced_language: str | None,
+    strict_retry: bool = False,
+) -> list[dict[str, Any]]:
+    language_policy = _build_language_policy_instruction()
+    enforcement_instruction = (
+        _build_enforced_language_instruction(enforced_language)
+        if enforced_language
+        else language_policy
+    )
+    retry_instruction = (
+        "注意：上一次输出语言不符合要求。本次必须严格遵守语言要求，否则视为失败。"
+        if strict_retry
+        else ""
+    )
+    document_assistant_prompt = _resolve_document_assistant_prompt()
+    system_prompt_prefix = (
+        f"系统级技能提示（{SYSTEM_DOCUMENT_SKILL_ID}）：{document_assistant_prompt}\n"
+        if document_assistant_prompt
+        else ""
+    )
     return [
         {
             "role": "system",
-            "content": "你是事故报告正文助手。只输出 JSON，不要输出代码块，不要编造事实。",
+            "content": (
+                f"{system_prompt_prefix}"
+                "你是事故报告正文助手。"
+                "先遵循参考文档，再结合当前上下文生成内容。"
+                "只输出 JSON，不要输出代码块，不要编造事实。"
+                f"{enforcement_instruction}"
+                f"{retry_instruction}"
+            ),
         },
         {
             "role": "user",
-            "content": f"{prompt}\n当前上下文：{context_json}",
+            "content": (
+                f"{prompt}\n"
+                f"语言策略：{enforcement_instruction}\n"
+                f"{retry_instruction}\n"
+                f"参考文档：\n{reference_context}\n"
+                f"当前上下文：{context_json}"
+            ),
         },
     ]
 
@@ -1430,6 +2018,13 @@ async def _run_body_generation_with_trace(
         raise RuntimeError("未配置 OLLAMA_BASE_URL。")
 
     effective_reranker_model = (reranker_model or "").strip() or model
+    detected_language, language_detection_reason = await _detect_generation_language_with_model(
+        model=model,
+        section_id=section_id,
+        timeline_index=timeline_index,
+        prompt=prompt,
+        context_json=context_json,
+    )
     trace_id = uuid4().hex
     recorder = AgentTraceRecorder(
         trace_id=trace_id,
@@ -1444,15 +2039,128 @@ async def _run_body_generation_with_trace(
         detail={
             "section_id": section_id,
             "timeline_index": timeline_index,
+            "language_policy": "model_detect_then_enforce",
+            "system_skill_id": SYSTEM_DOCUMENT_SKILL_ID,
+            "detected_language": detected_language,
+            "language_detection_reason": language_detection_reason,
+        },
+    )
+    await _flush_trace_safely(recorder)
+    recorder.add_event(
+        event_type="body_generation_language_detection",
+        detail={
+            "section_id": section_id,
+            "detected_language": detected_language,
+            "reason": language_detection_reason,
         },
     )
     await _flush_trace_safely(recorder)
 
+    reference_context = "[fallback]\n参考文档不可用，按上下文生成。"
+    selected_reference_files: list[str] = []
+    reference_selection_reason = "fallback:init"
+
     try:
+        (
+            reference_context,
+            selected_reference_files,
+            reference_selection_reason,
+        ) = await _resolve_generation_reference_context(
+            model=model,
+            section_id=section_id,
+            timeline_index=timeline_index,
+            prompt=prompt,
+            context_json=context_json,
+        )
+        recorder.add_event(
+            event_type="body_generation_reference_selection",
+            detail={
+                "section_id": section_id,
+                "selected_reference_files": selected_reference_files,
+                "selection_reason": reference_selection_reason,
+            },
+        )
+        await _flush_trace_safely(recorder)
+
         response_text, done_reason = await _run_plain_chat_completion(
             model=model,
-            messages=_build_body_generation_messages(prompt, context_json),
+            messages=_build_body_generation_messages(
+                prompt=prompt,
+                context_json=context_json,
+                reference_context=reference_context,
+                enforced_language=detected_language,
+            ),
         )
+
+        verification_match: bool | None = None
+        detected_output_language: str | None = None
+        verification_reason = "verification_skipped_no_detected_language"
+        if detected_language:
+            (
+                verification_match,
+                detected_output_language,
+                verification_reason,
+            ) = await _verify_generation_language_with_model(
+                model=model,
+                expected_language=detected_language,
+                generated_text=response_text,
+                section_id=section_id,
+            )
+            recorder.add_event(
+                event_type="body_generation_language_verification",
+                detail={
+                    "section_id": section_id,
+                    "attempt": 1,
+                    "expected_language": detected_language,
+                    "detected_output_language": detected_output_language,
+                    "match": verification_match,
+                    "reason": verification_reason,
+                },
+            )
+            await _flush_trace_safely(recorder)
+
+            if verification_match is False:
+                recorder.add_event(
+                    event_type="body_generation_language_retry",
+                    detail={
+                        "section_id": section_id,
+                        "expected_language": detected_language,
+                        "reason": verification_reason,
+                    },
+                )
+                await _flush_trace_safely(recorder)
+                response_text, done_reason = await _run_plain_chat_completion(
+                    model=model,
+                    messages=_build_body_generation_messages(
+                        prompt=prompt,
+                        context_json=context_json,
+                        reference_context=reference_context,
+                        enforced_language=detected_language,
+                        strict_retry=True,
+                    ),
+                )
+                (
+                    verification_match,
+                    detected_output_language,
+                    verification_reason,
+                ) = await _verify_generation_language_with_model(
+                    model=model,
+                    expected_language=detected_language,
+                    generated_text=response_text,
+                    section_id=section_id,
+                )
+                recorder.add_event(
+                    event_type="body_generation_language_verification",
+                    detail={
+                        "section_id": section_id,
+                        "attempt": 2,
+                        "expected_language": detected_language,
+                        "detected_output_language": detected_output_language,
+                        "match": verification_match,
+                        "reason": verification_reason,
+                    },
+                )
+                await _flush_trace_safely(recorder)
     except httpx.HTTPError as exc:
         recorder.add_event(
             event_type="body_generation_error",
@@ -1664,7 +2372,9 @@ async def generate_incident_report_body_from_quick_input(
     if not _answer_text(detail.snapshot, QUICK_NARRATIVE):
         raise ValueError("请先填写快填模式的事故简述。")
 
-    prompt = _build_quick_generation_prompt(detail.snapshot)
+    prompt, context_json = _build_quick_generation_request(
+        detail.snapshot
+    )
 
     def _apply(form_answers: dict[str, IncidentFormAnswer], payload: dict[str, Any]) -> None:
         _apply_quick_generation_payload(form_answers=form_answers, payload=payload)
@@ -1675,8 +2385,8 @@ async def generate_incident_report_body_from_quick_input(
         reranker_model=reranker_model,
         section_id="quick",
         timeline_index=None,
-        prompt="请将快填输入扩展为完整正文字段。",
-        context_json=prompt,
+        prompt=prompt,
+        context_json=context_json,
         apply_payload=_apply,
     )
 

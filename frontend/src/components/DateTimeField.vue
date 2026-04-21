@@ -34,11 +34,7 @@
             stroke-width="1.5"
           />
         </svg>
-        <svg
-          v-else
-          viewBox="0 0 20 20"
-          class="date-time-trigger-icon-svg"
-        >
+        <svg v-else viewBox="0 0 20 20" class="date-time-trigger-icon-svg">
           <rect
             x="3.25"
             y="4.5"
@@ -353,7 +349,9 @@ const parseDateTimeCandidate = (value: string): Date | null => {
   return null;
 };
 
-const parseTimeCandidate = (value: string): { hour: string; minute: string } | null => {
+const parseTimeCandidate = (
+  value: string,
+): { hour: string; minute: string } | null => {
   const normalized = value.trim();
   const applyAmpm = (rawHour: number, rawAmpm: string) => {
     let hour = rawHour;
@@ -370,9 +368,17 @@ const parseTimeCandidate = (value: string): { hour: string; minute: string } | n
     /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:[:：时hH点])\s*(?<minute>\d{1,2})(?:\s*(?:分|m|M))?\s*(?<ampm>am|pm)?/i,
   );
   if (timeMatched?.groups) {
-    const hour = applyAmpm(Number(timeMatched.groups.hour), timeMatched.groups.ampm ?? '');
+    const hour = applyAmpm(
+      Number(timeMatched.groups.hour),
+      timeMatched.groups.ampm ?? '',
+    );
     const minute = Number(timeMatched.groups.minute);
-    if (Number.isNaN(hour) || Number.isNaN(minute) || minute < 0 || minute > 59) {
+    if (
+      Number.isNaN(hour) ||
+      Number.isNaN(minute) ||
+      minute < 0 ||
+      minute > 59
+    ) {
       return null;
     }
     if (hour < 0 || hour > 23) {
@@ -388,7 +394,10 @@ const parseTimeCandidate = (value: string): { hour: string; minute: string } | n
     /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:点|时|h|H)\s*半\s*(?<ampm>am|pm)?/i,
   );
   if (halfMatched?.groups) {
-    const hour = applyAmpm(Number(halfMatched.groups.hour), halfMatched.groups.ampm ?? '');
+    const hour = applyAmpm(
+      Number(halfMatched.groups.hour),
+      halfMatched.groups.ampm ?? '',
+    );
     if (Number.isNaN(hour) || hour < 0 || hour > 23) {
       return null;
     }
@@ -404,7 +413,10 @@ const parseTimeCandidate = (value: string): { hour: string; minute: string } | n
   if (!hourOnlyMatched?.groups) {
     return null;
   }
-  const hour = applyAmpm(Number(hourOnlyMatched.groups.hour), hourOnlyMatched.groups.ampm ?? '');
+  const hour = applyAmpm(
+    Number(hourOnlyMatched.groups.hour),
+    hourOnlyMatched.groups.ampm ?? '',
+  );
   if (Number.isNaN(hour) || hour < 0 || hour > 23) {
     return null;
   }
@@ -481,7 +493,11 @@ const syncPendingStateFromModel = () => {
   pendingDate.value =
     mode.value === 'time'
       ? null
-      : new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+      : new Date(
+          baseDate.getFullYear(),
+          baseDate.getMonth(),
+          baseDate.getDate(),
+        );
   selectedHour.value =
     parsedTime?.hour ?? String(baseDate.getHours()).padStart(2, '0');
   selectedMinute.value =
@@ -534,7 +550,10 @@ const updatePanelPosition = () => {
   }
 
   const triggerRect = rootRef.value.getBoundingClientRect();
-  const desiredWidth = Math.max(triggerRect.width, mode.value === 'time' ? 290 : 320);
+  const desiredWidth = Math.max(
+    triggerRect.width,
+    mode.value === 'time' ? 290 : 320,
+  );
   const margin = 10;
   const estimatedPanelHeight =
     mode.value === 'datetime' ? 380 : mode.value === 'date' ? 330 : 220;

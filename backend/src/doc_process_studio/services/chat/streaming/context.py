@@ -67,6 +67,7 @@ def build_multi_skill_runtime_instructions(
             explicit_line,
             implicit_line,
             "系统级文档处理方式 document-assistant 始终启用，优先级最高。",
+            "回复语言策略：默认与用户最近一轮输入语言保持一致；若用户明确要求输出语言，优先遵从用户要求。",
             "触发规则：若用户通过输入框显式选择，或在消息中使用 $SkillName 明确提及某方式，当前轮必须使用；若提及多个，必须全部使用；除非再次提及，不跨轮沿用。",
             "未显式选择时，可根据任务描述按最小集合隐式调用；隐式调用由规划层建议，可按实际任务取舍。",
             "技能使用方法（渐进式披露）：先读 SKILL.md 必要部分；若引用 references/，仅按需读取必要文件；优先复用 scripts/ 与 assets/。",

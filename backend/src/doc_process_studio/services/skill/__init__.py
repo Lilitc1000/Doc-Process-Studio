@@ -16,6 +16,13 @@ from .registry import (
     list_skill_interfaces,
 )
 from .runtime import sync_skill_context_state
+from .selector import (
+    SelectorOption,
+    build_selector_skill_interfaces,
+    select_for_chat_skills,
+    select_for_workspace_reference,
+    select_skills_with_planner,
+)
 from .tool_loop import (
     build_skill_tools,
     build_skill_tools_for_skills,
@@ -39,5 +46,10 @@ __all__ = [
     "refresh_conversation_state_ttl",
     "save_conversation_state",
     "search_skill_context_chunks",
+    "SelectorOption",
+    "build_selector_skill_interfaces",
+    "select_for_chat_skills",
+    "select_for_workspace_reference",
+    "select_skills_with_planner",
     "sync_skill_context_state",
 ]

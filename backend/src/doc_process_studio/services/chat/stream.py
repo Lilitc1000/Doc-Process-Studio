@@ -37,7 +37,7 @@ from ..skill.registry import (
     get_skill_interface,
     list_skill_interfaces,
 )
-from ..skill.planner import plan_skill_activation
+from ..skill.selector import select_for_chat_skills
 from ..skill.runtime import sync_skill_context_state
 from ..skill.tool_loop import (
     build_skill_tools,
@@ -188,16 +188,13 @@ async def _resolve_skill_plan(
         if missing_skill_id not in missing_explicit_skill_ids:
             missing_explicit_skill_ids.append(missing_skill_id)
     valid_explicit_skill_ids = [skill_id for skill_id in explicit_skill_ids if skill_id in available_skill_ids]
-    skill_plan = await plan_skill_activation(
+    skill_plan = await select_for_chat_skills(
         model=request.model,
         messages=request.messages,
         available_skills=available_skills,
         explicit_skill_ids=valid_explicit_skill_ids,
         missing_explicit_skill_ids=missing_explicit_skill_ids,
         system_skill_id=SYSTEM_DOCUMENT_SKILL_ID,
-        max_implicit_skills=settings.skill_planner_max_implicit_skills,
-        top_k_candidates=settings.skill_planner_top_k_candidates,
-        min_confidence=settings.skill_planner_min_confidence,
     )
     return skill_plan
 

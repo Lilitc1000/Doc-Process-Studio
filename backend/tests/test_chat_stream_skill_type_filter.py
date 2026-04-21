@@ -35,7 +35,7 @@ def test_resolve_skill_plan_filters_non_chat_skill_types(monkeypatch) -> None:
         ],
     )
 
-    async def fake_plan_skill_activation(**kwargs):
+    async def fake_select_for_chat_skills(**kwargs):
         captured["available_skill_ids"] = [skill.id for skill in kwargs["available_skills"]]
         captured["explicit_skill_ids"] = kwargs["explicit_skill_ids"]
         captured["missing_explicit_skill_ids"] = kwargs["missing_explicit_skill_ids"]
@@ -54,8 +54,8 @@ def test_resolve_skill_plan_filters_non_chat_skill_types(monkeypatch) -> None:
 
     monkeypatch.setattr(
         chat_stream_module,
-        "plan_skill_activation",
-        fake_plan_skill_activation,
+        "select_for_chat_skills",
+        fake_select_for_chat_skills,
     )
 
     request = ChatStreamRequest(

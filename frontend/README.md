@@ -80,13 +80,13 @@ frontend/
 
 存储用户偏好和配置缓存，**页面刷新后自动恢复**：
 
-| 字段 | 说明 | 持久化 |
-|------|------|--------|
-| `selectedModel` | 当前选中的聊天模型 | ✅ |
-| `selectedRerankerModel` | 当前选中的重排序模型 | ✅ |
-| `activeWorkspaceId` | 当前工作区（`chat` / `incident-report`） | ✅ |
-| `availableModels` | 可用模型列表缓存 | ✅ |
-| `processingModes` | 可用 skill 列表缓存 | ✅ |
+| 字段                    | 说明                                     | 持久化 |
+| ----------------------- | ---------------------------------------- | ------ |
+| `selectedModel`         | 当前选中的聊天模型                       | ✅     |
+| `selectedRerankerModel` | 当前选中的重排序模型                     | ✅     |
+| `activeWorkspaceId`     | 当前工作区（`chat` / `incident-report`） | ✅     |
+| `availableModels`       | 可用模型列表缓存                         | ✅     |
+| `processingModes`       | 可用 skill 列表缓存                      | ✅     |
 
 持久化策略：所有字段均通过 `pinia-plugin-persistedstate` 写入 `localStorage`，页面打开时立即恢复上次选择，无需等待 API 返回即可渲染 UI。
 
@@ -166,7 +166,7 @@ ChatLayout.vue
   页面主控组件，负责页面编排与事件串联。状态从 Pinia Store 读取，业务逻辑由 composables 提供。
 - [ChatMessage.vue](/frontend/src/components/ChatMessage.vue)
   单条消息装配组件，负责拼装消息子组件与事件透传。
-- [components/message/*](/frontend/src/components/message)
+- [components/message/\*](/frontend/src/components/message)
   消息子组件集合：`MessageHeader`、`MessageFiles`、`MessageToolbar`、`MessageToolTimeline`、`MessageLiveToolStatus`。
 - [ChatInput.vue](/frontend/src/components/ChatInput.vue)
   底部输入区、文件选择、`$skill` 多选输入。
@@ -206,7 +206,7 @@ ChatLayout.vue
   模型与 skill 列表加载，负责 catalog 拉取与 system skill 过滤。通过 `useAppStore` 管理状态。
 - [useSkillMentionSelector.ts](/frontend/src/composables/useSkillMentionSelector.ts)
   统一的 `$skill` 触发、候选过滤、键盘导航、token 删除逻辑，供输入框与编辑态复用。
-- [composables/message/*](/frontend/src/composables/message)
+- [composables/message/\*](/frontend/src/composables/message)
   消息局部逻辑：`useMessageRender`（懒渲染/缓存）、`useMessageEdit`（编辑态自适应输入）。
 
 ### 4. 请求层
@@ -398,13 +398,22 @@ cacheScopeId + messageId + role + contentHash
 5. 自定义日期时间控件支持三种模式：`仅日期 / 仅时间 / 日期时间`，并带独立展开/收起图标。
 6. AI 正文支持双模式：
    快填模式：单输入框 + 一键生成（支持“正在生成中”弹窗与停止）。
-   完整模式：按段生成（事故简述、时间线、影响、根因、后续动作、时间线单条）。
+   完整模式：按段生成（事故简述、时间线、影响、根因、后续动作、时间线单条），同样显示“正在生成中”弹窗与停止。
 7. 时间线使用结构化控件编辑：时间线条目为时间输入；受影响日期摘要为日期 + 从/至时间。
-8. AI 回填后会同步更新时间线条目时间与内容（支持 `HH:MM`、单数字小时、AM/PM 等时间格式）。
-9. 附录使用富文本输入框，可输入文本并插入图片（不再使用独立附录图片区）。
-10. 预览区仅保留“预览附件”，不再暴露“生成附件（新增版本）”入口。
-11. 打开预览弹窗后，表单编辑会实时刷新预览内容（草稿预览链路）。
-12. 预览附件弹窗优先显示 PDF 风格预览（后端返回 `pdf_base64`），下载按钮始终下载“当前预览文档”。
+8. 完整模式中，时间线区域只保留“每条时间线的单独生成按钮”，不再保留时间线卡片右上角总生成按钮。
+9. 每条时间线中，时间控件与后续输入/按钮按垂直居中对齐。
+10. AI 回填后会同步更新时间线条目时间与内容（支持 `HH:MM`、单数字小时、AM/PM 等时间格式）。
+11. 附录使用富文本输入框，可输入文本并插入图片（不再使用独立附录图片区）。
+12. 预览区仅保留“预览附件”，不再暴露“生成附件（新增版本）”入口。
+13. 打开预览弹窗后，表单编辑会实时刷新预览内容（草稿预览链路）。
+14. 预览附件弹窗优先显示 PDF 风格预览（后端返回 `pdf_base64`），下载按钮始终下载“当前预览文档”。
+
+### incident-report skill 渐进披露对接约定
+
+- 前端在事故报告工作区触发正文生成时，始终视为显式调用 `incident-report` skill。
+- 生成请求仍通过 `api/incident-report.ts` 的 `quick-generate` / `section-generate` 接口发送，关键参数为 `section_id` 与可选 `timeline_index`。
+- 后端会基于 `section_id` 做“参考选择 -> 分段生成”两阶段处理，且参考选择与对话工作区共用统一选择服务（`services/skill/selector.py`，按场景模板分别走 `select_for_workspace_reference` / `select_for_chat_skills`，内部调用 planner），前端无需硬编码参考文档映射。
+- 新增 section 时，前端只需补 `section_id` 触发入口；参考文档选择规则由 skill 文档与后端选择器负责。
 
 ## 新功能开发建议
 

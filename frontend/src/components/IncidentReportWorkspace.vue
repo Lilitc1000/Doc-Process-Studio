@@ -14,7 +14,11 @@
           <li>AI 正文支持快填和完整模式联动生成。</li>
           <li>附件生成支持历史版本对比与下载。</li>
         </ul>
-        <button type="button" class="incident-primary-btn" @click="$emit('start')">
+        <button
+          type="button"
+          class="incident-primary-btn"
+          @click="$emit('start')"
+        >
           开始
         </button>
       </section>
@@ -22,7 +26,9 @@
       <section v-else key="form" class="incident-form-page">
         <header class="incident-form-header">
           <h2>{{ session.title }}</h2>
-          <span v-if="statusLabel" class="incident-status">{{ statusLabel }}</span>
+          <span v-if="statusLabel" class="incident-status">{{
+            statusLabel
+          }}</span>
         </header>
 
         <div class="incident-zone-grid">
@@ -31,7 +37,11 @@
               <h3>手工首页（Manual Cover）</h3>
               <p>对应参考文档第一页表格，优先人工确认。</p>
             </header>
-            <div class="zone-grid two-column">
+            <div class="zone-grid two-column manual-cover-grid">
+              <div class="manual-section-heading">
+                <h4>SECTION A - 故障记录（Fault Details）</h4>
+              </div>
+
               <label class="field-item">
                 <span>参考编号（Reference No.）</span>
                 <input
@@ -51,7 +61,9 @@
                   mode="date"
                   placeholder="选择日期"
                   :model-value="getTextAnswer(MANUAL_FAULT_DATE)"
-                  @update:model-value="setAnswerValue(MANUAL_FAULT_DATE, $event)"
+                  @update:model-value="
+                    setAnswerValue(MANUAL_FAULT_DATE, $event)
+                  "
                 />
               </label>
 
@@ -65,7 +77,9 @@
                   mode="time"
                   placeholder="选择时间"
                   :model-value="getTextAnswer(MANUAL_FAULT_TIME)"
-                  @update:model-value="setAnswerValue(MANUAL_FAULT_TIME, normalizeTimeOnly($event))"
+                  @update:model-value="
+                    setAnswerValue(MANUAL_FAULT_TIME, normalizeTimeOnly($event))
+                  "
                 />
               </label>
 
@@ -73,7 +87,9 @@
                 <span>报告人（Reporting Person）*</span>
                 <input
                   :value="getTextAnswer(MANUAL_REPORTING_PERSON)"
-                  :class="{ invalid: missingFieldSet.has(MANUAL_REPORTING_PERSON) }"
+                  :class="{
+                    invalid: missingFieldSet.has(MANUAL_REPORTING_PERSON),
+                  }"
                   @input="onTextInput(MANUAL_REPORTING_PERSON, $event)"
                 />
               </label>
@@ -113,12 +129,17 @@
                 />
               </label>
 
-              <label class="field-item full-width" :data-field="MANUAL_FAULT_SYMPTOM">
+              <label
+                class="field-item full-width"
+                :data-field="MANUAL_FAULT_SYMPTOM"
+              >
                 <span>故障现象详情（Details of Fault Symptom）*</span>
                 <textarea
                   rows="3"
                   :value="getTextAnswer(MANUAL_FAULT_SYMPTOM)"
-                  :class="{ invalid: missingFieldSet.has(MANUAL_FAULT_SYMPTOM) }"
+                  :class="{
+                    invalid: missingFieldSet.has(MANUAL_FAULT_SYMPTOM),
+                  }"
                   @input="onTextInput(MANUAL_FAULT_SYMPTOM, $event)"
                 ></textarea>
               </label>
@@ -128,7 +149,9 @@
                 <DateTimeField
                   mode="datetime"
                   :model-value="getTextAnswer(MANUAL_ARRIVAL_DATETIME)"
-                  @update:model-value="setAnswerValue(MANUAL_ARRIVAL_DATETIME, $event)"
+                  @update:model-value="
+                    setAnswerValue(MANUAL_ARRIVAL_DATETIME, $event)
+                  "
                 />
               </label>
 
@@ -137,7 +160,9 @@
                 <DateTimeField
                   mode="datetime"
                   :model-value="getTextAnswer(MANUAL_CLEARANCE_DATETIME)"
-                  @update:model-value="setAnswerValue(MANUAL_CLEARANCE_DATETIME, $event)"
+                  @update:model-value="
+                    setAnswerValue(MANUAL_CLEARANCE_DATETIME, $event)
+                  "
                 />
               </label>
 
@@ -165,23 +190,9 @@
                 />
               </label>
 
-              <label class="field-item">
-                <span>承包商人员（Contractor Staff）</span>
-                <input
-                  :value="getTextAnswer(MANUAL_CONTRACTOR_STAFF)"
-                  @input="onTextInput(MANUAL_CONTRACTOR_STAFF, $event)"
-                />
-              </label>
-
-              <label class="field-item">
-                <span>承包商日期（Contractor Date）</span>
-                <DateTimeField
-                  mode="date"
-                  placeholder="选择日期"
-                  :model-value="getTextAnswer(MANUAL_CONTRACTOR_DATE)"
-                  @update:model-value="setAnswerValue(MANUAL_CONTRACTOR_DATE, $event)"
-                />
-              </label>
+              <div class="manual-section-heading">
+                <h4>SECTION B - 维修与验证（Repair Works & Verification）</h4>
+              </div>
 
               <label class="field-item full-width">
                 <span>维修详情（Repair Details）</span>
@@ -193,19 +204,176 @@
               </label>
 
               <label class="field-item">
-                <span>状态（Status）</span>
+                <span>承包商人员（Contractor Staff）</span>
                 <input
-                  :value="getTextAnswer(MANUAL_STATUS)"
-                  @input="onTextInput(MANUAL_STATUS, $event)"
+                  :value="getTextAnswer(MANUAL_CONTRACTOR_STAFF)"
+                  @input="onTextInput(MANUAL_CONTRACTOR_STAFF, $event)"
+                />
+              </label>
+
+              <label class="field-item">
+                <span>承包商签名（Contractor Signature）</span>
+                <input
+                  :value="getTextAnswer(MANUAL_CONTRACTOR_SIGNATURE)"
+                  @input="onTextInput(MANUAL_CONTRACTOR_SIGNATURE, $event)"
+                />
+              </label>
+
+              <label class="field-item">
+                <span>承包商日期（Contractor Date）</span>
+                <DateTimeField
+                  mode="date"
+                  placeholder="选择日期"
+                  :model-value="getTextAnswer(MANUAL_CONTRACTOR_DATE)"
+                  @update:model-value="
+                    setAnswerValue(MANUAL_CONTRACTOR_DATE, $event)
+                  "
+                />
+              </label>
+
+              <div class="manual-section-heading">
+                <h4>SECTION C - 结案与签署（Closeout & Sign-off）</h4>
+              </div>
+
+              <label class="field-item">
+                <span>状态（Status）</span>
+                <div ref="statusDropdownRef" class="manual-dropdown">
+                  <button
+                    type="button"
+                    class="manual-dropdown-trigger"
+                    :class="{ open: statusDropdownOpen }"
+                    aria-haspopup="listbox"
+                    :aria-expanded="statusDropdownOpen"
+                    aria-label="状态（Status）"
+                    @click="toggleStatusDropdown"
+                    @keydown.enter.prevent="toggleStatusDropdown"
+                    @keydown.space.prevent="toggleStatusDropdown"
+                    @keydown.esc.prevent="closeManualDropdowns"
+                  >
+                    <span class="manual-dropdown-trigger-text">{{
+                      selectedStatusLabel
+                    }}</span>
+                    <span
+                      class="manual-dropdown-trigger-icon"
+                      aria-hidden="true"
+                    >
+                      <svg viewBox="0 0 16 16">
+                        <path
+                          d="M3.5 6.25L8 10.75L12.5 6.25"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
+                      </svg>
+                    </span>
+                  </button>
+                  <Transition name="dropdown">
+                    <div
+                      v-if="statusDropdownOpen"
+                      class="manual-dropdown-panel"
+                      role="listbox"
+                    >
+                      <button
+                        v-for="option in statusOptions"
+                        :key="option.value"
+                        type="button"
+                        class="manual-dropdown-option"
+                        :class="{
+                          active: option.value === selectedStatusOption,
+                        }"
+                        @click="selectStatusOption(option.value)"
+                      >
+                        <span>{{ option.label }}</span>
+                        <span
+                          v-if="option.value === selectedStatusOption"
+                          class="manual-dropdown-option-tag"
+                        >
+                          当前
+                        </span>
+                      </button>
+                    </div>
+                  </Transition>
+                </div>
+              </label>
+
+              <label
+                v-if="
+                  selectedStatusOption ===
+                  STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED
+                "
+                class="field-item"
+              >
+                <span>跟进单号（Follow-up Ref No.）</span>
+                <input
+                  :value="getTextAnswer(MANUAL_STATUS_REF_NO)"
+                  placeholder="例如：DAS2-FAULT-016"
+                  @input="onTextInput(MANUAL_STATUS_REF_NO, $event)"
                 />
               </label>
 
               <label class="field-item">
                 <span>严重级别（Severity）</span>
-                <input
-                  :value="getTextAnswer(MANUAL_SEVERITY)"
-                  @input="onTextInput(MANUAL_SEVERITY, $event)"
-                />
+                <div ref="severityDropdownRef" class="manual-dropdown">
+                  <button
+                    type="button"
+                    class="manual-dropdown-trigger"
+                    :class="{ open: severityDropdownOpen }"
+                    aria-haspopup="listbox"
+                    :aria-expanded="severityDropdownOpen"
+                    aria-label="严重级别（Severity）"
+                    @click="toggleSeverityDropdown"
+                    @keydown.enter.prevent="toggleSeverityDropdown"
+                    @keydown.space.prevent="toggleSeverityDropdown"
+                    @keydown.esc.prevent="closeManualDropdowns"
+                  >
+                    <span class="manual-dropdown-trigger-text">{{
+                      selectedSeverityLabel
+                    }}</span>
+                    <span
+                      class="manual-dropdown-trigger-icon"
+                      aria-hidden="true"
+                    >
+                      <svg viewBox="0 0 16 16">
+                        <path
+                          d="M3.5 6.25L8 10.75L12.5 6.25"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                        />
+                      </svg>
+                    </span>
+                  </button>
+                  <Transition name="dropdown">
+                    <div
+                      v-if="severityDropdownOpen"
+                      class="manual-dropdown-panel"
+                      role="listbox"
+                    >
+                      <button
+                        v-for="option in severityOptions"
+                        :key="option.value"
+                        type="button"
+                        class="manual-dropdown-option"
+                        :class="{
+                          active: option.value === selectedSeverityOption,
+                        }"
+                        @click="selectSeverityOption(option.value)"
+                      >
+                        <span>{{ option.label }}</span>
+                        <span
+                          v-if="option.value === selectedSeverityOption"
+                          class="manual-dropdown-option-tag"
+                        >
+                          当前
+                        </span>
+                      </button>
+                    </div>
+                  </Transition>
+                </div>
               </label>
 
               <label class="field-item">
@@ -217,12 +385,22 @@
               </label>
 
               <label class="field-item">
+                <span>业主代表签名（Employer Signature）</span>
+                <input
+                  :value="getTextAnswer(MANUAL_EMPLOYER_SIGNATURE)"
+                  @input="onTextInput(MANUAL_EMPLOYER_SIGNATURE, $event)"
+                />
+              </label>
+
+              <label class="field-item">
                 <span>结案日期（Closeout Date）</span>
                 <DateTimeField
                   mode="date"
                   placeholder="选择日期"
                   :model-value="getTextAnswer(MANUAL_CLOSEOUT_DATE)"
-                  @update:model-value="setAnswerValue(MANUAL_CLOSEOUT_DATE, $event)"
+                  @update:model-value="
+                    setAnswerValue(MANUAL_CLOSEOUT_DATE, $event)
+                  "
                 />
               </label>
 
@@ -274,7 +452,11 @@
                 ></textarea>
               </label>
               <div class="action-row">
-                <button type="button" class="incident-primary-btn" @click="$emit('quick-generate-body')">
+                <button
+                  type="button"
+                  class="incident-primary-btn"
+                  @click="$emit('quick-generate-body')"
+                >
                   一键生成正文
                 </button>
                 <button
@@ -293,7 +475,11 @@
                 <div class="section-header">
                   <h4>事故简述（Incident Summary）*</h4>
                   <div class="section-actions">
-                    <button type="button" class="incident-secondary-btn" @click="emitGenerateSection('description')">
+                    <button
+                      type="button"
+                      class="incident-secondary-btn"
+                      @click="emitGenerateSection('description')"
+                    >
                       生成
                     </button>
                     <button
@@ -317,19 +503,6 @@
               <div class="section-card" :data-field="BODY_TIMELINE">
                 <div class="section-header">
                   <h4>时间线（Timeline）*</h4>
-                  <div class="section-actions">
-                    <button type="button" class="incident-secondary-btn" @click="emitGenerateSection('timeline')">
-                      生成
-                    </button>
-                    <button
-                      v-if="sectionTraceMap.timeline"
-                      type="button"
-                      class="incident-secondary-btn"
-                      @click="$emit('open-trace', sectionTraceMap.timeline)"
-                    >
-                      链路
-                    </button>
-                  </div>
                 </div>
 
                 <div class="field-item full-width affected-date-editor">
@@ -339,7 +512,9 @@
                       mode="date"
                       placeholder="选择日期"
                       :model-value="affectedDateParts.date"
-                      @update:model-value="onAffectedDatePartChange('date', $event)"
+                      @update:model-value="
+                        onAffectedDatePartChange('date', $event)
+                      "
                     />
                     <div class="affected-time-pair">
                       <span class="affected-time-label">从</span>
@@ -347,7 +522,12 @@
                         mode="time"
                         placeholder="开始时间"
                         :model-value="affectedDateParts.from"
-                        @update:model-value="onAffectedDatePartChange('from', normalizeTimeOnly($event))"
+                        @update:model-value="
+                          onAffectedDatePartChange(
+                            'from',
+                            normalizeTimeOnly($event),
+                          )
+                        "
                       />
                     </div>
                     <div class="affected-time-pair">
@@ -356,7 +536,12 @@
                         mode="time"
                         placeholder="结束时间"
                         :model-value="affectedDateParts.to"
-                        @update:model-value="onAffectedDatePartChange('to', normalizeTimeOnly($event))"
+                        @update:model-value="
+                          onAffectedDatePartChange(
+                            'to',
+                            normalizeTimeOnly($event),
+                          )
+                        "
                       />
                     </div>
                   </div>
@@ -372,7 +557,13 @@
                       mode="time"
                       placeholder="时间"
                       :model-value="item.time"
-                      @update:model-value="onFullTimelineChange(index, 'time', normalizeTimeOnly($event))"
+                      @update:model-value="
+                        onFullTimelineChange(
+                          index,
+                          'time',
+                          normalizeTimeOnly($event),
+                        )
+                      "
                     />
                     <input
                       :value="item.event"
@@ -401,7 +592,12 @@
                         v-if="sectionTraceMap[`timeline_item_${index}`]"
                         type="button"
                         class="incident-secondary-btn"
-                        @click="$emit('open-trace', sectionTraceMap[`timeline_item_${index}`])"
+                        @click="
+                          $emit(
+                            'open-trace',
+                            sectionTraceMap[`timeline_item_${index}`],
+                          )
+                        "
                       >
                         链路
                       </button>
@@ -415,10 +611,17 @@
                     </div>
                   </div>
                 </div>
-                <button type="button" class="incident-secondary-btn" @click="addFullTimelineItem">
+                <button
+                  type="button"
+                  class="incident-secondary-btn"
+                  @click="addFullTimelineItem"
+                >
                   新增时间线
                 </button>
-                <p v-if="missingFieldSet.has(BODY_TIMELINE)" class="incident-error-text">
+                <p
+                  v-if="missingFieldSet.has(BODY_TIMELINE)"
+                  class="incident-error-text"
+                >
                   时间线至少需要一条。
                 </p>
               </div>
@@ -427,7 +630,11 @@
                 <div class="section-header">
                   <h4>影响范围 / 严重级别（Impact / Severity）*</h4>
                   <div class="section-actions">
-                    <button type="button" class="incident-secondary-btn" @click="emitGenerateSection('impact')">
+                    <button
+                      type="button"
+                      class="incident-secondary-btn"
+                      @click="emitGenerateSection('impact')"
+                    >
                       生成
                     </button>
                     <button
@@ -451,7 +658,9 @@
                 <label class="field-item" :data-field="BODY_IMPACT_SEVERITY">
                   <span>严重级别（Impact Severity）*</span>
                   <input
-                    :class="{ invalid: missingFieldSet.has(BODY_IMPACT_SEVERITY) }"
+                    :class="{
+                      invalid: missingFieldSet.has(BODY_IMPACT_SEVERITY),
+                    }"
                     :value="getTextAnswer(BODY_IMPACT_SEVERITY)"
                     @input="onTextInput(BODY_IMPACT_SEVERITY, $event)"
                   />
@@ -470,7 +679,11 @@
                 <div class="section-header">
                   <h4>根因分析（Root Cause）*</h4>
                   <div class="section-actions">
-                    <button type="button" class="incident-secondary-btn" @click="emitGenerateSection('root_cause')">
+                    <button
+                      type="button"
+                      class="incident-secondary-btn"
+                      @click="emitGenerateSection('root_cause')"
+                    >
                       生成
                     </button>
                     <button
@@ -505,7 +718,11 @@
                 <div class="section-header">
                   <h4>后续动作（Follow-Up Actions）*</h4>
                   <div class="section-actions">
-                    <button type="button" class="incident-secondary-btn" @click="emitGenerateSection('follow_up')">
+                    <button
+                      type="button"
+                      class="incident-secondary-btn"
+                      @click="emitGenerateSection('follow_up')"
+                    >
                       生成
                     </button>
                     <button
@@ -531,7 +748,9 @@
           <section class="incident-zone-card">
             <header class="zone-header">
               <h3>附录（Appendix）</h3>
-              <p>支持富文本输入，可直接插入图片，生成文档时会同步写入附录页。</p>
+              <p>
+                支持富文本输入，可直接插入图片，生成文档时会同步写入附录页。
+              </p>
             </header>
             <div class="zone-grid">
               <div class="field-item full-width">
@@ -617,7 +836,11 @@
           <div class="incident-modal preview-modal">
             <div class="preview-header">
               <h3>附件预览</h3>
-              <button type="button" class="incident-secondary-btn" @click="closePreviewDialog">
+              <button
+                type="button"
+                class="incident-secondary-btn"
+                @click="closePreviewDialog"
+              >
                 关闭
               </button>
             </div>
@@ -633,7 +856,12 @@
                 class="word-preview-pdf-frame"
                 :src="previewPdfSrc"
               ></iframe>
-              <div v-else-if="previewHtml" class="word-preview-html" v-html="previewHtml"></div>
+              <iframe
+                v-else-if="previewHtml"
+                class="word-preview-html-frame"
+                :srcdoc="previewHtmlSrcDoc"
+                sandbox="allow-same-origin"
+              ></iframe>
               <p v-else class="preview-placeholder">暂无可预览内容。</p>
             </div>
             <div class="preview-footer">
@@ -653,16 +881,26 @@
 
     <Teleport to="body">
       <Transition name="dialog-fade">
-        <div v-if="showQuickGenerationModal" class="incident-modal-mask">
+        <div v-if="showGenerationModal" class="incident-modal-mask">
           <div class="incident-modal quick-generation-modal">
             <div class="preview-header">
               <h3>正在生成中</h3>
             </div>
             <div class="preview-body">
-              <p>正在根据快填内容生成正文，请稍候。</p>
+              <div class="generation-thinking-row">
+                <span
+                  class="generation-thinking-spinner"
+                  aria-hidden="true"
+                ></span>
+                <p>{{ generationModalText }}</p>
+              </div>
             </div>
             <div class="preview-footer">
-              <button type="button" class="danger-mini-btn" @click="$emit('stop-generation')">
+              <button
+                type="button"
+                class="danger-mini-btn"
+                @click="$emit('stop-generation')"
+              >
                 停止
               </button>
             </div>
@@ -670,12 +908,18 @@
         </div>
       </Transition>
     </Teleport>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 import DateTimeField from './DateTimeField.vue';
 import type {
   IncidentFormAnswer,
@@ -717,12 +961,53 @@ const MANUAL_FAULT_CAUSE = 'manual_fault_cause';
 const MANUAL_MATERIALS_USED = 'manual_materials_used';
 const MANUAL_REPAIR_DETAILS = 'manual_repair_details';
 const MANUAL_CONTRACTOR_STAFF = 'manual_contractor_staff';
+const MANUAL_CONTRACTOR_SIGNATURE = 'manual_contractor_signature';
 const MANUAL_CONTRACTOR_DATE = 'manual_contractor_date';
 const MANUAL_STATUS = 'manual_status';
+const MANUAL_STATUS_REF_NO = 'manual_status_ref_no';
 const MANUAL_SEVERITY = 'manual_severity';
 const MANUAL_COMMENTS = 'manual_comments';
 const MANUAL_EMPLOYER_REP = 'manual_employer_rep';
+const MANUAL_EMPLOYER_SIGNATURE = 'manual_employer_signature';
 const MANUAL_CLOSEOUT_DATE = 'manual_closeout_date';
+
+const STATUS_OPTION_FAULT_CLEARED = 'fault_cleared';
+const STATUS_OPTION_TEMPORARILY_FIXED = 'temporarily_fixed';
+const STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED = 'follow_up_action_required';
+
+const SEVERITY_OPTION_NOT_APPLICABLE = 'not_applicable';
+const SEVERITY_OPTION_MINOR = 'minor';
+const SEVERITY_OPTION_MAJOR = 'major';
+
+const statusOptions = [
+  {
+    value: STATUS_OPTION_FAULT_CLEARED,
+    label: '已清除（Fault has been Cleared）',
+  },
+  {
+    value: STATUS_OPTION_TEMPORARILY_FIXED,
+    label: '临时修复（Temporarily Fixed）',
+  },
+  {
+    value: STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED,
+    label: '需要后续动作（Follow up action required）',
+  },
+] as const;
+
+const severityOptions = [
+  {
+    value: SEVERITY_OPTION_NOT_APPLICABLE,
+    label: '不适用（Not Applicable）',
+  },
+  {
+    value: SEVERITY_OPTION_MINOR,
+    label: '轻微（Minor）',
+  },
+  {
+    value: SEVERITY_OPTION_MAJOR,
+    label: '重大（Major）',
+  },
+] as const;
 
 const QUICK_NARRATIVE = 'quick_narrative';
 
@@ -780,7 +1065,10 @@ const emit = defineEmits<{
   (e: 'start'): void;
   (e: 'update-answers', answers: Record<string, IncidentFormAnswer>): void;
   (e: 'quick-generate-body'): void;
-  (e: 'generate-section', payload: { sectionId: string; timelineIndex?: number }): void;
+  (
+    e: 'generate-section',
+    payload: { sectionId: string; timelineIndex?: number },
+  ): void;
   (e: 'download-preview-docx'): void;
   (e: 'open-trace', traceId: string): void;
   (e: 'stop-generation'): void;
@@ -793,11 +1081,38 @@ const bodyMode = ref<'quick' | 'full'>('quick');
 const previewVisible = ref(false);
 const appendixEditorRef = ref<HTMLDivElement | null>(null);
 const appendixImageInputRef = ref<HTMLInputElement | null>(null);
+const statusDropdownRef = ref<HTMLDivElement | null>(null);
+const severityDropdownRef = ref<HTMLDivElement | null>(null);
+const statusDropdownOpen = ref(false);
+const severityDropdownOpen = ref(false);
 let syncingAnswersFromSession = false;
 const missingFieldIds = ref<string[]>([]);
 const previewValidationError = ref('');
 
 const previewHtml = computed(() => props.previewHtml ?? '');
+const previewHtmlSrcDoc = computed(() => {
+  const rawHtml = previewHtml.value.trim();
+  if (!rawHtml) {
+    return '';
+  }
+  const sanitizedHtml = rawHtml
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+=(['"]).*?\1/gi, '');
+  return [
+    '<!doctype html>',
+    '<html><head><meta charset="utf-8" />',
+    '<style>',
+    'html, body { margin: 0; padding: 0; background: #fff; }',
+    'body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; line-height: 1.5; color: #0f172a; padding: 1.8rem; }',
+    'p { margin: 0.5rem 0; }',
+    'table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }',
+    'td, th { border: 1px solid #dbe3ee; padding: 0.4rem 0.45rem; vertical-align: top; }',
+    'img { max-width: 100%; height: auto; border-radius: 8px; }',
+    '</style></head><body>',
+    sanitizedHtml,
+    '</body></html>',
+  ].join('');
+});
 const previewPdfSrc = computed(() => {
   const base64 = (props.previewPdfBase64 ?? '').trim();
   if (!base64) {
@@ -879,22 +1194,30 @@ const normalizeTimeOnly = (value: string) => {
     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   }
 
-  const halfPattern = /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:点|时|h|H)\s*半\s*(?<ampm>am|pm)?/i;
+  const halfPattern =
+    /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:点|时|h|H)\s*半\s*(?<ampm>am|pm)?/i;
   const halfMatched = normalized.match(halfPattern);
   if (halfMatched?.groups) {
-    const hour = applyAmpm(Number(halfMatched.groups.hour), halfMatched.groups.ampm ?? '');
+    const hour = applyAmpm(
+      Number(halfMatched.groups.hour),
+      halfMatched.groups.ampm ?? '',
+    );
     if (Number.isNaN(hour) || hour < 0 || hour > 23) {
       return '';
     }
     return `${String(hour).padStart(2, '0')}:30`;
   }
 
-  const hourOnlyPattern = /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:点|时|h|H)\s*(?<ampm>am|pm)?/i;
+  const hourOnlyPattern =
+    /(?:^|[^\d])(?<hour>\d{1,2})\s*(?:点|时|h|H)\s*(?<ampm>am|pm)?/i;
   const hourOnlyMatched = normalized.match(hourOnlyPattern);
   if (!hourOnlyMatched?.groups) {
     return '';
   }
-  const hour = applyAmpm(Number(hourOnlyMatched.groups.hour), hourOnlyMatched.groups.ampm ?? '');
+  const hour = applyAmpm(
+    Number(hourOnlyMatched.groups.hour),
+    hourOnlyMatched.groups.ampm ?? '',
+  );
   if (Number.isNaN(hour) || hour < 0 || hour > 23) {
     return '';
   }
@@ -1016,6 +1339,69 @@ const getTextAnswer = (fieldId: string) => {
   return typeof value === 'string' ? value : '';
 };
 
+const normalizeStatusOption = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return STATUS_OPTION_FAULT_CLEARED;
+  }
+  if (
+    normalized === STATUS_OPTION_FAULT_CLEARED ||
+    normalized === STATUS_OPTION_TEMPORARILY_FIXED ||
+    normalized === STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED
+  ) {
+    return normalized;
+  }
+  if (
+    normalized.includes('follow') ||
+    normalized.includes('后续') ||
+    normalized.includes('跟进')
+  ) {
+    return STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED;
+  }
+  if (normalized.includes('temporar') || normalized.includes('临时')) {
+    return STATUS_OPTION_TEMPORARILY_FIXED;
+  }
+  if (
+    normalized.includes('clear') ||
+    normalized.includes('cleared') ||
+    normalized.includes('已清除')
+  ) {
+    return STATUS_OPTION_FAULT_CLEARED;
+  }
+  return STATUS_OPTION_FAULT_CLEARED;
+};
+
+const normalizeSeverityOption = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return SEVERITY_OPTION_NOT_APPLICABLE;
+  }
+  if (
+    normalized === SEVERITY_OPTION_NOT_APPLICABLE ||
+    normalized === SEVERITY_OPTION_MINOR ||
+    normalized === SEVERITY_OPTION_MAJOR
+  ) {
+    return normalized;
+  }
+  if (
+    normalized.includes('major') ||
+    normalized.includes('high') ||
+    normalized.includes('critical') ||
+    normalized.includes('严重') ||
+    normalized.includes('重大')
+  ) {
+    return SEVERITY_OPTION_MAJOR;
+  }
+  if (
+    normalized.includes('minor') ||
+    normalized.includes('low') ||
+    normalized.includes('轻微')
+  ) {
+    return SEVERITY_OPTION_MINOR;
+  }
+  return SEVERITY_OPTION_NOT_APPLICABLE;
+};
+
 const ensureAnswer = (fieldId: string) => {
   if (!localAnswers.value[fieldId]) {
     localAnswers.value[fieldId] = {
@@ -1075,7 +1461,66 @@ const onTextInput = (fieldId: string, event: Event) => {
   setAnswerValue(fieldId, target.value);
 };
 
-const onAffectedDatePartChange = (key: keyof AffectedDateParts, value: string) => {
+const closeManualDropdowns = () => {
+  statusDropdownOpen.value = false;
+  severityDropdownOpen.value = false;
+};
+
+const selectStatusOption = (value: string) => {
+  const nextValue = normalizeStatusOption(value);
+  setAnswerValue(MANUAL_STATUS, nextValue);
+  if (nextValue !== STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED) {
+    setAnswerValue(MANUAL_STATUS_REF_NO, '');
+  }
+  statusDropdownOpen.value = false;
+};
+
+const selectSeverityOption = (value: string) => {
+  setAnswerValue(MANUAL_SEVERITY, normalizeSeverityOption(value));
+  severityDropdownOpen.value = false;
+};
+
+const toggleStatusDropdown = () => {
+  statusDropdownOpen.value = !statusDropdownOpen.value;
+  if (statusDropdownOpen.value) {
+    severityDropdownOpen.value = false;
+  }
+};
+
+const toggleSeverityDropdown = () => {
+  severityDropdownOpen.value = !severityDropdownOpen.value;
+  if (severityDropdownOpen.value) {
+    statusDropdownOpen.value = false;
+  }
+};
+
+const onManualDropdownPointerDown = (event: PointerEvent) => {
+  const target = event.target as Node | null;
+  if (!target) {
+    return;
+  }
+
+  if (
+    statusDropdownOpen.value &&
+    statusDropdownRef.value &&
+    !statusDropdownRef.value.contains(target)
+  ) {
+    statusDropdownOpen.value = false;
+  }
+
+  if (
+    severityDropdownOpen.value &&
+    severityDropdownRef.value &&
+    !severityDropdownRef.value.contains(target)
+  ) {
+    severityDropdownOpen.value = false;
+  }
+};
+
+const onAffectedDatePartChange = (
+  key: keyof AffectedDateParts,
+  value: string,
+) => {
   const parts = parseAffectedDateSummary(getTextAnswer(BODY_AFFECTED_DATE));
   const nextParts: AffectedDateParts = {
     ...parts,
@@ -1101,13 +1546,16 @@ const hasValidTimelineItem = () => {
     const time = normalizeTimeOnly(
       typeof candidate.time === 'string' ? candidate.time : '',
     );
-    const event = typeof candidate.event === 'string' ? candidate.event.trim() : '';
+    const event =
+      typeof candidate.event === 'string' ? candidate.event.trim() : '';
     return time.length > 0 && event.length > 0;
   });
 };
 
 const collectMissingRequiredFields = () => {
-  const missing = PREVIEW_REQUIRED_FIELDS.filter((fieldId) => !hasValue(fieldId));
+  const missing: string[] = PREVIEW_REQUIRED_FIELDS.filter(
+    (fieldId) => !hasValue(fieldId),
+  );
   if (!hasValidTimelineItem()) {
     missing.push(BODY_TIMELINE);
   }
@@ -1115,7 +1563,9 @@ const collectMissingRequiredFields = () => {
 };
 
 const focusAndScrollToField = (fieldId: string) => {
-  const target = document.querySelector(`[data-field="${fieldId}"]`) as HTMLElement | null;
+  const target = document.querySelector(
+    `[data-field="${fieldId}"]`,
+  ) as HTMLElement | null;
   if (!target) {
     if (fieldId.startsWith('body_') && bodyMode.value !== 'full') {
       bodyMode.value = 'full';
@@ -1182,7 +1632,10 @@ const syncAppendixEditorFromAnswer = () => {
       ? raw
       : escapeHtml(raw).replace(/\n/g, '<br>')
     : '';
-  if (normalizeHtmlForCompare(editor.innerHTML) === normalizeHtmlForCompare(nextHtml)) {
+  if (
+    normalizeHtmlForCompare(editor.innerHTML) ===
+    normalizeHtmlForCompare(nextHtml)
+  ) {
     return;
   }
   editor.innerHTML = nextHtml;
@@ -1198,7 +1651,11 @@ const migrateLegacyAppendixImages = () => {
     setAnswerValue(APPENDIX_IMAGES, []);
     return;
   }
-  const baseHtml = existing ? (isProbablyHtml(existing) ? existing : toRichHtml(existing)) : '';
+  const baseHtml = existing
+    ? isProbablyHtml(existing)
+      ? existing
+      : toRichHtml(existing)
+    : '';
   const imageHtml = images
     .map(
       (image) =>
@@ -1240,6 +1697,7 @@ watch(appendixEditorRef, (editor) => {
 watch(
   () => props.session?.id,
   () => {
+    closeManualDropdowns();
     const editor = appendixEditorRef.value;
     if (editor && document.activeElement !== editor) {
       editor.innerHTML = '';
@@ -1263,21 +1721,54 @@ const statusLabel = computed(() => {
   return '';
 });
 
-const showQuickGenerationModal = computed(() => {
+const showGenerationModal = computed(() => {
   return (
     props.isGenerating &&
     props.generationState === 'generating' &&
-    props.generationTask === 'quick-body'
+    (props.generationTask === 'quick-body' ||
+      props.generationTask === 'section')
   );
 });
 
+const generationModalText = computed(() => {
+  if (props.generationTask === 'quick-body') {
+    return '正在根据快填模式参考生成完整正文，请稍候。';
+  }
+  if (props.generationTask === 'section') {
+    return '正在根据当前分段参考生成内容，请稍候。';
+  }
+  return '正在生成内容，请稍候。';
+});
+
 const sectionTraceMap = computed<Record<string, string>>(() => {
-  return (props.session?.snapshot.section_trace_ids ?? {}) as Record<string, string>;
+  return (props.session?.snapshot.section_trace_ids ?? {}) as Record<
+    string,
+    string
+  >;
 });
 
 const canDownloadPreviewDocx = computed(() => {
   return Boolean((props.previewDocxBase64 ?? '').trim());
 });
+
+const selectedStatusOption = computed(() =>
+  normalizeStatusOption(getTextAnswer(MANUAL_STATUS)),
+);
+const selectedStatusLabel = computed(
+  () =>
+    statusOptions.find((option) => option.value === selectedStatusOption.value)
+      ?.label ?? statusOptions[0].label,
+);
+
+const selectedSeverityOption = computed(() =>
+  normalizeSeverityOption(getTextAnswer(MANUAL_SEVERITY)),
+);
+const selectedSeverityLabel = computed(
+  () =>
+    severityOptions.find(
+      (option) => option.value === selectedSeverityOption.value,
+    )?.label ?? severityOptions[0].label,
+);
 
 const affectedDateParts = computed(() => {
   return parseAffectedDateSummary(getTextAnswer(BODY_AFFECTED_DATE));
@@ -1308,7 +1799,8 @@ const parseTimeline = (fieldId: string): TimelineItem[] => {
       event: typeof candidate.event === 'string' ? candidate.event : '',
       resolution:
         typeof candidate.resolution === 'string' ? candidate.resolution : '',
-      evidence: typeof candidate.evidence === 'string' ? candidate.evidence : '',
+      evidence:
+        typeof candidate.evidence === 'string' ? candidate.evidence : '',
     };
   });
 };
@@ -1317,11 +1809,11 @@ const fullTimeline = computed(() => parseTimeline(BODY_TIMELINE));
 
 const setTimeline = (fieldId: string, timeline: TimelineItem[]) => {
   const normalizedTimeline = timeline.map((item) => ({
-      time: normalizeTimeOnly(item.time),
-      event: item.event,
-      resolution: item.resolution,
-      evidence: item.evidence,
-    }));
+    time: normalizeTimeOnly(item.time),
+    event: item.event,
+    resolution: item.resolution,
+    evidence: item.evidence,
+  }));
   setAnswerValue(fieldId, normalizedTimeline);
   if (fieldId === BODY_TIMELINE) {
     syncAffectedDateSummaryFromTimeline(normalizedTimeline);
@@ -1338,7 +1830,9 @@ const buildEmptyTimelineItem = (time = ''): TimelineItem => ({
 const addFullTimelineItem = () => {
   const previousTime =
     fullTimeline.value.length > 0
-      ? normalizeTimeOnly(fullTimeline.value[fullTimeline.value.length - 1]?.time ?? '')
+      ? normalizeTimeOnly(
+          fullTimeline.value[fullTimeline.value.length - 1]?.time ?? '',
+        )
       : '';
   const next = [...fullTimeline.value, buildEmptyTimelineItem(previousTime)];
   setTimeline(BODY_TIMELINE, next);
@@ -1546,7 +2040,17 @@ watch(
   { deep: true },
 );
 
+onMounted(() => {
+  document.addEventListener('pointerdown', onManualDropdownPointerDown, true);
+});
+
 onBeforeUnmount(() => {
+  document.removeEventListener(
+    'pointerdown',
+    onManualDropdownPointerDown,
+    true,
+  );
+  closeManualDropdowns();
   emit('cancel-preview');
   if (previewRefreshTimer !== null) {
     window.clearTimeout(previewRefreshTimer);

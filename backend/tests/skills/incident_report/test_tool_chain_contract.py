@@ -119,8 +119,12 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
     assert _read_cell(page_one_table, 0, 1) != ""  # Reference No.
     assert _read_cell(page_one_table, 4, 1) != ""  # Site ID
     assert _read_cell(page_one_table, 5, 1) != ""  # Location of Fault
-    assert _read_cell(page_one_table, 6, 0) != ""  # Details of Fault Symptom
+    assert _read_cell(page_one_table, 6, 1) != ""  # Details of Fault Symptom 内容
     assert _read_cell(page_one_table, 16, 1) != ""  # Status
+    assert "Details of Fault" in _read_cell(page_one_table, 6, 0)
+    assert "Symptom:" in _read_cell(page_one_table, 6, 0)
+    assert "Details of repair works" in _read_cell(page_one_table, 11, 0)
+    assert "Ref No." in _read_cell(page_one_table, 16, 1)
 
     # 正文段落应写入核心章节内容。
     assert _find_paragraph_after_heading(document, "Description of the Incident:") != ""

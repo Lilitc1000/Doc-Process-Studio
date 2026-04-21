@@ -54,9 +54,7 @@ export const useIncidentGeneration = (
   let previewAbortController: AbortController | null = null;
   let previewRequestSeq = 0;
 
-  const startGeneration = (
-    task: 'quick-body' | 'section',
-  ): AbortController => {
+  const startGeneration = (task: 'quick-body' | 'section'): AbortController => {
     generationAbortController?.abort();
     const controller = new AbortController();
     generationAbortController = controller;
@@ -132,29 +130,46 @@ export const useIncidentGeneration = (
       return null;
     }
     await options.flushSaveIncidentSnapshot();
-    const response = await generateIncidentBodySection(
-      incidentStore.activeIncidentSessionId,
-      {
-        model,
-        reranker_model: payload?.reranker_model,
-        section_id: sectionId,
-        timeline_index: payload?.timeline_index,
-      },
-    );
-    incidentStore.applyIncidentDetail({
-      ...response.session,
-      snapshot: response.snapshot,
-    });
-    return response;
+    const controller = startGeneration('section');
+    try {
+      const response = await generateIncidentBodySection(
+        incidentStore.activeIncidentSessionId,
+        {
+          model,
+          reranker_model: payload?.reranker_model,
+          section_id: sectionId,
+          timeline_index: payload?.timeline_index,
+        },
+        {
+          signal: controller.signal,
+        },
+      );
+      incidentStore.applyIncidentDetail({
+        ...response.session,
+        snapshot: response.snapshot,
+      });
+      finishGeneration('section', 'idle');
+      return response;
+    } catch (error) {
+      if (isRequestCanceled(error)) {
+        finishGeneration('section', 'idle');
+        incidentStore.incidentErrorMessage = '';
+        return null;
+      }
+      finishGeneration('section', 'idle');
+      throw error;
+    } finally {
+      if (generationAbortController === controller) {
+        generationAbortController = null;
+      }
+    }
   };
 
-  const loadIncidentPreview = async (
-    payload?: {
-      version?: number;
-      model?: string;
-      reranker_model?: string;
-    },
-  ) => {
+  const loadIncidentPreview = async (payload?: {
+    version?: number;
+    model?: string;
+    reranker_model?: string;
+  }) => {
     if (
       !incidentStore.activeIncidentSessionId ||
       !incidentStore.activeIncidentSession
@@ -210,12 +225,11 @@ export const useIncidentGeneration = (
         error instanceof Error ? error.message : '加载预览失败';
       throw error;
     } finally {
-      if (requestSeq !== previewRequestSeq) {
-        return null;
-      }
-      incidentStore.incidentPreviewLoading = false;
-      if (previewAbortController === controller) {
-        previewAbortController = null;
+      if (requestSeq === previewRequestSeq) {
+        incidentStore.incidentPreviewLoading = false;
+        if (previewAbortController === controller) {
+          previewAbortController = null;
+        }
       }
     }
   };
@@ -242,7 +256,8 @@ export const useIncidentGeneration = (
       throw new Error('当前预览没有可下载的文档内容。');
     }
     const fileName =
-      incidentStore.incidentPreviewDocxFileName.trim() || 'incident-report.docx';
+      incidentStore.incidentPreviewDocxFileName.trim() ||
+      'incident-report.docx';
     const docxBlob = decodeBase64ToBlob(
       docxBase64,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
