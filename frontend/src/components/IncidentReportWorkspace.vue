@@ -23,7 +23,11 @@
         </button>
       </section>
 
-      <section v-else key="form" class="incident-form-page">
+      <section
+        v-else
+        :key="`form-${session?.id ?? 'unknown'}`"
+        class="incident-form-page"
+      >
         <header class="incident-form-header">
           <h2>{{ session.title }}</h2>
           <span v-if="statusLabel" class="incident-status">{{

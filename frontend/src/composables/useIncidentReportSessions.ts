@@ -34,8 +34,8 @@ export const useIncidentReportSessions = () => {
       incidentStore.incidentSessionSummaries = [...sessions].sort(
         (left, right) => {
           return (
-            new Date(right.updated_at).getTime() -
-            new Date(left.updated_at).getTime()
+            new Date(right.created_at).getTime() -
+            new Date(left.created_at).getTime()
           );
         },
       );

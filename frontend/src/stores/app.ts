@@ -9,17 +9,19 @@ const DEFAULT_MODELS = [
   'deepseek-v3',
 ];
 
+export type PageId = 'home' | 'chat' | 'incident-report' | 'settings';
+
 export const useAppStore = defineStore(
   'app',
   () => {
     const selectedModel = ref(DEFAULT_MODELS[0]);
     const selectedRerankerModel = ref(DEFAULT_MODELS[0]);
-    const activeWorkspaceId = ref<'chat' | 'incident-report'>('chat');
+    const activePageId = ref<PageId>('home');
     const availableModels = ref<string[]>([...DEFAULT_MODELS]);
     const processingModes = ref<SkillOption[]>([]);
 
     return {
-      activeWorkspaceId,
+      activePageId,
       availableModels,
       processingModes,
       selectedModel,
@@ -31,7 +33,7 @@ export const useAppStore = defineStore(
       pick: [
         'selectedModel',
         'selectedRerankerModel',
-        'activeWorkspaceId',
+        'activePageId',
         'availableModels',
         'processingModes',
       ],

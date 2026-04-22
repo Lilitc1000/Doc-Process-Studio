@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import ChatLayout from '../src/components/ChatLayout.vue';
+import ChatPage from '../src/pages/ChatPage.vue';
 
 const streamChatReplyMock = vi.hoisted(() => vi.fn());
 const fetchAgentTraceReplayMock = vi.hoisted(() => vi.fn());
@@ -9,8 +9,6 @@ const fetchAvailableModelsMock = vi.hoisted(() => vi.fn());
 const fetchAvailableSkillsMock = vi.hoisted(() => vi.fn());
 const fetchSessionSummariesMock = vi.hoisted(() => vi.fn());
 const saveSessionMock = vi.hoisted(() => vi.fn());
-const fetchIncidentFormSchemaMock = vi.hoisted(() => vi.fn());
-const fetchIncidentSessionSummariesMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../src/api/chat', () => ({
   streamChatReply: streamChatReplyMock,
@@ -39,8 +37,8 @@ vi.mock('../src/api/sessions', () => ({
 }));
 
 vi.mock('../src/api/incident-report', () => ({
-  fetchIncidentFormSchema: fetchIncidentFormSchemaMock,
-  fetchIncidentSessionSummaries: fetchIncidentSessionSummariesMock,
+  fetchIncidentFormSchema: vi.fn(),
+  fetchIncidentSessionSummaries: vi.fn(),
   createIncidentSession: vi.fn(),
   fetchIncidentSessionDetail: vi.fn(),
   saveIncidentSessionSnapshot: vi.fn(),
@@ -60,11 +58,6 @@ describe('chat trace flow', () => {
     fetchAvailableModelsMock.mockResolvedValue(['qwen3-coder-next:latest']);
     fetchAvailableSkillsMock.mockResolvedValue({ skills: [] });
     fetchSessionSummariesMock.mockResolvedValue([]);
-    fetchIncidentFormSchemaMock.mockResolvedValue({
-      introMessage: '事故报告向导',
-      steps: [],
-    });
-    fetchIncidentSessionSummariesMock.mockResolvedValue([]);
     saveSessionMock.mockResolvedValue({
       id: 'conversation-1',
       title: '测试会话',
@@ -105,7 +98,7 @@ describe('chat trace flow', () => {
       },
     );
 
-    const wrapper = mount(ChatLayout, {
+    const wrapper = mount(ChatPage, {
       attachTo: document.body,
     });
     await flushPromises();

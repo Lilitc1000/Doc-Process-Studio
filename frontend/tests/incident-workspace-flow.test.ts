@@ -1,12 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import ChatLayout from '../src/components/ChatLayout.vue';
+import IncidentReportPage from '../src/pages/IncidentReportPage.vue';
 
-const streamChatReplyMock = vi.hoisted(() => vi.fn());
 const fetchAvailableModelsMock = vi.hoisted(() => vi.fn());
-const fetchAvailableSkillsMock = vi.hoisted(() => vi.fn());
-const fetchSessionSummariesMock = vi.hoisted(() => vi.fn());
-const saveSessionMock = vi.hoisted(() => vi.fn());
 const fetchIncidentFormSchemaMock = vi.hoisted(() => vi.fn());
 const fetchIncidentSessionSummariesMock = vi.hoisted(() => vi.fn());
 const createIncidentSessionMock = vi.hoisted(() => vi.fn());
@@ -16,7 +12,7 @@ const generateIncidentBodySectionMock = vi.hoisted(() => vi.fn());
 const previewIncidentAttachmentMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../src/api/chat', () => ({
-  streamChatReply: streamChatReplyMock,
+  streamChatReply: vi.fn(),
 }));
 
 vi.mock('../src/api/attachments', () => ({
@@ -25,15 +21,15 @@ vi.mock('../src/api/attachments', () => ({
 
 vi.mock('../src/api/catalog', () => ({
   fetchAvailableModels: fetchAvailableModelsMock,
-  fetchAvailableSkills: fetchAvailableSkillsMock,
+  fetchAvailableSkills: vi.fn(),
 }));
 
 vi.mock('../src/api/sessions', () => ({
-  fetchSessionSummaries: fetchSessionSummariesMock,
+  fetchSessionSummaries: vi.fn(),
   fetchSessionDetail: vi.fn(),
   renameSession: vi.fn(),
   removeSession: vi.fn(),
-  saveSession: saveSessionMock,
+  saveSession: vi.fn(),
 }));
 
 vi.mock('../src/api/incident-report', () => ({
@@ -100,8 +96,6 @@ const buildBaseSnapshot = () => ({
 describe('incident workspace flow', () => {
   it('支持快填生成正文并触发实时预览', async () => {
     fetchAvailableModelsMock.mockResolvedValue(['qwen3-coder-next:latest']);
-    fetchAvailableSkillsMock.mockResolvedValue({ skills: [] });
-    fetchSessionSummariesMock.mockResolvedValue([]);
     fetchIncidentSessionSummariesMock.mockResolvedValue([]);
     fetchIncidentFormSchemaMock.mockResolvedValue({
       intro_message: '欢迎来到事故报告向导',
@@ -156,14 +150,7 @@ describe('incident workspace flow', () => {
       warnings: [],
     });
 
-    const wrapper = mount(ChatLayout);
-    await flushPromises();
-
-    const incidentTab = wrapper
-      .findAll('.workspace-item')
-      .find((node) => node.text() === '事故报告');
-    expect(incidentTab).toBeTruthy();
-    await incidentTab!.trigger('click');
+    const wrapper = mount(IncidentReportPage);
     await flushPromises();
 
     const startButton = wrapper.find('.incident-primary-btn');

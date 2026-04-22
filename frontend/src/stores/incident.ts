@@ -58,17 +58,20 @@ export const useIncidentStore = defineStore('incident', () => {
   });
 
   const mergeSummary = (summary: IncidentSessionSummary) => {
-    const next = incidentSessionSummaries.value.filter((item) => {
-      return item.id !== summary.id;
-    });
-    next.unshift(summary);
-    next.sort((left, right) => {
-      return (
-        new Date(right.updated_at).getTime() -
-        new Date(left.updated_at).getTime()
-      );
-    });
-    incidentSessionSummaries.value = next;
+    const index = incidentSessionSummaries.value.findIndex(
+      (item) => item.id === summary.id,
+    );
+    if (index >= 0) {
+      incidentSessionSummaries.value[index] = summary;
+    } else {
+      incidentSessionSummaries.value.push(summary);
+      incidentSessionSummaries.value.sort((left, right) => {
+        return (
+          new Date(right.created_at).getTime() -
+          new Date(left.created_at).getTime()
+        );
+      });
+    }
   };
 
   const applyIncidentDetail = (detail: IncidentSessionDetail) => {

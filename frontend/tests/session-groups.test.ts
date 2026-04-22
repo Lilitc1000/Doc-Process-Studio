@@ -21,6 +21,7 @@ describe('session groups', () => {
           selected_model: 'qwen3:8b',
         },
       ],
+      undefined,
       now,
     );
 

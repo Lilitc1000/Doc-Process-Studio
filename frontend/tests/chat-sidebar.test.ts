@@ -6,9 +6,6 @@ describe('ChatSidebar', () => {
   it('渲染会话分组并在点击时抛出加载事件', async () => {
     const wrapper = mount(ChatSidebar, {
       props: {
-        models: ['qwen3:8b'],
-        selectedModel: 'qwen3:8b',
-        selectedRerankerModel: 'qwen3:8b',
         sessions: [
           {
             id: 'session-recent',
@@ -26,11 +23,6 @@ describe('ChatSidebar', () => {
           },
         ],
         activeSessionId: 'session-recent',
-        workspaces: [
-          { id: 'chat', label: '对话' },
-          { id: 'incident-report', label: '事故报告' },
-        ],
-        activeWorkspaceId: 'chat',
         isLocked: false,
       },
     });

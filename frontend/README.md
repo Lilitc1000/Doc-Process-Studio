@@ -46,21 +46,23 @@ npm run test
 frontend/
   src/
     api/            # 所有 HTTP 请求封装
-    components/     # 页面组件与 UI 组件
+    components/     # UI 组件（不含页面级组件）
     composables/    # 可复用状态逻辑
+    pages/          # 页面级组件（每个页面对应一个 .vue）
     stores/         # Pinia 全局状态管理
     styles/         # 全局样式与组件样式
     types/          # 跨组件共享类型
     utils/          # 纯函数、渲染工具、格式化工具
     env.d.ts        # Vue / CSS 模块声明
     main.ts         # 应用入口
-    App.vue         # 根组件
+    App.vue         # 根组件（页面路由与过渡动画）
   tests/            # Vitest 测试
 ```
 
 后续新增代码时，优先遵守下面这几个边界：
 
-- `components/` 放界面和交互，不要把大量 API 请求和复杂数据处理继续塞回组件。
+- `components/` 放 UI 组件（不含页面级组件），不要把大量 API 请求和复杂数据处理继续塞回组件。
+- `pages/` 放页面级组件，每个页面对应一个 `.vue` 文件，由 `App.vue` 根据 `activePageId` 切换显示。
 - `api/` 只负责请求与响应映射，不负责页面状态。
 - `types/` 只放跨文件共享的类型；组件内部临时类型不必硬抽。
 - `utils/` 放无状态纯函数，避免依赖 Vue 生命周期。
@@ -80,13 +82,13 @@ frontend/
 
 存储用户偏好和配置缓存，**页面刷新后自动恢复**：
 
-| 字段                    | 说明                                     | 持久化 |
-| ----------------------- | ---------------------------------------- | ------ |
-| `selectedModel`         | 当前选中的聊天模型                       | ✅     |
-| `selectedRerankerModel` | 当前选中的重排序模型                     | ✅     |
-| `activeWorkspaceId`     | 当前工作区（`chat` / `incident-report`） | ✅     |
-| `availableModels`       | 可用模型列表缓存                         | ✅     |
-| `processingModes`       | 可用 skill 列表缓存                      | ✅     |
+| 字段                    | 说明                                                         | 持久化 |
+| ----------------------- | ------------------------------------------------------------ | ------ |
+| `selectedModel`         | 当前选中的聊天模型                                           | ✅     |
+| `selectedRerankerModel` | 当前选中的重排序模型                                         | ✅     |
+| `activePageId`          | 当前页面（`home` / `chat` / `incident-report` / `settings`） | ✅     |
+| `availableModels`       | 可用模型列表缓存                                             | ✅     |
+| `processingModes`       | 可用 skill 列表缓存                                          | ✅     |
 
 持久化策略：所有字段均通过 `pinia-plugin-persistedstate` 写入 `localStorage`，页面打开时立即恢复上次选择，无需等待 API 返回即可渲染 UI。
 
@@ -133,22 +135,37 @@ frontend/
 
 - `incidentSidebarSessions`：侧栏会话列表（统一为 `ChatSessionSummary` 格式）
 
+事故报告会话排序约定：
+
+- 事故报告历史会话按 `created_at` 降序排列，不按 `updated_at` 排序。
+- 切换会话时，当前会话会被 flush-save，但不会因 `updated_at` 变化而重新排序或变更分组。
+- `mergeSummary` 更新已有会话时保持原位，仅新增会话时才按 `created_at` 插入排序。
+- 侧栏分组使用 `created_at`（通过 `ChatSidebar` 的 `groupByCreatedAt` prop 控制）。
+
 ### Store 与 Composable 的关系
 
 Store 负责**状态持有和基础操作**，Composable 负责**业务逻辑编排**：
 
 ```
-ChatLayout.vue
-  ├── useAppStore()          ← 用户偏好（持久化）
-  ├── useChatStore()         ← 聊天状态
-  ├── useIncidentStore()     ← 事故报告状态
-  ├── useChatSessions()      ← 会话 CRUD（读写 chatStore/appStore）
-  ├── useChatStreaming()     ← 流式生成（读写 chatStore）
-  ├── useMessageActions()    ← 消息操作（读写 chatStore/appStore）
-  ├── useCatalogLoader()     ← 目录加载（写入 appStore）
-  └── useIncidentReportSessions() ← 事故报告会话（读写 incidentStore）
-       ├── useIncidentForm()      ← 表单逻辑（读写 incidentStore）
-       └── useIncidentGeneration() ← 生成逻辑（读写 incidentStore）
+App.vue
+  └── 根据 activePageId 切换页面：
+      ├── HomePage.vue
+      ├── ChatPage.vue
+      │     ├── useAppStore()          ← 用户偏好（持久化）
+      │     ├── useChatStore()         ← 聊天状态
+      │     ├── useChatSessions()      ← 会话 CRUD（读写 chatStore/appStore）
+      │     ├── useChatStreaming()     ← 流式生成（读写 chatStore）
+      │     ├── useMessageActions()    ← 消息操作（读写 chatStore/appStore）
+      │     └── useCatalogLoader()     ← 目录加载（写入 appStore）
+      ├── IncidentReportPage.vue
+      │     ├── useAppStore()          ← 用户偏好（持久化）
+      │     ├── useIncidentStore()     ← 事故报告状态
+      │     ├── useIncidentReportSessions() ← 事故报告会话（读写 incidentStore）
+      │     │     ├── useIncidentForm()      ← 表单逻辑（读写 incidentStore）
+      │     │     └── useIncidentGeneration() ← 生成逻辑（读写 incidentStore）
+      │     └── useCatalogLoader()     ← 目录加载（写入 appStore）
+      └── SettingsPage.vue
+            └── useAppStore()          ← 用户偏好（持久化）
 ```
 
 ### 新增 Store 的原则
@@ -158,12 +175,42 @@ ChatLayout.vue
 - 不要为了"统一"把所有状态都搬进 Store——局部状态留在组件里更清晰。
 - 需要持久化的数据只限用户偏好和缓存，不要把运行时数据（如消息树、流式状态）持久化。
 
+## 页面导航架构
+
+当前应用采用基于 `activePageId` 的页面切换模式，而非 Vue Router：
+
+- `App.vue` 根据 `useAppStore().activePageId` 使用 `v-if` 切换显示不同页面组件。
+- 页面切换使用 Vue `<Transition>` 组件实现淡入淡出 + 位移 + 缩放动画（`page-switch` 过渡类）。
+- `activePageId` 通过 `pinia-plugin-persistedstate` 持久化，刷新后恢复上次所在页面。
+
+页面列表：
+
+| `activePageId`    | 组件                     | 说明           |
+| ----------------- | ------------------------ | -------------- |
+| `home`            | `HomePage.vue`           | 主页，入口卡片 |
+| `chat`            | `ChatPage.vue`           | 对话页面       |
+| `incident-report` | `IncidentReportPage.vue` | 事故报告页面   |
+| `settings`        | `SettingsPage.vue`       | 设置页面       |
+
+每个页面（除主页外）顶部都有 `AppHeader` 组件，包含主页图标和当前页面标题，点击主页图标返回主页。对话页与事故报告页支持点击页头标题快速回到欢迎态。
+
 ## 当前核心结构
 
-### 1. 组件层
+### 1. 页面层
 
-- [ChatLayout.vue](/frontend/src/components/ChatLayout.vue)
-  页面主控组件，负责页面编排与事件串联。状态从 Pinia Store 读取，业务逻辑由 composables 提供。
+- [HomePage.vue](/frontend/src/pages/HomePage.vue)
+  主页，展示"对话"、"事故报告"、"设置"三个入口卡片，点击导航到对应页面。
+- [ChatPage.vue](/frontend/src/pages/ChatPage.vue)
+  对话页面，编排 ChatSidebar + 消息列表 + ChatInput，业务逻辑由 composables 提供。
+- [IncidentReportPage.vue](/frontend/src/pages/IncidentReportPage.vue)
+  事故报告页面，编排 ChatSidebar + IncidentReportWorkspace，离开时自动 flush-save。
+- [SettingsPage.vue](/frontend/src/pages/SettingsPage.vue)
+  设置页面，包含聊天模型和重排序模型选择器。
+
+### 2. 组件层
+
+- [AppHeader.vue](/frontend/src/components/AppHeader.vue)
+  页面顶部栏，包含主页图标和当前页面标题。对话页/事故报告页标题可点击，触发“回到欢迎态”。
 - [ChatMessage.vue](/frontend/src/components/ChatMessage.vue)
   单条消息装配组件，负责拼装消息子组件与事件透传。
 - [components/message/\*](/frontend/src/components/message)
@@ -171,11 +218,11 @@ ChatLayout.vue
 - [ChatInput.vue](/frontend/src/components/ChatInput.vue)
   底部输入区、文件选择、`$skill` 多选输入。
 - [ChatSidebar.vue](/frontend/src/components/ChatSidebar.vue)
-  左侧历史会话与模型选择区域（包含"聊天模型"和"重排序模型"两个下拉）。
+  左侧历史会话区域，支持按日期分组、重命名与删除。
 - [IncidentReportWorkspace.vue](/frontend/src/components/IncidentReportWorkspace.vue)
   事故报告工作区页面，包含手工首页 / AI 正文 / 附录分区、快填与完整模式、附件预览与版本下载。
 
-### 2. 状态管理层
+### 3. 状态管理层
 
 - [stores/app.ts](/frontend/src/stores/app.ts)
   用户偏好与配置缓存，使用 `pinia-plugin-persistedstate` 持久化到 localStorage。
@@ -184,7 +231,7 @@ ChatLayout.vue
 - [stores/incident.ts](/frontend/src/stores/incident.ts)
   事故报告工作区状态：会话、表单定义、生成状态。
 
-### 3. 组合式逻辑
+### 4. 组合式逻辑
 
 - [useChatSessions.ts](/frontend/src/composables/useChatSessions.ts)
   历史会话加载、保存、重命名、删除、会话切换后的状态恢复。通过 `useChatStore` 和 `useAppStore` 管理状态。
@@ -209,7 +256,7 @@ ChatLayout.vue
 - [composables/message/\*](/frontend/src/composables/message)
   消息局部逻辑：`useMessageRender`（懒渲染/缓存）、`useMessageEdit`（编辑态自适应输入）。
 
-### 4. 请求层
+### 5. 请求层
 
 - [api/client.ts](/frontend/src/api/client.ts)
   `axios` 实例。
@@ -226,7 +273,7 @@ ChatLayout.vue
 - [api/trace.ts](/frontend/src/api/trace.ts)
   链路回放查询接口封装（`/api/system/agent-traces/{trace_id}`）。
 
-### 5. 类型层
+### 6. 类型层
 
 - [types/chat.ts](/frontend/src/types/chat.ts)
   消息节点、聊天请求、流式事件等类型。
@@ -239,14 +286,14 @@ ChatLayout.vue
 - [types/skill.ts](/frontend/src/types/skill.ts)
   skill 选项与 catalog 结构。
 
-### 6. 工具层
+### 7. 工具层
 
 - [utils/render-markdown.ts](/frontend/src/utils/render-markdown.ts)
   Markdown 渲染、高亮语言按需加载、消息渲染缓存、预热逻辑。
 - [utils/chat-stream.ts](/frontend/src/utils/chat-stream.ts)
   SSE 数据解析。
 - [utils/session-groups.ts](/frontend/src/utils/session-groups.ts)
-  历史会话分组。
+  历史会话分组，支持按 `updated_at` 或 `created_at` 分组（事故报告使用 `created_at` 避免切换会话时重新排序）。
 - [utils/catalog.ts](/frontend/src/utils/catalog.ts)
   模型和 skill 响应归一化。
 - [utils/file.ts](/frontend/src/utils/file.ts)
@@ -293,7 +340,11 @@ ChatLayout.vue
 当前样式已经从大部分组件里拆出，放在：
 
 - [base.css](/frontend/src/styles/base.css)
-- [chat-layout.css](/frontend/src/styles/components/chat-layout.css)
+- [home-page.css](/frontend/src/styles/components/home-page.css)
+- [chat-page.css](/frontend/src/styles/components/chat-page.css)
+- [incident-page.css](/frontend/src/styles/components/incident-page.css)
+- [settings-page.css](/frontend/src/styles/components/settings-page.css)
+- [app-header.css](/frontend/src/styles/components/app-header.css)
 - [chat-message.css](/frontend/src/styles/components/chat-message.css)
 - [chat-input.css](/frontend/src/styles/components/chat-input.css)
 - [chat-sidebar.css](/frontend/src/styles/components/chat-sidebar.css)
@@ -391,8 +442,8 @@ cacheScopeId + messageId + role + contentHash
 
 事故报告走独立页面流程：
 
-1. 侧栏切换到"事故报告"后显示欢迎向导。
-2. 点击"开始"会创建事故报告会话，标题格式：`事故报告-YYYY/MM/DD HH:MM`。
+1. 主页点击"事故报告"卡片进入事故报告页面，侧栏显示历史会话列表。
+2. 点击页头标题会回到欢迎态；在欢迎页点击"开始"会创建事故报告会话，标题格式：`事故报告-YYYY/MM/DD HH:MM`。
 3. 页面分区为：`手工首页 / AI 正文 / 附录 / 预览附件`。
 4. 手工首页标签使用 `中文（English）`，字段键保持模板英文映射。
 5. 自定义日期时间控件支持三种模式：`仅日期 / 仅时间 / 日期时间`，并带独立展开/收起图标。
@@ -484,7 +535,7 @@ cacheScopeId + messageId + role + contentHash
 
 如果以后继续整理前端，建议优先级如下：
 
-1. 保持 `ChatLayout.vue` 不再回涨
+1. 保持页面组件（`ChatPage.vue`、`IncidentReportPage.vue`）不再回涨
 2. 新逻辑优先落到 `api / utils / composables / stores`
 3. 补测试而不是堆更多手工回归
 4. 真出现长会话性能瓶颈时，再考虑虚拟滚动

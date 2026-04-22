@@ -2,8 +2,10 @@ import type { ChatSessionSummary, SessionGroup } from '../types/session';
 
 export const groupSessionsByDate = (
   sessions: readonly ChatSessionSummary[],
+  options?: { dateField?: 'updated_at' | 'created_at' },
   now = new Date(),
 ) => {
+  const dateField = options?.dateField ?? 'updated_at';
   const nowTime = now.getTime();
   const recentThreshold = nowTime - 30 * 24 * 60 * 60 * 1000;
   const groups: SessionGroup[] = [];
@@ -11,13 +13,13 @@ export const groupSessionsByDate = (
   const olderGroups = new Map<string, SessionGroup>();
 
   for (const session of sessions) {
-    const updatedAt = new Date(session.updated_at).getTime();
-    if (!Number.isFinite(updatedAt) || updatedAt >= recentThreshold) {
+    const dateValue = new Date(session[dateField]).getTime();
+    if (!Number.isFinite(dateValue) || dateValue >= recentThreshold) {
       recentSessions.push(session);
       continue;
     }
 
-    const date = new Date(updatedAt);
+    const date = new Date(dateValue);
     const groupId = `${date.getFullYear()}-${date.getMonth() + 1}`;
     const existingGroup = olderGroups.get(groupId);
     if (existingGroup) {
