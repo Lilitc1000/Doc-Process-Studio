@@ -4,7 +4,7 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 RUN DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
     && apt-get install -y curl ca-certificates git build-essential make python3-pip sed ed patch grep coreutils openssh-server libreoffice-writer default-jre-headless fonts-noto-cjk \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -18,6 +18,3 @@ RUN mkdir -p /var/run/sshd \
 
 RUN pip3 install --no-cache-dir uv
 RUN npm install -g @openai/codex --no-progress
-
-RUN echo "vscode ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vscode \
-    && chmod 0440 /etc/sudoers.d/vscode

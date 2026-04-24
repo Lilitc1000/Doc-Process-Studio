@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { SkillOption } from '../types/skill';
+import type { SkillOption } from '../types/common/skill';
 
 const DEFAULT_MODELS = [
   'gpt-4o-mini',

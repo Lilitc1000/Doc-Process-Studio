@@ -2,10 +2,10 @@ import json
 
 from docx import Document
 
-from doc_process_studio.models.conversation.stream import ChatStreamRequest
-from doc_process_studio.models.skill.runtime import SkillConversationState
-from doc_process_studio.services.chat import attachments as attachments_module
-from doc_process_studio.services.skill.tool_loop import execute_skill_tool_call
+from doc_process_studio.chat.schemas.request import ChatStreamRequest
+from doc_process_studio.skill.models.runtime import SkillConversationState
+from doc_process_studio.chat.service import attachments as attachments_module
+from doc_process_studio.skill.service.tool_loop import execute_skill_tool_call
 
 
 def _build_tool_call(arguments: dict) -> dict:
@@ -44,13 +44,13 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
         user_message_id="msg-user-incident-1",
         conversation_id="conv-incident-1",
         model="qwen3-coder-next:latest",
-        skill_id="incident-report",
+        selected_skill_ids=["incident-report"],
         messages=[],
         attachment_ids=[],
     )
     state = SkillConversationState(
         conversation_id=request.conversation_id,
-        skill_id=request.skill_id,
+        skill_id="incident-report",
         system_prompt="",
     )
 

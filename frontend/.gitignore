@@ -27,6 +27,10 @@ pnpm-debug.log*
 !.vscode/extensions.json
 .DS_Store
 
+# 测试
+test-results/
+playwright-report/
+
 # 其他
 *.suo
 *.ntvs*

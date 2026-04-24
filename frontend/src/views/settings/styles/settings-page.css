@@ -1,0 +1,74 @@
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #f5f5f5;
+  overflow: hidden;
+}
+
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  background:
+    radial-gradient(
+      circle at 8% 12%,
+      rgba(59, 130, 246, 0.06),
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 88% 80%,
+      rgba(14, 165, 233, 0.04),
+      transparent 36%
+    ),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.settings-content {
+  width: min(560px, 100%);
+  padding: 2.5rem 2rem;
+}
+
+.settings-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.settings-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.settings-section-desc {
+  margin: 0 0 1.5rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.selector-group {
+  position: relative;
+  margin-bottom: 1.2rem;
+}
+
+.selector-group:last-child {
+  margin-bottom: 0;
+}
+
+.selector-label {
+  display: block;
+  margin-bottom: 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.02em;
+}

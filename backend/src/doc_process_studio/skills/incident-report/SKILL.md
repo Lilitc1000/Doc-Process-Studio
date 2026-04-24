@@ -56,7 +56,7 @@ skill_type: "workspace_incident"
 incident-report/
 ├── SKILL.md
 ├── agents/
-│   └── openai.yaml
+│   └── config.yaml
 ├── references/
 │   ├── DAS2 Fault Log Form Template.docx
 │   └── body-sections/

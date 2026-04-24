@@ -7,5 +7,5 @@
 启动（在 DevContainer 内）：
 ```bash
 cd backend && uv sync --group dev && uv run uvicorn doc_process_studio.main:app --reload --host 0.0.0.0 --port 8000
-cd frontend && npm install && npm run dev -- --host --port 5173
+cd frontend && sudo npm install && npm run dev -- --host --port 5173
 ```

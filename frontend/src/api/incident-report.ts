@@ -1,134 +1,121 @@
-import { apiClient } from './client';
+import { apiClient } from './request';
 import type {
-  IncidentBodyGenerateResponse,
-  IncidentFormSchemaPayload,
-  IncidentPreviewResponse,
-  IncidentSessionDetail,
-  IncidentSessionSummary,
-  IncidentSnapshot,
-} from '../types/incident-report';
+  IncidentReportBodyGenerateResponse,
+  IncidentReportFormSchemaPayload,
+  IncidentReportPreviewResponse,
+  IncidentReportSessionDetail,
+  IncidentReportSessionSummary,
+  IncidentReportSnapshot,
+} from '../types/incident-report/incident-report';
 
-export const fetchIncidentFormSchema =
-  async (): Promise<IncidentFormSchemaPayload> => {
-    const response = await apiClient.get<IncidentFormSchemaPayload>(
+export const fetchIncidentReportFormSchema =
+  async (): Promise<IncidentReportFormSchemaPayload> => {
+    const response = await apiClient.get<IncidentReportFormSchemaPayload>(
       '/incident-report/schema',
     );
     return response.data;
   };
 
-export const fetchIncidentSessionSummaries = async (): Promise<
-  IncidentSessionSummary[]
+export const fetchIncidentReportSessionSummaries = async (): Promise<
+  IncidentReportSessionSummary[]
 > => {
   const response = await apiClient.get<{
-    sessions?: IncidentSessionSummary[];
+    sessions: IncidentReportSessionSummary[];
   }>('/incident-report/sessions');
   return response.data.sessions ?? [];
 };
 
-export const createIncidentSession = async (payload: { title: string }) => {
-  const response = await apiClient.post<IncidentSessionSummary>(
+export const createIncidentReportSession = async (payload: {
+  title: string;
+}): Promise<IncidentReportSessionSummary> => {
+  const response = await apiClient.post<IncidentReportSessionSummary>(
     '/incident-report/sessions',
     payload,
   );
   return response.data;
 };
 
-export const fetchIncidentSessionDetail = async (sessionId: string) => {
-  const response = await apiClient.get<IncidentSessionDetail>(
+export const fetchIncidentReportSessionDetail = async (
+  sessionId: string,
+): Promise<IncidentReportSessionDetail> => {
+  const response = await apiClient.get<IncidentReportSessionDetail>(
     `/incident-report/sessions/${sessionId}`,
   );
   return response.data;
 };
 
-export const saveIncidentSessionSnapshot = async (
+export const saveIncidentReportSessionSnapshot = async (
   sessionId: string,
-  snapshot: IncidentSnapshot,
-) => {
-  const response = await apiClient.put<IncidentSessionDetail>(
-    `/incident-report/sessions/${sessionId}`,
+  snapshot: IncidentReportSnapshot,
+): Promise<IncidentReportSessionDetail> => {
+  const response = await apiClient.put<IncidentReportSessionDetail>(
+    `/incident-report/sessions/${sessionId}/snapshot`,
     { snapshot },
   );
   return response.data;
 };
 
-export const quickGenerateIncidentBody = async (
+export const quickGenerateIncidentReportBody = async (
   sessionId: string,
-  payload: {
-    model: string;
-    reranker_model?: string;
-  },
-  options?: {
-    signal?: AbortSignal;
-  },
-) => {
-  const response = await apiClient.post<IncidentBodyGenerateResponse>(
-    `/incident-report/sessions/${sessionId}/body/quick-generate`,
+  payload: { model: string; rerankerModel?: string },
+  options?: { signal?: AbortSignal },
+): Promise<IncidentReportBodyGenerateResponse> => {
+  const response = await apiClient.post<IncidentReportBodyGenerateResponse>(
+    `/incident-report/sessions/${sessionId}/quick-generate`,
     payload,
-    {
-      signal: options?.signal,
-    },
+    { signal: options?.signal },
   );
   return response.data;
 };
 
-export const generateIncidentBodySection = async (
+export const generateIncidentReportBodySection = async (
   sessionId: string,
   payload: {
     model: string;
-    reranker_model?: string;
-    section_id: string;
-    timeline_index?: number;
+    rerankerModel?: string;
+    sectionId: string;
+    timelineIndex?: number;
   },
-  options?: {
-    signal?: AbortSignal;
-  },
-) => {
-  const response = await apiClient.post<IncidentBodyGenerateResponse>(
-    `/incident-report/sessions/${sessionId}/body/section-generate`,
+  options?: { signal?: AbortSignal },
+): Promise<IncidentReportBodyGenerateResponse> => {
+  const response = await apiClient.post<IncidentReportBodyGenerateResponse>(
+    `/incident-report/sessions/${sessionId}/generate-section`,
     payload,
-    {
-      signal: options?.signal,
-    },
+    { signal: options?.signal },
   );
   return response.data;
 };
 
-export const previewIncidentAttachment = async (
+export const previewIncidentReportAttachment = async (
   sessionId: string,
-  payload?: {
+  payload: {
     version?: number;
     model?: string;
-    reranker_model?: string;
+    rerankerModel?: string;
   },
-  options?: {
-    signal?: AbortSignal;
-  },
-) => {
-  const response = await apiClient.post<IncidentPreviewResponse>(
+  options?: { signal?: AbortSignal },
+): Promise<IncidentReportPreviewResponse> => {
+  const response = await apiClient.post<IncidentReportPreviewResponse>(
     `/incident-report/sessions/${sessionId}/preview`,
-    {
-      version: payload?.version ?? null,
-      model: payload?.model ?? null,
-      reranker_model: payload?.reranker_model ?? null,
-    },
-    {
-      signal: options?.signal,
-    },
+    payload,
+    { signal: options?.signal },
   );
   return response.data;
 };
 
-export const renameIncidentSession = async (
+export const renameIncidentReportSession = async (
   sessionId: string,
   title: string,
-) => {
-  const response = await apiClient.patch<IncidentSessionSummary>(
-    `/incident-report/sessions/${sessionId}/title`,
+): Promise<IncidentReportSessionSummary> => {
+  const response = await apiClient.patch<IncidentReportSessionSummary>(
+    `/incident-report/sessions/${sessionId}`,
     { title },
   );
   return response.data;
 };
 
-export const removeIncidentSession = async (sessionId: string) => {
+export const removeIncidentReportSession = async (
+  sessionId: string,
+): Promise<void> => {
   await apiClient.delete(`/incident-report/sessions/${sessionId}`);
 };

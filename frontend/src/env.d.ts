@@ -15,3 +15,10 @@ declare module '*.css' {
   const cssUrl: string;
   export default cssUrl;
 }
+
+declare module 'humps' {
+  export function camelizeKeys<T>(obj: T): T;
+  export function decamelizeKeys<T>(obj: T): T;
+  export function camelize(str: string): string;
+  export function decamelize(str: string): string;
+}

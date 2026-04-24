@@ -6,11 +6,11 @@ import type {
   ChatEditAttachment,
   ChatMessageNode,
   ChatToolStatus,
-} from '../types/chat';
+} from '../types/chat/chat';
 import type {
   ChatSessionSnapshotPayload,
   ChatSessionSummary,
-} from '../types/session';
+} from '../types/chat/session';
 import {
   buildDisplayedMessages,
   canSwitchMessageVersion as canSwitchMessageVersionInTree,
@@ -23,9 +23,9 @@ import {
   resolveCurrentLeafMessageId,
   resolveLastRoleMessageId,
   resolveTargetVersionMessageId,
-} from '../utils/message-tree';
-import { prewarmRenderedContentCache } from '../utils/render-markdown';
-import { createConversationId, createMessageId } from '../utils/ids';
+} from '../utils/chat/message-tree';
+import { prewarmRenderedContentCache } from '../utils/common/render-markdown';
+import { createConversationId, createMessageId } from '../utils/common/ids';
 
 const WELCOME_MESSAGES: ChatMessageNode[] = [
   {
@@ -46,8 +46,8 @@ const WELCOME_MESSAGES: ChatMessageNode[] = [
       '- 让我输出提纲、表格、要点或结构化结果',
     ].join('\n'),
     timestamp: new Date(),
-    parent_id: null,
-    child_ids: [],
+    parentId: null,
+    childIds: [],
   },
 ];
 
@@ -92,7 +92,7 @@ export const useChatStore = defineStore('chat', () => {
   });
 
   const activeStreamingAssistantMessage = computed(() => {
-    const activeAssistantId = activeGeneration.value?.assistant_id;
+    const activeAssistantId = activeGeneration.value?.assistantId;
     if (!activeAssistantId) {
       return null;
     }
@@ -100,7 +100,7 @@ export const useChatStore = defineStore('chat', () => {
   });
 
   const liveToolStatuses = computed<ChatToolStatus[]>(() => {
-    return activeStreamingAssistantMessage.value?.tool_statuses ?? [];
+    return activeStreamingAssistantMessage.value?.toolStatuses ?? [];
   });
 
   const latestLiveToolStatus = computed<ChatToolStatus | null>(() => {
@@ -133,7 +133,7 @@ export const useChatStore = defineStore('chat', () => {
     return (
       isLoading.value &&
       message.role === 'assistant' &&
-      message.id === activeGeneration.value?.assistant_id &&
+      message.id === activeGeneration.value?.assistantId &&
       !message.content.trim()
     );
   };
@@ -142,7 +142,7 @@ export const useChatStore = defineStore('chat', () => {
     return (
       isLoading.value &&
       message.role === 'assistant' &&
-      message.id === activeGeneration.value?.assistant_id
+      message.id === activeGeneration.value?.assistantId
     );
   };
 
@@ -180,22 +180,22 @@ export const useChatStore = defineStore('chat', () => {
   };
 
   const createMessageNode = (
-    node: Omit<ChatMessageNode, 'id' | 'child_ids'> & { id?: string },
+    node: Omit<ChatMessageNode, 'id' | 'childIds'> & { id?: string },
   ) => {
     const messageId = node.id ?? createMessageId();
     const newNode: ChatMessageNode = {
       ...node,
       id: messageId,
-      child_ids: [],
+      childIds: [],
     };
 
     messageNodes.value[messageId] = newNode;
 
-    if (node.parent_id) {
-      const parentNode = findMessageById(node.parent_id);
+    if (node.parentId) {
+      const parentNode = findMessageById(node.parentId);
       if (parentNode) {
-        parentNode.child_ids.push(messageId);
-        selectedChildIdByParent.value[node.parent_id] = messageId;
+        parentNode.childIds.push(messageId);
+        selectedChildIdByParent.value[node.parentId] = messageId;
       }
     } else {
       rootChildIds.value.push(messageId);
@@ -230,13 +230,12 @@ export const useChatStore = defineStore('chat', () => {
 
     const nextFiles = [...(targetMessage.files ?? [])];
     const duplicateIndex = nextFiles.findIndex((file) => {
-      if (file.attachment_id && attachment.attachment_id) {
-        return file.attachment_id === attachment.attachment_id;
+      if (file.attachmentId && attachment.attachmentId) {
+        return file.attachmentId === attachment.attachmentId;
       }
 
       return (
-        file.name === attachment.name &&
-        file.size_label === attachment.size_label
+        file.name === attachment.name && file.sizeLabel === attachment.sizeLabel
       );
     });
 
@@ -258,8 +257,8 @@ export const useChatStore = defineStore('chat', () => {
       return;
     }
 
-    targetMessage.tool_statuses = [
-      ...(targetMessage.tool_statuses ?? []),
+    targetMessage.toolStatuses = [
+      ...(targetMessage.toolStatuses ?? []),
       toolStatus,
     ];
   };
@@ -269,7 +268,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!targetMessage || targetMessage.role !== 'assistant') {
       return;
     }
-    targetMessage.trace_id = traceId;
+    targetMessage.traceId = traceId;
   };
 
   const getMessageVersionIndex = (messageId: string) => {
@@ -318,8 +317,8 @@ export const useChatStore = defineStore('chat', () => {
       return;
     }
 
-    if (messageNode.parent_id) {
-      selectedChildIdByParent.value[messageNode.parent_id] = targetMessageId;
+    if (messageNode.parentId) {
+      selectedChildIdByParent.value[messageNode.parentId] = targetMessageId;
     } else {
       selectedRootChildId.value = targetMessageId;
     }
@@ -333,20 +332,20 @@ export const useChatStore = defineStore('chat', () => {
     const path = getMessagePathToNode(messageNodes.value, userMessageId);
     const currentUserMessage = findMessageById(userMessageId);
     const selectedSkillIdsFromMessage = Array.from(
-      new Set(currentUserMessage?.request_skill_ids ?? []),
+      new Set(currentUserMessage?.requestSkillIds ?? []),
     );
     return {
-      user_message_id: userMessageId,
-      conversation_id: conversationId.value,
+      userMessageId,
+      conversationId: conversationId.value,
       model,
-      reranker_model: rerankerModel,
-      selected_skill_ids: selectedSkillIdsFromMessage,
+      rerankerModel,
+      selectedSkillIds: selectedSkillIdsFromMessage,
       messages: path.map((message) => ({
         role: message.role,
-        content: message.api_content ?? message.content,
+        content: message.apiContent ?? message.content,
       })),
-      files: currentUserMessage?.request_files ?? [],
-      attachment_ids: collectPersistedUploadedAttachmentIdsFromPath(path),
+      files: currentUserMessage?.requestFiles ?? [],
+      attachmentIds: collectPersistedUploadedAttachmentIdsFromPath(path),
     };
   };
 
@@ -378,28 +377,28 @@ export const useChatStore = defineStore('chat', () => {
 
   const hydrateSessionSnapshot = (snapshot: ChatSessionSnapshotPayload) => {
     const nextMessageNodes: Record<string, ChatMessageNode> = {};
-    for (const message of snapshot.message_nodes) {
+    for (const message of snapshot.messageNodes) {
       nextMessageNodes[message.id] = {
         id: message.id,
         role: message.role,
         content: message.content,
-        trace_id: message.trace_id ?? undefined,
-        api_content: message.api_content ?? undefined,
-        request_skill_ids: message.request_skill_ids ?? [],
+        traceId: message.traceId ?? undefined,
+        apiContent: message.apiContent ?? undefined,
+        requestSkillIds: message.requestSkillIds ?? [],
         files: message.files ?? [],
-        tool_statuses: message.tool_statuses ?? [],
+        toolStatuses: message.toolStatuses ?? [],
         timestamp: new Date(message.timestamp),
-        parent_id: message.parent_id,
-        child_ids: [...message.child_ids],
-        request_files: [],
+        parentId: message.parentId,
+        childIds: [...message.childIds],
+        requestFiles: [],
       };
     }
 
     messageNodes.value = nextMessageNodes;
-    rootChildIds.value = [...snapshot.root_child_ids];
-    selectedRootChildId.value = snapshot.selected_root_child_id;
+    rootChildIds.value = [...snapshot.rootChildIds];
+    selectedRootChildId.value = snapshot.selectedRootChildId;
     selectedChildIdByParent.value = {
-      ...snapshot.selected_child_id_by_parent,
+      ...snapshot.selectedChildIdByParent,
     };
     resetEditingState();
   };
@@ -409,24 +408,24 @@ export const useChatStore = defineStore('chat', () => {
     selectedRerankerModel: string,
   ): ChatSessionSnapshotPayload => {
     return {
-      message_nodes: Object.values(messageNodes.value).map((message) => ({
+      messageNodes: Object.values(messageNodes.value).map((message) => ({
         id: message.id,
         role: message.role,
         content: message.content,
-        trace_id: message.trace_id ?? null,
-        api_content: message.api_content ?? null,
-        request_skill_ids: message.request_skill_ids ?? [],
+        traceId: message.traceId ?? null,
+        apiContent: message.apiContent ?? null,
+        requestSkillIds: message.requestSkillIds ?? [],
         files: message.files ?? [],
-        tool_statuses: message.tool_statuses ?? [],
+        toolStatuses: message.toolStatuses ?? [],
         timestamp: message.timestamp.toISOString(),
-        parent_id: message.parent_id,
-        child_ids: [...message.child_ids],
+        parentId: message.parentId,
+        childIds: [...message.childIds],
       })),
-      root_child_ids: [...rootChildIds.value],
-      selected_root_child_id: selectedRootChildId.value,
-      selected_child_id_by_parent: { ...selectedChildIdByParent.value },
-      selected_model: selectedModel,
-      selected_reranker_model: selectedRerankerModel,
+      rootChildIds: [...rootChildIds.value],
+      selectedRootChildId: selectedRootChildId.value,
+      selectedChildIdByParent: { ...selectedChildIdByParent.value },
+      selectedModel,
+      selectedRerankerModel,
     };
   };
 
@@ -445,19 +444,19 @@ export const useChatStore = defineStore('chat', () => {
       | {
           id: string;
           title: string;
-          created_at: string;
-          updated_at: string;
-          selected_model?: string;
-          selected_reranker_model?: string | null;
+          createdAt: string;
+          updatedAt: string;
+          selectedModel?: string;
+          selectedRerankerModel?: string | null;
         },
   ) => {
     const mapped = {
       id: session.id,
       title: session.title,
-      created_at: session.created_at,
-      updated_at: session.updated_at,
-      selected_model: session.selected_model ?? '',
-      selected_reranker_model: session.selected_reranker_model ?? null,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      selectedModel: session.selectedModel ?? '',
+      selectedRerankerModel: session.selectedRerankerModel ?? null,
     } satisfies ChatSessionSummary;
 
     const nextSessions = sessionSummaries.value.filter((item) => {
@@ -466,8 +465,7 @@ export const useChatStore = defineStore('chat', () => {
     nextSessions.unshift(mapped);
     nextSessions.sort((left, right) => {
       return (
-        new Date(right.updated_at).getTime() -
-        new Date(left.updated_at).getTime()
+        new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
       );
     });
     sessionSummaries.value = nextSessions;
