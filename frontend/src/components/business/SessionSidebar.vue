@@ -82,7 +82,7 @@
                 </svg>
               </base-button>
 
-              <transition name="menu-fade">
+              <transition name="fade-slide-up">
                 <div
                   v-if="openSessionMenuId === session.id"
                   class="history-session-menu"
@@ -114,7 +114,7 @@
     </div>
 
     <teleport to="body">
-      <transition name="dialog-fade">
+      <transition name="fade-slide-up">
         <div
           v-if="renameDialogSession"
           class="dialog-mask"

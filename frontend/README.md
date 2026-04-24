@@ -252,6 +252,20 @@ frontend/tests/
 5. **scoped 样式优先**，避免全局污染
 6. **按钮、输入框、下拉框等基础 UI 元素必须使用 `components/base/` 中的组件**，不要在业务组件中手写原生 `<button>`/`<input>`/`<select>` 再自定义样式
 
+## 全局过渡动画
+
+所有页面共享的过渡动画统一收敛在 `src/styles/transitions.css` 中，通过 Vue `<Transition name="xxx">` 直接使用：
+
+| 动画名 | 用途 | 示例 |
+|--------|------|------|
+| `fade` | 纯淡入淡出（轻提示、遮罩） | `<Transition name="fade">` |
+| `fade-slide-up` | 淡入 + 上滑（弹窗、下拉菜单） | `<Transition name="fade-slide-up">` |
+| `page-switch` | 页面路由切换 | `<Transition name="page-switch" mode="out-in">` |
+| `session-switch` | 同页内会话/内容切换 | `<Transition name="session-switch" mode="out-in">` |
+| `skill-suggestion-fade` | Skill 建议面板 | `<Transition name="skill-suggestion-fade">` |
+
+**注意**：新增页面如需使用过渡动画，优先从上述全局动画中选择；只有当现有动画无法满足需求时，才考虑在 `transitions.css` 中扩展新动画，**禁止**在业务样式文件中重复定义相同的动画类。
+
 ## 公共基础组件
 
 ### BaseButton

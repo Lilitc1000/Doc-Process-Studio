@@ -746,7 +746,7 @@
     </Transition>
 
     <Teleport to="body">
-      <Transition name="dialog-fade">
+      <Transition name="fade-slide-up">
         <div v-if="previewVisible" class="incident-report-modal-mask">
           <div class="incident-report-modal preview-modal">
             <div class="preview-header">
@@ -797,7 +797,7 @@
     </Teleport>
 
     <Teleport to="body">
-      <Transition name="dialog-fade">
+      <Transition name="fade-slide-up">
         <div v-if="showGenerationModal" class="incident-report-modal-mask">
           <div class="incident-report-modal quick-generation-modal">
             <div class="preview-header">

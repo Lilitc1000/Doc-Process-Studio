@@ -311,16 +311,6 @@
   line-height: 1.35;
 }
 
-.skill-suggestion-fade-enter-active,
-.skill-suggestion-fade-leave-active {
-  transition: opacity 0.16s ease;
-}
-
-.skill-suggestion-fade-enter-from,
-.skill-suggestion-fade-leave-to {
-  opacity: 0;
-}
-
 .input-actions {
   display: flex;
   gap: 0.6rem;

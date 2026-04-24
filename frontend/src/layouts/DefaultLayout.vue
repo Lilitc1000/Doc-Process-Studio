@@ -81,25 +81,3 @@ const onTitleClick = () => {
   overflow: hidden;
 }
 </style>
-
-<style>
-.page-switch-enter-active,
-.page-switch-leave-active {
-  transition:
-    opacity 0.3s ease,
-    transform 0.3s ease,
-    filter 0.3s ease;
-}
-
-.page-switch-enter-from {
-  opacity: 0;
-  transform: translateY(14px) scale(0.98);
-  filter: blur(4px);
-}
-
-.page-switch-leave-to {
-  opacity: 0;
-  transform: translateY(-8px) scale(0.99);
-  filter: blur(3px);
-}
-</style>
