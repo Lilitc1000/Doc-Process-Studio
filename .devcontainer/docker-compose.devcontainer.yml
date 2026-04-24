@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     privileged: true
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
@@ -19,14 +21,30 @@ services:
       - "8000:8000"
       - "2222:22"
     command: bash -lc '/workspace/.devcontainer/startup.sh'
+  db:
+    image: postgres:latest
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: postgres_password
+      POSTGRES_DB: master
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U admin -d master" ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
   redis:
     image: redis:latest
+    restart: always
     ports:
       - "6379:6379"
     command: redis-server --requirepass redis_dev_password --appendonly yes
     volumes:
       - redis_data:/data
-    restart: unless-stopped
     healthcheck:
       test: [ "CMD", "redis-cli", "-a", "redis_dev_password", "ping" ]
       interval: 10s
@@ -34,4 +52,5 @@ services:
       retries: 3
 
 volumes:
+  pgdata:
   redis_data:
