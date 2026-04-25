@@ -1,40 +1,70 @@
 <template>
   <header class="app-header">
-    <base-button
-      type="button"
-      class="app-header-home"
-      variant="ghost"
-      size="sm"
-      @click="$emit('go-home')"
-    >
-      <svg viewBox="0 0 24 24" class="app-header-home-icon" aria-hidden="true">
-        <path
-          d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"
-          fill="none"
-          stroke="currentColor"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="1.8"
+    <div class="app-header-left">
+      <base-button
+        type="button"
+        class="app-header-home"
+        variant="ghost"
+        size="sm"
+        @click="$emit('go-home')"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          class="app-header-home-icon"
+          aria-hidden="true"
+        >
+          <path
+            d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.8"
+          />
+        </svg>
+      </base-button>
+      <base-button
+        v-if="titleClickable"
+        type="button"
+        class="app-header-title app-header-title-btn"
+        variant="ghost"
+        size="sm"
+        @click="$emit('title-click')"
+      >
+        {{ pageTitle }}
+      </base-button>
+      <span v-else class="app-header-title">{{ pageTitle }}</span>
+    </div>
+    <div class="app-header-right">
+      <template v-if="authStore.isAuthenticated">
+        <UserMenuDropdown
+          :username="authStore.username"
+          :avatar-color="authStore.avatarColor"
+          @profile="showProfileModal = true"
+          @logout="onLogout"
         />
-      </svg>
-    </base-button>
-    <base-button
-      v-if="titleClickable"
-      type="button"
-      class="app-header-title app-header-title-btn"
-      variant="ghost"
-      size="sm"
-      @click="$emit('title-click')"
-    >
-      {{ pageTitle }}
-    </base-button>
-    <span v-else class="app-header-title">{{ pageTitle }}</span>
+      </template>
+      <template v-else>
+        <BaseButton variant="ghost" size="sm" @click="router.push('/login')">
+          登录
+        </BaseButton>
+      </template>
+    </div>
+    <UserProfileModal
+      :visible="showProfileModal"
+      :user-info="authStore.userInfo"
+      @close="showProfileModal = false"
+    />
   </header>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import BaseButton from '../../components/base/BaseButton.vue';
+import UserMenuDropdown from '../../components/business/UserMenuDropdown.vue';
+import UserProfileModal from '../../components/business/UserProfileModal.vue';
+import { useAuthStore } from '../../stores/auth';
 import type { PageId } from '../../stores/app';
 
 const props = defineProps<{
@@ -47,6 +77,10 @@ defineEmits<{
   (e: 'title-click'): void;
 }>();
 
+const router = useRouter();
+const authStore = useAuthStore();
+const showProfileModal = ref(false);
+
 const pageTitles: Record<PageId, string> = {
   home: '文档处理平台',
   chat: '对话',
@@ -55,18 +89,38 @@ const pageTitles: Record<PageId, string> = {
 };
 
 const pageTitle = computed(() => pageTitles[props.pageId] ?? '');
+
+async function onLogout() {
+  await authStore.logout();
+  router.push('/login');
+}
 </script>
 
 <style scoped>
 .app-header {
+  position: relative;
+  z-index: 100;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.65rem;
   padding: 0.7rem 1.15rem;
   border-bottom: 1px solid #e2e8f0;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   flex-shrink: 0;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .app-header-home,

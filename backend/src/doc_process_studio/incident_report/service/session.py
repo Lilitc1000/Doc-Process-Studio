@@ -44,14 +44,14 @@ from .preview import (
 )
 from .report_data import answer_text, build_report_data_from_snapshot
 from .translation import stable_payload_hash, translate_report_data_to_english
-from ..service.session_store import (
+from .db_session_store import (
     delete_incident_session_records,
     list_incident_session_ids,
     load_incident_session_snapshot,
     load_incident_session_summary,
     save_incident_session_snapshot,
     save_incident_session_summary,
-    touch_incident_session_index,
+    touch_incident_session_updated_at,
 )
 
 
@@ -129,7 +129,7 @@ async def create_incident_report_session(
         pass
     await save_incident_session_summary(summary)
     await save_incident_session_snapshot(session_id, snapshot)
-    await touch_incident_session_index(session_id, now.timestamp())
+    await touch_incident_session_updated_at(session_id)
     return summary
 
 
@@ -154,7 +154,7 @@ async def update_incident_report_session_snapshot(
 
     await save_incident_session_summary(next_summary)
     await save_incident_session_snapshot(session_id, next_snapshot)
-    await touch_incident_session_index(session_id, now.timestamp())
+    await touch_incident_session_updated_at(session_id)
     return IncidentReportSessionDetail(
         **next_summary.model_dump(),
         snapshot=next_snapshot,
@@ -176,7 +176,7 @@ async def update_incident_report_session_title(
         updated_at=now,
     )
     await save_incident_session_summary(summary)
-    await touch_incident_session_index(session_id, now.timestamp())
+    await touch_incident_session_updated_at(session_id)
     return summary
 
 

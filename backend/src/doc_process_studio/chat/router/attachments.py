@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from ..service.attachments import resolve_attachment_path
+from ...core.security import get_current_user_id
 
 router = APIRouter(prefix="/api", tags=["attachments"])
 
@@ -22,5 +23,8 @@ def _build_attachment_download_response(attachment_id: str) -> FileResponse:
 
 
 @router.get("/attachments/{attachment_id}/download")
-async def download_attachment(attachment_id: str) -> FileResponse:
+async def download_attachment(
+    attachment_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> FileResponse:
     return _build_attachment_download_response(attachment_id)

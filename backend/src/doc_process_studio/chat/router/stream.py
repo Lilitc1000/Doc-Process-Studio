@@ -1,9 +1,10 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from ..schemas.request import ChatStreamRequest
 from ..service.stream import stream_remote_chat_completion
+from ...core.security import get_current_user_id
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/api", tags=["chat"])
 async def stream_chat(
     payload: str = Form(...),
     files: list[UploadFile] = File(default=[]),
+    user_id: str = Depends(get_current_user_id),
 ) -> StreamingResponse:
     try:
         request = ChatStreamRequest.model_validate_json(payload)
@@ -27,4 +29,3 @@ async def stream_chat(
             "X-Accel-Buffering": "no",
         },
     )
-

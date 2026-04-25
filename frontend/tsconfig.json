@@ -9,5 +9,10 @@
     "src/**/*.vue",
     "src/**/*.d.ts",
     "tests/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
   ]
 }

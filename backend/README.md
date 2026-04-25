@@ -28,8 +28,39 @@ cd backend
 ENV=dev uv run uvicorn doc_process_studio.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## 数据库迁移
+
+项目使用 Alembic 管理 PostgreSQL 数据库迁移，迁移配置位于 `backend/alembic.ini` 和 `backend/migrations/`。
+
+```bash
+cd backend
+
+# 生成迁移脚本（根据 ORM 模型变更自动生成）
+env ENV=dev uv run alembic revision --autogenerate -m "描述变更内容"
+
+# 执行迁移（升级到最新版本）
+env ENV=dev uv run alembic upgrade head
+
+# 回退一个版本
+env ENV=dev uv run alembic downgrade -1
+
+# 查看当前迁移状态
+env ENV=dev uv run alembic current
+
+# 查看迁移历史
+env ENV=dev uv run alembic history
+```
+
+注意事项：
+
+- Alembic 使用异步引擎（asyncpg），`migrations/env.py` 已配置 `run_async_migrations`
+- 新增 ORM 模型后，务必执行 `alembic revision --autogenerate` 生成迁移脚本
+- 生成后请检查迁移脚本内容，确认自动检测的变更符合预期
+- 生产环境部署前必须执行 `alembic upgrade head`
+
 ## 测试
-后端改动完成后，使用 `uv` 作为统一入口，推荐本地这样跑：
+
+后端改动完成后，使用 `uv` 作为统一入口：
 
 ```bash
 cd backend
@@ -44,31 +75,21 @@ env ENV=dev uv run --no-sync python -m compileall src/doc_process_studio
 - 如果本机存在缓存目录权限问题，可附加：
   `UV_CACHE_DIR=/tmp/uv-cache TMPDIR=/tmp PYTHONDONTWRITEBYTECODE=1`
 
-### 测试目录约定
+详细测试开发指南见 `tests/DEVELOPMENT.md`。
+
+测试按业务域组织，每个域内再区分测试类型：
 
 ```text
 backend/tests/
-├── conftest.py                 # 全局 autouse fixture（Redis 状态重置等）
-├── unit/                       # 单元测试
-│   ├── chat/
-│   ├── incident_report/
-│   ├── skill/
-│   │   ├── conftest.py         # Skill 域共享 fixture（build_skill, build_plan_decision）
-│   │   ├── test_selector.py
-│   │   ├── test_tool_loop.py
-│   │   └── test_conversation_store.py
-│   └── agent/
-│       └── test_executor.py
-├── integration/                # 集成测试
-│   └── api/
-└── skills/                     # Skill 契约测试
+├── DEVELOPMENT.md      # 测试开发指南（必读）
+├── conftest.py         # 全局 autouse fixture
+├── auth/               # 认证域（unit/ + integration/）
+├── chat/               # 对话域（unit/ + integration/）
+├── incident_report/    # 事故报告域（unit/ + integration/ + contract/）
+├── skill/              # 技能域（unit/ + integration/，含域级 conftest.py）
+├── system/             # 系统域（unit/ + integration/）
+└── core/               # 核心基础设施域（unit/）
 ```
-
-### 共享 Fixture 约定
-
-- **全局 fixture**（`tests/conftest.py`）：`autouse`，用于重置全局状态（如 Redis 连接池），每个测试后自动执行
-- **域级 fixture**（`tests/unit/<domain>/conftest.py`）：同一业务域内多个测试文件共用的 fixture，如 `build_skill`、`build_plan_decision`
-- 新增测试时，如果构造数据的逻辑在 2 个以上测试文件中重复出现，应提取为域级 fixture
 
 ## 目录结构
 
@@ -80,20 +101,32 @@ backend/src/doc_process_studio/
 │
 ├── core/                       # 基础设施
 │   ├── config.py               # 配置管理（Settings）
-│   ├── db.py                   # Redis 连接池
+│   ├── database.py             # PostgreSQL 异步连接池 + SQLAlchemy Base
+│   ├── security.py             # JWT 令牌 + 密码哈希 + get_current_user_id 依赖
+│   ├── cache_client.py         # Redis 连接池
 │   ├── cache.py                # Redis 缓存操作
 │   ├── exceptions.py           # 全局异常层级
 │   ├── ollama.py               # Ollama HTTP 调用
 │   ├── model_context.py        # 模型上下文长度缓存
 │   ├── language_policy.py      # 语言检测与校验
-│   ├── request_guard.py        # 请求防护（限流、并发）
-│   └── session_store.py        # 通用 Redis 会话存储基类
+│   └── request_guard.py        # 请求防护（限流、并发）
 │
 ├── shared/                     # 跨模块共享工具
 │   ├── dtutils.py              # 日期时间（utcnow、utcnow_iso）
 │   ├── text_utils.py           # 文本/JSON 解析（parse_json_object）
 │   ├── tool_args.py            # 工具参数解析与规整
 │   └── error_utils.py          # 错误事件构建
+│
+├── auth/                       # 业务域：认证与用户管理
+│   ├── router/
+│   │   └── auth.py             # 认证端点（注册、登录、刷新令牌、用户信息、登出）
+│   ├── service/
+│   │   └── auth.py             # 认证业务逻辑（JWT、密码哈希、令牌管理）
+│   ├── models/
+│   │   └── user.py             # SQLAlchemy ORM 模型（User）
+│   └── schemas/
+│       ├── request.py          # 入参 Pydantic 模型
+│       └── response.py         # 出参 Pydantic 模型
 │
 ├── chat/                       # 业务域：对话
 │   ├── router/
@@ -103,11 +136,12 @@ backend/src/doc_process_studio/
 │   ├── service/
 │   │   ├── stream.py           # 流式聊天编排入口
 │   │   ├── sessions.py         # 聊天会话 CRUD
+│   │   ├── db_session_store.py # 聊天会话 PostgreSQL 存储
 │   │   ├── attachments.py      # 附件管理
 │   │   ├── file_context.py     # 文件内容提取
-│   │   ├── session_store.py    # 聊天会话 Redis 存储
 │   │   └── streaming/          # SSE 格式化、工具调用合并、上下文构建
 │   ├── models/
+│   │   ├── chat_session_orm.py # ChatSession ORM 模型
 │   │   ├── session.py          # 会话摘要、快照模型
 │   │   ├── message.py          # 消息输入、流式请求模型
 │   │   ├── attachment.py       # 附件模型
@@ -122,15 +156,16 @@ backend/src/doc_process_studio/
 │   │   └── incident_reports.py # 事故报告端点
 │   ├── service/
 │   │   ├── session.py          # 会话 CRUD
+│   │   ├── db_session_store.py # 事故报告会话 PostgreSQL 存储
 │   │   ├── generation.py       # AI 正文生成
 │   │   ├── preview.py          # DOCX/PDF/HTML 预览
 │   │   ├── translation.py      # 中英文翻译
 │   │   ├── reference.py        # 参考文档选择
 │   │   ├── normalization.py    # 日期/时间/状态归一化
 │   │   ├── report_data.py      # 快照→report_data 构建
-│   │   ├── constants.py        # 字段键常量
-│   │   └── session_store.py    # 事故报告会话 Redis 存储
+│   │   └── constants.py        # 字段键常量
 │   ├── models/
+│   │   ├── incident_report_session_orm.py # IncidentReportSession ORM 模型
 │   │   └── incident_report.py  # 事故报告数据模型
 │   └── schemas/
 │       ├── request.py          # 入参 Pydantic 模型
@@ -181,20 +216,7 @@ backend/src/doc_process_studio/
     └── <skill-id>/
 ```
 
-测试目录结构（详见上方"测试目录约定"）：
-
-```text
-backend/tests/
-├── conftest.py                 # 全局 autouse fixture
-├── unit/                       # 单元测试（纯逻辑，不依赖 HTTP）
-│   ├── chat/                   # 对话域
-│   ├── incident_report/          # 事故报告域
-│   ├── skill/                  # Skill 域（含共享 conftest.py）
-│   └── agent/                  # Agent 域
-├── integration/                # 集成测试（HTTP 端到端）
-│   └── api/                    # API 端点测试
-└── skills/                     # Skill 契约测试
-```
+测试目录结构详见上方"测试"章节。
 
 ## 业务域开发文档
 
@@ -202,6 +224,7 @@ backend/tests/
 
 | 业务域 | 文档路径 | 说明 |
 |--------|---------|------|
+| Auth | `src/doc_process_studio/auth/DEVELOPMENT.md` | 认证与用户管理：注册、登录、JWT 令牌、用户资料、密码修改 |
 | Chat | `src/doc_process_studio/chat/DEVELOPMENT.md` | 对话功能：消息流式生成、会话管理、附件 |
 | Incident | `src/doc_process_studio/incident_report/DEVELOPMENT.md` | 事故报告：表单、AI 生成、预览、翻译 |
 | Skill | `src/doc_process_studio/skill/DEVELOPMENT.md` | Skill 管理：发现、选择、上下文检索、工具执行 |
@@ -249,6 +272,8 @@ service → models
 | 模块 | 职责 |
 |------|------|
 | `config.py` | 所有配置参数（Settings 类），从环境变量 / `.env` 文件读取 |
+| `database.py` | PostgreSQL 异步连接池（SQLAlchemy async engine + session） |
+| `security.py` | JWT 令牌生成/验证、密码哈希/校验 |
 | `db.py` | Redis 连接池管理 |
 | `cache.py` | Redis 缓存操作（get_json、set_json、build_cache_key 等） |
 | `exceptions.py` | 全局异常层级（AppError、NotFoundError、ConflictError 等） |
@@ -256,7 +281,6 @@ service → models
 | `model_context.py` | 模型上下文长度缓存与预热 |
 | `language_policy.py` | 语言检测与校验（LLM 驱动） |
 | `request_guard.py` | 请求防护（速率限制、并发控制） |
-| `session_store.py` | 通用 `RedisSessionStore[TSummary, TSnapshot]` 泛型基类 |
 
 ## 跨模块共享（shared/）
 
@@ -285,6 +309,38 @@ from .system.router.health import router as health_router
 1. 把路由文件放到对应业务域的 `router/` 子包
 2. 在 `main.py` 中导入并注册
 3. 不要在 `router/` 里写业务逻辑
+
+## 认证与用户管理
+
+后端提供完整的 JWT 认证体系，所有业务 API 均需携带 `Authorization: Bearer <token>` 请求头。详细开发指南见 `src/doc_process_studio/auth/DEVELOPMENT.md`。
+
+### 认证 API
+
+| 端点 | 方法 | 说明 | 是否需要认证 |
+|------|------|------|------------|
+| `/api/auth/register` | POST | 用户注册 | 否 |
+| `/api/auth/login` | POST | 用户登录（form-urlencoded） | 否 |
+| `/api/auth/refresh` | POST | 刷新令牌 | 否 |
+| `/api/auth/me` | GET | 获取当前用户信息 | 是 |
+| `/api/auth/me` | PUT | 更新用户资料 | 是 |
+| `/api/auth/password` | PUT | 修改密码 | 是 |
+| `/api/auth/logout` | POST | 登出 | 是 |
+| `/api/auth/users/{user_id}` | DELETE | 删除用户账号 | 是 |
+| `/api/auth/users/by-prefix/{prefix}` | DELETE | 按用户名前缀批量删除（仅 dev） | 否 |
+| `/api/auth/rate-limit-whitelist` | POST | 速率限制白名单（仅 dev） | 否 |
+| `/api/auth/ensure-admin` | POST | 确保管理员用户存在（仅 dev） | 否 |
+
+### 环境变量
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `DATABASE_URL` | PostgreSQL 连接字符串 | `postgresql+asyncpg://admin:postgres_password@db:5432/master` |
+| `JWT_SECRET_KEY` | JWT 签名密钥 | `your-super-secret-key-change-in-production-min-32-chars` |
+| `JWT_ALGORITHM` | JWT 算法 | `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | access_token 有效期（分钟） | `15` |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | refresh_token 有效期（天） | `7` |
+| `ADMIN_USERNAME` | 默认管理员用户名 | `admin` |
+| `ADMIN_PASSWORD` | 默认管理员密码 | `admin123` |
 
 ## 事故报告工作区
 
@@ -373,6 +429,25 @@ Skill 内容来自 `skills/` 目录。每个 skill 至少应包含：
 ### 类型注解
 
 类型注解覆盖率 > 90%。
+
+### 认证开发注意事项
+
+详细开发指南见 `src/doc_process_studio/auth/DEVELOPMENT.md`，以下为关键要点：
+
+1. **bcrypt 版本兼容性**：passlib 的 bcrypt 后端与 `bcrypt>=5.0.0` 不兼容，`pyproject.toml` 中已锁定 `bcrypt>=4.0.1,<5.0.0`
+2. **登录接口格式**：`/api/auth/login` 使用 `OAuth2PasswordRequestForm`，请求体必须是 `application/x-www-form-urlencoded` 格式，不是 JSON
+3. **速率限制与白名单**：注册和登录接口有速率限制（5 次/60 秒/客户端 IP），E2E 测试应在 `beforeAll` 中调用 `POST /api/auth/rate-limit-whitelist` 加入白名单
+4. **测试专用端点**：`by-prefix`、`rate-limit-whitelist`、`ensure-admin` 仅在 dev 环境注册，生产环境不可访问
+5. **共享认证依赖**：`get_current_user_id` 定义在 `core/security.py`，其他域通过 `from ...core.security import get_current_user_id` 引用
+6. **ORM 模型归属**：每个业务域的 ORM 模型放在自己的 `models/` 目录下，`Base` 定义在 `core/database.py`
+
+### 测试开发注意事项
+
+1. **异步引擎清理**：`tests/conftest.py` 中有 `_dispose_async_engine` autouse fixture，每个测试后自动调用 `engine.dispose()` 释放连接池，避免异步测试间的连接泄漏
+2. **缓存客户端重置**：`_reset_cache_client` autouse fixture 会在每个测试后清空 Redis 客户端和连接池
+3. **速率限制器重置**：`_reset_rate_limiter` autouse fixture 会在每个测试后清空 `_auth_rate_windows` 和 `_RATE_LIMIT_WHITELIST`，防止速率限制状态在测试间泄漏
+4. **认证测试隔离**：集成测试中使用 `monkeypatch` 替换 service 层函数，避免测试依赖真实数据库；Pydantic 响应模型字段使用 snake_case（如 `avatar_color` 不是 `avatarColor`）
+5. **auth_headers fixture**：`conftest.py` 提供 `auth_headers` fixture，生成包含有效 JWT 的 `Authorization` 请求头，用于需要认证的 API 测试
 
 ## 提交改动前建议自查
 

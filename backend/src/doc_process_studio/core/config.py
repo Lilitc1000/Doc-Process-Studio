@@ -97,6 +97,13 @@ class Settings(BaseSettings):
     agent_executor_model_context_warmup_concurrency: int = 4
     generated_attachments_dir: str = str(BACKEND_DIR / "generated-attachments")
     generated_attachment_ttl_seconds: int = 60 * 60 * 24 * 7
+    database_url: str = "postgresql+asyncpg://admin:postgres_password@db:5432/master"
+    jwt_secret_key: str = "your-super-secret-key-change-in-production-min-32-chars"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+    admin_username: str = "admin"
+    admin_password: str = "admin123"
 
     model_config = SettingsConfigDict(extra="ignore")
 

@@ -1,5 +1,5 @@
 from .config import Settings, settings
-from .db import get_redis_client
+from .cache_client import get_redis_client
 from .cache import (
     build_cache_key,
     delete_key,
@@ -36,14 +36,12 @@ from .language_policy import (
     verify_text_language_with_model,
 )
 from .request_guard import guard_request_slot, normalize_tenant_id
-from .session_store import RedisSessionStore
 
 __all__ = [
     "LANGUAGE_EN",
     "LANGUAGE_ZH",
     "NotFoundError",
     "OllamaNotConfiguredError",
-    "RedisSessionStore",
     "RequestGuardError",
     "Settings",
     "ValidationError",

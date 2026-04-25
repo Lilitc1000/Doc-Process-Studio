@@ -12,7 +12,7 @@ backend/src/doc_process_studio/incident_report/
 │   └── incident_reports.py  # 事故报告全部 API 端点
 ├── service/
 │   ├── session.py           # 会话 CRUD
-│   ├── session_store.py     # Redis 会话存储实例
+│   ├── session_store.py     # PostgreSQL 会话存储（重新导出 db_session_store）
 │   ├── generation.py        # AI 生成正文（一键 / 分段）
 │   ├── preview.py           # HTML 预览 + DOCX/PDF 导出
 │   ├── translation.py       # 多语言翻译
@@ -62,6 +62,6 @@ backend/src/doc_process_studio/incident_report/
 
 - 表单 Schema 来自 `skills/incident-report/agents/openai.yaml`
 - 生成脚本在 `skills/incident-report/scripts/generate_incident_report.py`
-- 会话数据存储在 Redis，使用 `session_store.py` 中的实例
+- 会话数据存储在 PostgreSQL，使用 `session_store.py` 重新导出 `db_session_store` 中的函数
 - 预览支持 HTML、DOCX、PDF 三种格式
 - 不要在 `router/` 中写业务逻辑，所有编排逻辑放 `service/`

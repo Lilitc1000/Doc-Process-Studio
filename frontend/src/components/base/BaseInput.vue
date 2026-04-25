@@ -1,11 +1,26 @@
 <template>
-  <input v-bind="$attrs" class="base-input" />
+  <input
+    :value="modelValue"
+    class="base-input"
+    v-bind="$attrs"
+    @input="
+      $emit('update:modelValue', ($event.target as HTMLInputElement).value)
+    "
+  />
 </template>
 
 <script setup lang="ts">
 defineOptions({
   inheritAttrs: false,
 });
+
+defineProps<{
+  modelValue?: string;
+}>();
+
+defineEmits<{
+  (e: 'update:modelValue', value: string): void;
+}>();
 </script>
 
 <style scoped>

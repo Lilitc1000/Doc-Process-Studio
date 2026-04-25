@@ -10,14 +10,12 @@ npm run dev
 npm run build
 npm run lint
 npm run test
-npx -y vue-tsc --noEmit
 ```
 
-开发时建议至少保证下面 3 项通过：
+开发时建议至少保证下面 2 项通过：
 
 ```bash
 npm run lint
-npx -y vue-tsc --noEmit
 npm run build
 ```
 
@@ -45,6 +43,12 @@ frontend/src/
 │       └── AppHeader.vue
 │
 ├── views/                      # 页面级组件（按业务域，对应路由）
+│   ├── auth/
+│   │   ├── LoginView.vue
+│   │   ├── RegisterView.vue
+│   │   └── styles/
+│   │       ├── login-page.css
+│   │       └── register-page.css
 │   ├── home/
 │   │   ├── HomeView.vue
 │   │   └── styles/
@@ -89,13 +93,17 @@ frontend/src/
 │   │   ├── BaseDropdown.vue    # 下拉选择器
 │   │   ├── BaseModal.vue       # 模态对话框
 │   │   ├── BaseInput.vue       # 文本输入框
+│   │   ├── PasswordInput.vue   # 密码输入框（带可见性切换）
 │   │   ├── BaseTextarea.vue    # 多行输入框
 │   │   ├── BaseFileUpload.vue  # 文件上传
 │   │   └── BaseDateTimePicker.vue # 日期/时间选择器
 │   └── business/               # 业务组件：跨页面复用，带业务语义
 │       ├── SessionSidebar.vue
 │       ├── FloatingToast.vue
-│       └── TraceReplayModal.vue
+│       ├── TraceReplayModal.vue
+│       ├── UserAvatar.vue
+│       ├── UserMenuDropdown.vue
+│       └── UserProfileModal.vue
 │
 ├── composables/                # 全局组合式函数
 │   └── business/               # 跨页面业务逻辑复用
@@ -104,7 +112,8 @@ frontend/src/
 │       └── useTraceModal.ts
 │
 ├── api/                        # HTTP 请求封装（按业务域）
-│   ├── request.ts              # Axios 实例（含 camelCase ↔ snake_case 自动转换拦截器）
+│   ├── request.ts              # Axios 实例（含 camelCase ↔ snake_case 自动转换拦截器 + JWT 认证）
+│   ├── auth.ts                 # 认证接口（注册、登录、刷新令牌、用户信息、登出）
 │   ├── catalog.ts              # 模型列表、skill 列表
 │   ├── chat-stream.ts          # 聊天流式请求
 │   ├── chat-sessions.ts        # 聊天会话接口
@@ -114,10 +123,13 @@ frontend/src/
 │
 ├── stores/                     # Pinia 全局状态（按业务域）
 │   ├── app.ts                  # 用户偏好（持久化）
+│   ├── auth.ts                 # 认证状态（登录、令牌、用户信息）
 │   ├── chat.ts                 # 聊天工作区状态
 │   └── incident-report.ts      # 事故报告工作区状态
 │
 ├── types/                      # 跨组件共享类型
+│   ├── auth/
+│   │   └── auth.ts             # 认证类型（登录、注册、令牌、用户信息）
 │   ├── chat/
 │   │   ├── chat.ts             # 消息节点、聊天请求、流式事件
 │   │   └── session.ts          # 历史会话与快照
@@ -137,6 +149,7 @@ frontend/src/
 │   │   └── constants.ts        # 事故报告常量与归一化函数
 │   └── common/
 │       ├── catalog.ts          # 目录归一化
+│       ├── avatar-colors.ts    # 头像颜色常量
 │       ├── file.ts             # 文件大小格式化
 │       ├── file-type-visuals.ts # 文件类型视觉映射
 │       ├── ids.ts              # ID 生成
@@ -153,11 +166,14 @@ frontend/src/
 ```text
 frontend/tests/
 ├── unit/                       # Vitest：纯函数、composables、store
+│   ├── auth/                   # 认证域（auth store）
 │   ├── chat/
 │   ├── incident-report/
 │   └── common/
 ├── integration/                # Vitest + @vue/test-utils：组件渲染 + API mock
+│   └── auth/                   # 认证组件（UserAvatar、PasswordInput）
 └── e2e/                        # Playwright：真实浏览器端到端测试
+    ├── auth.spec.ts            # 认证流程（注册、登录、登出、路由守卫）
     ├── home.spec.ts            # 首页导航
     ├── chat.spec.ts            # 对话页面（含发送消息场景）
     ├── incident-report.spec.ts # 事故报告页面（含创建报告场景）
@@ -171,6 +187,7 @@ frontend/tests/
 
 | 业务域         | 前端文档                                   | 后端文档                                                        |
 | -------------- | ------------------------------------------ | --------------------------------------------------------------- |
+| Auth           | `src/views/auth/DEVELOPMENT.md`            | `backend/src/doc_process_studio/auth/DEVELOPMENT.md`            |
 | Chat           | `src/views/chat/DEVELOPMENT.md`            | `backend/src/doc_process_studio/chat/DEVELOPMENT.md`            |
 | IncidentReport | `src/views/incident-report/DEVELOPMENT.md` | `backend/src/doc_process_studio/incident_report/DEVELOPMENT.md` |
 | Home           | `src/views/home/DEVELOPMENT.md`            | —                                                               |
@@ -256,13 +273,13 @@ frontend/tests/
 
 所有页面共享的过渡动画统一收敛在 `src/styles/transitions.css` 中，通过 Vue `<Transition name="xxx">` 直接使用：
 
-| 动画名 | 用途 | 示例 |
-|--------|------|------|
-| `fade` | 纯淡入淡出（轻提示、遮罩） | `<Transition name="fade">` |
-| `fade-slide-up` | 淡入 + 上滑（弹窗、下拉菜单） | `<Transition name="fade-slide-up">` |
-| `page-switch` | 页面路由切换 | `<Transition name="page-switch" mode="out-in">` |
-| `session-switch` | 同页内会话/内容切换 | `<Transition name="session-switch" mode="out-in">` |
-| `skill-suggestion-fade` | Skill 建议面板 | `<Transition name="skill-suggestion-fade">` |
+| 动画名                  | 用途                          | 示例                                               |
+| ----------------------- | ----------------------------- | -------------------------------------------------- |
+| `fade`                  | 纯淡入淡出（轻提示、遮罩）    | `<Transition name="fade">`                         |
+| `fade-slide-up`         | 淡入 + 上滑（弹窗、下拉菜单） | `<Transition name="fade-slide-up">`                |
+| `page-switch`           | 页面路由切换                  | `<Transition name="page-switch" mode="out-in">`    |
+| `session-switch`        | 同页内会话/内容切换           | `<Transition name="session-switch" mode="out-in">` |
+| `skill-suggestion-fade` | Skill 建议面板                | `<Transition name="skill-suggestion-fade">`        |
 
 **注意**：新增页面如需使用过渡动画，优先从上述全局动画中选择；只有当现有动画无法满足需求时，才考虑在 `transitions.css` 中扩展新动画，**禁止**在业务样式文件中重复定义相同的动画类。
 
@@ -323,6 +340,18 @@ frontend/tests/
 />
 ```
 
+### PasswordInput
+
+密码输入框，基于 `BaseInput` 封装，支持密码可见性切换（眼睛图标）。
+
+```vue
+<PasswordInput
+  v-model="password"
+  placeholder="请输入密码"
+  autocomplete="current-password"
+/>
+```
+
 ### BaseFileUpload
 
 统一文件上传触发器，隐藏原生 `<input type="file">`，通过 slot 自定义触发 UI。
@@ -351,12 +380,14 @@ frontend/tests/
 
 使用 Vue Router 4 管理页面导航：
 
-| 路由路径           | 组件                     | 说明           |
-| ------------------ | ------------------------ | -------------- |
-| `/`                | `HomeView.vue`           | 主页，入口卡片 |
-| `/chat`            | `ChatView.vue`           | 对话页面       |
-| `/incident-report` | `IncidentReportView.vue` | 事故报告页面   |
-| `/settings`        | `SettingsView.vue`       | 设置页面       |
+| 路由路径           | 组件                     | 说明           | 需要认证 |
+| ------------------ | ------------------------ | -------------- | -------- |
+| `/login`           | `LoginView.vue`          | 登录页面       | 否       |
+| `/register`        | `RegisterView.vue`       | 注册页面       | 否       |
+| `/`                | `HomeView.vue`           | 主页，入口卡片 | 是       |
+| `/chat`            | `ChatView.vue`           | 对话页面       | 是       |
+| `/incident-report` | `IncidentReportView.vue` | 事故报告页面   | 是       |
+| `/settings`        | `SettingsView.vue`       | 设置页面       | 是       |
 
 所有页面使用 `DefaultLayout` 布局，包含 `AppHeader` 和 `<router-view>`。
 
@@ -395,6 +426,23 @@ defineExpose({
 | `selectedRerankerModel` | 当前选中的重排序模型 | ✅     |
 | `availableModels`       | 可用模型列表缓存     | ✅     |
 | `processingModes`       | 可用 skill 列表缓存  | ✅     |
+
+### `useAuthStore`（部分持久化）
+
+文件：[stores/auth.ts](/frontend/src/stores/auth.ts)
+
+管理用户认证状态，refresh_token 持久化到 localStorage：
+
+| 字段              | 说明                         | 持久化 |
+| ----------------- | ---------------------------- | ------ |
+| `accessToken`     | 当前 access_token（内存）    | ❌     |
+| `refreshToken`    | 当前 refresh_token           | ✅     |
+| `userInfo`        | 当前用户信息（内存）         | ❌     |
+| `isAuthenticated` | 是否已认证（computed）       | ❌     |
+| `username`        | 当前用户名（computed）       | ❌     |
+| `avatarColor`     | 当前用户头像颜色（computed） | ❌     |
+
+核心方法：`login`、`register`、`refreshAccessToken`、`logout`、`fetchUserInfo`、`clearAuth`
 
 ### `useChatStore`（不持久化）
 
@@ -447,26 +495,38 @@ IncidentReportView.vue
 
 `api/` 目录按业务域组织，每个文件负责一组 API 请求：
 
-| 文件                  | 职责                                                                            |
-| --------------------- | ------------------------------------------------------------------------------- |
-| `request.ts`          | Axios 实例（baseURL: `/api`），含请求/响应拦截器自动转换 camelCase ↔ snake_case |
-| `catalog.ts`          | 模型列表、skill 列表                                                            |
-| `chat-stream.ts`      | 聊天流式请求（使用原生 fetch，支持 SSE ReadableStream）                         |
-| `chat-sessions.ts`    | 聊天会话 CRUD                                                                   |
-| `chat-attachments.ts` | 附件下载                                                                        |
-| `incident-report.ts`  | 事故报告工作区全部接口                                                          |
-| `trace.ts`            | 链路回放查询                                                                    |
+| 文件                  | 职责                                                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `request.ts`          | Axios 实例（baseURL: `/api`），含请求/响应拦截器自动转换 camelCase ↔ snake_case，JWT 认证头注入，401 自动刷新令牌 |
+| `auth.ts`             | 认证接口：注册、登录、刷新令牌、获取/更新用户信息、修改密码、登出                                                 |
+| `catalog.ts`          | 模型列表、skill 列表                                                                                              |
+| `chat-stream.ts`      | 聊天流式请求（使用原生 fetch，支持 SSE ReadableStream）                                                           |
+| `chat-sessions.ts`    | 聊天会话 CRUD                                                                                                     |
+| `chat-attachments.ts` | 附件下载                                                                                                          |
+| `incident-report.ts`  | 事故报告工作区全部接口                                                                                            |
+| `trace.ts`            | 链路回放查询                                                                                                      |
 
 `api/` 只负责请求与响应映射，不负责页面状态。
 
-### HTTP 拦截器（camelCase ↔ snake_case 自动转换）
+### HTTP 拦截器（camelCase ↔ snake_case 自动转换 + JWT 认证）
 
 `request.ts` 中已配置 Axios 拦截器，使用 `humps` 库实现自动转换：
 
-- **请求拦截器**：将 `config.data` 和 `config.params` 中的 camelCase 字段自动转换为 snake_case
-- **响应拦截器**：将 `response.data` 中的 snake_case 字段自动转换为 camelCase
+- **请求拦截器**：将 `config.data` 和 `config.params` 中的 camelCase 字段自动转换为 snake_case；自动注入 `Authorization: Bearer <token>` 请求头
+- **响应拦截器**：将 `response.data` 中的 snake_case 字段自动转换为 camelCase；遇到 401 时自动尝试刷新令牌并重试请求
 
 前端代码统一使用 camelCase，后端接口统一使用 snake_case，无需在业务代码中手动转换。
+
+### 认证流程
+
+前端认证体系包含登录/注册页面、JWT 令牌管理、路由守卫和用户菜单。详细开发指南见 `src/views/auth/DEVELOPMENT.md`。
+
+1. 用户在登录页输入用户名和密码，调用 `authStore.login()`
+2. 登录成功后 access_token 存入内存，refresh_token 持久化到 localStorage
+3. 后续 API 请求自动携带 `Authorization: Bearer <access_token>` 请求头
+4. access_token 过期（401）时，自动使用 refresh_token 刷新，成功后重试原请求
+5. 刷新失败则清除认证状态，跳转到登录页
+6. 路由守卫确保未认证用户只能访问 `/login` 和 `/register`
 
 ## 字段命名约定
 
@@ -553,45 +613,31 @@ IncidentReportView.vue
 
 如果是纯格式化、纯映射、纯解析逻辑，优先放 `src/utils/`，不要放进组件。
 
-## 测试约定
+## 测试
 
-当前测试使用 Vitest + @vue/test-utils + happy-dom + Playwright。
-
-### 单元测试与集成测试
-
-- **单元测试**：纯函数输入输出，composables 不 mock API（测逻辑分支），utils 全覆盖
-- **集成测试**：组件用 @vue/test-utils mount，API 用 vi.mock，不测真实后端
-
-### E2E 测试
-
-使用 Playwright 在真实浏览器中测试用户常用场景：
+测试使用 Vitest + @vue/test-utils + happy-dom + Playwright，详细开发指南见 `tests/DEVELOPMENT.md`。
 
 ```bash
-# 先启动后端（E2E 测试需要后端运行）
-cd backend && env ENV=dev uv run uvicorn doc_process_studio.main:app --host 0.0.0.0 --port 8000
-
-# 再运行 E2E 测试
-npm run test:e2e       # 运行 E2E 测试
-npm run test:e2e:ui    # 带 UI 界面运行
+npm run test          # 单元 + 集成测试
+npm run test:e2e      # E2E 测试（需要后端运行）
+npm run test:e2e:ui   # E2E 测试（带 UI）
 ```
 
-E2E 测试覆盖：
+测试按业务域组织，每个域内再区分测试类型：
 
-- 首页加载与导航卡片跳转
-- 对话页面：渲染、发送消息、AI 回复、会话管理
-- 事故报告页面：渲染、创建报告、填写表单、AI 生成正文
-- 设置页面：模型选择交互
-- 全局导航（header 首页按钮、浏览器前进后退）
-
-E2E 测试通过 `playwright.config.ts` 配置，会自动启动 Vite 开发服务器。**对话和事故报告的 E2E 测试需要后端运行**，纯 UI 测试则不需要。
-
-### 新增 E2E 测试注意
-
-1. 测试文件放在 `tests/e2e/` 目录，文件名以 `.spec.ts` 结尾
-2. 使用 `page.goto()` 导航，用 CSS 选择器定位元素
-3. 需要后端的测试用 `test.describe` 标注，并在测试前确认后端可用
-4. 使用 `expect().toBeVisible()` / `toHaveText()` / `toHaveURL()` 等断言
-5. 涉及 AI 生成的测试需要较长超时时间（建议 30s+）
+```text
+frontend/tests/
+├── DEVELOPMENT.md    # 测试开发指南（必读）
+├── setup.ts          # Vitest 全局 setup
+├── helpers.ts        # E2E 共享辅助函数
+├── auth/             # 认证域（unit/ + integration/ + e2e/）
+├── chat/             # 对话域（unit/ + integration/ + e2e/）
+├── incident-report/  # 事故报告域（unit/ + integration/ + e2e/）
+├── settings/         # 设置域（e2e/）
+├── home/             # 首页域（e2e/）
+├── common/           # 通用工具域（unit/）
+└── app/              # 全局/跨域（e2e/）
+```
 
 ## 维护时尽量避免的事
 

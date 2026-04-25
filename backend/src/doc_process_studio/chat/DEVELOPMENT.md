@@ -17,7 +17,7 @@ backend/src/doc_process_studio/chat/
 │   ├── sessions.py         # 会话 CRUD
 │   ├── attachments.py      # 附件管理
 │   ├── file_context.py     # 上传文件上下文准备
-│   ├── session_store.py    # Redis 会话存储实例
+│   ├── session_store.py    # PostgreSQL 会话存储（重新导出 db_session_store）
 │   └── streaming/          # SSE 格式化、工具调用合并、上下文构建
 ├── models/
 │   ├── session.py          # ChatSessionSummary, ChatSessionSnapshot
@@ -64,6 +64,6 @@ backend/src/doc_process_studio/chat/
 ## 开发注意
 
 - 流式响应使用 SSE 格式，事件类型定义在 `service/streaming/` 中
-- 会话数据存储在 Redis，使用 `session_store.py` 中的 `RedisSessionStore` 实例
+- 会话数据存储在 PostgreSQL，使用 `session_store.py` 重新导出 `db_session_store` 中的函数
 - 附件文件落到 `backend/generated-attachments/`，7 天过期自动清理
 - 不要在 `router/` 中写业务逻辑，所有编排逻辑放 `service/`

@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.ts,.js --fix && prettier --write .",
     "format": "prettier --check .",
+    "type-check": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -42,6 +43,7 @@
     "prettier": "^3.3.3",
     "typescript": "^5.9.3",
     "vite": "^8.0.5",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "vue-tsc": "^2.2.12"
   }
 }

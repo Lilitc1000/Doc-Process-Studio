@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..models.incident_report import IncidentReportSessionSummary
 from ..schemas.request import (
@@ -28,6 +28,7 @@ from ..service.session import (
     update_incident_report_session_title,
     update_incident_report_session_snapshot,
 )
+from ...core.security import get_current_user_id
 
 router = APIRouter(prefix="/api/incident-report", tags=["incident-report"])
 
@@ -38,19 +39,25 @@ async def get_form_schema() -> IncidentReportFormSchemaResponse:
 
 
 @router.get("/sessions", response_model=IncidentReportSessionListResponse)
-async def list_sessions() -> IncidentReportSessionListResponse:
+async def list_sessions(
+    user_id: str = Depends(get_current_user_id),
+) -> IncidentReportSessionListResponse:
     return await list_incident_report_sessions()
 
 
 @router.post("/sessions", response_model=IncidentReportSessionSummary)
 async def create_session(
     payload: IncidentReportSessionCreateRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> IncidentReportSessionSummary:
     return await create_incident_report_session(title=payload.title)
 
 
 @router.get("/sessions/{session_id}", response_model=IncidentReportSessionDetail)
-async def get_session(session_id: str) -> IncidentReportSessionDetail:
+async def get_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> IncidentReportSessionDetail:
     session = await get_incident_report_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="未找到对应事故报告会话。")
@@ -61,6 +68,7 @@ async def get_session(session_id: str) -> IncidentReportSessionDetail:
 async def update_session(
     session_id: str,
     payload: IncidentReportSessionUpdateRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> IncidentReportSessionDetail:
     try:
         session = await update_incident_report_session_snapshot(
@@ -81,6 +89,7 @@ async def update_session(
 async def quick_generate_body(
     session_id: str,
     payload: IncidentBodyQuickGenerateRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> IncidentBodyGenerateResponse:
     try:
         response = await generate_incident_report_body_from_quick_input(
@@ -104,6 +113,7 @@ async def quick_generate_body(
 async def generate_body_section(
     session_id: str,
     payload: IncidentBodySectionGenerateRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> IncidentBodyGenerateResponse:
     try:
         response = await polish_incident_report_section(
@@ -129,6 +139,7 @@ async def generate_body_section(
 async def preview_session_attachment(
     session_id: str,
     payload: IncidentReportPreviewRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> IncidentReportPreviewResponse:
     try:
         response = await preview_incident_report_attachment(
@@ -150,6 +161,7 @@ async def preview_session_attachment(
 async def rename_session(
     session_id: str,
     payload: IncidentReportSessionTitleUpdateRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> IncidentReportSessionSummary:
     session = await update_incident_report_session_title(
         session_id=session_id,
@@ -161,6 +173,9 @@ async def rename_session(
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session(session_id: str) -> dict[str, bool]:
+async def delete_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, bool]:
     deleted = await delete_incident_report_session(session_id)
     return {"deleted": deleted}

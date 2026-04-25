@@ -1,9 +1,13 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import text
 
 from .core.config import settings
+from .core.database import Base, engine
 from .core.model_context import warmup_model_context_cache
+from .auth.router.auth import router as auth_router
+from .auth.service.auth import ensure_admin_user
 from .chat.service.attachments import cleanup_expired_attachments
 from .chat.router.stream import router as chat_stream_router
 from .chat.router.sessions import router as chat_sessions_router
@@ -17,6 +21,10 @@ from .system.router.agent_traces import router as agent_traces_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    await ensure_admin_user()
     cleanup_expired_attachments()
     await warmup_model_context_cache()
     yield
@@ -27,6 +35,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(auth_router)
 app.include_router(chat_stream_router)
 app.include_router(chat_sessions_router)
 app.include_router(chat_attachments_router)

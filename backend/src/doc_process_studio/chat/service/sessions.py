@@ -15,14 +15,15 @@ from ...core.config import settings
 from ...system.service.trace_store import delete_agent_traces_for_conversation
 from ...core.ollama import extract_first_message_content, post_chat_completion
 from .attachments import delete_attachments_for_conversation
-from .session_store import (
+from .db_session_store import (
     delete_chat_session_records,
-    list_chat_session_ids,
+    get_chat_session_user_id,
+    list_chat_session_ids_by_user,
     load_chat_session_snapshot,
     load_chat_session_summary,
     save_chat_session_snapshot,
-    save_chat_session_summary,
-    touch_chat_session_index,
+    save_chat_session_summary_with_user_id,
+    touch_chat_session_updated_at,
 )
 from ...shared.dtutils import utcnow
 
@@ -83,8 +84,8 @@ async def generate_session_title(
     return content or fallback_title
 
 
-async def list_chat_sessions() -> ChatSessionListResponse:
-    session_ids = await list_chat_session_ids()
+async def list_chat_sessions(user_id: str) -> ChatSessionListResponse:
+    session_ids = await list_chat_session_ids_by_user(user_id)
     sessions: list[ChatSessionSummary] = []
 
     for session_id in session_ids:
@@ -110,6 +111,7 @@ async def get_chat_session(session_id: str) -> ChatSessionDetail | None:
 async def upsert_chat_session(
     *,
     session_id: str,
+    user_id: str,
     title: str,
     title_source_messages: list[str],
     snapshot: ChatSessionSnapshot,
@@ -139,9 +141,9 @@ async def upsert_chat_session(
         ),
     )
 
-    await save_chat_session_summary(summary)
+    await save_chat_session_summary_with_user_id(summary, user_id)
     await save_chat_session_snapshot(session_id, snapshot)
-    await touch_chat_session_index(session_id, now.timestamp())
+    await touch_chat_session_updated_at(session_id)
 
     return summary
 
@@ -159,8 +161,11 @@ async def update_chat_session_title(
         title=title.strip(),
         updated_at=utcnow(),
     )
-    await save_chat_session_summary(summary)
-    await touch_chat_session_index(session_id, summary.updated_at.timestamp())
+    await save_chat_session_summary_with_user_id(
+        summary,
+        await get_chat_session_user_id(session_id) or "",
+    )
+    await touch_chat_session_updated_at(session_id)
     return summary
 
 
@@ -171,3 +176,10 @@ async def delete_chat_session(session_id: str) -> bool:
         conversation_id=session_id
     )
     return bool(deleted_session or deleted_attachments > 0 or deleted_traces > 0)
+
+
+async def check_chat_session_access(session_id: str, user_id: str) -> bool:
+    session_user_id = await get_chat_session_user_id(session_id)
+    if session_user_id is None:
+        return False
+    return session_user_id == user_id

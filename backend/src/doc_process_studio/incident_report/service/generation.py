@@ -56,10 +56,10 @@ from .normalization import (
 from .reference import resolve_generation_reference_context
 from .report_data import answer_text, answer_value, answer_value_from_answers, set_answer, set_answer_if_non_empty
 from ...chat.service.streaming import extract_delta_text, extract_done_reason
-from .session_store import (
+from .db_session_store import (
     save_incident_session_snapshot,
     save_incident_session_summary,
-    touch_incident_session_index,
+    touch_incident_session_updated_at,
 )
 
 
@@ -742,7 +742,7 @@ async def _run_body_generation_with_trace(
 
     await save_incident_session_summary(next_summary)
     await save_incident_session_snapshot(detail.id, next_snapshot)
-    await touch_incident_session_index(detail.id, now.timestamp())
+    await touch_incident_session_updated_at(detail.id)
 
     recorder.add_event(
         event_type="body_generation_response",

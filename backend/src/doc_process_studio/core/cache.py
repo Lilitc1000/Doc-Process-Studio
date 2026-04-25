@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 from .config import settings
-from .db import get_redis_client
+from .cache_client import get_redis_client
 
 
 def build_cache_key(*parts: str) -> str:

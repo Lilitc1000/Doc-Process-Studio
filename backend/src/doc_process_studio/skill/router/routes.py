@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..schemas import (
     SkillCacheStatusResponse,
@@ -17,12 +17,15 @@ from ..service.registry import (
     get_skill_interface,
     list_skill_interfaces,
 )
+from ...core.security import get_current_user_id
 
 router = APIRouter(prefix="/api", tags=["skills"])
 
 
 @router.get("/skills", response_model=SkillListResponse)
-async def list_skills() -> SkillListResponse:
+async def list_skills(
+    user_id: str = Depends(get_current_user_id),
+) -> SkillListResponse:
     return SkillListResponse(
         skills=list_skill_interfaces(),
     )
@@ -35,6 +38,7 @@ async def list_skills() -> SkillListResponse:
 async def search_skill_context(
     skill_id: str,
     query: str = Query(..., min_length=1),
+    user_id: str = Depends(get_current_user_id),
 ) -> SkillContextSearchResponse:
     try:
         get_skill_interface(skill_id)
@@ -58,7 +62,9 @@ async def search_skill_context(
 
 
 @router.get("/skills/cache/status", response_model=SkillCacheStatusResponse)
-async def get_skill_cache_status() -> SkillCacheStatusResponse:
+async def get_skill_cache_status(
+    user_id: str = Depends(get_current_user_id),
+) -> SkillCacheStatusResponse:
     try:
         if await ping_redis():
             return SkillCacheStatusResponse(
@@ -81,6 +87,7 @@ async def get_skill_cache_status() -> SkillCacheStatusResponse:
 async def refresh_skill_conversation_cache(
     conversation_id: str,
     tenant_id: str = Query(default="default"),
+    user_id: str = Depends(get_current_user_id),
 ) -> SkillConversationCacheResponse:
     refreshed, ttl_seconds = await refresh_conversation_state_ttl(
         conversation_id,
@@ -105,6 +112,7 @@ async def refresh_skill_conversation_cache(
 async def delete_skill_conversation_cache(
     conversation_id: str,
     tenant_id: str = Query(default="default"),
+    user_id: str = Depends(get_current_user_id),
 ) -> SkillConversationCacheResponse:
     cleared = await clear_conversation_state(conversation_id, tenant_id=tenant_id)
     ttl_seconds = await get_conversation_state_ttl_seconds(
