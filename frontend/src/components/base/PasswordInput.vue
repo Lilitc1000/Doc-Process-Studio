@@ -1,6 +1,6 @@
 <template>
   <div class="password-input-wrapper">
-    <BaseInput
+    <base-input
       ref="inputRef"
       :model-value="modelValue"
       :type="isVisible ? 'text' : 'password'"
@@ -8,7 +8,7 @@
       v-bind="$attrs"
       @update:model-value="$emit('update:modelValue', $event)"
     />
-    <BaseButton
+    <base-button
       type="button"
       variant="ghost"
       size="sm"
@@ -60,7 +60,7 @@
           stroke-linecap="round"
         />
       </svg>
-    </BaseButton>
+    </base-button>
   </div>
 </template>
 

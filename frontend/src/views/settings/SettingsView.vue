@@ -5,12 +5,12 @@
         <section class="settings-section">
           <h3 class="settings-section-title">模型配置</h3>
           <p class="settings-section-desc">
-            配置对话与文档生成所使用的 AI 模型
+            配置文档生成与重排序所使用的 AI 模型
           </p>
 
           <div class="selector-group">
             <label id="settings-model-label" class="selector-label"
-              >聊天模型</label
+              >生成模型</label
             >
             <base-dropdown
               :model-value="appStore.selectedModel"

@@ -5,7 +5,7 @@
       <form class="register-form" @submit.prevent="onSubmit">
         <div class="register-field">
           <label class="register-label">用户名</label>
-          <BaseInput
+          <base-input
             v-model="username"
             placeholder="3-20 个字符"
             autocomplete="username"
@@ -13,7 +13,7 @@
         </div>
         <div class="register-field">
           <label class="register-label">密码</label>
-          <PasswordInput
+          <password-input
             v-model="password"
             placeholder="至少 6 个字符"
             autocomplete="new-password"
@@ -21,7 +21,7 @@
         </div>
         <div class="register-field">
           <label class="register-label">确认密码</label>
-          <PasswordInput
+          <password-input
             v-model="confirmPassword"
             placeholder="再次输入密码"
             autocomplete="new-password"
@@ -32,7 +32,7 @@
             {{ errorMessage }}
           </div>
         </Transition>
-        <BaseButton
+        <base-button
           type="submit"
           variant="primary"
           block
@@ -40,7 +40,7 @@
           class="register-submit"
         >
           {{ isLoading ? '注册中...' : '注册' }}
-        </BaseButton>
+        </base-button>
       </form>
       <div class="register-footer">
         <span>已有账号？</span>

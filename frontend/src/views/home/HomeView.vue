@@ -9,7 +9,7 @@
       </div>
 
       <div class="home-grid">
-        <BaseButton
+        <base-button
           type="button"
           class="home-card"
           variant="ghost"
@@ -54,9 +54,9 @@
             <span class="home-card-label">对话</span>
             <span class="home-card-desc">智能问答与文档对话</span>
           </div>
-        </BaseButton>
+        </base-button>
 
-        <BaseButton
+        <base-button
           type="button"
           class="home-card"
           variant="ghost"
@@ -103,9 +103,9 @@
             <span class="home-card-label">事故报告</span>
             <span class="home-card-desc">结构化报告生成与管理</span>
           </div>
-        </BaseButton>
+        </base-button>
 
-        <BaseButton
+        <base-button
           type="button"
           class="home-card"
           variant="ghost"
@@ -134,7 +134,7 @@
             <span class="home-card-label">设置</span>
             <span class="home-card-desc">模型与系统配置</span>
           </div>
-        </BaseButton>
+        </base-button>
       </div>
     </div>
   </div>

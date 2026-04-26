@@ -19,6 +19,7 @@ services:
     ports:
       - "5173:5173"
       - "8000:8000"
+      - "9323:9323"
       - "2222:22"
     command: bash -lc '/workspace/.devcontainer/startup.sh'
   db:
@@ -31,7 +32,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./pgdata:/var/lib/postgresql
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U admin -d master" ]
       interval: 20s
@@ -52,5 +53,5 @@ services:
       retries: 3
 
 volumes:
-  pgdata:
+  postgres_data:
   redis_data:

@@ -1,6 +1,6 @@
 <template>
   <div class="app-layout">
-    <AppHeader
+    <app-header
       v-if="showHeader"
       :page-id="currentPageId"
       :title-clickable="isTitleClickable"

@@ -14,9 +14,15 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "postinstall": "npx playwright install chromium --with-deps"
+    "postinstall": "npx playwright install chromium --with-deps",
+    "e2e-report": "npx playwright show-report --host 0.0.0.0 --port 9323"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.22.4",
+    "@tiptap/extension-placeholder": "^3.22.4",
+    "@tiptap/extension-underline": "^3.22.4",
+    "@tiptap/starter-kit": "^3.22.4",
+    "@tiptap/vue-3": "^3.22.4",
     "axios": "^1.7.7",
     "highlight.js": "^11.9.0",
     "humps": "^2.0.1",

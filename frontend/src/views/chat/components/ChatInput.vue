@@ -34,7 +34,7 @@
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formatFileSize(file) }}</span>
           </div>
-          <BaseButton
+          <base-button
             type="button"
             class="remove-file-btn"
             variant="ghost"
@@ -43,10 +43,10 @@
             @click.stop="$emit('remove-file', index)"
           >
             ✕
-          </BaseButton>
+          </base-button>
         </div>
       </div>
-      <BaseButton
+      <base-button
         type="button"
         class="remove-all-btn"
         variant="danger"
@@ -55,12 +55,12 @@
         @click="$emit('clear-all-files')"
       >
         ✕ 移除所有文件
-      </BaseButton>
+      </base-button>
     </div>
     <div class="input-area">
       <div class="editor-area">
         <div v-if="selectedSkillOptions.length > 0" class="skill-chip-list">
-          <BaseButton
+          <base-button
             v-for="skill in selectedSkillOptions"
             :key="skill.id"
             type="button"
@@ -72,11 +72,11 @@
           >
             <span class="skill-chip-name">{{ skill.displayName }}</span>
             <span class="skill-chip-remove" aria-hidden="true">×</span>
-          </BaseButton>
+          </base-button>
         </div>
 
         <div class="textarea-wrapper">
-          <BaseTextarea
+          <base-textarea
             :ref="setTextareaRef"
             :value="localText"
             class="chat-input-textarea"
@@ -86,7 +86,7 @@
             @click="onCaretChange"
             @keyup="onCaretChange"
             @focus="onCaretChange"
-          ></BaseTextarea>
+          ></base-textarea>
 
           <Transition name="skill-suggestion-fade">
             <div
@@ -94,7 +94,7 @@
               class="skill-suggestion-panel"
               role="listbox"
             >
-              <BaseButton
+              <base-button
                 v-for="(skill, index) in filteredSkillSuggestions"
                 :key="skill.id"
                 type="button"
@@ -117,14 +117,14 @@
                 >
                   {{ skill.shortDescription }}
                 </span>
-              </BaseButton>
+              </base-button>
             </div>
           </Transition>
         </div>
       </div>
 
       <div class="input-actions">
-        <BaseFileUpload
+        <base-file-upload
           class="file-input-label"
           title="上传文件"
           :accept="accept"
@@ -141,9 +141,9 @@
               stroke-width="1.4"
             />
           </svg>
-        </BaseFileUpload>
+        </base-file-upload>
 
-        <BaseButton
+        <base-button
           type="button"
           class="send-btn"
           variant="primary"
@@ -187,7 +187,7 @@
             />
           </svg>
           <span class="send-text">{{ props.isLoading ? '停止' : '发送' }}</span>
-        </BaseButton>
+        </base-button>
       </div>
     </div>
   </div>

@@ -15,6 +15,7 @@
         "esbenp.prettier-vscode",
         "vue.volar",
         "ms-vscode.vscode-typescript-next",
+        "ms-playwright.playwright",
         "openai.chatgpt"
       ]
     }

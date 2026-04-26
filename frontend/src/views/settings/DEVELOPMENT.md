@@ -13,7 +13,7 @@ frontend/src/views/settings/
 
 设置页面提供 AI 模型配置：
 
-- **聊天模型** — 选择对话使用的模型（`BaseDropdown` 组件）
+- **生成模型** — 选择文档生成所使用的模型（`BaseDropdown` 组件）
 - **重排序模型** — 选择重排序使用的模型（`BaseDropdown` 组件）
 
 模型列表从 `/api/models` 获取，选择后自动保存到 `appStore`。
@@ -24,7 +24,7 @@ frontend/src/views/settings/
 
 | 字段                    | 说明                 | 持久化 |
 | ----------------------- | -------------------- | ------ |
-| `selectedModel`         | 当前选中的聊天模型   | ✅     |
+| `selectedModel`         | 当前选中的生成模型   | ✅     |
 | `selectedRerankerModel` | 当前选中的重排序模型 | ✅     |
 | `availableModels`       | 可用模型列表缓存     | ✅     |
 | `processingModes`       | 可用 skill 列表缓存  | ✅     |

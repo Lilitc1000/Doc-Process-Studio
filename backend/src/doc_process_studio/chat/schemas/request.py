@@ -31,7 +31,7 @@ class ChatStreamRequest(BaseModel):
     model: str = Field(..., description="要调用的模型名称")
     reranker_model: str = Field(
         default="",
-        description="用于检索重排序的轻量模型；为空时回退使用聊天模型。",
+        description="用于检索重排序的轻量模型；为空时回退使用生成模型。",
     )
     confirm_sensitive_actions: bool = Field(
         default=True,

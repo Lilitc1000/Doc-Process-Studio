@@ -4,7 +4,7 @@
       <div v-if="visible" class="modal-overlay" @click.self="$emit('close')">
         <div class="modal-container">
           <div class="modal-left">
-            <UserAvatar
+            <user-avatar
               :username="userInfo?.username ?? ''"
               :color="editAvatarColor ?? userInfo?.avatarColor ?? '#4f46e5'"
               size="lg"
@@ -20,22 +20,24 @@
           </div>
           <div class="modal-right">
             <div class="modal-tabs">
-              <button
+              <base-button
                 type="button"
                 class="modal-tab"
-                :class="{ active: activeTab === 'profile' }"
+                :variant="activeTab === 'profile' ? 'secondary' : 'ghost'"
+                size="sm"
                 @click="activeTab = 'profile'"
               >
                 基本信息
-              </button>
-              <button
+              </base-button>
+              <base-button
                 type="button"
                 class="modal-tab"
-                :class="{ active: activeTab === 'password' }"
+                :variant="activeTab === 'password' ? 'secondary' : 'ghost'"
+                size="sm"
                 @click="activeTab = 'password'"
               >
                 修改密码
-              </button>
+              </base-button>
             </div>
 
             <Transition name="fade" mode="out-in">
@@ -61,25 +63,27 @@
                     </div>
                   </div>
                   <div class="modal-actions">
-                    <BaseButton variant="primary" @click="startEditing">
+                    <base-button variant="primary" @click="startEditing">
                       编辑
-                    </BaseButton>
+                    </base-button>
                   </div>
                 </template>
                 <template v-else>
                   <div class="modal-field">
                     <label class="modal-field-label">用户名</label>
-                    <BaseInput v-model="editUsername" />
+                    <base-input v-model="editUsername" />
                   </div>
                   <div class="modal-field">
                     <label class="modal-field-label">头像颜色</label>
                     <div class="modal-color-picker">
-                      <button
+                      <base-button
                         v-for="color in AVATAR_COLORS"
                         :key="color"
                         type="button"
                         class="modal-color-dot modal-color-dot-clickable"
                         :class="{ selected: editAvatarColor === color }"
+                        variant="ghost"
+                        size="sm"
                         :style="{ backgroundColor: color }"
                         @click="editAvatarColor = color"
                       />
@@ -91,16 +95,16 @@
                     </div>
                   </Transition>
                   <div class="modal-actions">
-                    <BaseButton
+                    <base-button
                       variant="primary"
                       :disabled="isSaving"
                       @click="saveProfile"
                     >
                       {{ isSaving ? '保存中...' : '保存' }}
-                    </BaseButton>
-                    <BaseButton variant="secondary" @click="cancelEditing">
+                    </base-button>
+                    <base-button variant="secondary" @click="cancelEditing">
                       取消
-                    </BaseButton>
+                    </base-button>
                   </div>
                 </template>
               </div>
@@ -108,15 +112,15 @@
               <div v-else key="password" class="modal-tab-content">
                 <div class="modal-field">
                   <label class="modal-field-label">当前密码</label>
-                  <PasswordInput v-model="currentPassword" />
+                  <password-input v-model="currentPassword" />
                 </div>
                 <div class="modal-field">
                   <label class="modal-field-label">新密码</label>
-                  <PasswordInput v-model="newPassword" />
+                  <password-input v-model="newPassword" />
                 </div>
                 <div class="modal-field">
                   <label class="modal-field-label">确认新密码</label>
-                  <PasswordInput v-model="confirmPassword" />
+                  <password-input v-model="confirmPassword" />
                 </div>
                 <Transition name="fade">
                   <div v-if="passwordError" class="modal-error">
@@ -124,16 +128,16 @@
                   </div>
                 </Transition>
                 <div class="modal-actions">
-                  <BaseButton
+                  <base-button
                     variant="primary"
                     :disabled="isChangingPassword"
                     @click="savePassword"
                   >
                     {{ isChangingPassword ? '保存中...' : '保存' }}
-                  </BaseButton>
-                  <BaseButton variant="secondary" @click="$emit('close')">
+                  </base-button>
+                  <base-button variant="secondary" @click="$emit('close')">
                     取消
-                  </BaseButton>
+                  </base-button>
                 </div>
               </div>
             </Transition>
@@ -151,8 +155,7 @@ import BaseInput from '../base/BaseInput.vue';
 import PasswordInput from '../base/PasswordInput.vue';
 import UserAvatar from './UserAvatar.vue';
 import { AVATAR_COLORS } from '../../utils/common/avatar-colors';
-import { useAuthStore } from '../../stores/auth';
-import { updateProfile, changePassword } from '../../api/auth';
+import { useUserProfile } from '../../composables/business/useUserProfile';
 import type { UserInfoResponse } from '../../types/auth/auth';
 
 const props = defineProps<{
@@ -164,14 +167,17 @@ defineEmits<{
   (e: 'close'): void;
 }>();
 
-const authStore = useAuthStore();
+const {
+  isSaving,
+  isChangingPassword,
+  errorMessage,
+  passwordError,
+  saveProfile: doSaveProfile,
+  savePassword: doSavePassword,
+} = useUserProfile();
 
 const activeTab = ref<'profile' | 'password'>('profile');
 const isEditing = ref(false);
-const isSaving = ref(false);
-const isChangingPassword = ref(false);
-const errorMessage = ref('');
-const passwordError = ref('');
 
 const editUsername = ref('');
 const editAvatarColor = ref('');
@@ -207,54 +213,22 @@ function cancelEditing() {
 }
 
 async function saveProfile() {
-  if (editUsername.value.length < 3 || editUsername.value.length > 20) {
-    errorMessage.value = '用户名长度需为 3-20 个字符';
-    return;
-  }
-  isSaving.value = true;
-  errorMessage.value = '';
-  try {
-    await updateProfile({
-      username: editUsername.value,
-      avatarColor: editAvatarColor.value,
-    });
-    await authStore.fetchUserInfo();
+  const success = await doSaveProfile(editUsername.value, editAvatarColor.value);
+  if (success) {
     isEditing.value = false;
-  } catch (err: any) {
-    const detail =
-      err?.response?.data?.detail || err?.message || '保存失败，请重试';
-    errorMessage.value = detail;
-  } finally {
-    isSaving.value = false;
   }
 }
 
 async function savePassword() {
-  if (newPassword.value.length < 6) {
-    passwordError.value = '新密码至少 6 个字符';
-    return;
-  }
-  if (newPassword.value !== confirmPassword.value) {
-    passwordError.value = '两次输入的密码不一致';
-    return;
-  }
-  isChangingPassword.value = true;
-  passwordError.value = '';
-  try {
-    await changePassword({
-      currentPassword: currentPassword.value,
-      newPassword: newPassword.value,
-    });
+  const success = await doSavePassword(
+    currentPassword.value,
+    newPassword.value,
+    confirmPassword.value,
+  );
+  if (success) {
     currentPassword.value = '';
     newPassword.value = '';
     confirmPassword.value = '';
-    passwordError.value = '';
-  } catch (err: any) {
-    const detail =
-      err?.response?.data?.detail || err?.message || '修改密码失败';
-    passwordError.value = detail;
-  } finally {
-    isChangingPassword.value = false;
   }
 }
 

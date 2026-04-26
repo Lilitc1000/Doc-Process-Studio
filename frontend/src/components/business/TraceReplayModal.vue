@@ -53,7 +53,7 @@
               <h4>基本信息</h4>
               <ul class="trace-modal-kv-list">
                 <li>会话: {{ payload.conversationId || '-' }}</li>
-                <li>聊天模型: {{ payload.model || '-' }}</li>
+                <li>生成模型: {{ payload.model || '-' }}</li>
                 <li>重排序模型: {{ payload.rerankerModel || '-' }}</li>
                 <li>开始时间: {{ formatDateTime(payload.startedAt) }}</li>
                 <li>结束状态: {{ payload.final?.doneReason || '-' }}</li>

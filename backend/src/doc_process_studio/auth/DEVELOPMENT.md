@@ -42,7 +42,7 @@ backend/src/doc_process_studio/auth/
 3. 后续请求携带 `Authorization: Bearer <access_token>` 访问受保护资源
 4. access_token 过期后，使用 refresh_token 调用 `POST /refresh` 获取新令牌对
 5. 登出时调用 `POST /logout`，refresh_token 的 jti 写入 Redis 黑名单
-6. 删除用户时调用 `DELETE /users/{user_id}`，关联的 chat_sessions 和 incident_report_sessions 通过 FK `ON DELETE CASCADE` 自动清理
+6. 删除用户时调用 `DELETE /users/{user_id}`，关联的 chat_sessions 和 incident_reports 通过 FK `ON DELETE CASCADE` 自动清理
 
 ## 环境变量
 
@@ -69,7 +69,7 @@ backend/src/doc_process_studio/auth/
 |------|------|----------|
 | `users` | 用户表（user_id, username, hashed_password, avatar_color） | auth/models/ |
 | `chat_sessions` | 聊天会话表（FK → users.user_id, ON DELETE CASCADE） | chat/models/ |
-| `incident_report_sessions` | 事故报告会话表 | incident_report/models/ |
+| `incident_reports` | 事故报告表 | incident_report/models/ |
 
 ## 开发注意
 

@@ -37,7 +37,7 @@
     </div>
     <div class="app-header-right">
       <template v-if="authStore.isAuthenticated">
-        <UserMenuDropdown
+        <user-menu-dropdown
           :username="authStore.username"
           :avatar-color="authStore.avatarColor"
           @profile="showProfileModal = true"
@@ -45,12 +45,12 @@
         />
       </template>
       <template v-else>
-        <BaseButton variant="ghost" size="sm" @click="router.push('/login')">
+        <base-button variant="ghost" size="sm" @click="router.push('/login')">
           登录
-        </BaseButton>
+        </base-button>
       </template>
     </div>
-    <UserProfileModal
+    <user-profile-modal
       :visible="showProfileModal"
       :user-info="authStore.userInfo"
       @close="showProfileModal = false"

@@ -1,28 +1,36 @@
 <template>
   <div ref="dropdownRef" class="user-menu-dropdown">
-    <button
+    <base-button
       type="button"
       class="user-menu-trigger"
+      variant="ghost"
+      size="sm"
       @click="toggle"
       @keydown.esc.prevent="close"
     >
-      <UserAvatar :username="username" :color="avatarColor" size="md" />
-    </button>
+      <user-avatar :username="username" :color="avatarColor" size="md" />
+    </base-button>
     <Transition name="fade-slide-up">
       <div v-if="isOpen" class="user-menu-panel">
-        <button type="button" class="user-menu-item" @click="onProfileClick">
+        <base-button
+          type="button"
+          class="user-menu-item"
+          variant="ghost"
+          @click="onProfileClick"
+        >
           <span class="user-menu-item-icon">👤</span>
           <span>用户信息</span>
-        </button>
+        </base-button>
         <div class="user-menu-divider" />
-        <button
+        <base-button
           type="button"
           class="user-menu-item user-menu-item-danger"
+          variant="ghost"
           @click="onLogoutClick"
         >
           <span class="user-menu-item-icon">🚪</span>
           <span>退出登录</span>
-        </button>
+        </base-button>
       </div>
     </Transition>
   </div>
@@ -30,6 +38,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import BaseButton from '../base/BaseButton.vue';
 import UserAvatar from './UserAvatar.vue';
 
 defineProps<{
@@ -84,7 +93,8 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-.user-menu-trigger {
+.user-menu-trigger,
+.base-button.user-menu-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -98,7 +108,8 @@ onBeforeUnmount(() => {
     transform 0.2s ease;
 }
 
-.user-menu-trigger:hover {
+.user-menu-trigger:hover,
+.base-button.user-menu-trigger:hover:not(:disabled) {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
   transform: scale(1.05);
 }
@@ -119,7 +130,8 @@ onBeforeUnmount(() => {
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
-.user-menu-item {
+.user-menu-item,
+.base-button.user-menu-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -137,11 +149,13 @@ onBeforeUnmount(() => {
     color 0.18s ease;
 }
 
-.user-menu-item:hover {
+.user-menu-item:hover,
+.base-button.user-menu-item:hover:not(:disabled) {
   background: #f8fafc;
 }
 
-.user-menu-item-danger:hover {
+.user-menu-item-danger:hover,
+.base-button.user-menu-item-danger:hover:not(:disabled) {
   background: #fef2f2;
   color: #dc2626;
 }

@@ -121,9 +121,7 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 - `from_status` / `to_status` — 状态变更
 - `comment` — 操作备注
 
-## 数据库迁移
-
-### 新表结构
+## 数据模型
 
 | 表名 | 说明 |
 |------|------|
@@ -131,13 +129,6 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 | `incident_audit_logs` | 审计日志 |
 | `incident_comments` | 评论 |
 | `incident_report_roles` | 角色分配（复合主键 user_id + role） |
-
-### 旧表迁移
-
-迁移脚本 `b2c3d4e5f6a7_migrate_legacy_sessions.py` 将 `incident_report_sessions` 数据迁移到 `incident_reports`：
-- 自动创建 `usr_migrated` 虚拟用户
-- `generated` 状态映射为 `approved`
-- 审计日志 ID 使用 `md5()` 哈希以适配 `varchar(32)` 限制
 
 ## 跨域依赖
 

@@ -5,7 +5,7 @@
       <form class="login-form" @submit.prevent="onSubmit">
         <div class="login-field">
           <label class="login-label">用户名</label>
-          <BaseInput
+          <base-input
             v-model="username"
             placeholder="请输入用户名"
             autocomplete="username"
@@ -13,7 +13,7 @@
         </div>
         <div class="login-field">
           <label class="login-label">密码</label>
-          <PasswordInput
+          <password-input
             v-model="password"
             placeholder="请输入密码"
             autocomplete="current-password"
@@ -24,7 +24,7 @@
             {{ errorMessage }}
           </div>
         </Transition>
-        <BaseButton
+        <base-button
           type="submit"
           variant="primary"
           block
@@ -32,7 +32,7 @@
           class="login-submit"
         >
           {{ isLoading ? '登录中...' : '登录' }}
-        </BaseButton>
+        </base-button>
       </form>
       <div class="login-footer">
         <span>还没有账号？</span>

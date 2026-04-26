@@ -4,13 +4,15 @@
       <div v-for="(item, index) in items" :key="index" class="timeline-item">
         <div class="timeline-item-header">
           <span class="timeline-item-index">#{{ index + 1 }}</span>
-          <button
+          <base-button
             type="button"
             class="timeline-item-remove"
+            variant="ghost"
+            size="sm"
             @click="removeItem(index)"
           >
             ✕
-          </button>
+          </base-button>
         </div>
         <div class="timeline-item-fields">
           <div class="timeline-field">
@@ -126,7 +128,8 @@ const updateItem = (index: number, field: 'time' | 'event', value: string) => {
   color: var(--color-primary);
 }
 
-.timeline-item-remove {
+.timeline-item-remove,
+.base-button.timeline-item-remove {
   border: none;
   background: transparent;
   cursor: pointer;
@@ -136,7 +139,8 @@ const updateItem = (index: number, field: 'time' | 'event', value: string) => {
   border-radius: 4px;
 }
 
-.timeline-item-remove:hover {
+.timeline-item-remove:hover,
+.base-button.timeline-item-remove:hover:not(:disabled) {
   background: var(--color-danger-bg, #fef2f2);
   color: var(--color-danger);
 }

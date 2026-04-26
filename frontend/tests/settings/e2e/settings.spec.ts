@@ -19,15 +19,15 @@ test.describe('设置页面', () => {
     );
   });
 
-  test('显示聊天模型和重排序模型两个下拉框', async ({ page }) => {
+  test('显示生成模型和重排序模型两个下拉框', async ({ page }) => {
     await page.goto('/settings');
 
     const labels = page.locator('.selector-label');
-    await expect(labels.nth(0)).toHaveText('聊天模型');
+    await expect(labels.nth(0)).toHaveText('生成模型');
     await expect(labels.nth(1)).toHaveText('重排序模型');
   });
 
-  test('点击聊天模型下拉框展开选项列表', async ({ page }) => {
+  test('点击生成模型下拉框展开选项列表', async ({ page }) => {
     await page.goto('/settings');
 
     const dropdown = page.locator('.base-dropdown').first();
@@ -36,7 +36,7 @@ test.describe('设置页面', () => {
     await expect(page.locator('.base-dropdown-panel')).toBeVisible();
   });
 
-  test('选择聊天模型后下拉框显示所选模型', async ({ page }) => {
+  test('选择生成模型后下拉框显示所选模型', async ({ page }) => {
     await page.goto('/settings');
 
     const dropdown = page.locator('.base-dropdown').first();

@@ -1,73 +1,80 @@
 <template>
-  <div class="rich-text-editor">
+  <div v-if="editor" class="rich-text-editor">
     <div class="editor-toolbar">
-      <button
+      <base-button
         type="button"
         class="toolbar-btn"
+        :variant="editor.isActive('bold') ? 'secondary' : 'ghost'"
+        size="sm"
         title="加粗"
-        @click="execCommand('bold')"
+        @click="editor.chain().focus().toggleBold().run()"
       >
         <strong>B</strong>
-      </button>
-      <button
+      </base-button>
+      <base-button
         type="button"
         class="toolbar-btn"
+        :variant="editor.isActive('italic') ? 'secondary' : 'ghost'"
+        size="sm"
         title="斜体"
-        @click="execCommand('italic')"
+        @click="editor.chain().focus().toggleItalic().run()"
       >
         <em>I</em>
-      </button>
-      <button
+      </base-button>
+      <base-button
         type="button"
         class="toolbar-btn"
+        :variant="editor.isActive('underline') ? 'secondary' : 'ghost'"
+        size="sm"
         title="下划线"
-        @click="execCommand('underline')"
+        @click="editor.chain().focus().toggleUnderline().run()"
       >
         <u>U</u>
-      </button>
+      </base-button>
       <span class="toolbar-divider" />
-      <button
+      <base-button
         type="button"
         class="toolbar-btn"
+        :variant="editor.isActive('bulletList') ? 'secondary' : 'ghost'"
+        size="sm"
         title="无序列表"
-        @click="execCommand('insertUnorderedList')"
+        @click="editor.chain().focus().toggleBulletList().run()"
       >
         • 列表
-      </button>
-      <button
+      </base-button>
+      <base-button
         type="button"
         class="toolbar-btn"
+        :variant="editor.isActive('orderedList') ? 'secondary' : 'ghost'"
+        size="sm"
         title="有序列表"
-        @click="execCommand('insertOrderedList')"
+        @click="editor.chain().focus().toggleOrderedList().run()"
       >
         1. 列表
-      </button>
+      </base-button>
       <span class="toolbar-divider" />
-      <button
+      <base-button
         type="button"
         class="toolbar-btn"
+        variant="ghost"
+        size="sm"
         title="插入图片"
         @click="triggerImageUpload"
       >
         📷
-      </button>
-      <button
+      </base-button>
+      <base-button
         type="button"
         class="toolbar-btn"
+        variant="ghost"
+        size="sm"
         title="清除格式"
-        @click="execCommand('removeFormat')"
+        @click="editor.chain().focus().clearNodes().unsetAllMarks().run()"
       >
         ✕
-      </button>
+      </base-button>
     </div>
-    <div
-      ref="editorRef"
-      class="editor-content"
-      contenteditable
-      :data-placeholder="placeholder"
-      @input="handleInput"
-      @blur="handleBlur"
-    />
+    <editor-content :editor="editor" class="editor-content" />
     <input
       ref="fileInputRef"
       type="file"
@@ -79,7 +86,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onBeforeUnmount, watch } from 'vue';
+import { useEditor, EditorContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Image from '@tiptap/extension-image';
+import Placeholder from '@tiptap/extension-placeholder';
+import BaseButton from './BaseButton.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -96,25 +109,31 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void;
 }>();
 
-const editorRef = ref<HTMLDivElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
-const execCommand = (command: string) => {
-  document.execCommand(command, false);
-  editorRef.value?.focus();
-};
+const editor = useEditor({
+  extensions: [
+    StarterKit,
+    Underline,
+    Image,
+    Placeholder.configure({
+      placeholder: props.placeholder,
+    }),
+  ],
+  content: props.modelValue,
+  onUpdate: ({ editor: ed }) => {
+    emit('update:modelValue', ed.getHTML());
+  },
+});
 
-const handleInput = () => {
-  if (editorRef.value) {
-    emit('update:modelValue', editorRef.value.innerHTML);
-  }
-};
-
-const handleBlur = () => {
-  if (editorRef.value) {
-    emit('update:modelValue', editorRef.value.innerHTML);
-  }
-};
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    if (editor.value && editor.value.getHTML() !== newVal) {
+      editor.value.commands.setContent(newVal || '');
+    }
+  },
+);
 
 const triggerImageUpload = () => {
   fileInputRef.value?.click();
@@ -128,27 +147,15 @@ const handleImageUpload = (event: Event) => {
   const reader = new FileReader();
   reader.onload = (e) => {
     const imgSrc = e.target?.result as string;
-    document.execCommand('insertImage', false, imgSrc);
-    handleInput();
+    editor.value?.chain().focus().setImage({ src: imgSrc }).run();
   };
   reader.readAsDataURL(file);
   target.value = '';
 };
 
-onMounted(() => {
-  if (editorRef.value && props.modelValue) {
-    editorRef.value.innerHTML = props.modelValue;
-  }
+onBeforeUnmount(() => {
+  editor.value?.destroy();
 });
-
-watch(
-  () => props.modelValue,
-  (newVal) => {
-    if (editorRef.value && editorRef.value.innerHTML !== newVal) {
-      editorRef.value.innerHTML = newVal || '';
-    }
-  },
-);
 </script>
 
 <style scoped>
@@ -169,23 +176,12 @@ watch(
 }
 
 .toolbar-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
   width: 28px;
   height: 28px;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
-  cursor: pointer;
+  padding: 0 !important;
   font-size: 13px;
-  color: var(--color-text-secondary);
-  transition: background-color 0.15s;
-}
-
-.toolbar-btn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
 }
 
 .toolbar-divider {
@@ -202,20 +198,35 @@ watch(
   padding: 10px 12px;
   font-size: 14px;
   line-height: 1.6;
-  outline: none;
   color: var(--color-text-primary);
 }
 
-.editor-content:empty::before {
+.editor-content :deep(.tiptap) {
+  outline: none;
+  min-height: 100px;
+}
+
+.editor-content :deep(.tiptap p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
   color: var(--color-text-tertiary);
   pointer-events: none;
+  float: left;
+  height: 0;
 }
 
-.editor-content img {
+.editor-content :deep(.tiptap img) {
   max-width: 100%;
   height: auto;
   border-radius: 4px;
   margin: 4px 0;
+}
+
+.editor-content :deep(.tiptap ul),
+.editor-content :deep(.tiptap ol) {
+  padding-left: 1.5em;
+}
+
+.editor-content :deep(.tiptap li) {
+  margin: 2px 0;
 }
 </style>
