@@ -1,0 +1,115 @@
+.incident-report-audit-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px;
+}
+
+.audit-loading,
+.audit-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--color-text-secondary);
+}
+
+.audit-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.audit-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.audit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+.audit-report-preview {
+  padding: 20px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+}
+
+.audit-report-preview h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 12px 0 8px;
+}
+
+.audit-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 16px;
+}
+
+.audit-form-data {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.audit-data-row {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.audit-data-key {
+  width: 140px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.audit-data-value {
+  flex: 1;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+}
+
+.audit-action-panel {
+  padding: 20px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+}
+
+.audit-action-panel h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.audit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.audit-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

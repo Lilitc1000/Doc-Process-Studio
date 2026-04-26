@@ -2,18 +2,18 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import type {
   IncidentReportFormSchemaPayload,
-  IncidentReportSessionDetail,
-  IncidentReportSessionSummary,
+  IncidentReportSummaryItem,
+  IncidentReportDetailItem,
+  IncidentAnalyticsOverview,
 } from '../types/incident-report/incident-report';
+import {
+  fetchUserIncidentRoles,
+  fetchIncidentReportList,
+  fetchIncidentReportDetail,
+  fetchIncidentAnalyticsOverview,
+} from '../api/incident-report';
 
 export const useIncidentReportStore = defineStore('incident-report', () => {
-  const activeIncidentReportSessionId = ref<string>('');
-  const activeIncidentReportSession = ref<IncidentReportSessionDetail | null>(
-    null,
-  );
-  const incidentReportSessionSummaries = ref<IncidentReportSessionSummary[]>(
-    [],
-  );
   const incidentReportSchema = ref<IncidentReportFormSchemaPayload | null>(
     null,
   );
@@ -32,61 +32,71 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
   const incidentReportPreviewVersion = ref<number | null>(null);
   const incidentReportPreviewSource = ref<'draft' | 'version'>('draft');
 
-  const incidentReportSidebarSessions = computed(() => {
-    const summaries = incidentReportSessionSummaries.value;
-    const activeId = activeIncidentReportSessionId.value;
-    const activeSession = activeIncidentReportSession.value;
-    if (!activeId || !activeSession) {
-      return summaries;
-    }
-    const exists = summaries.some((item) => item.id === activeId);
-    if (exists) {
-      return summaries;
-    }
-    return [
-      {
-        id: activeSession.id,
-        title: activeSession.title,
-        status: activeSession.status,
-        createdAt: activeSession.createdAt,
-        updatedAt: activeSession.updatedAt,
-      },
-      ...summaries,
-    ];
-  });
+  const userIncidentRoles = ref<string[]>([]);
+  const reportList = ref<IncidentReportSummaryItem[]>([]);
+  const reportListTotal = ref(0);
+  const reportListPage = ref(1);
+  const reportListPageSize = ref(20);
+  const reportListLoading = ref(false);
+  const activeReport = ref<IncidentReportDetailItem | null>(null);
+  const analyticsOverview = ref<IncidentAnalyticsOverview | null>(null);
 
-  const clearActiveIncidentReportSession = () => {
-    activeIncidentReportSessionId.value = '';
-    activeIncidentReportSession.value = null;
-    resetGenerationState();
-    resetPreviewState();
+  const isAdmin = computed(() => userIncidentRoles.value.includes('admin'));
+  const isVerifier = computed(() => userIncidentRoles.value.includes('verifier'));
+  const isHandler = computed(() => userIncidentRoles.value.includes('handler'));
+  const isReporter = computed(() => userIncidentRoles.value.includes('reporter'));
+  const isViewer = computed(
+    () => userIncidentRoles.value.length === 0 || userIncidentRoles.value.includes('viewer'),
+  );
+
+  const canCreateReport = computed(() =>
+    userIncidentRoles.value.some((r) =>
+      ['reporter', 'handler', 'verifier', 'admin'].includes(r),
+    ),
+  );
+
+  const canAudit = computed(() => isVerifier.value || isAdmin.value);
+  const canManageSettings = computed(() => isAdmin.value);
+
+  const loadUserIncidentRoles = async () => {
+    userIncidentRoles.value = await fetchUserIncidentRoles();
   };
 
-  const applyIncidentReportDetail = (detail: IncidentReportSessionDetail) => {
-    activeIncidentReportSession.value = detail;
-    const index = incidentReportSessionSummaries.value.findIndex(
-      (item) => item.id === detail.id,
-    );
-    if (index >= 0) {
-      incidentReportSessionSummaries.value[index] = {
-        id: detail.id,
-        title: detail.title,
-        status: detail.status,
-        createdAt: detail.createdAt,
-        updatedAt: detail.updatedAt,
-      };
+  const loadReportList = async (params?: {
+    page?: number;
+    pageSize?: number;
+    status?: string;
+    severity?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    reportListLoading.value = true;
+    try {
+      const response = await fetchIncidentReportList({
+        page: params?.page ?? reportListPage.value,
+        pageSize: params?.pageSize ?? reportListPageSize.value,
+        status: params?.status,
+        severity: params?.severity,
+        search: params?.search,
+        startDate: params?.startDate,
+        endDate: params?.endDate,
+      });
+      reportList.value = response.items;
+      reportListTotal.value = response.total;
+      if (params?.page) reportListPage.value = params.page;
+      if (params?.pageSize) reportListPageSize.value = params.pageSize;
+    } finally {
+      reportListLoading.value = false;
     }
   };
 
-  const mergeSummary = (summary: IncidentReportSessionSummary) => {
-    const existing = incidentReportSessionSummaries.value.find(
-      (item) => item.id === summary.id,
-    );
-    if (existing) {
-      Object.assign(existing, summary);
-    } else {
-      incidentReportSessionSummaries.value.unshift(summary);
-    }
+  const loadActiveReport = async (reportId: string) => {
+    activeReport.value = await fetchIncidentReportDetail(reportId);
+  };
+
+  const loadAnalyticsOverview = async () => {
+    analyticsOverview.value = await fetchIncidentAnalyticsOverview();
   };
 
   const resetGenerationState = () => {
@@ -108,9 +118,6 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
   };
 
   return {
-    activeIncidentReportSessionId,
-    activeIncidentReportSession,
-    incidentReportSessionSummaries,
     incidentReportSchema,
     isIncidentReportGenerating,
     generationState,
@@ -124,10 +131,26 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
     incidentReportPreviewError,
     incidentReportPreviewVersion,
     incidentReportPreviewSource,
-    incidentReportSidebarSessions,
-    clearActiveIncidentReportSession,
-    applyIncidentReportDetail,
-    mergeSummary,
+    userIncidentRoles,
+    reportList,
+    reportListTotal,
+    reportListPage,
+    reportListPageSize,
+    reportListLoading,
+    activeReport,
+    analyticsOverview,
+    isAdmin,
+    isVerifier,
+    isHandler,
+    isReporter,
+    isViewer,
+    canCreateReport,
+    canAudit,
+    canManageSettings,
+    loadUserIncidentRoles,
+    loadReportList,
+    loadActiveReport,
+    loadAnalyticsOverview,
     resetGenerationState,
     resetPreviewState,
   };

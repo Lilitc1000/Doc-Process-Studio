@@ -6,14 +6,11 @@ from typing import Any, Callable
 
 import httpx
 
-from ..models.incident_report import (
+from ..schemas.common import (
     IncidentFormAnswer,
-    IncidentReportSessionSummary,
+    IncidentFormSnapshot,
 )
-from ..schemas.response import (
-    IncidentBodyGenerateResponse,
-    IncidentReportSessionDetail,
-)
+from ..schemas.response import IncidentBodyGenerateResponse
 from ...system.service.error_detail import summarize_exception
 from ...system.service.trace_store import AgentTraceRecorder
 from ...shared.dtutils import utcnow
@@ -56,33 +53,12 @@ from .normalization import (
 from .reference import resolve_generation_reference_context
 from .report_data import answer_text, answer_value, answer_value_from_answers, set_answer, set_answer_if_non_empty
 from ...chat.service.streaming import extract_delta_text, extract_done_reason
-from .db_session_store import (
-    save_incident_session_snapshot,
-    save_incident_session_summary,
-    touch_incident_session_updated_at,
-)
+from .report_store import update_report_record
 
 
 def _build_default_title(now: Any = None) -> str:
     current = now or utcnow()
     return f"事故报告-{current.strftime('%Y/%m/%d %H:%M')}"
-
-
-def _build_summary_from_detail(
-    detail: IncidentReportSessionDetail,
-    *,
-    status: str | None = None,
-    title: str | None = None,
-    updated_at: Any = None,
-) -> IncidentReportSessionSummary:
-    payload = detail.model_dump(exclude={"snapshot"})
-    if status is not None:
-        payload["status"] = status
-    if title is not None:
-        payload["title"] = title
-    if updated_at is not None:
-        payload["updated_at"] = updated_at
-    return IncidentReportSessionSummary.model_validate(payload)
 
 
 def _resolve_document_assistant_prompt() -> str:
@@ -195,7 +171,7 @@ async def _flush_trace_safely(recorder: AgentTraceRecorder) -> None:
 
 
 def _build_quick_generation_context(
-    snapshot: Any,
+    snapshot: IncidentFormSnapshot,
 ) -> dict[str, Any]:
     return {
         "quick_inputs": {
@@ -229,7 +205,7 @@ def _build_quick_generation_context(
 
 
 def _build_quick_generation_request(
-    snapshot: Any,
+    snapshot: IncidentFormSnapshot,
 ) -> tuple[str, str]:
     prompt = (
         "你将执行「快填模式 -> 完整模式」生成。"
@@ -244,7 +220,7 @@ def _build_quick_generation_request(
 
 
 def _build_section_generation_prompt(
-    snapshot: Any,
+    snapshot: IncidentFormSnapshot,
     *,
     section_id: str,
     timeline_index: int | None,
@@ -536,7 +512,8 @@ def _apply_section_payload(
 
 async def _run_body_generation_with_trace(
     *,
-    detail: IncidentReportSessionDetail,
+    report_id: str,
+    snapshot: IncidentFormSnapshot,
     model: str,
     reranker_model: str | None,
     section_id: str,
@@ -562,7 +539,7 @@ async def _run_body_generation_with_trace(
     recorder = AgentTraceRecorder(
         trace_id=trace_id,
         tenant_id="default",
-        conversation_id=detail.id,
+        conversation_id=report_id,
         user_message_id=f"incident-body-{section_id}",
         model=model,
         reranker_model=effective_reranker_model,
@@ -720,16 +697,11 @@ async def _run_body_generation_with_trace(
         await recorder.flush()
         raise RuntimeError("模型未返回合法 JSON。")
 
-    form_answers = deepcopy(detail.snapshot.form_answers)
+    form_answers = deepcopy(snapshot.form_answers)
     apply_payload(form_answers, payload)
 
     now = utcnow()
-    next_summary = _build_summary_from_detail(
-        detail,
-        status="draft",
-        updated_at=now,
-    )
-    next_snapshot = detail.snapshot.model_copy(deep=True)
+    next_snapshot = snapshot.model_copy(deep=True)
     next_snapshot.form_answers = form_answers
     next_snapshot.generated_trace_id = trace_id
     section_trace_ids = dict(next_snapshot.section_trace_ids)
@@ -740,9 +712,15 @@ async def _run_body_generation_with_trace(
     next_snapshot.section_trace_ids = section_trace_ids
     next_snapshot.polish_error = None
 
-    await save_incident_session_summary(next_summary)
-    await save_incident_session_snapshot(detail.id, next_snapshot)
-    await touch_incident_session_updated_at(detail.id)
+    form_data_for_db = {
+        key: ans.model_dump()
+        for key, ans in next_snapshot.form_answers.items()
+    }
+    await update_report_record(
+        report_id,
+        form_data=form_data_for_db,
+        report_data=next_snapshot.report_data,
+    )
 
     recorder.add_event(
         event_type="body_generation_response",
@@ -756,8 +734,8 @@ async def _run_body_generation_with_trace(
     recorder.set_final(done_reason=done_reason, error=None)
     await recorder.flush()
     return IncidentBodyGenerateResponse(
-        session=next_summary,
-        snapshot=next_snapshot,
+        report_id=report_id,
+        form_answers=form_answers,
         trace_id=trace_id,
         section_id=section_id,
         timeline_index=timeline_index,

@@ -33,9 +33,45 @@ const router = createRouter({
         },
         {
           path: '/incident-report',
-          name: 'incident-report',
+          name: 'incident-report-list',
           component: () =>
-            import('../views/incident-report/IncidentReportView.vue'),
+            import('../views/incident-report/list/IncidentReportListView.vue'),
+          meta: { requiresAuth: true, pageTitle: '事故报告管理' },
+        },
+        {
+          path: '/incident-report/create',
+          name: 'incident-report-create',
+          component: () =>
+            import('../views/incident-report/create/IncidentReportCreateView.vue'),
+          meta: { requiresAuth: true, pageTitle: '新建事故报告' },
+        },
+        {
+          path: '/incident-report/analytics',
+          name: 'incident-report-analytics',
+          component: () =>
+            import('../views/incident-report/analytics/IncidentReportAnalyticsView.vue'),
+          meta: { requiresAuth: true, pageTitle: '统计分析' },
+        },
+        {
+          path: '/incident-report/:id/audit',
+          name: 'incident-report-audit',
+          component: () =>
+            import('../views/incident-report/audit/IncidentReportAuditView.vue'),
+          meta: { requiresAuth: true, pageTitle: '审核报告' },
+        },
+        {
+          path: '/incident-report/:id/edit',
+          name: 'incident-report-edit',
+          component: () =>
+            import('../views/incident-report/edit/IncidentReportEditView.vue'),
+          meta: { requiresAuth: true, pageTitle: '编辑报告' },
+        },
+        {
+          path: '/incident-report/:id',
+          name: 'incident-report-detail',
+          component: () =>
+            import('../views/incident-report/detail/IncidentReportDetailView.vue'),
+          meta: { requiresAuth: true, pageTitle: '报告详情' },
         },
         {
           path: '/settings',
@@ -65,6 +101,13 @@ router.beforeEach(async (to, _from, next) => {
     next({ name: 'login', query: { redirect: to.fullPath } });
   } else if (hideForAuth && authStore.isAuthenticated) {
     next({ name: 'home' });
+  } else if (
+    to.name === 'incident-report-detail' &&
+    to.params.id &&
+    String(to.params.id).length >= 32 &&
+    /^[a-f0-9]+$/.test(String(to.params.id))
+  ) {
+    next({ name: 'incident-report-list' });
   } else {
     next();
   }

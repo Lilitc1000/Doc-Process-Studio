@@ -12,7 +12,9 @@ from .chat.service.attachments import cleanup_expired_attachments
 from .chat.router.stream import router as chat_stream_router
 from .chat.router.sessions import router as chat_sessions_router
 from .chat.router.attachments import router as chat_attachments_router
-from .incident_report.router.incident_reports import router as incident_reports_router
+from .incident_report.router.reports import router as incident_report_reports_router
+from .incident_report.router.roles import router as incident_report_roles_router
+from .incident_report.router.analytics import router as incident_report_analytics_router
 from .skill.router.routes import router as skill_routes_router
 from .system.router.health import router as health_router
 from .system.router.models import router as models_router
@@ -39,7 +41,9 @@ app.include_router(auth_router)
 app.include_router(chat_stream_router)
 app.include_router(chat_sessions_router)
 app.include_router(chat_attachments_router)
-app.include_router(incident_reports_router)
+app.include_router(incident_report_reports_router)
+app.include_router(incident_report_roles_router)
+app.include_router(incident_report_analytics_router)
 app.include_router(skill_routes_router)
 app.include_router(health_router)
 app.include_router(models_router)

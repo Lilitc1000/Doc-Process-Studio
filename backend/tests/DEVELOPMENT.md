@@ -24,10 +24,18 @@ backend/tests/
 │       ├── test_chat_stream_skill_type_filter.py
 │       └── test_chat_attachments_api.py
 ├── incident_report/            # 事故报告域
+│   ├── conftest.py             # 域级 fixture（isolated FastAPI app + TestClient）
 │   ├── unit/
-│   │   └── test_generation.py
+│   │   ├── test_report_service.py   # 报告业务逻辑（状态流转）
+│   │   ├── test_role_service.py     # 角色管理
+│   │   ├── test_audit_log.py        # 审计日志
+│   │   ├── test_form_validation.py  # 表单校验
+│   │   └── test_generation.py       # 正文生成（reference/translation/report_data）
 │   ├── integration/
-│   │   └── test_incident_report_sessions_api.py
+│   │   ├── test_reports_api.py      # 报告 API（CRUD + 状态流转 + 权限）
+│   │   ├── test_reports_workflow.py # 工作流 API（状态转换 + 审计日志 + 评论）
+│   │   ├── test_roles_api.py        # 角色 API（权限控制）
+│   │   └── test_analytics_api.py    # 分析 API（概览 + 趋势）
 │   └── contract/               # Skill 契约测试
 │       ├── test_tool_chain_contract.py
 │       └── test_script_contract.py
@@ -71,7 +79,7 @@ backend/tests/
 |--------|----------|------|
 | `auth/` | `doc_process_studio/auth/` | 认证（JWT、密码哈希、用户管理） |
 | `chat/` | `doc_process_studio/chat/` | 对话（流式、会话、附件、文件上下文） |
-| `incident_report/` | `doc_process_studio/incident_report/` | 事故报告（正文生成、预览、翻译、工具链） |
+| `incident_report/` | `doc_process_studio/incident_report/` | 事故报告（报告 CRUD、状态流转、角色管理、审计日志、正文生成、数据分析） |
 | `skill/` | `doc_process_studio/skill/` | 技能系统（注册、选择、规划、工具循环、会话存储） |
 | `system/` | `doc_process_studio/system/` | 系统服务（执行器、质量门控、特性开关、错误详情、链路追踪、模型管理） |
 | `core/` | `doc_process_studio/core/` | 核心基础设施（配置、请求防护、模型上下文、安全、缓存、数据库） |
@@ -232,13 +240,13 @@ def test_generation_records_trace(monkeypatch):
 ```python
 def _build_detail(**overrides):
     defaults = {
-        "id": "sess-1",
-        "title": "测试会话",
+        "id": "rep-1",
+        "title": "测试报告",
         "status": "draft",
-        "snapshot": {"formAnswers": {}, "isLocked": False},
+        "reporter_id": "usr_test",
     }
     defaults.update(overrides)
-    return IncidentReportSessionDetail(**defaults)
+    return IncidentReportDetail(**defaults)
 ```
 
 #### 5. 重置模块级状态
@@ -293,6 +301,48 @@ def test_register_success(client, monkeypatch):
     data = resp.json()
     assert data["username"] == "newuser"
 ```
+
+#### 1b. Isolated FastAPI App 模式（避免 lifespan 触发 DB 连接）
+
+对于涉及数据库连接的模块（如 incident_report），使用 isolated FastAPI app 避免 `Event loop is closed` 错误：
+
+```python
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+
+from doc_process_studio.core.security import create_access_token
+from doc_process_studio.incident_report.router.reports import router as reports_router
+from doc_process_studio.incident_report.router.dependencies import require_admin
+
+
+def _create_test_app() -> FastAPI:
+    app = FastAPI()
+    app.include_router(reports_router)
+    return app
+
+
+def _auth_headers(user_id: str = "usr_test") -> dict:
+    token = create_access_token(user_id, "testuser")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_delete_requires_admin():
+    app = _create_test_app()
+
+    async def _reject():
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+
+    app.dependency_overrides[require_admin] = _reject
+
+    client = TestClient(app)
+    resp = client.delete("/api/incident-report/reports/test-id", headers=_auth_headers())
+    assert resp.status_code == 403
+```
+
+**要点**：
+- 不使用 `main_module.app`，而是手动组装 isolated FastAPI app（不含 lifespan）
+- 权限控制使用 `app.dependency_overrides` 替换，而非 patch service 层
+- service 层函数使用 `unittest.mock.patch` 在 router 模块层级替换
 
 #### 2. 需要认证的 API 测试
 

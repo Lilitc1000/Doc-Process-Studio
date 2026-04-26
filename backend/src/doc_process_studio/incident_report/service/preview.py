@@ -192,16 +192,16 @@ def preview_template_token() -> str:
         return "unknown"
 
 
-def _build_output_name(*, session_title: str, session_id: str, suffix: str) -> str:
-    normalized_title = session_title.strip().replace(" ", "-").replace("/", "-")
+def _build_output_name(*, report_title: str, report_id: str, suffix: str) -> str:
+    normalized_title = report_title.strip().replace(" ", "-").replace("/", "-")
     if not normalized_title:
-        normalized_title = f"incident-report-{session_id[:8]}"
+        normalized_title = f"incident-report-{report_id[:8]}"
     return f"{normalized_title}{suffix}"
 
 
-def build_initial_output_name(*, session_title: str, session_id: str) -> str:
-    return _build_output_name(session_title=session_title, session_id=session_id, suffix="-V1.docx")
+def build_initial_output_name(*, report_title: str, report_id: str) -> str:
+    return _build_output_name(report_title=report_title, report_id=report_id, suffix="-V1.docx")
 
 
-def build_preview_output_name(*, session_title: str, session_id: str) -> str:
-    return _build_output_name(session_title=session_title, session_id=session_id, suffix="-preview.docx")
+def build_preview_output_name(*, report_title: str, report_id: str) -> str:
+    return _build_output_name(report_title=report_title, report_id=report_id, suffix="-preview.docx")

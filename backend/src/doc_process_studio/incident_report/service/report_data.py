@@ -3,9 +3,9 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
 
-from ..models.incident_report import (
+from ..schemas.common import (
     IncidentFormAnswer,
-    IncidentReportSessionSnapshot,
+    IncidentFormSnapshot,
 )
 from .constants import (
     APPENDIX_IMAGES,
@@ -72,14 +72,14 @@ from .normalization import (
 )
 
 
-def answer_value(snapshot: IncidentReportSessionSnapshot, key: str) -> Any:
+def answer_value(snapshot: IncidentFormSnapshot, key: str) -> Any:
     answer = snapshot.form_answers.get(key)
     if answer is None:
         return None
     return answer.value
 
 
-def answer_text(snapshot: IncidentReportSessionSnapshot, key: str) -> str:
+def answer_text(snapshot: IncidentFormSnapshot, key: str) -> str:
     return normalize_text(answer_value(snapshot, key))
 
 
@@ -113,7 +113,7 @@ def build_reference_no() -> str:
 
 
 def build_report_data_from_snapshot(
-    snapshot: IncidentReportSessionSnapshot,
+    snapshot: IncidentFormSnapshot,
     *,
     strict_required: bool = True,
 ) -> tuple[dict[str, Any] | None, list[str]]:

@@ -30,13 +30,22 @@ frontend/tests/
 │       └── chat.spec.ts
 ├── incident-report/            # 事故报告域
 │   ├── unit/
-│   │   ├── date-normalization.test.ts
-│   │   └── constants.test.ts
+│   │   ├── report-store.test.ts          # Store 权限/角色测试
+│   │   ├── use-report-list.test.ts       # 列表 composable 测试
+│   │   ├── use-report-detail.test.ts     # 详情 composable 测试
+│   │   ├── incident-report-types.test.ts # 类型常量测试
+│   │   ├── report-status-badge.test.ts   # 状态徽章组件测试
+│   │   └── stats-cards.test.ts           # 统计卡片组件测试
 │   ├── integration/
-│   │   ├── workspace-flow.test.ts
-│   │   └── generation-modal.test.ts
+│   │   ├── report-list-view.test.ts      # 列表页集成测试
+│   │   ├── report-detail-view.test.ts    # 详情页集成测试
+│   │   ├── report-workflow.test.ts       # 状态流转集成测试
+│   │   ├── use-report-audit.test.ts      # 审核 composable 测试
+│   │   └── use-report-analytics.test.ts  # 分析 composable 测试
 │   └── e2e/
-│       └── incident-report.spec.ts
+│       ├── incident-report-list.spec.ts  # 列表页 E2E
+│       ├── incident-report-create.spec.ts # 创建页 E2E
+│       └── incident-report-audit.spec.ts  # 审核页 E2E
 ├── settings/                   # 设置域
 │   └── e2e/
 │       └── settings.spec.ts
@@ -264,22 +273,23 @@ describe('UserAvatar', () => {
 ```typescript
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useIncidentReportForm } from '../../../src/views/incident-report/composables/useIncidentReportForm';
+import { useReportList } from '../../../src/views/incident-report/list/composables/useReportList';
 
 vi.mock('../../../src/api/incident-report', () => ({
-  fetchIncidentReportFormSchema: vi.fn().mockResolvedValue(null),
-  saveIncidentReportSessionSnapshot: vi.fn().mockResolvedValue(null),
+  fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
+  fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
 }));
 
-describe('useIncidentReportForm', () => {
+describe('useReportList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setActivePinia(createPinia());
   });
 
   it('应正确初始化并返回方法', () => {
-    const form = useIncidentReportForm();
-    expect(form.loadIncidentReportSchema).toBeTypeOf('function');
+    const { loadList, loading } = useReportList();
+    expect(loadList).toBeTypeOf('function');
+    expect(loading.value).toBe(false);
   });
 });
 ```

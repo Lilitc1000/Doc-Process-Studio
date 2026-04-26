@@ -1,17 +1,17 @@
-from typing import Literal
+from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from ..models.incident_report import (
-    IncidentReportSessionSnapshot,
-    IncidentReportSessionSummary,
-)
-from ...skill.models.interaction import SkillInteractionStep
+from .common import IncidentFormAnswer, IncidentReportStatus, IncidentSeverity
 
 
 class IncidentBodyGenerateResponse(BaseModel):
-    session: IncidentReportSessionSummary = Field(..., description="更新后的会话摘要")
-    snapshot: IncidentReportSessionSnapshot = Field(..., description="更新后的会话快照")
+    report_id: str = Field(..., description="报告ID")
+    form_answers: dict[str, IncidentFormAnswer] = Field(
+        default_factory=dict,
+        description="更新后的表单答案。",
+    )
     trace_id: str = Field(..., description="本次正文生成 trace_id。")
     section_id: str = Field(..., description="本次生成的分段标识。")
     timeline_index: int | None = Field(
@@ -43,32 +43,99 @@ class IncidentReportPreviewResponse(BaseModel):
     )
 
 
-class IncidentReportSessionListResponse(BaseModel):
-    sessions: list[IncidentReportSessionSummary] = Field(
-        default_factory=list,
-        description="事故报告历史会话列表",
-    )
+class IncidentReportSummary(BaseModel):
+    id: str = Field(..., description="报告ID")
+    ref_no: str = Field(..., description="参考编号")
+    title: str = Field(..., description="标题")
+    status: IncidentReportStatus = Field(..., description="状态")
+    severity: IncidentSeverity | None = Field(default=None, description="严重级别")
+    reporter_id: str = Field(..., description="报告人ID")
+    reporter_name: str | None = Field(default=None, description="报告人姓名")
+    assignee_id: str | None = Field(default=None, description="处理人ID")
+    assignee_name: str | None = Field(default=None, description="处理人姓名")
+    verifier_id: str | None = Field(default=None, description="审核人ID")
+    verifier_name: str | None = Field(default=None, description="审核人姓名")
+    fault_date: datetime | None = Field(default=None, description="故障日期")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
 
 
-class IncidentReportSessionDetail(IncidentReportSessionSummary):
-    snapshot: IncidentReportSessionSnapshot = Field(..., description="会话快照")
+class IncidentReportDetail(IncidentReportSummary):
+    system: str | None = Field(default=None, description="所属系统")
+    site_id: str | None = Field(default=None, description="站点编号")
+    form_data: dict[str, Any] = Field(default_factory=dict, description="表单数据")
+    report_data: dict[str, Any] | None = Field(default=None, description="报告数据")
+    submitted_at: datetime | None = Field(default=None, description="提交时间")
+    approved_at: datetime | None = Field(default=None, description="审批时间")
+    closed_at: datetime | None = Field(default=None, description="关闭时间")
+    resolution_date: datetime | None = Field(default=None, description="解决日期")
 
 
-class IncidentReportFormSchemaResponse(BaseModel):
-    intro_message: str = Field(
-        default="",
-        description="欢迎向导文案。",
-    )
-    steps: list[SkillInteractionStep] = Field(
-        default_factory=list,
-        description="表单步骤定义。",
-    )
+class IncidentReportListResponse(BaseModel):
+    total: int = Field(..., description="总数")
+    items: list[IncidentReportSummary] = Field(default_factory=list)
+
+
+class IncidentAuditLogEntry(BaseModel):
+    id: str = Field(...)
+    action: str = Field(...)
+    actor_id: str = Field(...)
+    actor_name: str | None = Field(default=None)
+    from_status: str | None = Field(default=None)
+    to_status: str | None = Field(default=None)
+    comment: str | None = Field(default=None)
+    created_at: datetime = Field(...)
+
+
+class IncidentCommentEntry(BaseModel):
+    id: str = Field(...)
+    report_id: str = Field(...)
+    author_id: str = Field(...)
+    author_name: str | None = Field(default=None)
+    content: str = Field(...)
+    parent_id: str | None = Field(default=None)
+    created_at: datetime = Field(...)
+
+
+class IncidentAnalyticsOverview(BaseModel):
+    total_this_month: int = Field(...)
+    pending_count: int = Field(...)
+    in_progress_count: int = Field(...)
+    closed_this_month: int = Field(...)
+    avg_resolution_hours: float | None = Field(default=None)
+
+
+class IncidentAnalyticsTrend(BaseModel):
+    date: str = Field(...)
+    count: int = Field(...)
+
+
+class IncidentRoleEntry(BaseModel):
+    user_id: str = Field(...)
+    role: str = Field(...)
+    assigned_by: str | None = Field(default=None)
+    assigned_at: datetime | None = Field(default=None)
+
+
+class IncidentUserRolesResponse(BaseModel):
+    user_id: str = Field(...)
+    roles: list[str] = Field(default_factory=list)
+
+
+class IncidentRoleListResponse(BaseModel):
+    items: list[IncidentRoleEntry] = Field(default_factory=list)
 
 
 __all__ = [
-    "IncidentBodyGenerateResponse",
-    "IncidentReportFormSchemaResponse",
+    "IncidentAnalyticsOverview",
+    "IncidentAnalyticsTrend",
+    "IncidentAuditLogEntry",
+    "IncidentCommentEntry",
+    "IncidentReportDetail",
+    "IncidentReportListResponse",
     "IncidentReportPreviewResponse",
-    "IncidentReportSessionDetail",
-    "IncidentReportSessionListResponse",
+    "IncidentReportSummary",
+    "IncidentRoleEntry",
+    "IncidentRoleListResponse",
+    "IncidentUserRolesResponse",
 ]

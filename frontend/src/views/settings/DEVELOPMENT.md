@@ -9,12 +9,6 @@ frontend/src/views/settings/
     └── settings-page.css
 ```
 
-## API 依赖
-
-| API       | 方法 | 用途             |
-| --------- | ---- | ---------------- |
-| `/models` | GET  | 获取可用模型列表 |
-
 ## 功能说明
 
 设置页面提供 AI 模型配置：
@@ -24,9 +18,26 @@ frontend/src/views/settings/
 
 模型列表从 `/api/models` 获取，选择后自动保存到 `appStore`。
 
+## Store 状态说明
+
+`useAppStore`（持久化）：
+
+| 字段 | 说明 | 持久化 |
+|------|------|--------|
+| `selectedModel` | 当前选中的聊天模型 | ✅ |
+| `selectedRerankerModel` | 当前选中的重排序模型 | ✅ |
+| `availableModels` | 可用模型列表缓存 | ✅ |
+| `processingModes` | 可用 skill 列表缓存 | ✅ |
+
+## API 依赖
+
+| API | 方法 | 用途 |
+|-----|------|------|
+| `/models` | GET | 获取可用模型列表 |
+
 ## 开发注意
 
 - 使用 `BaseDropdown` 公共组件，不要自己实现下拉框
 - 模型选择后通过 `appStore.setSelectedModel()` / `appStore.setSelectedRerankerModel()` 保存
-- 不需要自己的 AppHeader，DefaultLayout 已提供
-- 样式文件放在 `styles/` 目录下
+- 不需要自己的 AppHeader，`DefaultLayout` 已提供
+- 样式文件放在 `styles/` 目录下，通过 `<style scoped src="./styles/xxx.css">` 引入

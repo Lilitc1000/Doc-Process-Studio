@@ -51,11 +51,19 @@ backend/src/doc_process_studio/chat/
 5. 流式调用 Ollama，若有工具调用则进入执行器
 6. 结束后落盘 trace 审计记录
 
+## 附件管理
+
+- 文件落到 `backend/generated-attachments/`
+- 该目录已加入 `.gitignore`
+- 默认有效期 7 天
+- 过期文件会在启动时、生成新文件时、下载文件前自动清理
+- 统一下载接口：`GET /api/attachments/{attachment_id}/download`
+
 ## 跨域依赖
 
 - `skill.service.registry` — Skill 发现与选择
 - `skill.service.context` — 上下文检索
-- `skill.service.tool_loop` — 工具执行循环（子包：tool_exec, tool_schema, tool_status, skill_files, tool_args）
+- `skill.service.tool_loop` — 工具执行循环
 - `system.service.executor` — DAG 执行器
 - `system.service.trace_store` — trace 审计
 - `core.ollama` — Ollama 调用
@@ -65,5 +73,4 @@ backend/src/doc_process_studio/chat/
 
 - 流式响应使用 SSE 格式，事件类型定义在 `service/streaming/` 中
 - 会话数据存储在 PostgreSQL，使用 `session_store.py` 重新导出 `db_session_store` 中的函数
-- 附件文件落到 `backend/generated-attachments/`，7 天过期自动清理
 - 不要在 `router/` 中写业务逻辑，所有编排逻辑放 `service/`

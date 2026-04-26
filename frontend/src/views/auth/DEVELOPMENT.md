@@ -2,34 +2,23 @@
 
 ## 目录结构
 
+```text
 frontend/src/views/auth/
-├── LoginView.vue # 登录页面
-├── RegisterView.vue # 注册页面
+├── LoginView.vue               # 登录页面
+├── RegisterView.vue            # 注册页面
 └── styles/
-├── login-page.css # 登录页样式
-└── register-page.css # 注册页样式
+    ├── login-page.css
+    └── register-page.css
 
 frontend/src/components/business/
-├── UserAvatar.vue # 用户头像（首字母 + 颜色背景）
-├── UserMenuDropdown.vue # 用户菜单下拉（资料、登出）
-└── UserProfileModal.vue # 用户资料弹窗（资料编辑 + 修改密码）
+├── UserAvatar.vue              # 用户头像（首字母 + 颜色背景）
+├── UserMenuDropdown.vue        # 用户菜单下拉（资料、登出）
+└── UserProfileModal.vue        # 用户资料弹窗（资料编辑 + 修改密码）
 
-frontend/src/stores/auth.ts # 认证状态管理
-frontend/src/api/auth.ts # 认证 API 请求
+frontend/src/stores/auth.ts     # 认证状态管理
+frontend/src/api/auth.ts        # 认证 API 请求
 frontend/src/types/auth/auth.ts # 认证类型定义
-
-## API 依赖
-
-| API                    | 方法   | 用途                    |
-| ---------------------- | ------ | ----------------------- |
-| `/auth/register`       | POST   | 注册新用户              |
-| `/auth/login`          | POST   | 登录（form-urlencoded） |
-| `/auth/refresh`        | POST   | 刷新令牌                |
-| `/auth/me`             | GET    | 获取当前用户信息        |
-| `/auth/me`             | PUT    | 更新用户资料            |
-| `/auth/password`       | PUT    | 修改密码                |
-| `/auth/logout`         | POST   | 登出                    |
-| `/auth/users/{userId}` | DELETE | 删除用户账号            |
+```
 
 ## 核心交互流程
 
@@ -40,6 +29,34 @@ frontend/src/types/auth/auth.ts # 认证类型定义
 5. access_token 过期（401）时，自动使用 refresh_token 刷新，成功后重试原请求
 6. 刷新失败则清除认证状态，跳转到登录页
 7. 已认证用户访问 `/login` 或 `/register` 时，路由守卫重定向到首页
+
+## Store 状态说明
+
+`useAuthStore`（部分持久化）：
+
+| 字段 | 说明 | 持久化 |
+|------|------|--------|
+| `accessToken` | 当前 access_token（内存） | ❌ |
+| `refreshToken` | 当前 refresh_token | ✅ |
+| `userInfo` | 当前用户信息（内存） | ❌ |
+| `isAuthenticated` | 是否已认证（computed） | ❌ |
+| `username` | 当前用户名（computed） | ❌ |
+| `avatarColor` | 当前用户头像颜色（computed） | ❌ |
+
+核心方法：`login`、`register`、`refreshAccessToken`、`logout`、`fetchUserInfo`、`clearAuth`
+
+## API 依赖
+
+| API | 方法 | 用途 |
+|-----|------|------|
+| `/auth/register` | POST | 注册新用户 |
+| `/auth/login` | POST | 登录（form-urlencoded） |
+| `/auth/refresh` | POST | 刷新令牌 |
+| `/auth/me` | GET | 获取当前用户信息 |
+| `/auth/me` | PUT | 更新用户资料 |
+| `/auth/password` | PUT | 修改密码 |
+| `/auth/logout` | POST | 登出 |
+| `/auth/users/{userId}` | DELETE | 删除用户账号 |
 
 ## 组件交互约定
 
@@ -58,7 +75,7 @@ frontend/src/types/auth/auth.ts # 认证类型定义
 - **401 自动刷新**：响应拦截器检测到 401 时自动刷新令牌并重试，刷新失败则清除认证跳转登录页
 - **路由守卫**：`requiresAuth` meta 要求认证，`hideForAuth` meta 对已认证用户隐藏
 - **Auth Store 隔离**：单元测试中每个 `beforeEach` 必须调用 `setActivePinia(createPinia())`
-- **humps 转换**：`request.ts` 的请求拦截器只对普通对象（`[object Object]`）执行 `decamelizeKeys`，`URLSearchParams` 等非普通对象会被跳过
+- **humps 转换**：`request.ts` 的请求拦截器只对普通对象执行 `decamelizeKeys`，`URLSearchParams` 等非普通对象会被跳过
 - **样式文件**：放在 `styles/` 目录下，通过 `<style scoped src="./styles/xxx.css">` 引入
 - **不要在业务组件中直接写原生 `<button>`/`<input>`**，应使用 `components/base/` 中的基础组件
 - **E2E 测试速率限制**：测试 `beforeAll` 中调用 `POST /api/auth/rate-limit-whitelist` 加入白名单

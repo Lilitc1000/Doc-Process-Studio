@@ -1,0 +1,148 @@
+@media (max-width: 768px) {
+  .incident-report-list-view {
+    padding: 12px;
+  }
+
+  .incident-report-list-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .incident-report-list-body {
+    flex-direction: column;
+  }
+
+  .incident-report-list-sidebar {
+    width: 100%;
+  }
+
+  .report-list-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .stat-card {
+    flex: 1;
+    min-width: 80px;
+    padding: 8px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .report-list-filters {
+    flex-direction: column;
+  }
+
+  .filter-search,
+  .filter-dropdown {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .report-table th:nth-child(4),
+  .report-table td:nth-child(4),
+  .report-table th:nth-child(5),
+  .report-table td:nth-child(5) {
+    display: none;
+  }
+
+  .incident-report-detail-view {
+    padding: 12px;
+  }
+
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .detail-header-left {
+    flex-wrap: wrap;
+  }
+
+  .detail-header-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .detail-body {
+    flex-direction: column;
+  }
+
+  .detail-sidebar {
+    width: 100%;
+  }
+
+  .incident-report-create-view {
+    padding: 12px;
+  }
+
+  .wizard-steps {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .wizard-step {
+    min-width: 80px;
+    font-size: 12px;
+  }
+
+  .step-label {
+    display: none;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+
+  .incident-report-audit-view {
+    padding: 12px;
+  }
+
+  .audit-meta {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .incident-report-analytics-view {
+    padding: 12px;
+  }
+
+  .analytics-charts {
+    flex-direction: column;
+  }
+
+  .stats-cards {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .stat-card {
+    min-width: 100px;
+    padding: 12px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .report-table th:nth-child(3),
+  .report-table td:nth-cell(3) {
+    display: none;
+  }
+
+  .wizard-steps {
+    gap: 2px;
+    padding: 4px;
+  }
+
+  .wizard-step {
+    padding: 6px 8px;
+  }
+}

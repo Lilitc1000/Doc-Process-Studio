@@ -1,0 +1,47 @@
+.incident-report-analytics-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px;
+}
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.analytics-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.analytics-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+.analytics-charts {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.analytics-charts > * {
+  flex: 1;
+  min-width: 300px;
+}
+
+@media (max-width: 768px) {
+  .analytics-charts {
+    flex-direction: column;
+  }
+
+  .stats-cards {
+    flex-direction: column;
+  }
+}
