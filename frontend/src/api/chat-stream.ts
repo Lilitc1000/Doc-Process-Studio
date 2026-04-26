@@ -1,5 +1,6 @@
 import type { ChatRequestSnapshot, ChatStreamEvent } from '../types/chat/chat';
 import { parseStreamEvents } from '../utils/chat/chat-stream';
+import { useAuthStore } from '../stores/auth';
 
 export const streamChatReply = async (
   requestSnapshot: ChatRequestSnapshot,
@@ -26,9 +27,16 @@ export const streamChatReply = async (
 
   // 使用原生 fetch 而非 axios，因为 SSE 流式接口需要 ReadableStream 逐块读取，
   // axios 不原生支持 ReadableStream，无法实现实时流式输出。
+  const authStore = useAuthStore();
+  const headers: Record<string, string> = {};
+  if (authStore.accessToken) {
+    headers['Authorization'] = `Bearer ${authStore.accessToken}`;
+  }
+
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
     signal,
+    headers,
     body: formData,
   });
 

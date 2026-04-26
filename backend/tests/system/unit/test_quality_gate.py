@@ -126,3 +126,119 @@ def test_quality_gate_passes_when_all_metrics_reach_threshold() -> None:
         ),
     )
     assert failures == []
+
+
+def test_quality_gate_fails_on_tool_success_rate() -> None:
+    metrics = QualityMetrics(
+        skill_selection_precision=0.90,
+        tool_success_rate=0.80,
+        first_response_latency_ms=1600,
+        invalid_tool_call_rate=0.08,
+        user_interrupt_rate=0.12,
+    )
+    failures = evaluate_quality_gate(
+        metrics=metrics,
+        thresholds=QualityGateThresholds(),
+    )
+    assert any("tool_success_rate" in f for f in failures)
+
+
+def test_quality_gate_fails_on_latency() -> None:
+    metrics = QualityMetrics(
+        skill_selection_precision=0.90,
+        tool_success_rate=0.95,
+        first_response_latency_ms=5000,
+        invalid_tool_call_rate=0.08,
+        user_interrupt_rate=0.12,
+    )
+    failures = evaluate_quality_gate(
+        metrics=metrics,
+        thresholds=QualityGateThresholds(),
+    )
+    assert any("first_response_latency_ms" in f for f in failures)
+
+
+def test_quality_gate_fails_on_invalid_tool_call_rate() -> None:
+    metrics = QualityMetrics(
+        skill_selection_precision=0.90,
+        tool_success_rate=0.95,
+        first_response_latency_ms=1600,
+        invalid_tool_call_rate=0.20,
+        user_interrupt_rate=0.12,
+    )
+    failures = evaluate_quality_gate(
+        metrics=metrics,
+        thresholds=QualityGateThresholds(),
+    )
+    assert any("invalid_tool_call_rate" in f for f in failures)
+
+
+def test_quality_gate_fails_on_user_interrupt_rate() -> None:
+    metrics = QualityMetrics(
+        skill_selection_precision=0.90,
+        tool_success_rate=0.95,
+        first_response_latency_ms=1600,
+        invalid_tool_call_rate=0.08,
+        user_interrupt_rate=0.40,
+    )
+    failures = evaluate_quality_gate(
+        metrics=metrics,
+        thresholds=QualityGateThresholds(),
+    )
+    assert any("user_interrupt_rate" in f for f in failures)
+
+
+def test_compute_tool_metrics_from_traces_empty() -> None:
+    metrics = compute_tool_metrics_from_traces([])
+    assert metrics["tool_success_rate"] == 1.0
+    assert metrics["invalid_tool_call_rate"] == 0.0
+    assert metrics["first_response_latency_ms"] == 0.0
+    assert metrics["user_interrupt_rate"] == 0.0
+
+
+def test_compute_tool_metrics_from_traces_interrupted() -> None:
+    trace_payloads = [
+        {
+            "events": [],
+            "rounds": [],
+            "final": {"error": "已停止输出"},
+        }
+    ]
+    metrics = compute_tool_metrics_from_traces(trace_payloads)
+    assert metrics["user_interrupt_rate"] == 1.0
+
+
+def test_compute_tool_metrics_from_traces_invalid_json_content() -> None:
+    trace_payloads = [
+        {
+            "events": [],
+            "rounds": [
+                {
+                    "tool_trace_messages": [
+                        {"role": "tool", "content": "not json"},
+                    ]
+                }
+            ],
+            "final": {"error": ""},
+        }
+    ]
+    metrics = compute_tool_metrics_from_traces(trace_payloads)
+    assert metrics["invalid_tool_call_rate"] == 1.0
+
+
+def test_compute_tool_metrics_from_traces_non_tool_role_ignored() -> None:
+    trace_payloads = [
+        {
+            "events": [],
+            "rounds": [
+                {
+                    "tool_trace_messages": [
+                        {"role": "assistant", "content": '{"ok": true}'},
+                    ]
+                }
+            ],
+            "final": {"error": ""},
+        }
+    ]
+    metrics = compute_tool_metrics_from_traces(trace_payloads)
+    assert metrics["tool_success_rate"] == 1.0

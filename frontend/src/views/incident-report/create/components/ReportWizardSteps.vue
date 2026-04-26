@@ -3,7 +3,10 @@
     <div
       v-for="(step, index) in steps"
       :key="step.key"
-      :class="['wizard-step', { active: currentStep === index, completed: currentStep > index }]"
+      :class="[
+        'wizard-step',
+        { active: currentStep === index, completed: currentStep > index },
+      ]"
       @click="currentStep > index && $emit('go-to-step', index)"
     >
       <span class="step-number">{{ index + 1 }}</span>

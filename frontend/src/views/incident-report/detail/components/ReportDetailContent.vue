@@ -2,8 +2,15 @@
   <div class="report-detail-content">
     <div class="content-card">
       <h3>报告正文</h3>
-      <div v-if="report.form_data && Object.keys(report.form_data).length > 0" class="form-data-section">
-        <div v-for="(value, key) in report.form_data" :key="key" class="form-data-row">
+      <div
+        v-if="report.form_data && Object.keys(report.form_data).length > 0"
+        class="form-data-section"
+      >
+        <div
+          v-for="(value, key) in report.form_data"
+          :key="key"
+          class="form-data-row"
+        >
           <span class="form-data-key">{{ key }}</span>
           <span class="form-data-value">{{ formatValue(value) }}</span>
         </div>

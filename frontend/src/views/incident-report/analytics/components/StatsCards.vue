@@ -5,19 +5,27 @@
       <div class="stat-label">本月报告总数</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value stat-pending">{{ overview?.pending_count ?? 0 }}</div>
+      <div class="stat-value stat-pending">
+        {{ overview?.pending_count ?? 0 }}
+      </div>
       <div class="stat-label">待审核</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value stat-progress">{{ overview?.in_progress_count ?? 0 }}</div>
+      <div class="stat-value stat-progress">
+        {{ overview?.in_progress_count ?? 0 }}
+      </div>
       <div class="stat-label">处理中</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value stat-closed">{{ overview?.closed_this_month ?? 0 }}</div>
+      <div class="stat-value stat-closed">
+        {{ overview?.closed_this_month ?? 0 }}
+      </div>
       <div class="stat-label">已关闭</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">{{ overview?.avg_resolution_hours?.toFixed(1) ?? '-' }}h</div>
+      <div class="stat-value">
+        {{ overview?.avg_resolution_hours?.toFixed(1) ?? '-' }}h
+      </div>
       <div class="stat-label">平均处理时长</div>
     </div>
   </div>
@@ -53,9 +61,15 @@ defineProps<{
   color: var(--color-text-primary);
 }
 
-.stat-pending { color: var(--color-primary); }
-.stat-progress { color: var(--color-warning); }
-.stat-closed { color: var(--color-success); }
+.stat-pending {
+  color: var(--color-primary);
+}
+.stat-progress {
+  color: var(--color-warning);
+}
+.stat-closed {
+  color: var(--color-success);
+}
 
 .stat-label {
   font-size: 13px;

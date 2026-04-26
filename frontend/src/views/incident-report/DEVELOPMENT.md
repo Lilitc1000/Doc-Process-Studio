@@ -78,51 +78,51 @@ frontend/src/views/incident-report/
 
 ### 计算属性
 
-| 属性 | 说明 |
-|------|------|
-| `isAdmin` | 是否管理员 |
-| `isVerifier` | 是否审核人 |
-| `isHandler` | 是否处理人 |
-| `isReporter` | 是否报告人 |
-| `canCreateReport` | 是否可创建报告 |
-| `canAudit` | 是否可审核（verifier 或 admin） |
-| `canManageSettings` | 是否可管理设置（admin） |
+| 属性                | 说明                            |
+| ------------------- | ------------------------------- |
+| `isAdmin`           | 是否管理员                      |
+| `isVerifier`        | 是否审核人                      |
+| `isHandler`         | 是否处理人                      |
+| `isReporter`        | 是否报告人                      |
+| `canCreateReport`   | 是否可创建报告                  |
+| `canAudit`          | 是否可审核（verifier 或 admin） |
+| `canManageSettings` | 是否可管理设置（admin）         |
 
 ## 路由结构
 
-| 路径 | 组件 | 说明 |
-|------|------|------|
-| `/incident-report` | IncidentReportListView | 报告列表 |
-| `/incident-report/create` | IncidentReportCreateView | 创建报告 |
+| 路径                         | 组件                        | 说明     |
+| ---------------------------- | --------------------------- | -------- |
+| `/incident-report`           | IncidentReportListView      | 报告列表 |
+| `/incident-report/create`    | IncidentReportCreateView    | 创建报告 |
 | `/incident-report/analytics` | IncidentReportAnalyticsView | 数据分析 |
-| `/incident-report/:id` | IncidentReportDetailView | 报告详情 |
-| `/incident-report/:id/edit` | IncidentReportEditView | 编辑报告 |
-| `/incident-report/:id/audit` | IncidentReportAuditView | 审核报告 |
+| `/incident-report/:id`       | IncidentReportDetailView    | 报告详情 |
+| `/incident-report/:id/edit`  | IncidentReportEditView      | 编辑报告 |
+| `/incident-report/:id/audit` | IncidentReportAuditView     | 审核报告 |
 
 路由守卫：旧 32+ 字符 hex session ID 自动重定向到列表页。
 
 ## API 依赖
 
-| API | 方法 | 用途 |
-|-----|------|------|
-| `/incident-report/reports` | GET | 报告列表（分页/筛选） |
-| `/incident-report/reports` | POST | 创建报告 |
-| `/incident-report/reports/schema` | GET | 获取表单 Schema |
-| `/incident-report/reports/{id}` | GET | 报告详情 |
-| `/incident-report/reports/{id}` | PUT | 更新报告 |
-| `/incident-report/reports/{id}` | DELETE | 删除报告 |
-| `/incident-report/reports/{id}/submit` | POST | 提交审核 |
-| `/incident-report/reports/{id}/approve` | POST | 批准 |
-| `/incident-report/reports/{id}/reject` | POST | 驳回 |
-| `/incident-report/reports/{id}/assign` | POST | 指派处理人 |
-| `/incident-report/reports/{id}/close` | POST | 关闭 |
-| `/incident-report/reports/{id}/reopen` | POST | 重新打开 |
-| `/incident-report/reports/{id}/audit-logs` | GET | 审计日志 |
-| `/incident-report/reports/{id}/comments` | GET/POST | 评论 |
-| `/incident-report/roles/me` | GET | 当前用户角色 |
-| `/incident-report/roles` | GET/POST/DELETE | 角色管理 |
-| `/incident-report/analytics/overview` | GET | 月度概览 |
-| `/incident-report/analytics/trend` | GET | 趋势数据 |
+| API                                        | 方法            | 用途                  |
+| ------------------------------------------ | --------------- | --------------------- |
+| `/incident-report/reports`                 | GET             | 报告列表（分页/筛选） |
+| `/incident-report/reports`                 | POST            | 创建报告              |
+| `/incident-report/reports/schema`          | GET             | 获取表单 Schema       |
+| `/incident-report/reports/{id}`            | GET             | 报告详情              |
+| `/incident-report/reports/{id}`            | PUT             | 更新报告              |
+| `/incident-report/reports/{id}`            | DELETE          | 删除报告              |
+| `/incident-report/reports/{id}/submit`     | POST            | 提交审核              |
+| `/incident-report/reports/{id}/approve`    | POST            | 批准                  |
+| `/incident-report/reports/{id}/reject`     | POST            | 驳回                  |
+| `/incident-report/reports/{id}/assign`     | POST            | 指派处理人            |
+| `/incident-report/reports/{id}/close`      | POST            | 关闭                  |
+| `/incident-report/reports/{id}/reopen`     | POST            | 重新打开              |
+| `/incident-report/reports/{id}/audit-logs` | GET             | 审计日志              |
+| `/incident-report/reports/{id}/comments`   | GET/POST        | 评论                  |
+| `/incident-report/roles/me`                | GET             | 当前用户角色          |
+| `/incident-report/roles`                   | GET/POST/DELETE | 角色管理              |
+| `/incident-report/analytics/overview`      | GET             | 月度概览              |
+| `/incident-report/analytics/trend`         | GET             | 趋势数据              |
 
 ## 核心交互流程
 
@@ -136,16 +136,16 @@ frontend/src/views/incident-report/
 
 核心类型定义在 `types/incident-report/incident-report.ts`：
 
-| 类型 | 说明 |
-|------|------|
-| `IncidentReportStatus` | 状态枚举（draft/pending/approved/rejected/in_progress/closed） |
-| `IncidentSeverity` | 严重级别（P0/P1/P2/P3） |
-| `IncidentReportSummaryItem` | 列表项 |
-| `IncidentReportDetailItem` | 详情项 |
-| `IncidentAuditLogEntry` | 审计日志条目 |
-| `IncidentCommentEntry` | 评论条目 |
-| `IncidentAnalyticsOverview` | 分析概览 |
-| `IncidentAnalyticsTrend` | 趋势数据 |
+| 类型                        | 说明                                                           |
+| --------------------------- | -------------------------------------------------------------- |
+| `IncidentReportStatus`      | 状态枚举（draft/pending/approved/rejected/in_progress/closed） |
+| `IncidentSeverity`          | 严重级别（P0/P1/P2/P3）                                        |
+| `IncidentReportSummaryItem` | 列表项                                                         |
+| `IncidentReportDetailItem`  | 详情项                                                         |
+| `IncidentAuditLogEntry`     | 审计日志条目                                                   |
+| `IncidentCommentEntry`      | 评论条目                                                       |
+| `IncidentAnalyticsOverview` | 分析概览                                                       |
+| `IncidentAnalyticsTrend`    | 趋势数据                                                       |
 
 ## 开发注意
 

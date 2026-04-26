@@ -17,7 +17,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { IncidentReportDetailItem, IncidentAuditLogEntry } from '../../../../types/incident-report/incident-report';
+import type {
+  IncidentReportDetailItem,
+  IncidentAuditLogEntry,
+} from '../../../../types/incident-report/incident-report';
 import { INCIDENT_STATUS_LABELS } from '../../../../types/incident-report/incident-report';
 import ReportStatusBadge from '../../components/ReportStatusBadge.vue';
 import ReportAuditTimeline from './ReportAuditTimeline.vue';
@@ -28,21 +31,48 @@ const props = defineProps<{
 }>();
 
 const infoFields = computed(() => [
-  { key: 'status', label: '状态', value: INCIDENT_STATUS_LABELS[props.report.status] ?? props.report.status },
+  {
+    key: 'status',
+    label: '状态',
+    value: INCIDENT_STATUS_LABELS[props.report.status] ?? props.report.status,
+  },
   { key: 'severity', label: '级别', value: props.report.severity },
-  { key: 'reporter', label: '报告人', value: props.report.reporter_name ?? props.report.reporter_id },
-  { key: 'assignee', label: '处理人', value: props.report.assignee_name ?? props.report.assignee_id },
-  { key: 'verifier', label: '审核人', value: props.report.verifier_name ?? props.report.verifier_id },
+  {
+    key: 'reporter',
+    label: '报告人',
+    value: props.report.reporter_name ?? props.report.reporter_id,
+  },
+  {
+    key: 'assignee',
+    label: '处理人',
+    value: props.report.assignee_name ?? props.report.assignee_id,
+  },
+  {
+    key: 'verifier',
+    label: '审核人',
+    value: props.report.verifier_name ?? props.report.verifier_id,
+  },
   { key: 'system', label: '系统', value: props.report.system },
   { key: 'site', label: '站点', value: props.report.site_id },
-  { key: 'fault_date', label: '故障日期', value: formatDate(props.report.fault_date) },
-  { key: 'created_at', label: '创建时间', value: formatDate(props.report.created_at) },
+  {
+    key: 'fault_date',
+    label: '故障日期',
+    value: formatDate(props.report.fault_date),
+  },
+  {
+    key: 'created_at',
+    label: '创建时间',
+    value: formatDate(props.report.created_at),
+  },
 ]);
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
-  try { return new Date(dateStr).toLocaleString('zh-CN'); }
-  catch { return dateStr; }
+  try {
+    return new Date(dateStr).toLocaleString('zh-CN');
+  } catch {
+    return dateStr;
+  }
 };
 </script>
 

@@ -13,7 +13,9 @@ const props = defineProps<{
   status: IncidentReportStatus;
 }>();
 
-const label = computed(() => INCIDENT_STATUS_LABELS[props.status] ?? props.status);
+const label = computed(
+  () => INCIDENT_STATUS_LABELS[props.status] ?? props.status,
+);
 </script>
 
 <style scoped>

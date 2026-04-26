@@ -4,7 +4,13 @@
       <div v-for="(item, index) in items" :key="index" class="timeline-item">
         <div class="timeline-item-header">
           <span class="timeline-item-index">#{{ index + 1 }}</span>
-          <button type="button" class="timeline-item-remove" @click="removeItem(index)">✕</button>
+          <button
+            type="button"
+            class="timeline-item-remove"
+            @click="removeItem(index)"
+          >
+            ✕
+          </button>
         </div>
         <div class="timeline-item-fields">
           <div class="timeline-field">
@@ -43,11 +49,14 @@ interface TimelineItem {
   event: string;
 }
 
-const props = withDefaults(defineProps<{
-  modelValue?: unknown;
-}>(), {
-  modelValue: () => [],
-});
+const props = withDefaults(
+  defineProps<{
+    modelValue?: unknown;
+  }>(),
+  {
+    modelValue: () => [],
+  },
+);
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: unknown): void;

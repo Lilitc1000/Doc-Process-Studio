@@ -3,7 +3,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { useAuthStore } from '../../../src/stores/auth';
 import * as authApi from '../../../src/api/auth';
 
-vi.mock('../../../../src/api/auth', () => ({
+vi.mock('../../../src/api/auth', () => ({
   loginUser: vi.fn(),
   registerUser: vi.fn(),
   refreshToken: vi.fn(),

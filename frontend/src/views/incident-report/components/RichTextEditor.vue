@@ -1,27 +1,62 @@
 <template>
   <div class="rich-text-editor">
     <div class="editor-toolbar">
-      <button type="button" class="toolbar-btn" title="加粗" @click="execCommand('bold')">
+      <button
+        type="button"
+        class="toolbar-btn"
+        title="加粗"
+        @click="execCommand('bold')"
+      >
         <strong>B</strong>
       </button>
-      <button type="button" class="toolbar-btn" title="斜体" @click="execCommand('italic')">
+      <button
+        type="button"
+        class="toolbar-btn"
+        title="斜体"
+        @click="execCommand('italic')"
+      >
         <em>I</em>
       </button>
-      <button type="button" class="toolbar-btn" title="下划线" @click="execCommand('underline')">
+      <button
+        type="button"
+        class="toolbar-btn"
+        title="下划线"
+        @click="execCommand('underline')"
+      >
         <u>U</u>
       </button>
       <span class="toolbar-divider" />
-      <button type="button" class="toolbar-btn" title="无序列表" @click="execCommand('insertUnorderedList')">
+      <button
+        type="button"
+        class="toolbar-btn"
+        title="无序列表"
+        @click="execCommand('insertUnorderedList')"
+      >
         • 列表
       </button>
-      <button type="button" class="toolbar-btn" title="有序列表" @click="execCommand('insertOrderedList')">
+      <button
+        type="button"
+        class="toolbar-btn"
+        title="有序列表"
+        @click="execCommand('insertOrderedList')"
+      >
         1. 列表
       </button>
       <span class="toolbar-divider" />
-      <button type="button" class="toolbar-btn" title="插入图片" @click="triggerImageUpload">
+      <button
+        type="button"
+        class="toolbar-btn"
+        title="插入图片"
+        @click="triggerImageUpload"
+      >
         📷
       </button>
-      <button type="button" class="toolbar-btn" title="清除格式" @click="execCommand('removeFormat')">
+      <button
+        type="button"
+        class="toolbar-btn"
+        title="清除格式"
+        @click="execCommand('removeFormat')"
+      >
         ✕
       </button>
     </div>
@@ -46,13 +81,16 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 
-const props = withDefaults(defineProps<{
-  modelValue?: string;
-  placeholder?: string;
-}>(), {
-  modelValue: '',
-  placeholder: '请输入内容...',
-});
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string;
+    placeholder?: string;
+  }>(),
+  {
+    modelValue: '',
+    placeholder: '请输入内容...',
+  },
+);
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void;
@@ -103,11 +141,14 @@ onMounted(() => {
   }
 });
 
-watch(() => props.modelValue, (newVal) => {
-  if (editorRef.value && editorRef.value.innerHTML !== newVal) {
-    editorRef.value.innerHTML = newVal || '';
-  }
-});
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    if (editorRef.value && editorRef.value.innerHTML !== newVal) {
+      editorRef.value.innerHTML = newVal || '';
+    }
+  },
+);
 </script>
 
 <style scoped>

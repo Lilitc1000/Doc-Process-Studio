@@ -42,11 +42,17 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
   const analyticsOverview = ref<IncidentAnalyticsOverview | null>(null);
 
   const isAdmin = computed(() => userIncidentRoles.value.includes('admin'));
-  const isVerifier = computed(() => userIncidentRoles.value.includes('verifier'));
+  const isVerifier = computed(() =>
+    userIncidentRoles.value.includes('verifier'),
+  );
   const isHandler = computed(() => userIncidentRoles.value.includes('handler'));
-  const isReporter = computed(() => userIncidentRoles.value.includes('reporter'));
+  const isReporter = computed(() =>
+    userIncidentRoles.value.includes('reporter'),
+  );
   const isViewer = computed(
-    () => userIncidentRoles.value.length === 0 || userIncidentRoles.value.includes('viewer'),
+    () =>
+      userIncidentRoles.value.length === 0 ||
+      userIncidentRoles.value.includes('viewer'),
   );
 
   const canCreateReport = computed(() =>

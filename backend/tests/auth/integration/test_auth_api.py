@@ -5,7 +5,6 @@ from doc_process_studio.auth.schemas.response import (
     TokenResponse,
     UserInfoResponse,
 )
-from doc_process_studio.core.security import create_access_token
 
 
 def test_api_auth_register_success(monkeypatch) -> None:

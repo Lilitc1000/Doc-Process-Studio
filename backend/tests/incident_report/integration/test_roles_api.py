@@ -1,4 +1,3 @@
-from unittest.mock import patch
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient

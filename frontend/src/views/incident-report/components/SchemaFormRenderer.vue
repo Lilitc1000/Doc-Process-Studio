@@ -2,12 +2,16 @@
   <div class="schema-form-renderer">
     <div v-for="step in schema.steps" :key="step.step_id" class="form-step">
       <h3 class="step-title">{{ step.title }}</h3>
-      <p v-if="step.description" class="step-description">{{ step.description }}</p>
+      <p v-if="step.description" class="step-description">
+        {{ step.description }}
+      </p>
 
       <div class="step-fields">
         <template v-for="field in step.fields" :key="field.field_id">
           <div v-if="field.field_type === 'text'" class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <base-input
               :model-value="getFieldValue(field.field_id)"
               :placeholder="field.placeholder ?? undefined"
@@ -16,7 +20,9 @@
           </div>
 
           <div v-else-if="field.field_type === 'textarea'" class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <base-textarea
               :model-value="getFieldValue(field.field_id)"
               :placeholder="field.placeholder ?? undefined"
@@ -25,7 +31,9 @@
           </div>
 
           <div v-else-if="field.field_type === 'select'" class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <base-dropdown
               :model-value="getFieldValue(field.field_id)"
               :options="fieldOptions(field)"
@@ -35,7 +43,9 @@
           </div>
 
           <div v-else-if="field.field_type === 'datetime'" class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <base-date-time-picker
               :model-value="getFieldValue(field.field_id)"
               mode="datetime"
@@ -44,7 +54,9 @@
           </div>
 
           <div v-else-if="field.field_type === 'date'" class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <base-date-time-picker
               :model-value="getFieldValue(field.field_id)"
               mode="date"
@@ -53,7 +65,9 @@
           </div>
 
           <div v-else-if="field.field_type === 'rich_text'" class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <rich-text-editor
               :model-value="getFieldValue(field.field_id)"
               @update:model-value="setFieldValue(field.field_id, $event)"
@@ -61,7 +75,9 @@
           </div>
 
           <div v-else-if="field.field_type === 'timeline'" class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <timeline-editor
               :model-value="getFieldValue(field.field_id)"
               @update:model-value="setFieldValue(field.field_id, $event)"
@@ -69,7 +85,9 @@
           </div>
 
           <div v-else-if="field.field_type === 'attachment'" class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <base-file-upload
               accept="image/*,.pdf,.doc,.docx"
               multiple
@@ -78,7 +96,9 @@
           </div>
 
           <div v-else class="form-field">
-            <label :class="['field-label', { required: field.required }]">{{ field.label }}</label>
+            <label :class="['field-label', { required: field.required }]">{{
+              field.label
+            }}</label>
             <base-input
               :model-value="getFieldValue(field.field_id)"
               :placeholder="field.placeholder ?? undefined"

@@ -1,5 +1,8 @@
 import { ref } from 'vue';
-import { fetchIncidentReportDetail, updateIncidentReport } from '../../../../api/incident-report';
+import {
+  fetchIncidentReportDetail,
+  updateIncidentReport,
+} from '../../../../api/incident-report';
 import type { IncidentReportDetailItem } from '../../../../types/incident-report/incident-report';
 
 export function useReportEdit() {
@@ -16,14 +19,17 @@ export function useReportEdit() {
     }
   };
 
-  const save = async (reportId: string, payload: {
-    title?: string;
-    severity?: string;
-    system?: string;
-    site_id?: string;
-    fault_date?: string;
-    form_data?: Record<string, unknown>;
-  }) => {
+  const save = async (
+    reportId: string,
+    payload: {
+      title?: string;
+      severity?: string;
+      system?: string;
+      site_id?: string;
+      fault_date?: string;
+      form_data?: Record<string, unknown>;
+    },
+  ) => {
     saving.value = true;
     try {
       report.value = await updateIncidentReport(reportId, payload);

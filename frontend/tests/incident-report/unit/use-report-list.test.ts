@@ -22,11 +22,43 @@ describe('useReportList', () => {
     const mockData = {
       total: 2,
       items: [
-        { id: 'rep-1', ref_no: 'DAS-001', title: '测试1', status: 'draft', severity: 'P1', reporter_id: 'usr-1', reporter_name: null, assignee_id: null, assignee_name: null, verifier_id: null, verifier_name: null, fault_date: null, created_at: '2026-04-20', updated_at: '2026-04-20' },
-        { id: 'rep-2', ref_no: 'DAS-002', title: '测试2', status: 'pending', severity: 'P2', reporter_id: 'usr-2', reporter_name: null, assignee_id: null, assignee_name: null, verifier_id: null, verifier_name: null, fault_date: null, created_at: '2026-04-19', updated_at: '2026-04-19' },
+        {
+          id: 'rep-1',
+          ref_no: 'DAS-001',
+          title: '测试1',
+          status: 'draft',
+          severity: 'P1',
+          reporter_id: 'usr-1',
+          reporter_name: null,
+          assignee_id: null,
+          assignee_name: null,
+          verifier_id: null,
+          verifier_name: null,
+          fault_date: null,
+          created_at: '2026-04-20',
+          updated_at: '2026-04-20',
+        },
+        {
+          id: 'rep-2',
+          ref_no: 'DAS-002',
+          title: '测试2',
+          status: 'pending',
+          severity: 'P2',
+          reporter_id: 'usr-2',
+          reporter_name: null,
+          assignee_id: null,
+          assignee_name: null,
+          verifier_id: null,
+          verifier_name: null,
+          fault_date: null,
+          created_at: '2026-04-19',
+          updated_at: '2026-04-19',
+        },
       ],
     };
-    (api.fetchIncidentReportList as ReturnType<typeof vi.fn>).mockResolvedValue(mockData);
+    (api.fetchIncidentReportList as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockData,
+    );
 
     const { items, total, load } = useReportList();
     await load({ page: 1 });

@@ -44,42 +44,42 @@ frontend/src/
 
 ## 命名规范
 
-| 使用场景 | 风格 | 示例 |
-|----------|------|------|
-| JS 变量 / 函数 | camelCase | `incidentReportStore` |
-| Vue 组件定义 | PascalCase | `IncidentReportWorkspace.vue` |
-| 模板中的组件名 | kebab-case | `<incident-report-workspace />` |
-| 模板中的 prop 绑定 | kebab-case | `:is-generating="..."` |
-| 自定义事件名 | kebab-case | `@quick-generate-body="..."` |
-| CSS 类名 / ID | kebab-case | `.incident-report-workspace` |
-| 文件名 | kebab-case | `incident-report-page.css` |
-| API 路径 | kebab-case | `/incident-report/sessions` |
+| 使用场景           | 风格       | 示例                            |
+| ------------------ | ---------- | ------------------------------- |
+| JS 变量 / 函数     | camelCase  | `incidentReportStore`           |
+| Vue 组件定义       | PascalCase | `IncidentReportWorkspace.vue`   |
+| 模板中的组件名     | kebab-case | `<incident-report-workspace />` |
+| 模板中的 prop 绑定 | kebab-case | `:is-generating="..."`          |
+| 自定义事件名       | kebab-case | `@quick-generate-body="..."`    |
+| CSS 类名 / ID      | kebab-case | `.incident-report-workspace`    |
+| 文件名             | kebab-case | `incident-report-page.css`      |
+| API 路径           | kebab-case | `/incident-report/sessions`     |
 
 前端代码统一使用 **camelCase**，后端接口使用 snake_case，由 `api/request.ts` 中的拦截器自动转换。
 
 ## 组件分层规则
 
-| 层级 | 目录 | 职责 | 约束 |
-|------|------|------|------|
-| 布局 | `layouts/` | 页面骨架 | 禁止写业务逻辑 |
-| 页面 | `views/` | 对应路由，数据获取和页面级状态 | 可组合多个 components |
-| 页面私有组件 | `views/xxx/components/` | 仅当前页面用 | 禁止被其他页面导入 |
-| 页面私有逻辑 | `views/xxx/composables/` | 仅当前页面用 | 禁止被其他页面导入 |
-| 原子组件 | `components/base/` | 纯 UI，无业务，到处复用 | 禁止依赖 API，props/emit 通信 |
-| 业务组件 | `components/business/` | 跨页面复用，带业务语义 | 可依赖 API 类型，禁止直接调用 API |
-| 全局逻辑 | `composables/` | 逻辑复用 | base 级纯逻辑，business 级可调用 API |
+| 层级         | 目录                     | 职责                           | 约束                                 |
+| ------------ | ------------------------ | ------------------------------ | ------------------------------------ |
+| 布局         | `layouts/`               | 页面骨架                       | 禁止写业务逻辑                       |
+| 页面         | `views/`                 | 对应路由，数据获取和页面级状态 | 可组合多个 components                |
+| 页面私有组件 | `views/xxx/components/`  | 仅当前页面用                   | 禁止被其他页面导入                   |
+| 页面私有逻辑 | `views/xxx/composables/` | 仅当前页面用                   | 禁止被其他页面导入                   |
+| 原子组件     | `components/base/`       | 纯 UI，无业务，到处复用        | 禁止依赖 API，props/emit 通信        |
+| 业务组件     | `components/business/`   | 跨页面复用，带业务语义         | 可依赖 API 类型，禁止直接调用 API    |
+| 全局逻辑     | `composables/`           | 逻辑复用                       | base 级纯逻辑，business 级可调用 API |
 
 ## 样式规范
 
 ### 样式归属
 
-| 组件类型 | 样式位置 | 说明 |
-|----------|----------|------|
-| 公共基础组件 | 内联 `<style scoped>` | 组件自包含 |
-| 业务公共组件 | 优先内联；复杂时同目录引入 | 保证可复用 |
-| 布局组件 | 内联 `<style scoped>` | 同上 |
-| 页面级组件 | `views/xxx/styles/` | 业务域样式集中管理 |
-| 全局样式 | `styles/base.css` | 仅 CSS 变量、reset、全局字体 |
+| 组件类型     | 样式位置                   | 说明                         |
+| ------------ | -------------------------- | ---------------------------- |
+| 公共基础组件 | 内联 `<style scoped>`      | 组件自包含                   |
+| 业务公共组件 | 优先内联；复杂时同目录引入 | 保证可复用                   |
+| 布局组件     | 内联 `<style scoped>`      | 同上                         |
+| 页面级组件   | `views/xxx/styles/`        | 业务域样式集中管理           |
+| 全局样式     | `styles/base.css`          | 仅 CSS 变量、reset、全局字体 |
 
 ### 样式约束
 
@@ -107,15 +107,15 @@ frontend/src/
 
 ### 新增 UI 元素
 
-| UI 元素 | 应使用 |
-|---------|--------|
-| 按钮 | `BaseButton` |
-| 输入框 | `BaseInput` |
-| 多行输入 | `BaseTextarea` |
-| 下拉选择 | `BaseDropdown` |
-| 文件上传 | `BaseFileUpload` |
+| UI 元素       | 应使用               |
+| ------------- | -------------------- |
+| 按钮          | `BaseButton`         |
+| 输入框        | `BaseInput`          |
+| 多行输入      | `BaseTextarea`       |
+| 下拉选择      | `BaseDropdown`       |
+| 文件上传      | `BaseFileUpload`     |
 | 日期/时间选择 | `BaseDateTimePicker` |
-| 弹窗/对话框 | `BaseModal` |
+| 弹窗/对话框   | `BaseModal`          |
 
 现有基础组件不满足需求时，先在 `components/base/` 中扩展，不要在业务组件中直接写原生 HTML 元素。
 
@@ -147,24 +147,24 @@ npm run test:e2e:ui   # E2E 测试（带 UI）
 
 ## 目录开发文档
 
-| 目录 | 文档 | 说明 |
-|------|------|------|
-| `src/api/` | [api/DEVELOPMENT.md](src/api/DEVELOPMENT.md) | HTTP 请求封装、拦截器说明 |
-| `src/components/` | [components/DEVELOPMENT.md](src/components/DEVELOPMENT.md) | 原子组件与业务组件分层 |
-| `src/composables/` | [composables/DEVELOPMENT.md](src/composables/DEVELOPMENT.md) | 全局组合式函数 |
-| `src/layouts/` | [layouts/DEVELOPMENT.md](src/layouts/DEVELOPMENT.md) | 布局组件 |
-| `src/router/` | [router/DEVELOPMENT.md](src/router/DEVELOPMENT.md) | 路由配置与导航守卫 |
-| `src/stores/` | [stores/DEVELOPMENT.md](src/stores/DEVELOPMENT.md) | Pinia 状态管理 |
-| `src/styles/` | [styles/DEVELOPMENT.md](src/styles/DEVELOPMENT.md) | 全局样式与过渡动画 |
-| `src/types/` | [types/DEVELOPMENT.md](src/types/DEVELOPMENT.md) | 共享类型定义 |
-| `src/utils/` | [utils/DEVELOPMENT.md](src/utils/DEVELOPMENT.md) | 纯工具函数 |
+| 目录               | 文档                                                         | 说明                      |
+| ------------------ | ------------------------------------------------------------ | ------------------------- |
+| `src/api/`         | [api/DEVELOPMENT.md](src/api/DEVELOPMENT.md)                 | HTTP 请求封装、拦截器说明 |
+| `src/components/`  | [components/DEVELOPMENT.md](src/components/DEVELOPMENT.md)   | 原子组件与业务组件分层    |
+| `src/composables/` | [composables/DEVELOPMENT.md](src/composables/DEVELOPMENT.md) | 全局组合式函数            |
+| `src/layouts/`     | [layouts/DEVELOPMENT.md](src/layouts/DEVELOPMENT.md)         | 布局组件                  |
+| `src/router/`      | [router/DEVELOPMENT.md](src/router/DEVELOPMENT.md)           | 路由配置与导航守卫        |
+| `src/stores/`      | [stores/DEVELOPMENT.md](src/stores/DEVELOPMENT.md)           | Pinia 状态管理            |
+| `src/styles/`      | [styles/DEVELOPMENT.md](src/styles/DEVELOPMENT.md)           | 全局样式与过渡动画        |
+| `src/types/`       | [types/DEVELOPMENT.md](src/types/DEVELOPMENT.md)             | 共享类型定义              |
+| `src/utils/`       | [utils/DEVELOPMENT.md](src/utils/DEVELOPMENT.md)             | 纯工具函数                |
 
 ## 业务域开发文档
 
-| 业务域 | 文档路径 |
-|--------|----------|
-| Auth | [src/views/auth/DEVELOPMENT.md](src/views/auth/DEVELOPMENT.md) |
-| Chat | [src/views/chat/DEVELOPMENT.md](src/views/chat/DEVELOPMENT.md) |
+| 业务域         | 文档路径                                                                             |
+| -------------- | ------------------------------------------------------------------------------------ |
+| Auth           | [src/views/auth/DEVELOPMENT.md](src/views/auth/DEVELOPMENT.md)                       |
+| Chat           | [src/views/chat/DEVELOPMENT.md](src/views/chat/DEVELOPMENT.md)                       |
 | IncidentReport | [src/views/incident-report/DEVELOPMENT.md](src/views/incident-report/DEVELOPMENT.md) |
-| Home | [src/views/home/DEVELOPMENT.md](src/views/home/DEVELOPMENT.md) |
-| Settings | [src/views/settings/DEVELOPMENT.md](src/views/settings/DEVELOPMENT.md) |
+| Home           | [src/views/home/DEVELOPMENT.md](src/views/home/DEVELOPMENT.md)                       |
+| Settings       | [src/views/settings/DEVELOPMENT.md](src/views/settings/DEVELOPMENT.md)               |

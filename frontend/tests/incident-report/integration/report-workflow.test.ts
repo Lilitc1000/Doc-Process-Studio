@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { useIncidentReportStore } from '../../../src/stores/incident-report';
 import { setActivePinia, createPinia } from 'pinia';
 import * as api from '../../../src/api/incident-report';
 
@@ -54,10 +53,18 @@ describe('报告状态流转集成测试', () => {
       resolution_date: null,
     };
 
-    const mockSubmitted = { ...mockCreated, status: 'pending', submitted_at: '2026-04-20' };
+    const mockSubmitted = {
+      ...mockCreated,
+      status: 'pending',
+      submitted_at: '2026-04-20',
+    };
 
-    (api.createIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(mockCreated);
-    (api.submitIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(mockSubmitted);
+    (api.createIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockCreated,
+    );
+    (api.submitIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockSubmitted,
+    );
 
     const created = await api.createIncidentReport({ title: '测试报告' });
     expect(created.status).toBe('draft');
@@ -92,7 +99,9 @@ describe('报告状态流转集成测试', () => {
       resolution_date: null,
     };
 
-    (api.approveIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(mockApproved);
+    (api.approveIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockApproved,
+    );
 
     const result = await api.approveIncidentReport('rep-1', '通过审核');
     expect(result.status).toBe('approved');
@@ -125,7 +134,9 @@ describe('报告状态流转集成测试', () => {
       resolution_date: null,
     };
 
-    (api.rejectIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(mockRejected);
+    (api.rejectIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockRejected,
+    );
 
     const result = await api.rejectIncidentReport('rep-1', '信息不完整');
     expect(result.status).toBe('rejected');
@@ -157,7 +168,9 @@ describe('报告状态流转集成测试', () => {
       resolution_date: '2026-04-22',
     };
 
-    (api.closeIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(mockClosed);
+    (api.closeIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockClosed,
+    );
 
     const result = await api.closeIncidentReport('rep-1', '问题已解决');
     expect(result.status).toBe('closed');

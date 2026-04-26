@@ -7,12 +7,20 @@
         <div class="timeline-content">
           <div class="timeline-header">
             <span class="timeline-action">{{ actionLabel(log.action) }}</span>
-            <span class="timeline-actor">{{ log.actor_name ?? log.actor_id }}</span>
+            <span class="timeline-actor">{{
+              log.actor_name ?? log.actor_id
+            }}</span>
             <span class="timeline-time">{{ formatDate(log.created_at) }}</span>
           </div>
-          <div v-if="log.comment" class="timeline-comment">{{ log.comment }}</div>
-          <div v-if="log.from_status && log.to_status" class="timeline-status-change">
-            {{ statusLabel(log.from_status) }} → {{ statusLabel(log.to_status) }}
+          <div v-if="log.comment" class="timeline-comment">
+            {{ log.comment }}
+          </div>
+          <div
+            v-if="log.from_status && log.to_status"
+            class="timeline-status-change"
+          >
+            {{ statusLabel(log.from_status) }} →
+            {{ statusLabel(log.to_status) }}
           </div>
         </div>
       </div>
@@ -21,7 +29,10 @@
 </template>
 
 <script setup lang="ts">
-import type { IncidentAuditLogEntry, IncidentReportStatus } from '../../../../types/incident-report/incident-report';
+import type {
+  IncidentAuditLogEntry,
+  IncidentReportStatus,
+} from '../../../../types/incident-report/incident-report';
 import { INCIDENT_STATUS_LABELS } from '../../../../types/incident-report/incident-report';
 
 defineProps<{
@@ -88,12 +99,24 @@ const formatDate = (dateStr: string) => {
   background: var(--color-text-tertiary);
 }
 
-.dot-create { background: var(--color-primary); }
-.dot-submit { background: var(--color-warning); }
-.dot-approve { background: var(--color-success); }
-.dot-reject { background: var(--color-danger); }
-.dot-close { background: var(--color-text-tertiary); }
-.dot-reopen { background: var(--color-primary); }
+.dot-create {
+  background: var(--color-primary);
+}
+.dot-submit {
+  background: var(--color-warning);
+}
+.dot-approve {
+  background: var(--color-success);
+}
+.dot-reject {
+  background: var(--color-danger);
+}
+.dot-close {
+  background: var(--color-text-tertiary);
+}
+.dot-reopen {
+  background: var(--color-primary);
+}
 
 .timeline-content {
   flex: 1;

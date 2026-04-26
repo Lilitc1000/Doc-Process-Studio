@@ -32,8 +32,12 @@ describe('useReportAnalytics', () => {
       { date: '2026-04-21', count: 3 },
     ];
 
-    (api.fetchIncidentAnalyticsOverview as ReturnType<typeof vi.fn>).mockResolvedValue(mockOverview);
-    (api.fetchIncidentAnalyticsTrend as ReturnType<typeof vi.fn>).mockResolvedValue(mockTrend);
+    (
+      api.fetchIncidentAnalyticsOverview as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(mockOverview);
+    (
+      api.fetchIncidentAnalyticsTrend as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(mockTrend);
 
     const { overview, trendData, load } = useReportAnalytics();
     await load(30);

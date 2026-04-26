@@ -5,21 +5,30 @@
       <div class="bar-item">
         <span class="bar-label">待审核</span>
         <div class="bar-track">
-          <div class="bar-fill bar-pending" :style="{ width: barWidth('pending') }" />
+          <div
+            class="bar-fill bar-pending"
+            :style="{ width: barWidth('pending') }"
+          />
         </div>
         <span class="bar-value">{{ overview?.pending_count ?? 0 }}</span>
       </div>
       <div class="bar-item">
         <span class="bar-label">处理中</span>
         <div class="bar-track">
-          <div class="bar-fill bar-progress" :style="{ width: barWidth('in_progress') }" />
+          <div
+            class="bar-fill bar-progress"
+            :style="{ width: barWidth('in_progress') }"
+          />
         </div>
         <span class="bar-value">{{ overview?.in_progress_count ?? 0 }}</span>
       </div>
       <div class="bar-item">
         <span class="bar-label">已关闭</span>
         <div class="bar-track">
-          <div class="bar-fill bar-closed" :style="{ width: barWidth('closed') }" />
+          <div
+            class="bar-fill bar-closed"
+            :style="{ width: barWidth('closed') }"
+          />
         </div>
         <span class="bar-value">{{ overview?.closed_this_month ?? 0 }}</span>
       </div>
@@ -90,9 +99,15 @@ const barWidth = (type: 'pending' | 'in_progress' | 'closed') => {
   transition: width 0.3s ease;
 }
 
-.bar-pending { background: var(--color-primary); }
-.bar-progress { background: var(--color-warning); }
-.bar-closed { background: var(--color-success); }
+.bar-pending {
+  background: var(--color-primary);
+}
+.bar-progress {
+  background: var(--color-warning);
+}
+.bar-closed {
+  background: var(--color-success);
+}
 
 .bar-value {
   width: 30px;

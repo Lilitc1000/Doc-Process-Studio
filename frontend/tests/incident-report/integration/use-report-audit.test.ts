@@ -46,7 +46,9 @@ describe('useReportAudit', () => {
       resolution_date: null,
     };
 
-    (api.approveIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(mockReport);
+    (api.approveIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockReport,
+    );
 
     const { report, approve } = useReportAudit();
     await approve('rep-1', '通过审核');
@@ -81,7 +83,9 @@ describe('useReportAudit', () => {
       resolution_date: null,
     };
 
-    (api.rejectIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(mockReport);
+    (api.rejectIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockReport,
+    );
 
     const { report, reject } = useReportAudit();
     await reject('rep-1', '信息不完整');

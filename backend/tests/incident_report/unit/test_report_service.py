@@ -1,7 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
 
-import pytest
 
 from doc_process_studio.incident_report.service.report import (
     create_report,
@@ -10,13 +9,9 @@ from doc_process_studio.incident_report.service.report import (
     reject_report,
     close_report,
     reopen_report,
-    assign_handler,
 )
 from doc_process_studio.incident_report.service.report_store import (
     _CLEAR_SENTINEL,
-    generate_ref_no,
-    orm_to_detail,
-    orm_to_summary,
 )
 
 

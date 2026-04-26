@@ -1,7 +1,11 @@
 <template>
   <div class="incident-report-analytics-view">
     <div class="analytics-header">
-      <base-button variant="ghost" size="sm" @click="router.push('/incident-report')">
+      <base-button
+        variant="ghost"
+        size="sm"
+        @click="router.push('/incident-report')"
+      >
         ← 返回列表
       </base-button>
       <h1>统计分析</h1>
@@ -11,13 +15,8 @@
       <stats-cards :overview="overview" />
 
       <div class="analytics-charts">
-        <distribution-chart
-          :overview="overview"
-        />
-        <trend-chart
-          :trend-data="trendData"
-          :loading="trendLoading"
-        />
+        <distribution-chart :overview="overview" />
+        <trend-chart :trend-data="trendData" :loading="trendLoading" />
       </div>
     </div>
   </div>
@@ -26,8 +25,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { fetchIncidentAnalyticsOverview, fetchIncidentAnalyticsTrend } from '../../../api/incident-report';
-import type { IncidentAnalyticsOverview, IncidentAnalyticsTrend } from '../../../types/incident-report/incident-report';
+import {
+  fetchIncidentAnalyticsOverview,
+  fetchIncidentAnalyticsTrend,
+} from '../../../api/incident-report';
+import type {
+  IncidentAnalyticsOverview,
+  IncidentAnalyticsTrend,
+} from '../../../types/incident-report/incident-report';
 import BaseButton from '../../../components/base/BaseButton.vue';
 import StatsCards from './components/StatsCards.vue';
 import DistributionChart from './components/DistributionChart.vue';

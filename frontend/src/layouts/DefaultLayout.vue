@@ -30,7 +30,7 @@ const currentPageId = computed(() => {
   const name = route.name as string;
   if (name === 'home') return 'home';
   if (name === 'chat') return 'chat';
-  if (name === 'incident-report') return 'incident-report';
+  if (name?.startsWith('incident-report')) return 'incident-report';
   if (name === 'settings') return 'settings';
   return 'home';
 });

@@ -54,16 +54,16 @@ ChatView.vue
 
 ## API 依赖
 
-| API | 方法 | 用途 |
-|-----|------|------|
-| `/chat-sessions` | GET | 加载会话列表 |
-| `/chat-sessions/{id}` | GET | 加载会话详情 |
-| `/chat-sessions/{id}` | PUT | 保存会话快照 |
-| `/chat-sessions/{id}/title` | PATCH | 修改会话标题 |
-| `/chat-sessions/{id}` | DELETE | 删除会话 |
-| `/chat/stream` | POST | 发送消息并接收 SSE 流式回复 |
-| `/models` | GET | 获取可用模型列表 |
-| `/skills` | GET | 获取 Skill 列表 |
+| API                         | 方法   | 用途                        |
+| --------------------------- | ------ | --------------------------- |
+| `/chat-sessions`            | GET    | 加载会话列表                |
+| `/chat-sessions/{id}`       | GET    | 加载会话详情                |
+| `/chat-sessions/{id}`       | PUT    | 保存会话快照                |
+| `/chat-sessions/{id}/title` | PATCH  | 修改会话标题                |
+| `/chat-sessions/{id}`       | DELETE | 删除会话                    |
+| `/chat/stream`              | POST   | 发送消息并接收 SSE 流式回复 |
+| `/models`                   | GET    | 获取可用模型列表            |
+| `/skills`                   | GET    | 获取 Skill 列表             |
 
 ## 核心交互流程
 

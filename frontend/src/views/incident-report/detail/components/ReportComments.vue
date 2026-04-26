@@ -4,7 +4,9 @@
     <div class="comments-list">
       <div v-for="comment in comments" :key="comment.id" class="comment-item">
         <div class="comment-header">
-          <span class="comment-author">{{ comment.author_name ?? comment.author_id }}</span>
+          <span class="comment-author">{{
+            comment.author_name ?? comment.author_id
+          }}</span>
           <span class="comment-time">{{ formatDate(comment.created_at) }}</span>
         </div>
         <div class="comment-body">{{ comment.content }}</div>
@@ -35,7 +37,7 @@ import type { IncidentCommentEntry } from '../../../../types/incident-report/inc
 import BaseTextarea from '../../../../components/base/BaseTextarea.vue';
 import BaseButton from '../../../../components/base/BaseButton.vue';
 
-const props = defineProps<{
+defineProps<{
   reportId: string;
   comments: IncidentCommentEntry[];
 }>();

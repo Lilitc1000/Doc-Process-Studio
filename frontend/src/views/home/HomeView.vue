@@ -148,7 +148,7 @@ const router = useRouter();
 
 const routeMap: Record<string, string> = {
   chat: 'chat',
-  'incident-report': 'incident-report',
+  'incident-report': 'incident-report-list',
   settings: 'settings',
 };
 

@@ -1,7 +1,6 @@
 import asyncio
 
 from doc_process_studio.incident_report.service.audit_log import (
-    create_audit_log,
     orm_to_entry,
 )
 

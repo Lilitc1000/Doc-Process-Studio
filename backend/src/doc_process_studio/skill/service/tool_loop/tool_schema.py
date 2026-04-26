@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..registry import get_skill_interface
-from .skill_files import SCOPED_TOOL_SEPARATOR, _resolve_search_limit_bounds
+from .skill_files import SCOPED_TOOL_SEPARATOR, _resolve_search_limit_bounds, compose_scoped_tool_name
 
 def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
     """构造当前 skill 对模型暴露的全部工具。"""

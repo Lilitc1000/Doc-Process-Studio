@@ -43,10 +43,24 @@ test.describe('对话页面 - UI 渲染', () => {
 });
 
 test.describe('对话页面 - 端到端场景', () => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
+
+  let ollamaAvailable = false;
 
   test.beforeAll(async ({ request }) => {
     await addRateLimitWhitelist(request);
+    try {
+      const accessToken = await loginViaApi(request);
+      if (accessToken) {
+        const resp = await request.get('/api/models', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          timeout: 10_000,
+        });
+        ollamaAvailable = resp.ok();
+      }
+    } catch {
+      ollamaAvailable = false;
+    }
   });
 
   test.beforeEach(async ({ page }) => {
@@ -79,6 +93,11 @@ test.describe('对话页面 - 端到端场景', () => {
   });
 
   test('发送消息后 AI 回复出现在聊天区域', async ({ page }) => {
+    if (!ollamaAvailable) {
+      test.skip();
+      return;
+    }
+
     const sessionsResp = page.waitForResponse(
       (resp) => resp.url().includes('/chat-sessions') && resp.status() === 200,
       { timeout: 10_000 },
@@ -93,21 +112,13 @@ test.describe('对话页面 - 端到端场景', () => {
     const sendBtn = page.locator('.chat-input .send-btn');
     await sendBtn.click();
 
-    try {
-      const streamResp = await page.waitForResponse(
-        (resp) => resp.url().includes('/chat/stream'),
-        { timeout: 15_000 },
-      );
-      if (streamResp.status() !== 200) {
-        test.skip();
-        return;
-      }
-    } catch {
-      test.skip();
-      return;
-    }
+    const streamResp = await page.waitForResponse(
+      (resp) => resp.url().includes('/chat/stream'),
+      { timeout: 30_000 },
+    );
+    expect(streamResp.status()).toBe(200);
 
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
     const messages = page.locator('.chat-message');
     const count = await messages.count();
@@ -115,6 +126,11 @@ test.describe('对话页面 - 端到端场景', () => {
   });
 
   test('发送消息后侧边栏出现新会话', async ({ page }) => {
+    if (!ollamaAvailable) {
+      test.skip();
+      return;
+    }
+
     const sessionsResp = page.waitForResponse(
       (resp) => resp.url().includes('/chat-sessions') && resp.status() === 200,
       { timeout: 10_000 },
@@ -133,21 +149,13 @@ test.describe('对话页面 - 端到端场景', () => {
     const sendBtn = page.locator('.chat-input .send-btn');
     await sendBtn.click();
 
-    try {
-      const streamResp = await page.waitForResponse(
-        (resp) => resp.url().includes('/chat/stream'),
-        { timeout: 15_000 },
-      );
-      if (streamResp.status() !== 200) {
-        test.skip();
-        return;
-      }
-    } catch {
-      test.skip();
-      return;
-    }
+    const streamResp = await page.waitForResponse(
+      (resp) => resp.url().includes('/chat/stream'),
+      { timeout: 30_000 },
+    );
+    expect(streamResp.status()).toBe(200);
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
     const newCount = await page
       .locator('.chat-sidebar .history-session')

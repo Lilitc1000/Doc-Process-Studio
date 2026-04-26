@@ -11,14 +11,14 @@ frontend/src/router/
 
 ## 路由表
 
-| 路由路径 | 组件 | 说明 | 需要认证 |
-|----------|------|------|----------|
-| `/login` | `LoginView.vue` | 登录页面 | 否 |
-| `/register` | `RegisterView.vue` | 注册页面 | 否 |
-| `/` | `HomeView.vue` | 主页 | 是 |
-| `/chat` | `ChatView.vue` | 对话页面 | 是 |
-| `/incident-report` | `IncidentReportView.vue` | 事故报告页面 | 是 |
-| `/settings` | `SettingsView.vue` | 设置页面 | 是 |
+| 路由路径           | 组件                     | 说明         | 需要认证 |
+| ------------------ | ------------------------ | ------------ | -------- |
+| `/login`           | `LoginView.vue`          | 登录页面     | 否       |
+| `/register`        | `RegisterView.vue`       | 注册页面     | 否       |
+| `/`                | `HomeView.vue`           | 主页         | 是       |
+| `/chat`            | `ChatView.vue`           | 对话页面     | 是       |
+| `/incident-report` | `IncidentReportView.vue` | 事故报告页面 | 是       |
+| `/settings`        | `SettingsView.vue`       | 设置页面     | 是       |
 
 所有受保护路由共用 `DefaultLayout` 布局。
 

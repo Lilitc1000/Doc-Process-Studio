@@ -1,13 +1,23 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   INCIDENT_STATUS_LABELS,
   INCIDENT_SEVERITY_LABELS,
 } from '../../../src/types/incident-report/incident-report';
-import type { IncidentReportStatus, IncidentSeverity } from '../../../src/types/incident-report/incident-report';
+import type {
+  IncidentReportStatus,
+  IncidentSeverity,
+} from '../../../src/types/incident-report/incident-report';
 
 describe('IncidentReport 类型常量', () => {
   it('INCIDENT_STATUS_LABELS 包含所有状态', () => {
-    const statuses: IncidentReportStatus[] = ['draft', 'pending', 'approved', 'rejected', 'in_progress', 'closed'];
+    const statuses: IncidentReportStatus[] = [
+      'draft',
+      'pending',
+      'approved',
+      'rejected',
+      'in_progress',
+      'closed',
+    ];
     for (const status of statuses) {
       expect(INCIDENT_STATUS_LABELS[status]).toBeDefined();
       expect(typeof INCIDENT_STATUS_LABELS[status]).toBe('string');

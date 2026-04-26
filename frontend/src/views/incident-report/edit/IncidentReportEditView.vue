@@ -4,7 +4,11 @@
     <div v-else-if="!report" class="edit-empty">报告不存在</div>
     <template v-else>
       <div class="edit-header">
-        <base-button variant="ghost" size="sm" @click="router.push(`/incident-report/${report.id}`)">
+        <base-button
+          variant="ghost"
+          size="sm"
+          @click="router.push(`/incident-report/${report.id}`)"
+        >
           ← 返回详情
         </base-button>
         <h1>编辑报告 - {{ report.ref_no }}</h1>
@@ -18,11 +22,18 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">严重级别</label>
-            <base-dropdown v-model="formData.severity" :options="severityOptions" placeholder="选择级别" />
+            <base-dropdown
+              v-model="formData.severity"
+              :options="severityOptions"
+              placeholder="选择级别"
+            />
           </div>
           <div class="form-group">
             <label class="form-label">所属系统</label>
-            <base-input v-model="formData.system" placeholder="如：数据库系统" />
+            <base-input
+              v-model="formData.system"
+              placeholder="如：数据库系统"
+            />
           </div>
         </div>
         <div class="form-row">
@@ -32,20 +43,33 @@
           </div>
           <div class="form-group">
             <label class="form-label">故障日期</label>
-            <base-input v-model="formData.fault_date" placeholder="YYYY-MM-DD" />
+            <base-input
+              v-model="formData.fault_date"
+              placeholder="YYYY-MM-DD"
+            />
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">事故描述</label>
-          <base-textarea v-model="formData.description" placeholder="请详细描述事故情况..." />
+          <base-textarea
+            v-model="formData.description"
+            placeholder="请详细描述事故情况..."
+          />
         </div>
       </div>
 
       <div class="edit-actions">
-        <base-button variant="secondary" @click="router.push(`/incident-report/${report.id}`)">
+        <base-button
+          variant="secondary"
+          @click="router.push(`/incident-report/${report.id}`)"
+        >
           取消
         </base-button>
-        <base-button variant="primary" :disabled="!formData.title.trim() || saving" @click="handleSave">
+        <base-button
+          variant="primary"
+          :disabled="!formData.title.trim() || saving"
+          @click="handleSave"
+        >
           {{ saving ? '保存中...' : '保存' }}
         </base-button>
       </div>
@@ -56,7 +80,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchIncidentReportDetail, updateIncidentReport } from '../../../api/incident-report';
+import {
+  fetchIncidentReportDetail,
+  updateIncidentReport,
+} from '../../../api/incident-report';
 import type { IncidentReportDetailItem } from '../../../types/incident-report/incident-report';
 import BaseButton from '../../../components/base/BaseButton.vue';
 import BaseInput from '../../../components/base/BaseInput.vue';

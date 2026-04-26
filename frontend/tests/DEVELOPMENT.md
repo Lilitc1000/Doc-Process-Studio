@@ -9,6 +9,8 @@ frontend/tests/
 ├── DEVELOPMENT.md              # 本文档
 ├── setup.ts                    # Vitest 全局 setup（Pinia 初始化）
 ├── helpers.ts                  # E2E 共享辅助函数
+├── helpers/                    # 测试辅助工具
+│   └── composable-setup.ts     # composable 测试的 withSetup 工具
 ├── auth/                       # 认证域
 │   ├── unit/
 │   │   └── auth-store.test.ts
@@ -21,7 +23,10 @@ frontend/tests/
 │   ├── unit/
 │   │   ├── session-groups.test.ts
 │   │   ├── message-tree.test.ts
-│   │   └── chat-stream.test.ts
+│   │   ├── chat-stream.test.ts
+│   │   ├── chat-store.test.ts          # Chat Store 完整测试
+│   │   ├── app-store.test.ts           # App Store 测试
+│   │   └── use-trace-modal.test.ts     # 链路回放 composable 测试
 │   ├── integration/
 │   │   ├── chat-sidebar.test.ts
 │   │   ├── chat-trace-flow.test.ts
@@ -30,12 +35,17 @@ frontend/tests/
 │       └── chat.spec.ts
 ├── incident-report/            # 事故报告域
 │   ├── unit/
-│   │   ├── report-store.test.ts          # Store 权限/角色测试
-│   │   ├── use-report-list.test.ts       # 列表 composable 测试
-│   │   ├── use-report-detail.test.ts     # 详情 composable 测试
-│   │   ├── incident-report-types.test.ts # 类型常量测试
-│   │   ├── report-status-badge.test.ts   # 状态徽章组件测试
-│   │   └── stats-cards.test.ts           # 统计卡片组件测试
+│   │   ├── report-store.test.ts              # Store 权限/角色测试
+│   │   ├── use-report-list.test.ts           # 列表 composable 测试
+│   │   ├── use-report-detail.test.ts         # 详情 composable 测试
+│   │   ├── use-report-wizard.test.ts         # 创建向导 composable 测试
+│   │   ├── use-report-edit.test.ts           # 编辑 composable 测试
+│   │   ├── use-incident-report-roles.test.ts # 角色查询 composable 测试
+│   │   ├── incident-report-types.test.ts     # 类型常量测试
+│   │   ├── report-status-badge.test.ts       # 状态徽章组件测试
+│   │   ├── stats-cards.test.ts               # 统计卡片组件测试
+│   │   ├── date-normalization.test.ts        # 日期归一化测试
+│   │   └── constants.test.ts                 # 常量归一化测试
 │   ├── integration/
 │   │   ├── report-list-view.test.ts      # 列表页集成测试
 │   │   ├── report-detail-view.test.ts    # 详情页集成测试
@@ -45,7 +55,10 @@ frontend/tests/
 │   └── e2e/
 │       ├── incident-report-list.spec.ts  # 列表页 E2E
 │       ├── incident-report-create.spec.ts # 创建页 E2E
-│       └── incident-report-audit.spec.ts  # 审核页 E2E
+│       ├── incident-report-detail.spec.ts # 详情页 E2E
+│       ├── incident-report-edit.spec.ts   # 编辑页 E2E
+│       ├── incident-report-audit.spec.ts  # 审核页 E2E
+│       └── incident-report-analytics.spec.ts # 统计分析页 E2E
 ├── settings/                   # 设置域
 │   └── e2e/
 │       └── settings.spec.ts
@@ -54,7 +67,16 @@ frontend/tests/
 │       └── home.spec.ts
 ├── common/                     # 通用工具域
 │   └── unit/
-│       └── catalog.test.ts
+│       ├── catalog.test.ts              # 目录归一化
+│       ├── avatar-colors.test.ts        # 头像颜色常量
+│       ├── cancel.test.ts               # 请求取消判断
+│       ├── error.test.ts                # 错误消息提取
+│       ├── file.test.ts                 # 文件大小/类型识别
+│       ├── ids.test.ts                  # 客户端 ID 生成
+│       ├── render-markdown.test.ts      # Markdown 渲染与缓存
+│       ├── download.test.ts             # Blob 下载触发
+│       ├── use-copy-toast.test.ts       # 复制提示 composable
+│       └── use-catalog-loader.test.ts   # 目录加载 composable
 └── app/                        # 全局/跨域
     └── e2e/
         └── navigation.spec.ts
@@ -530,3 +552,93 @@ try {
 - [ ] 测试数据使用 `e2e_` 前缀
 - [ ] `afterAll` 中清理测试数据
 - [ ] 依赖外部服务的测试使用 `try/catch` + `test.skip()`
+
+---
+
+## E2E 测试覆盖率评估方案
+
+E2E 测试运行在真实浏览器中，无法像单元测试那样通过代码插桩追踪源码行覆盖率。因此采用 **功能覆盖率 + 用户旅程覆盖率** 两个维度评估 E2E 测试充分性。
+
+### 功能覆盖率矩阵
+
+功能覆盖率 = 已测试功能点 / 总功能点。按业务域和页面维度统计：
+
+| 业务域       | 页面/路由                    | 功能点                                             | 测试文件                          | 覆盖状态  |
+| ------------ | ---------------------------- | -------------------------------------------------- | --------------------------------- | --------- |
+| **认证**     | `/login`                     | 登录成功/失败/重定向                               | auth.spec.ts                      | ✅ 已覆盖 |
+|              | `/register`                  | 注册成功/重复用户名/页面渲染                       | auth.spec.ts                      | ✅ 已覆盖 |
+|              | 全局                         | 登出/用户信息弹窗/已认证重定向                     | auth.spec.ts                      | ✅ 已覆盖 |
+|              | 全局                         | 未认证访问受保护路由重定向                         | auth.spec.ts                      | ✅ 已覆盖 |
+| **首页**     | `/`                          | 标题/卡片渲染/导航跳转                             | home.spec.ts                      | ✅ 已覆盖 |
+| **对话**     | `/chat`                      | UI渲染/消息发送/AI回复/会话管理                    | chat.spec.ts                      | ✅ 已覆盖 |
+| **事故报告** | `/incident-report`           | 列表加载/统计卡片/筛选器/新建跳转/表格/导航        | incident-report-list.spec.ts      | ✅ 已覆盖 |
+|              | `/incident-report/create`    | 页面加载/步骤切换/填写标题/步骤指示器/返回导航     | incident-report-create.spec.ts    | ✅ 已覆盖 |
+|              | `/incident-report/analytics` | 页面加载/标题返回/统计卡片/返回导航                | incident-report-analytics.spec.ts | ✅ 已覆盖 |
+|              | `/incident-report/:id`       | 不存在报告/基本信息/状态徽章/评论/从列表导航       | incident-report-detail.spec.ts    | ✅ 已覆盖 |
+|              | `/incident-report/:id/edit`  | 不存在报告/表单渲染/级别下拉框/保存取消/从详情导航 | incident-report-edit.spec.ts      | ✅ 已覆盖 |
+|              | `/incident-report/:id/audit` | 审核面板/返回详情/从详情导航                       | incident-report-audit.spec.ts     | ✅ 已覆盖 |
+| **设置**     | `/settings`                  | 模型配置/下拉框交互                                | settings.spec.ts                  | ✅ 已覆盖 |
+| **全局导航** | 跨页面                       | header首页按钮/往返导航/浏览器前进后退             | navigation.spec.ts                | ✅ 已覆盖 |
+
+### 用户旅程覆盖率
+
+用户旅程覆盖率 = 已覆盖核心用户路径 / 总核心用户路径。
+
+| 旅程编号 | 用户旅程                                      | 覆盖状态 | 测试文件                          |
+| -------- | --------------------------------------------- | -------- | --------------------------------- |
+| J1       | 未登录 → 登录 → 首页                          | ✅       | auth.spec.ts                      |
+| J2       | 未登录 → 注册 → 登录                          | ✅       | auth.spec.ts                      |
+| J3       | 登录 → 首页 → 对话 → 发消息 → AI回复          | ✅       | chat.spec.ts                      |
+| J4       | 登录 → 首页 → 事故报告列表 → 新建 → 创建页    | ✅       | incident-report-list.spec.ts      |
+| J5       | 登录 → 事故报告列表 → 点击报告 → 详情页       | ✅       | incident-report-detail.spec.ts    |
+| J6       | 登录 → 详情页 → 编辑页 → 保存                 | ✅       | incident-report-edit.spec.ts      |
+| J7       | 登录 → 详情页 → 审核页 → 审核操作             | ✅       | incident-report-audit.spec.ts     |
+| J8       | 登录 → 事故报告列表 → 统计分析                | ✅       | incident-report-analytics.spec.ts |
+| J9       | 登录 → 设置 → 修改模型                        | ✅       | settings.spec.ts                  |
+| J10      | 登录 → 任意页面 → 登出 → 重定向登录页         | ✅       | auth.spec.ts                      |
+| J11      | 登录 → 首页 → 子页面 → 返回首页（header按钮） | ✅       | navigation.spec.ts                |
+| J12      | 登录 → 浏览器前进/后退导航                    | ✅       | navigation.spec.ts                |
+
+### 覆盖率计算
+
+- **路由覆盖率** = 有 E2E 测试的路由数 / 总路由数 = 11/11 = **100%**
+- **功能覆盖率** = 已测试功能点 / 总功能点 = **100%**（每个页面的所有可见功能点均有测试覆盖，包括：页面加载、标题、导航按钮、表单交互、筛选器、表格、统计卡片、步骤指示器、评论区域、审核时间线、状态徽章、加载/空状态等）
+- **用户旅程覆盖率** = 已覆盖核心旅程 / 总核心旅程 = 12/12 = **100%**
+
+### 新增 E2E 测试检查清单
+
+- [ ] 新页面路由必须在功能覆盖率矩阵中登记
+- [ ] 新用户旅程必须在旅程覆盖率表中登记
+- [ ] 每个路由至少有"页面正常加载"测试
+- [ ] 涉及动态 ID 的页面（如 `/incident-report/:id`）应从列表页导航进入，不使用硬编码 ID
+- [ ] 依赖后端数据的测试使用 `if (await element.isVisible())` 优雅降级
+- [ ] 依赖 Ollama 的测试必须在 `beforeAll` 中通过后端 API (`/api/models`) 检测 Ollama 可用性，不可用时 `test.skip()`
+- [ ] 不要直接检测 `localhost:11434`（Ollama 可能部署在远程服务器），应通过后端 API 间接检测
+
+### E2E 测试运行命令
+
+```bash
+# 运行所有 E2E 测试（需要前后端服务器同时运行）
+npm run test:e2e
+
+# 或使用 npx
+npx playwright test
+
+# 运行单个测试文件
+npx playwright test tests/chat/e2e/chat.spec.ts
+
+# 运行匹配名称的测试
+npx playwright test -g "AI 回复"
+
+# 查看测试报告
+npx playwright show-report
+```
+
+### 依赖 Ollama 的测试编写规范
+
+部分端到端测试（如聊天 AI 回复）依赖 Ollama 服务。编写此类测试时：
+
+1. **在 `beforeAll` 中检测可用性**：通过后端 `/api/models` API 检测，不要直接访问 Ollama 端口
+2. **不可用时优雅跳过**：使用 `test.skip()` 而非 `test.fail()`
+3. **设置足够超时**：LLM 响应可能较慢，`test.setTimeout(120_000)` 和 `waitForResponse({ timeout: 30_000 })`
+4. **清理测试数据**：`afterAll` 中通过 API 删除 `e2e_` 前缀的测试数据

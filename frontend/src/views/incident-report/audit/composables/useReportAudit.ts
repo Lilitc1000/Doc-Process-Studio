@@ -1,5 +1,9 @@
 import { ref } from 'vue';
-import { fetchIncidentReportDetail, approveIncidentReport, rejectIncidentReport } from '../../../../api/incident-report';
+import {
+  fetchIncidentReportDetail,
+  approveIncidentReport,
+  rejectIncidentReport,
+} from '../../../../api/incident-report';
 import type { IncidentReportDetailItem } from '../../../../types/incident-report/incident-report';
 
 export function useReportAudit() {

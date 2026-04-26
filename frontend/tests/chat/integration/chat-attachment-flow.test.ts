@@ -9,20 +9,20 @@ const fetchAvailableSkillsMock = vi.hoisted(() => vi.fn());
 const fetchSessionSummariesMock = vi.hoisted(() => vi.fn());
 const saveSessionMock = vi.hoisted(() => vi.fn());
 
-vi.mock('../../../../src/api/chat-stream', () => ({
+vi.mock('../../../src/api/chat-stream', () => ({
   streamChatReply: streamChatReplyMock,
 }));
 
-vi.mock('../../../../src/api/chat-attachments', () => ({
+vi.mock('../../../src/api/chat-attachments', () => ({
   downloadAttachment: downloadAttachmentMock,
 }));
 
-vi.mock('../../../../src/api/catalog', () => ({
+vi.mock('../../../src/api/catalog', () => ({
   fetchAvailableModels: fetchAvailableModelsMock,
   fetchAvailableSkills: fetchAvailableSkillsMock,
 }));
 
-vi.mock('../../../../src/api/chat-sessions', () => ({
+vi.mock('../../../src/api/chat-sessions', () => ({
   fetchSessionSummaries: fetchSessionSummariesMock,
   fetchSessionDetail: vi.fn(),
   renameSession: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('../../../../src/api/chat-sessions', () => ({
   saveSession: saveSessionMock,
 }));
 
-vi.mock('../../../../src/api/incident', () => ({
+vi.mock('../../../src/api/incident', () => ({
   fetchIncidentFormSchema: vi.fn(),
   fetchIncidentSessionSummaries: vi.fn(),
   createIncidentSession: vi.fn(),

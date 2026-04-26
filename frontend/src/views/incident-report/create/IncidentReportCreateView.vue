@@ -1,7 +1,11 @@
 <template>
   <div class="incident-report-create-view">
     <div class="create-header">
-      <base-button variant="ghost" size="sm" @click="router.push('/incident-report')">
+      <base-button
+        variant="ghost"
+        size="sm"
+        @click="router.push('/incident-report')"
+      >
         ← 返回列表
       </base-button>
       <h1>新建事故报告</h1>
@@ -11,7 +15,10 @@
       <div
         v-for="(step, index) in steps"
         :key="step.key"
-        :class="['wizard-step', { active: currentStep === index, completed: currentStep > index }]"
+        :class="[
+          'wizard-step',
+          { active: currentStep === index, completed: currentStep > index },
+        ]"
         @click="currentStep > index && (currentStep = index)"
       >
         <span class="step-number">{{ index + 1 }}</span>
@@ -28,11 +35,18 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">严重级别</label>
-            <base-dropdown v-model="formData.severity" :options="severityOptions" placeholder="选择级别" />
+            <base-dropdown
+              v-model="formData.severity"
+              :options="severityOptions"
+              placeholder="选择级别"
+            />
           </div>
           <div class="form-group">
             <label class="form-label">所属系统</label>
-            <base-input v-model="formData.system" placeholder="如：数据库系统" />
+            <base-input
+              v-model="formData.system"
+              placeholder="如：数据库系统"
+            />
           </div>
         </div>
         <div class="form-row">
@@ -42,7 +56,10 @@
           </div>
           <div class="form-group">
             <label class="form-label">故障日期</label>
-            <base-input v-model="formData.fault_date" placeholder="YYYY-MM-DD" />
+            <base-input
+              v-model="formData.fault_date"
+              placeholder="YYYY-MM-DD"
+            />
           </div>
         </div>
       </div>
@@ -50,42 +67,69 @@
       <div v-if="currentStep === 1" class="step-form">
         <div class="form-group">
           <label class="form-label">事故描述</label>
-          <base-textarea v-model="formData.description" placeholder="请详细描述事故情况..." />
+          <base-textarea
+            v-model="formData.description"
+            placeholder="请详细描述事故情况..."
+          />
         </div>
       </div>
 
       <div v-if="currentStep === 2" class="step-form">
         <div class="form-group">
           <label class="form-label">时间线</label>
-          <base-textarea v-model="formData.timeline" placeholder="记录事故发生的时间线..." />
+          <base-textarea
+            v-model="formData.timeline"
+            placeholder="记录事故发生的时间线..."
+          />
         </div>
       </div>
 
       <div v-if="currentStep === 3" class="step-form">
         <div class="form-group">
           <label class="form-label">附录</label>
-          <base-textarea v-model="formData.appendix" placeholder="附加信息..." />
+          <base-textarea
+            v-model="formData.appendix"
+            placeholder="附加信息..."
+          />
         </div>
       </div>
 
       <div v-if="currentStep === 4" class="step-preview">
         <h3>预览并提交</h3>
         <div class="preview-summary">
-          <div class="preview-row"><span>标题：</span><span>{{ formData.title }}</span></div>
-          <div class="preview-row"><span>级别：</span><span>{{ formData.severity || '-' }}</span></div>
-          <div class="preview-row"><span>系统：</span><span>{{ formData.system || '-' }}</span></div>
-          <div class="preview-row"><span>站点：</span><span>{{ formData.site_id || '-' }}</span></div>
-          <div class="preview-row"><span>故障日期：</span><span>{{ formData.fault_date || '-' }}</span></div>
+          <div class="preview-row">
+            <span>标题：</span><span>{{ formData.title }}</span>
+          </div>
+          <div class="preview-row">
+            <span>级别：</span><span>{{ formData.severity || '-' }}</span>
+          </div>
+          <div class="preview-row">
+            <span>系统：</span><span>{{ formData.system || '-' }}</span>
+          </div>
+          <div class="preview-row">
+            <span>站点：</span><span>{{ formData.site_id || '-' }}</span>
+          </div>
+          <div class="preview-row">
+            <span>故障日期：</span><span>{{ formData.fault_date || '-' }}</span>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="wizard-actions">
-      <base-button variant="secondary" @click="handleSaveDraft" :disabled="saving">
+      <base-button
+        variant="secondary"
+        :disabled="saving"
+        @click="handleSaveDraft"
+      >
         保存草稿
       </base-button>
       <div class="wizard-nav">
-        <base-button v-if="currentStep > 0" variant="ghost" @click="currentStep--">
+        <base-button
+          v-if="currentStep > 0"
+          variant="ghost"
+          @click="currentStep--"
+        >
           上一步
         </base-button>
         <base-button
@@ -113,7 +157,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { createIncidentReport, submitIncidentReport } from '../../../api/incident-report';
+import {
+  createIncidentReport,
+  submitIncidentReport,
+} from '../../../api/incident-report';
 import BaseButton from '../../../components/base/BaseButton.vue';
 import BaseInput from '../../../components/base/BaseInput.vue';
 import BaseDropdown from '../../../components/base/BaseDropdown.vue';

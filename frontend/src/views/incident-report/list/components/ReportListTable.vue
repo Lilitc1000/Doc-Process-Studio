@@ -14,11 +14,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="item in items"
-          :key="item.id"
-          class="report-list-row"
-        >
+        <tr v-for="item in items" :key="item.id" class="report-list-row">
           <td class="cell-ref">{{ item.ref_no }}</td>
           <td class="cell-title">{{ item.title }}</td>
           <td class="cell-status">
@@ -27,7 +23,12 @@
           <td class="cell-severity">{{ item.severity ?? '-' }}</td>
           <td class="cell-date">{{ formatDate(item.created_at) }}</td>
           <td class="cell-actions">
-            <base-button variant="ghost" size="sm" class="action-view" @click="$emit('view', item.id)">
+            <base-button
+              variant="ghost"
+              size="sm"
+              class="action-view"
+              @click="$emit('view', item.id)"
+            >
               查看
             </base-button>
             <base-button

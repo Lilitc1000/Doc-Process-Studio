@@ -1,6 +1,12 @@
 import { ref } from 'vue';
-import { fetchIncidentReportDetail, fetchIncidentReportAuditLogs } from '../../../../api/incident-report';
-import type { IncidentReportDetailItem, IncidentAuditLogEntry } from '../../../../types/incident-report/incident-report';
+import {
+  fetchIncidentReportDetail,
+  fetchIncidentReportAuditLogs,
+} from '../../../../api/incident-report';
+import type {
+  IncidentReportDetailItem,
+  IncidentAuditLogEntry,
+} from '../../../../types/incident-report/incident-report';
 
 export function useReportDetail() {
   const report = ref<IncidentReportDetailItem | null>(null);

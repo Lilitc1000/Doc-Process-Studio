@@ -1,5 +1,8 @@
 import { ref } from 'vue';
-import { createIncidentReport, submitIncidentReport, updateIncidentReport } from '../../../../api/incident-report';
+import {
+  createIncidentReport,
+  submitIncidentReport,
+} from '../../../../api/incident-report';
 import type { IncidentReportDetailItem } from '../../../../types/incident-report/incident-report';
 
 export function useReportWizard() {

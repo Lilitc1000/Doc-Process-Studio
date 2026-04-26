@@ -34,29 +34,29 @@ frontend/src/types/auth/auth.ts # 认证类型定义
 
 `useAuthStore`（部分持久化）：
 
-| 字段 | 说明 | 持久化 |
-|------|------|--------|
-| `accessToken` | 当前 access_token（内存） | ❌ |
-| `refreshToken` | 当前 refresh_token | ✅ |
-| `userInfo` | 当前用户信息（内存） | ❌ |
-| `isAuthenticated` | 是否已认证（computed） | ❌ |
-| `username` | 当前用户名（computed） | ❌ |
-| `avatarColor` | 当前用户头像颜色（computed） | ❌ |
+| 字段              | 说明                         | 持久化 |
+| ----------------- | ---------------------------- | ------ |
+| `accessToken`     | 当前 access_token（内存）    | ❌     |
+| `refreshToken`    | 当前 refresh_token           | ✅     |
+| `userInfo`        | 当前用户信息（内存）         | ❌     |
+| `isAuthenticated` | 是否已认证（computed）       | ❌     |
+| `username`        | 当前用户名（computed）       | ❌     |
+| `avatarColor`     | 当前用户头像颜色（computed） | ❌     |
 
 核心方法：`login`、`register`、`refreshAccessToken`、`logout`、`fetchUserInfo`、`clearAuth`
 
 ## API 依赖
 
-| API | 方法 | 用途 |
-|-----|------|------|
-| `/auth/register` | POST | 注册新用户 |
-| `/auth/login` | POST | 登录（form-urlencoded） |
-| `/auth/refresh` | POST | 刷新令牌 |
-| `/auth/me` | GET | 获取当前用户信息 |
-| `/auth/me` | PUT | 更新用户资料 |
-| `/auth/password` | PUT | 修改密码 |
-| `/auth/logout` | POST | 登出 |
-| `/auth/users/{userId}` | DELETE | 删除用户账号 |
+| API                    | 方法   | 用途                    |
+| ---------------------- | ------ | ----------------------- |
+| `/auth/register`       | POST   | 注册新用户              |
+| `/auth/login`          | POST   | 登录（form-urlencoded） |
+| `/auth/refresh`        | POST   | 刷新令牌                |
+| `/auth/me`             | GET    | 获取当前用户信息        |
+| `/auth/me`             | PUT    | 更新用户资料            |
+| `/auth/password`       | PUT    | 修改密码                |
+| `/auth/logout`         | POST   | 登出                    |
+| `/auth/users/{userId}` | DELETE | 删除用户账号            |
 
 ## 组件交互约定
 

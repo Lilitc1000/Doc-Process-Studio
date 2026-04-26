@@ -26,11 +26,25 @@ backend/tests/
 ├── incident_report/            # 事故报告域
 │   ├── conftest.py             # 域级 fixture（isolated FastAPI app + TestClient）
 │   ├── unit/
-│   │   ├── test_report_service.py   # 报告业务逻辑（状态流转）
-│   │   ├── test_role_service.py     # 角色管理
-│   │   ├── test_audit_log.py        # 审计日志
-│   │   ├── test_form_validation.py  # 表单校验
-│   │   └── test_generation.py       # 正文生成（reference/translation/report_data）
+│   │   ├── test_report_service.py          # 报告业务逻辑（状态流转）
+│   │   ├── test_report_store.py            # ORM→Schema 映射 + _CLEAR_SENTINEL
+│   │   ├── test_report_store_extended.py   # DB 操作（create/load/update/delete/list/comment）
+│   │   ├── test_report_extended.py         # 报告 CRUD + 状态流转 + 权限
+│   │   ├── test_report_data.py             # 表单数据读写工具函数
+│   │   ├── test_role_service.py            # 角色管理（基础）
+│   │   ├── test_role_extended.py           # 角色管理（完整 DB mock）
+│   │   ├── test_audit_log.py               # 审计日志
+│   │   ├── test_form_validation.py         # 表单校验
+│   │   ├── test_form_schema.py             # 表单 Schema 结构
+│   │   ├── test_generation.py              # 正文生成（reference/translation/report_data）
+│   │   ├── test_generation_extended.py     # 正文生成（prompt 构建 + payload 应用）
+│   │   ├── test_normalization.py           # 文本归一化（日期/时间/状态/严重级别）
+│   │   ├── test_translation.py             # 翻译缓存与调度
+│   │   ├── test_preview.py                 # 预览缓存与文件名构建
+│   │   ├── test_preview_extended.py        # 预览转换（PDF/HTML/附件加载）
+│   │   ├── test_reference.py               # 参考资料提取与启发式选择
+│   │   ├── test_constants.py               # 常量与正则模式
+│   │   └── test_schemas_common.py          # 公共 Schema（状态/角色/表单快照）
 │   ├── integration/
 │   │   ├── test_reports_api.py      # 报告 API（CRUD + 状态流转 + 权限）
 │   │   ├── test_reports_workflow.py # 工作流 API（状态转换 + 审计日志 + 评论）
@@ -42,11 +56,21 @@ backend/tests/
 ├── skill/                      # 技能域
 │   ├── conftest.py             # 域级共享 fixture（build_skill、build_plan_decision）
 │   ├── unit/
-│   │   ├── test_registry.py
-│   │   ├── test_selector.py
-│   │   ├── test_planner.py
-│   │   ├── test_tool_loop.py
-│   │   └── test_conversation_store.py
+│   │   ├── test_registry.py               # 技能注册（基础）
+│   │   ├── test_registry_extended.py      # 技能注册（YAML/Markdown 解析 + 接口查询）
+│   │   ├── test_selector.py               # 技能选择
+│   │   ├── test_planner.py                # 技能规划
+│   │   ├── test_tool_loop.py              # 工具循环
+│   │   ├── test_tool_schema.py            # 工具 Schema 构建
+│   │   ├── test_tool_exec.py              # 工具执行（文本归一化/JSON 解析）
+│   │   ├── test_tool_status.py            # 工具状态（标签/路径）
+│   │   ├── test_tool_status_extended.py   # 工具状态（开始/完成/复用/声明式工具）
+│   │   ├── test_tool_args_extended.py     # 工具参数解析
+│   │   ├── test_skill_files.py            # 技能文件操作
+│   │   ├── test_context.py                # 上下文检索（向量/重排）
+│   │   ├── test_context_packer_extended.py # 层级记忆压缩与上下文预算
+│   │   ├── test_conversation_store.py     # 会话存储
+│   │   └── test_conversation_store_extended.py # 会话存储（扩展）
 │   └── integration/
 │       ├── test_skills_api.py
 │       └── test_skills_runtime_api.py
@@ -55,7 +79,8 @@ backend/tests/
 │   │   ├── test_executor.py
 │   │   ├── test_quality_gate.py
 │   │   ├── test_feature_flags.py
-│   │   └── test_error_detail.py
+│   │   ├── test_error_detail.py
+│   │   └── test_trace_store.py
 │   └── integration/
 │       ├── test_agent_trace_api.py
 │       └── test_models_api.py

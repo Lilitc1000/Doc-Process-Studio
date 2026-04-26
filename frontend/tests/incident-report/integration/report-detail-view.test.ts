@@ -30,8 +30,26 @@ vi.mock('../../../src/api/incident-report', () => ({
     resolution_date: null,
   }),
   fetchIncidentReportAuditLogs: vi.fn().mockResolvedValue([
-    { id: 'log-1', action: 'create', actor_id: 'usr-1', actor_name: null, from_status: null, to_status: 'draft', comment: null, created_at: '2026-04-20T10:00:00Z' },
-    { id: 'log-2', action: 'submit', actor_id: 'usr-1', actor_name: null, from_status: 'draft', to_status: 'pending', comment: null, created_at: '2026-04-20T11:00:00Z' },
+    {
+      id: 'log-1',
+      action: 'create',
+      actor_id: 'usr-1',
+      actor_name: null,
+      from_status: null,
+      to_status: 'draft',
+      comment: null,
+      created_at: '2026-04-20T10:00:00Z',
+    },
+    {
+      id: 'log-2',
+      action: 'submit',
+      actor_id: 'usr-1',
+      actor_name: null,
+      from_status: 'draft',
+      to_status: 'pending',
+      comment: null,
+      created_at: '2026-04-20T11:00:00Z',
+    },
   ]),
   fetchIncidentReportComments: vi.fn().mockResolvedValue([]),
   createIncidentReportComment: vi.fn(),
@@ -62,11 +80,26 @@ describe('IncidentReportDetailView', () => {
       global: {
         plugins: [router],
         stubs: {
-          BaseButton: { template: '<button @click="$emit(\'click\')"><slot /></button>', props: ['variant', 'size', 'disabled'] },
-          ReportStatusBadge: { template: '<span class="status-badge">{{ status }}</span>', props: ['status'] },
-          ReportAuditTimeline: { template: '<div class="audit-timeline" />', props: ['auditLogs'] },
-          ReportDetailContent: { template: '<div class="detail-content" />', props: ['report'] },
-          ReportComments: { template: '<div class="report-comments" />', props: ['reportId', 'comments'] },
+          BaseButton: {
+            template: '<button @click="$emit(\'click\')"><slot /></button>',
+            props: ['variant', 'size', 'disabled'],
+          },
+          ReportStatusBadge: {
+            template: '<span class="status-badge">{{ status }}</span>',
+            props: ['status'],
+          },
+          ReportAuditTimeline: {
+            template: '<div class="audit-timeline" />',
+            props: ['auditLogs'],
+          },
+          ReportDetailContent: {
+            template: '<div class="detail-content" />',
+            props: ['report'],
+          },
+          ReportComments: {
+            template: '<div class="report-comments" />',
+            props: ['reportId', 'comments'],
+          },
         },
       },
     });
@@ -85,11 +118,20 @@ describe('IncidentReportDetailView', () => {
       global: {
         plugins: [router],
         stubs: {
-          BaseButton: { template: '<button @click="$emit(\'click\')"><slot /></button>', props: ['variant', 'size', 'disabled'] },
-          ReportStatusBadge: { template: '<span class="status-badge">{{ status }}</span>', props: ['status'] },
+          BaseButton: {
+            template: '<button @click="$emit(\'click\')"><slot /></button>',
+            props: ['variant', 'size', 'disabled'],
+          },
+          ReportStatusBadge: {
+            template: '<span class="status-badge">{{ status }}</span>',
+            props: ['status'],
+          },
           ReportAuditTimeline: { template: '<div />', props: ['auditLogs'] },
           ReportDetailContent: { template: '<div />', props: ['report'] },
-          ReportComments: { template: '<div />', props: ['reportId', 'comments'] },
+          ReportComments: {
+            template: '<div />',
+            props: ['reportId', 'comments'],
+          },
         },
       },
     });

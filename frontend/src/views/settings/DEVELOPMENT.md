@@ -22,18 +22,18 @@ frontend/src/views/settings/
 
 `useAppStore`（持久化）：
 
-| 字段 | 说明 | 持久化 |
-|------|------|--------|
-| `selectedModel` | 当前选中的聊天模型 | ✅ |
-| `selectedRerankerModel` | 当前选中的重排序模型 | ✅ |
-| `availableModels` | 可用模型列表缓存 | ✅ |
-| `processingModes` | 可用 skill 列表缓存 | ✅ |
+| 字段                    | 说明                 | 持久化 |
+| ----------------------- | -------------------- | ------ |
+| `selectedModel`         | 当前选中的聊天模型   | ✅     |
+| `selectedRerankerModel` | 当前选中的重排序模型 | ✅     |
+| `availableModels`       | 可用模型列表缓存     | ✅     |
+| `processingModes`       | 可用 skill 列表缓存  | ✅     |
 
 ## API 依赖
 
-| API | 方法 | 用途 |
-|-----|------|------|
-| `/models` | GET | 获取可用模型列表 |
+| API       | 方法 | 用途             |
+| --------- | ---- | ---------------- |
+| `/models` | GET  | 获取可用模型列表 |
 
 ## 开发注意
 

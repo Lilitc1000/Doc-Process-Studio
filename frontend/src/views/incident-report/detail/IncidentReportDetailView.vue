@@ -5,7 +5,11 @@
     <template v-else>
       <div class="detail-header">
         <div class="detail-header-left">
-          <base-button variant="ghost" size="sm" @click="router.push('/incident-report')">
+          <base-button
+            variant="ghost"
+            size="sm"
+            @click="router.push('/incident-report')"
+          >
             ← 返回列表
           </base-button>
           <span class="detail-ref">{{ report.ref_no }}</span>
@@ -61,15 +65,21 @@
             </div>
             <div class="info-row">
               <span class="info-label">报告人</span>
-              <span class="info-value">{{ report.reporter_name ?? report.reporter_id }}</span>
+              <span class="info-value">{{
+                report.reporter_name ?? report.reporter_id
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">处理人</span>
-              <span class="info-value">{{ report.assignee_name ?? report.assignee_id ?? '-' }}</span>
+              <span class="info-value">{{
+                report.assignee_name ?? report.assignee_id ?? '-'
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">审核人</span>
-              <span class="info-value">{{ report.verifier_name ?? report.verifier_id ?? '-' }}</span>
+              <span class="info-value">{{
+                report.verifier_name ?? report.verifier_id ?? '-'
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">系统</span>
@@ -81,11 +91,15 @@
             </div>
             <div class="info-row">
               <span class="info-label">故障日期</span>
-              <span class="info-value">{{ formatDate(report.fault_date) }}</span>
+              <span class="info-value">{{
+                formatDate(report.fault_date)
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">创建时间</span>
-              <span class="info-value">{{ formatDate(report.created_at) }}</span>
+              <span class="info-value">{{
+                formatDate(report.created_at)
+              }}</span>
             </div>
           </div>
 
@@ -151,7 +165,9 @@ const canAudit = computed(() => {
 
 const canClose = computed(() => {
   if (!report.value) return false;
-  return report.value.status === 'in_progress' && (store.isHandler || store.isAdmin);
+  return (
+    report.value.status === 'in_progress' && (store.isHandler || store.isAdmin)
+  );
 });
 
 const canReopen = computed(() => {
@@ -180,7 +196,9 @@ const handleReopen = async () => {
 
 const handleAddComment = async (content: string) => {
   if (!report.value) return;
-  const comment = await createIncidentReportComment(report.value.id, { content });
+  const comment = await createIncidentReportComment(report.value.id, {
+    content,
+  });
   comments.value.push(comment);
 };
 

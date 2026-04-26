@@ -4,7 +4,11 @@
     <div v-else-if="!report" class="audit-empty">报告不存在</div>
     <template v-else>
       <div class="audit-header">
-        <base-button variant="ghost" size="sm" @click="router.push(`/incident-report/${report.id}`)">
+        <base-button
+          variant="ghost"
+          size="sm"
+          @click="router.push(`/incident-report/${report.id}`)"
+        >
           ← 返回详情
         </base-button>
         <h1>审核报告 - {{ report.ref_no }}</h1>
@@ -15,12 +19,21 @@
           <report-status-badge :status="report.status" />
           <h2>{{ report.title }}</h2>
           <div class="audit-meta">
-            <span>报告人: {{ report.reporter_name ?? report.reporter_id }}</span>
+            <span
+              >报告人: {{ report.reporter_name ?? report.reporter_id }}</span
+            >
             <span>级别: {{ report.severity ?? '-' }}</span>
             <span>系统: {{ report.system ?? '-' }}</span>
           </div>
-          <div v-if="report.form_data && Object.keys(report.form_data).length > 0" class="audit-form-data">
-            <div v-for="(value, key) in report.form_data" :key="key" class="audit-data-row">
+          <div
+            v-if="report.form_data && Object.keys(report.form_data).length > 0"
+            class="audit-form-data"
+          >
+            <div
+              v-for="(value, key) in report.form_data"
+              :key="key"
+              class="audit-data-row"
+            >
               <span class="audit-data-key">{{ key }}</span>
               <span class="audit-data-value">{{ formatValue(value) }}</span>
             </div>
@@ -32,7 +45,10 @@
           <div class="audit-form">
             <div class="form-group">
               <label class="form-label">审核意见 *</label>
-              <base-textarea v-model="comment" placeholder="请输入审核意见..." />
+              <base-textarea
+                v-model="comment"
+                placeholder="请输入审核意见..."
+              />
             </div>
             <div class="audit-buttons">
               <base-button
@@ -60,7 +76,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { fetchIncidentReportDetail, approveIncidentReport, rejectIncidentReport } from '../../../api/incident-report';
+import {
+  fetchIncidentReportDetail,
+  approveIncidentReport,
+  rejectIncidentReport,
+} from '../../../api/incident-report';
 import type { IncidentReportDetailItem } from '../../../types/incident-report/incident-report';
 import BaseButton from '../../../components/base/BaseButton.vue';
 import BaseTextarea from '../../../components/base/BaseTextarea.vue';

@@ -20,7 +20,9 @@ export const fetchIncidentReportFormSchema =
     return response.data;
   };
 
-export const fetchIncidentReportSchema = async (): Promise<Record<string, unknown>> => {
+export const fetchIncidentReportSchema = async (): Promise<
+  Record<string, unknown>
+> => {
   const response = await apiClient.get<Record<string, unknown>>(
     '/incident-report/reports/schema',
   );
@@ -85,9 +87,7 @@ export const updateIncidentReport = async (
   return response.data;
 };
 
-export const deleteIncidentReport = async (
-  reportId: string,
-): Promise<void> => {
+export const deleteIncidentReport = async (reportId: string): Promise<void> => {
   await apiClient.delete(`/incident-report/reports/${reportId}`);
 };
 

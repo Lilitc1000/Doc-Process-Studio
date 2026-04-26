@@ -4,11 +4,7 @@
     <div v-if="loading" class="trend-loading">加载中...</div>
     <div v-else-if="trendData.length === 0" class="trend-empty">暂无数据</div>
     <div v-else class="trend-bars">
-      <div
-        v-for="item in trendData"
-        :key="item.date"
-        class="trend-bar-item"
-      >
+      <div v-for="item in trendData" :key="item.date" class="trend-bar-item">
         <div
           class="trend-bar-fill"
           :style="{ height: barHeight(item.count) }"
@@ -35,7 +31,10 @@ const barHeight = (count: number) => {
 
 const formatLabel = (date: string) => {
   try {
-    return new Date(date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+    return new Date(date).toLocaleDateString('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+    });
   } catch {
     return date;
   }

@@ -8,8 +8,38 @@ vi.mock('../../../src/api/incident-report', () => ({
   fetchIncidentReportList: vi.fn().mockResolvedValue({
     total: 2,
     items: [
-      { id: 'rep-1', ref_no: 'DAS-001', title: '测试1', status: 'draft', severity: 'P1', reporter_id: 'usr-1', reporter_name: null, assignee_id: null, assignee_name: null, verifier_id: null, verifier_name: null, fault_date: null, created_at: '2026-04-20', updated_at: '2026-04-20' },
-      { id: 'rep-2', ref_no: 'DAS-002', title: '测试2', status: 'pending', severity: 'P2', reporter_id: 'usr-2', reporter_name: null, assignee_id: null, assignee_name: null, verifier_id: null, verifier_name: null, fault_date: null, created_at: '2026-04-19', updated_at: '2026-04-19' },
+      {
+        id: 'rep-1',
+        ref_no: 'DAS-001',
+        title: '测试1',
+        status: 'draft',
+        severity: 'P1',
+        reporter_id: 'usr-1',
+        reporter_name: null,
+        assignee_id: null,
+        assignee_name: null,
+        verifier_id: null,
+        verifier_name: null,
+        fault_date: null,
+        created_at: '2026-04-20',
+        updated_at: '2026-04-20',
+      },
+      {
+        id: 'rep-2',
+        ref_no: 'DAS-002',
+        title: '测试2',
+        status: 'pending',
+        severity: 'P2',
+        reporter_id: 'usr-2',
+        reporter_name: null,
+        assignee_id: null,
+        assignee_name: null,
+        verifier_id: null,
+        verifier_name: null,
+        fault_date: null,
+        created_at: '2026-04-19',
+        updated_at: '2026-04-19',
+      },
     ],
   }),
   fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
@@ -53,7 +83,11 @@ describe('IncidentReportListView', () => {
           BaseTextarea: true,
           ReportListStats: true,
           ReportListFilters: true,
-          ReportListTable: { template: '<div class="report-list-table"><div v-for="item in items" :key="item.id" class="report-list-row">{{ item.ref_no }} {{ item.title }}</div></div>', props: ['items', 'loading', 'canDelete'] },
+          ReportListTable: {
+            template:
+              '<div class="report-list-table"><div v-for="item in items" :key="item.id" class="report-list-row">{{ item.ref_no }} {{ item.title }}</div></div>',
+            props: ['items', 'loading', 'canDelete'],
+          },
         },
       },
     });
@@ -72,7 +106,11 @@ describe('IncidentReportListView', () => {
       global: {
         plugins: [router],
         stubs: {
-          BaseButton: { template: '<button :class="variant" @click="$emit(\'click\')"><slot /></button>', props: ['variant', 'size', 'disabled'] },
+          BaseButton: {
+            template:
+              '<button :class="variant" @click="$emit(\'click\')"><slot /></button>',
+            props: ['variant', 'size', 'disabled'],
+          },
           BaseInput: true,
           BaseDropdown: true,
           BaseTextarea: true,

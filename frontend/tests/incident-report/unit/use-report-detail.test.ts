@@ -45,11 +45,24 @@ describe('useReportDetail', () => {
       resolution_date: null,
     };
     const mockLogs = [
-      { id: 'log-1', action: 'create', actor_id: 'usr-1', actor_name: null, from_status: null, to_status: 'draft', comment: null, created_at: '2026-04-20' },
+      {
+        id: 'log-1',
+        action: 'create',
+        actor_id: 'usr-1',
+        actor_name: null,
+        from_status: null,
+        to_status: 'draft',
+        comment: null,
+        created_at: '2026-04-20',
+      },
     ];
 
-    (api.fetchIncidentReportDetail as ReturnType<typeof vi.fn>).mockResolvedValue(mockReport);
-    (api.fetchIncidentReportAuditLogs as ReturnType<typeof vi.fn>).mockResolvedValue(mockLogs);
+    (
+      api.fetchIncidentReportDetail as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(mockReport);
+    (
+      api.fetchIncidentReportAuditLogs as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(mockLogs);
 
     const { report, auditLogs, load } = useReportDetail();
     await load('rep-1');
