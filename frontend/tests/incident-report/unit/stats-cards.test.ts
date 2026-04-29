@@ -11,11 +11,11 @@ describe('StatsCards', () => {
 
   it('渲染概览数据', () => {
     const overview: IncidentAnalyticsOverview = {
-      total_this_month: 10,
-      pending_count: 3,
-      in_progress_count: 2,
-      closed_this_month: 5,
-      avg_resolution_hours: 24.5,
+      totalThisMonth: 10,
+      pendingCount: 3,
+      inProgressCount: 2,
+      closedThisMonth: 5,
+      avgResolutionHours: 24.5,
     };
 
     const wrapper = mount(StatsCards, {

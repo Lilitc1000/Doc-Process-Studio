@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  E2E_PREFIX,
+  getWorkerPrefix,
   loginAsAdmin,
   loginViaApi,
   addRateLimitWhitelist,
@@ -45,9 +45,12 @@ test.describe('对话页面 - UI 渲染', () => {
 test.describe('对话页面 - 端到端场景', () => {
   test.setTimeout(120_000);
 
+  let workerPrefix: string;
   let ollamaAvailable = false;
+  let availableModel = '';
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(async ({ request }, testInfo) => {
+    workerPrefix = getWorkerPrefix(testInfo.workerIndex);
     await addRateLimitWhitelist(request);
     try {
       const accessToken = await loginViaApi(request);
@@ -56,7 +59,20 @@ test.describe('对话页面 - 端到端场景', () => {
           headers: { Authorization: `Bearer ${accessToken}` },
           timeout: 10_000,
         });
-        ollamaAvailable = resp.ok();
+        if (resp.ok()) {
+          const data = await resp.json();
+          const models: { name: string }[] = data.models ?? [];
+          const chatModels = models.filter(
+            (m) =>
+              !m.name.includes('embed') &&
+              !m.name.includes('rerank') &&
+              !m.name.includes('bge'),
+          );
+          if (chatModels.length > 0) {
+            ollamaAvailable = true;
+            availableModel = chatModels[0].name;
+          }
+        }
       }
     } catch {
       ollamaAvailable = false;
@@ -71,9 +87,12 @@ test.describe('对话页面 - 端到端场景', () => {
     try {
       const accessToken = await loginViaApi(request);
       if (!accessToken) return;
-      await request.delete(`/api/chat-sessions/by-title-prefix/${E2E_PREFIX}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      await request.delete(
+        `/api/chat-sessions/by-title-prefix/${workerPrefix}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
     } catch {
       // ignore cleanup errors
     }
@@ -98,23 +117,36 @@ test.describe('对话页面 - 端到端场景', () => {
       return;
     }
 
-    const sessionsResp = page.waitForResponse(
+    await page.goto('/chat');
+
+    await page.waitForResponse(
+      (resp) => resp.url().includes('/api/models') && resp.status() === 200,
+      { timeout: 10_000 },
+    );
+
+    await page.evaluate((model) => {
+      const raw = localStorage.getItem('app');
+      const parsed = raw ? JSON.parse(raw) : {};
+      parsed.selectedModel = model;
+      parsed.selectedRerankerModel = model;
+      localStorage.setItem('app', JSON.stringify(parsed));
+    }, availableModel);
+
+    await page.reload();
+    await page.waitForResponse(
       (resp) => resp.url().includes('/chat-sessions') && resp.status() === 200,
       { timeout: 10_000 },
     );
 
-    await page.goto('/chat');
-    await sessionsResp;
-
     const input = page.locator('.chat-input textarea');
-    await input.fill(`${E2E_PREFIX}你好`);
+    await input.fill(`${workerPrefix}你好`);
 
     const sendBtn = page.locator('.chat-input .send-btn');
     await sendBtn.click();
 
     const streamResp = await page.waitForResponse(
       (resp) => resp.url().includes('/chat/stream'),
-      { timeout: 30_000 },
+      { timeout: 60_000 },
     );
     expect(streamResp.status()).toBe(200);
 
@@ -123,6 +155,15 @@ test.describe('对话页面 - 端到端场景', () => {
     const messages = page.locator('.chat-message');
     const count = await messages.count();
     expect(count).toBeGreaterThanOrEqual(2);
+
+    const assistantMessages = page.locator('.chat-message.assistant');
+    const assistantCount = await assistantMessages.count();
+    if (assistantCount > 0) {
+      const lastAssistant = assistantMessages.last();
+      const text = await lastAssistant.textContent();
+      expect(text).not.toContain('请求失败');
+      expect(text).not.toContain('错误状态');
+    }
   });
 
   test('发送消息后侧边栏出现新会话', async ({ page }) => {
@@ -131,27 +172,40 @@ test.describe('对话页面 - 端到端场景', () => {
       return;
     }
 
-    const sessionsResp = page.waitForResponse(
-      (resp) => resp.url().includes('/chat-sessions') && resp.status() === 200,
+    await page.goto('/chat');
+
+    await page.waitForResponse(
+      (resp) => resp.url().includes('/api/models') && resp.status() === 200,
       { timeout: 10_000 },
     );
 
-    await page.goto('/chat');
-    await sessionsResp;
+    await page.evaluate((model) => {
+      const raw = localStorage.getItem('app');
+      const parsed = raw ? JSON.parse(raw) : {};
+      parsed.selectedModel = model;
+      parsed.selectedRerankerModel = model;
+      localStorage.setItem('app', JSON.stringify(parsed));
+    }, availableModel);
+
+    await page.reload();
+    await page.waitForResponse(
+      (resp) => resp.url().includes('/chat-sessions') && resp.status() === 200,
+      { timeout: 10_000 },
+    );
 
     const initialCount = await page
       .locator('.chat-sidebar .history-session')
       .count();
 
     const input = page.locator('.chat-input textarea');
-    await input.fill(`${E2E_PREFIX}测试新会话`);
+    await input.fill(`${workerPrefix}测试新会话`);
 
     const sendBtn = page.locator('.chat-input .send-btn');
     await sendBtn.click();
 
     const streamResp = await page.waitForResponse(
       (resp) => resp.url().includes('/chat/stream'),
-      { timeout: 30_000 },
+      { timeout: 60_000 },
     );
     expect(streamResp.status()).toBe(200);
 

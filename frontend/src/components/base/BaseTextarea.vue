@@ -1,5 +1,13 @@
 <template>
-  <textarea ref="textareaEl" v-bind="$attrs" class="base-textarea"></textarea>
+  <textarea
+    ref="textareaEl"
+    :value="modelValue"
+    class="base-textarea"
+    v-bind="$attrs"
+    @input="
+      $emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)
+    "
+  ></textarea>
 </template>
 
 <script setup lang="ts">
@@ -8,6 +16,14 @@ import { ref } from 'vue';
 defineOptions({
   inheritAttrs: false,
 });
+
+defineProps<{
+  modelValue?: string;
+}>();
+
+defineEmits<{
+  (e: 'update:modelValue', value: string): void;
+}>();
 
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 

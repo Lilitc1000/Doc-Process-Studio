@@ -49,32 +49,40 @@ export interface IncidentReportPreviewResponse {
   warnings: string[];
 }
 
+export interface IncidentBodyGenerateResponse {
+  reportId: string;
+  formAnswers: Record<string, IncidentReportFormAnswer>;
+  traceId: string;
+  sectionId: string;
+  timelineIndex: number | null;
+}
+
 export interface IncidentReportSummaryItem {
   id: string;
-  ref_no: string;
+  refNo: string;
   title: string;
   status: IncidentReportStatus;
   severity: IncidentSeverity | null;
-  reporter_id: string;
-  reporter_name: string | null;
-  assignee_id: string | null;
-  assignee_name: string | null;
-  verifier_id: string | null;
-  verifier_name: string | null;
-  fault_date: string | null;
-  created_at: string;
-  updated_at: string;
+  reporterId: string;
+  reporterName: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  verifierId: string | null;
+  verifierName: string | null;
+  faultDate: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface IncidentReportDetailItem extends IncidentReportSummaryItem {
   system: string | null;
-  site_id: string | null;
-  form_data: Record<string, unknown>;
-  report_data: Record<string, unknown> | null;
-  submitted_at: string | null;
-  approved_at: string | null;
-  closed_at: string | null;
-  resolution_date: string | null;
+  siteId: string | null;
+  formData: Record<string, unknown>;
+  reportData: Record<string, unknown> | null;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  closedAt: string | null;
+  resolutionDate: string | null;
 }
 
 export interface IncidentReportListResponse {
@@ -85,30 +93,30 @@ export interface IncidentReportListResponse {
 export interface IncidentAuditLogEntry {
   id: string;
   action: string;
-  actor_id: string;
-  actor_name: string | null;
-  from_status: string | null;
-  to_status: string | null;
+  actorId: string;
+  actorName: string | null;
+  fromStatus: string | null;
+  toStatus: string | null;
   comment: string | null;
-  created_at: string;
+  createdAt: string;
 }
 
 export interface IncidentCommentEntry {
   id: string;
-  report_id: string;
-  author_id: string;
-  author_name: string | null;
+  reportId: string;
+  authorId: string;
+  authorName: string | null;
   content: string;
-  parent_id: string | null;
-  created_at: string;
+  parentId: string | null;
+  createdAt: string;
 }
 
 export interface IncidentAnalyticsOverview {
-  total_this_month: number;
-  pending_count: number;
-  in_progress_count: number;
-  closed_this_month: number;
-  avg_resolution_hours: number | null;
+  totalThisMonth: number;
+  pendingCount: number;
+  inProgressCount: number;
+  closedThisMonth: number;
+  avgResolutionHours: number | null;
 }
 
 export interface IncidentAnalyticsTrend {
@@ -117,15 +125,38 @@ export interface IncidentAnalyticsTrend {
 }
 
 export interface IncidentUserRolesResponse {
-  user_id: string;
+  userId: string;
   roles: string[];
+  permissions: string[];
 }
 
 export interface IncidentRoleEntry {
-  user_id: string;
+  userId: string;
   role: string;
-  assigned_by: string | null;
-  assigned_at: string | null;
+  assignedBy: string | null;
+  assignedAt: string | null;
+}
+
+export interface IncidentRoleDefinitionEntry {
+  roleKey: string;
+  roleName: string;
+  description: string | null;
+  permissions: string[];
+}
+
+export interface IncidentRoleDefinitionListResponse {
+  items: IncidentRoleDefinitionEntry[];
+}
+
+export interface IncidentPermissionEntry {
+  permissionKey: string;
+  permissionName: string;
+  description: string | null;
+  category: string;
+}
+
+export interface IncidentPermissionListResponse {
+  items: IncidentPermissionEntry[];
 }
 
 export const INCIDENT_STATUS_LABELS: Record<IncidentReportStatus, string> = {

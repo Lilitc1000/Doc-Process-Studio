@@ -15,13 +15,13 @@
       </thead>
       <tbody>
         <tr v-for="item in items" :key="item.id" class="report-list-row">
-          <td class="cell-ref">{{ item.ref_no }}</td>
+          <td class="cell-ref">{{ item.refNo }}</td>
           <td class="cell-title">{{ item.title }}</td>
           <td class="cell-status">
             <report-status-badge :status="item.status" />
           </td>
           <td class="cell-severity">{{ item.severity ?? '-' }}</td>
-          <td class="cell-date">{{ formatDate(item.created_at) }}</td>
+          <td class="cell-date">{{ formatDate(item.createdAt) }}</td>
           <td class="cell-actions">
             <base-button
               variant="ghost"

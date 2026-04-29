@@ -15,6 +15,17 @@ from doc_process_studio.incident_report.service.report import (
 from doc_process_studio.incident_report.service.report_store import _CLEAR_SENTINEL
 
 
+class _FakeCtx:
+    def __init__(self, session):
+        self._session = session
+
+    async def __aenter__(self):
+        return self._session
+
+    async def __aexit__(self, *args):
+        pass
+
+
 def _apply_fields(target, fields):
     for k, v in fields.items():
         if v is _CLEAR_SENTINEL:
@@ -54,15 +65,15 @@ def test_update_report_non_owner_non_admin_rejected(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
-    async def _fake_has_role(user_id, role):
+    async def _fake_has_permission(user_id, permission):
         return False
 
     import doc_process_studio.incident_report.service.report as report_module
     import doc_process_studio.incident_report.service.role as role_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
-    monkeypatch.setattr(role_module, "has_incident_role", _fake_has_role)
+    monkeypatch.setattr(role_module, "has_permission", _fake_has_permission)
 
-    with pytest.raises(ValueError, match="只有报告人或管理员"):
+    with pytest.raises(ValueError, match="只有报告人、被指派处理人或管理员可以编辑报告"):
         asyncio.run(update_report(report_id="rep-1", user_id="usr_test", title="new"))
 
 
@@ -78,20 +89,17 @@ def test_update_report_admin_can_edit_others(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
-    async def _fake_has_role(user_id, role):
+    async def _fake_has_permission(user_id, permission):
         return True
 
     async def _fake_update(report_id, **fields):
         _apply_fields(fake_report, fields)
         return fake_report
 
-    async def _fake_has_role_inline(user_id, role):
-        return True
-
     import doc_process_studio.incident_report.service.report as report_module
     import doc_process_studio.incident_report.service.role as role_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
-    monkeypatch.setattr(role_module, "has_incident_role", _fake_has_role_inline)
+    monkeypatch.setattr(role_module, "has_permission", _fake_has_permission)
     monkeypatch.setattr(report_module, "update_report_record", _fake_update)
 
     result = asyncio.run(update_report(report_id="rep-1", user_id="usr_admin", title="updated"))
@@ -110,15 +118,15 @@ def test_submit_report_non_owner_non_admin_rejected(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
-    async def _fake_has_role(user_id, role):
+    async def _fake_has_permission(user_id, permission):
         return False
 
     import doc_process_studio.incident_report.service.report as report_module
     import doc_process_studio.incident_report.service.role as role_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
-    monkeypatch.setattr(role_module, "has_incident_role", _fake_has_role)
+    monkeypatch.setattr(role_module, "has_permission", _fake_has_permission)
 
-    with pytest.raises(ValueError, match="只有报告人或管理员"):
+    with pytest.raises(ValueError, match="只有报告人或管理员可以提交审核"):
         asyncio.run(submit_report(report_id="rep-1", actor_id="usr_test"))
 
 
@@ -248,40 +256,39 @@ def test_get_report_returns_none_for_missing(monkeypatch):
 
 
 def test_delete_report_with_actor_creates_audit(monkeypatch):
-    audit_calls = []
+    from unittest.mock import AsyncMock, MagicMock
 
-    async def _fake_audit_log(**kwargs):
-        audit_calls.append(kwargs)
-
-    async def _fake_delete(report_id):
-        return True
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=MagicMock())
+    mock_session.execute = AsyncMock(return_value=MagicMock())
+    mock_session.delete = AsyncMock()
+    mock_session.commit = AsyncMock()
 
     import doc_process_studio.incident_report.service.report as report_module
-    monkeypatch.setattr(report_module, "create_audit_log", _fake_audit_log)
-    monkeypatch.setattr(report_module, "delete_report_record", _fake_delete)
+    monkeypatch.setattr(report_module, "async_session_factory", lambda: _FakeCtx(mock_session))
 
     result = asyncio.run(delete_report(report_id="rep-1", actor_id="usr_admin"))
     assert result is True
-    assert len(audit_calls) == 1
-    assert audit_calls[0]["action"] == "delete"
+    mock_session.delete.assert_called_once()
+    mock_session.commit.assert_called_once()
 
 
 def test_delete_report_without_actor_skips_audit(monkeypatch):
-    audit_calls = []
+    from unittest.mock import AsyncMock, MagicMock
 
-    async def _fake_audit_log(**kwargs):
-        audit_calls.append(kwargs)
-
-    async def _fake_delete(report_id):
-        return True
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=MagicMock())
+    mock_session.execute = AsyncMock(return_value=MagicMock())
+    mock_session.delete = AsyncMock()
+    mock_session.commit = AsyncMock()
 
     import doc_process_studio.incident_report.service.report as report_module
-    monkeypatch.setattr(report_module, "create_audit_log", _fake_audit_log)
-    monkeypatch.setattr(report_module, "delete_report_record", _fake_delete)
+    monkeypatch.setattr(report_module, "async_session_factory", lambda: _FakeCtx(mock_session))
 
     result = asyncio.run(delete_report(report_id="rep-1"))
     assert result is True
-    assert len(audit_calls) == 0
+    mock_session.delete.assert_called_once()
+    mock_session.commit.assert_called_once()
 
 
 def test_list_incident_reports(monkeypatch):

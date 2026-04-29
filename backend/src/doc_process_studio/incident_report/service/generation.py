@@ -53,7 +53,7 @@ from .normalization import (
 from .reference import resolve_generation_reference_context
 from .report_data import answer_text, answer_value, answer_value_from_answers, set_answer, set_answer_if_non_empty
 from ...chat.service.streaming import extract_delta_text, extract_done_reason
-from .report_store import update_report_record
+from .report_store import load_report_orm, update_report_record
 
 
 def _build_default_title(now: Any = None) -> str:
@@ -739,4 +739,78 @@ async def _run_body_generation_with_trace(
         trace_id=trace_id,
         section_id=section_id,
         timeline_index=timeline_index,
+    )
+
+
+def _build_snapshot_from_form_data(form_data: dict[str, Any]) -> IncidentFormSnapshot:
+    form_answers: dict[str, IncidentFormAnswer] = {}
+    raw_answers = form_data or {}
+    for key, raw_value in raw_answers.items():
+        if isinstance(raw_value, IncidentFormAnswer):
+            form_answers[key] = raw_value
+        elif isinstance(raw_value, dict) and ("value" in raw_value or "custom_value" in raw_value):
+            form_answers[key] = IncidentFormAnswer(**raw_value)
+        else:
+            form_answers[key] = IncidentFormAnswer(value=raw_value, custom_value="")
+    return IncidentFormSnapshot(form_answers=form_answers)
+
+
+async def quick_generate_report_body(
+    *,
+    report_id: str,
+    model: str | None = None,
+    reranker_model: str | None = None,
+) -> IncidentBodyGenerateResponse:
+    record = await load_report_orm(report_id)
+    if record is None:
+        raise ValueError(f"报告 {report_id} 不存在。")
+    snapshot = _build_snapshot_from_form_data(record.form_data)
+    effective_model = model or "qwen3:8b"
+    prompt, context_json = _build_quick_generation_request(snapshot)
+    return await _run_body_generation_with_trace(
+        report_id=report_id,
+        snapshot=snapshot,
+        model=effective_model,
+        reranker_model=reranker_model,
+        section_id="quick",
+        timeline_index=None,
+        prompt=prompt,
+        context_json=context_json,
+        apply_payload=lambda fa, p: _apply_quick_generation_payload(form_answers=fa, payload=p),
+    )
+
+
+async def generate_report_body_section(
+    *,
+    report_id: str,
+    section_id: str,
+    timeline_index: int | None = None,
+    model: str | None = None,
+    reranker_model: str | None = None,
+) -> IncidentBodyGenerateResponse:
+    record = await load_report_orm(report_id)
+    if record is None:
+        raise ValueError(f"报告 {report_id} 不存在。")
+    snapshot = _build_snapshot_from_form_data(record.form_data)
+    effective_model = model or "qwen3:8b"
+    prompt, context_json = _build_section_generation_prompt(
+        snapshot,
+        section_id=section_id,
+        timeline_index=timeline_index,
+    )
+    return await _run_body_generation_with_trace(
+        report_id=report_id,
+        snapshot=snapshot,
+        model=effective_model,
+        reranker_model=reranker_model,
+        section_id=section_id,
+        timeline_index=timeline_index,
+        prompt=prompt,
+        context_json=context_json,
+        apply_payload=lambda fa, p: _apply_section_payload(
+            form_answers=fa,
+            section_id=section_id,
+            timeline_index=timeline_index,
+            payload=p,
+        ),
     )

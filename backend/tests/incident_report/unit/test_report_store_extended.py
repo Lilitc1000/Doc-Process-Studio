@@ -28,7 +28,7 @@ def mock_session():
 
 def test_generate_ref_no(mock_session):
     mock_scalar = MagicMock()
-    mock_scalar.scalar_one.return_value = 42
+    mock_scalar.scalar_one_or_none.return_value = "DAS-0042"
     mock_session.execute.return_value = mock_scalar
 
     with patch(
@@ -38,6 +38,20 @@ def test_generate_ref_no(mock_session):
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
         result = asyncio.run(generate_ref_no())
     assert result == "DAS-0043"
+
+
+def test_generate_ref_no_empty(mock_session):
+    mock_scalar = MagicMock()
+    mock_scalar.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_scalar
+
+    with patch(
+        "doc_process_studio.incident_report.service.report_store.async_session_factory"
+    ) as mock_factory:
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        result = asyncio.run(generate_ref_no())
+    assert result == "DAS-0001"
 
 
 def test_create_report_record(mock_session):

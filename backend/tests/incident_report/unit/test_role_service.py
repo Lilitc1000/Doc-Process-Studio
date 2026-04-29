@@ -1,8 +1,6 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from doc_process_studio.incident_report.service.role import get_user_incident_roles
 
 

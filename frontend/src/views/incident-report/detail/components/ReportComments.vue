@@ -5,9 +5,9 @@
       <div v-for="comment in comments" :key="comment.id" class="comment-item">
         <div class="comment-header">
           <span class="comment-author">{{
-            comment.author_name ?? comment.author_id
+            comment.authorName ?? comment.authorId
           }}</span>
-          <span class="comment-time">{{ formatDate(comment.created_at) }}</span>
+          <span class="comment-time">{{ formatDate(comment.createdAt) }}</span>
         </div>
         <div class="comment-body">{{ comment.content }}</div>
       </div>

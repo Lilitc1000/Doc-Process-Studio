@@ -2,12 +2,14 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { triggerBlobDownload } from '../../../src/utils/common/download';
 
 describe('triggerBlobDownload', () => {
-  let createObjectURLSpy: ReturnType<typeof vi.fn>;
-  let revokeObjectURLSpy: ReturnType<typeof vi.fn>;
+  let createObjectURLSpy: (obj: Blob | MediaSource) => string;
+  let revokeObjectURLSpy: (url: string) => void;
 
   beforeEach(() => {
-    createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake-url');
-    revokeObjectURLSpy = vi.fn();
+    createObjectURLSpy = vi.fn(
+      () => 'blob:http://localhost/fake-url',
+    ) as unknown as (obj: Blob | MediaSource) => string;
+    revokeObjectURLSpy = vi.fn() as unknown as (url: string) => void;
     globalThis.URL.createObjectURL = createObjectURLSpy;
     globalThis.URL.revokeObjectURL = revokeObjectURLSpy;
   });

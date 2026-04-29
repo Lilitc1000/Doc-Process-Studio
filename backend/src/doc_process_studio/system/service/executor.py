@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, Callable, Literal
 
 from ...chat.schemas.request import ChatStreamRequest
+from ...shared.dtutils import to_utc8
 from ...shared.tool_args import parse_tool_arguments
 from ...skill.models.runtime import (
     ConversationAgentState,
@@ -520,7 +521,7 @@ def _collect_outcome(
                 if not tool_result.get("ok") and tool_result.get("error") is not None
                 else None
             ),
-            created_at=datetime.now(UTC),
+            created_at=to_utc8(datetime.now(UTC)),
         ),
     )
     result.state_diff.tool_history_added += 1

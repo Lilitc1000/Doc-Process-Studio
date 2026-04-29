@@ -40,29 +40,29 @@ const infoFields = computed(() => [
   {
     key: 'reporter',
     label: '报告人',
-    value: props.report.reporter_name ?? props.report.reporter_id,
+    value: props.report.reporterName ?? props.report.reporterId,
   },
   {
     key: 'assignee',
     label: '处理人',
-    value: props.report.assignee_name ?? props.report.assignee_id,
+    value: props.report.assigneeName ?? props.report.assigneeId,
   },
   {
     key: 'verifier',
     label: '审核人',
-    value: props.report.verifier_name ?? props.report.verifier_id,
+    value: props.report.verifierName ?? props.report.verifierId,
   },
   { key: 'system', label: '系统', value: props.report.system },
-  { key: 'site', label: '站点', value: props.report.site_id },
+  { key: 'site', label: '站点', value: props.report.siteId },
   {
     key: 'fault_date',
     label: '故障日期',
-    value: formatDate(props.report.fault_date),
+    value: formatDate(props.report.faultDate),
   },
   {
     key: 'created_at',
     label: '创建时间',
-    value: formatDate(props.report.created_at),
+    value: formatDate(props.report.createdAt),
   },
 ]);
 

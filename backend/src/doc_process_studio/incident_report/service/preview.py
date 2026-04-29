@@ -205,3 +205,55 @@ def build_initial_output_name(*, report_title: str, report_id: str) -> str:
 
 def build_preview_output_name(*, report_title: str, report_id: str) -> str:
     return _build_output_name(report_title=report_title, report_id=report_id, suffix="-preview.docx")
+
+
+async def preview_report_attachment(
+    *,
+    report_id: str,
+    version: int | None = None,
+    model: str | None = None,
+    reranker_model: str | None = None,
+) -> IncidentReportPreviewResponse:
+    import base64
+    from .report_store import load_report_orm
+    from .report_data import build_report_data_from_snapshot
+    from .generation import _build_snapshot_from_form_data
+
+    record = await load_report_orm(report_id)
+    if record is None:
+        raise ValueError(f"报告 {report_id} 不存在。")
+
+    cache_key = f"report:{report_id}:v{version or 'draft'}:{preview_template_token()}"
+    cached = preview_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    snapshot = _build_snapshot_from_form_data(record.form_data)
+    report_data, missing = build_report_data_from_snapshot(
+        snapshot,
+        strict_required=False,
+    )
+    if report_data is None:
+        report_data = {"missing_fields": missing}
+
+    docx_bytes = render_docx_bytes_from_report_data(report_data)
+    html, pdf_base64, warnings = build_preview_payload_from_docx_bytes(docx_bytes)
+
+    output_name = build_preview_output_name(
+        report_title=record.title,
+        report_id=report_id,
+    )
+
+    response = IncidentReportPreviewResponse(
+        source="draft",
+        version=version,
+        label=output_name.replace(".docx", ""),
+        html=html,
+        docx_base64=base64.b64encode(docx_bytes).decode("ascii"),
+        docx_file_name=output_name,
+        pdf_base64=pdf_base64,
+        warnings=warnings,
+    )
+
+    preview_cache_set(cache_key=cache_key, payload=response)
+    return response

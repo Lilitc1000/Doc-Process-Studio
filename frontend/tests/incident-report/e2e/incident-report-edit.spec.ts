@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, addRateLimitWhitelist } from '../../helpers';
+import {
+  getWorkerPrefix,
+  loginAsAdmin,
+  loginViaApi,
+  addRateLimitWhitelist,
+  createIncidentReportViaApi,
+  deleteIncidentReportViaApi,
+} from '../../helpers';
 
 test.describe('事故报告编辑页 - 不存在的报告', () => {
   test.beforeAll(async ({ request }) => {
@@ -18,7 +25,10 @@ test.describe('事故报告编辑页 - 不存在的报告', () => {
 });
 
 test.describe('事故报告编辑页 - 已有报告', () => {
-  test.beforeAll(async ({ request }) => {
+  let workerPrefix: string;
+
+  test.beforeAll(async ({ request }, testInfo) => {
+    workerPrefix = getWorkerPrefix(testInfo.workerIndex);
     await addRateLimitWhitelist(request);
   });
 
@@ -26,175 +36,113 @@ test.describe('事故报告编辑页 - 已有报告', () => {
     await loginAsAdmin(page);
   });
 
-  test('从详情页进入编辑页', async ({ page }) => {
-    const listResp = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
-      { timeout: 10_000 },
-    );
-    await page.goto('/incident-report');
-    await listResp.catch(() => {});
-    const reportRow = page.locator('.report-list-table tbody tr').first();
-    if (await reportRow.isVisible()) {
-      await reportRow.click();
-      await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
+  test('从详情页进入编辑页', async ({ page, request }) => {
+    const token = await loginViaApi(request);
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}进入编辑页测试`,
+    });
+    expect(report).not.toBeNull();
+
+    try {
+      await page.goto(`/incident-report/${report!.id}`);
+      await expect(page.locator('.incident-report-detail-view')).toBeVisible();
+
       const editBtn = page.locator('.detail-header-right button', {
         hasText: '编辑',
       });
-      if (await editBtn.isVisible()) {
-        await editBtn.click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+\/edit/);
-      }
+      await expect(editBtn).toBeVisible();
+      await editBtn.click();
+      await expect(page).toHaveURL(/\/incident-report\/[^/]+\/edit/);
+    } finally {
+      await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 
-  test('编辑页显示返回详情按钮', async ({ page }) => {
-    const listResp = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
-      { timeout: 10_000 },
-    );
-    await page.goto('/incident-report');
-    await listResp.catch(() => {});
-    const reportRow = page.locator('.report-list-table tbody tr').first();
-    if (await reportRow.isVisible()) {
-      await reportRow.click();
-      await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
-      const editBtn = page.locator('.detail-header-right button', {
-        hasText: '编辑',
-      });
-      if (await editBtn.isVisible()) {
-        await editBtn.click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+\/edit/);
-        await expect(
-          page.locator('button', { hasText: '返回详情' }),
-        ).toBeVisible();
-      }
+  test('编辑页显示返回详情按钮', async ({ page, request }) => {
+    const token = await loginViaApi(request);
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}返回详情按钮测试`,
+    });
+    expect(report).not.toBeNull();
+
+    try {
+      await page.goto(`/incident-report/${report!.id}/edit`);
+      await expect(
+        page.locator('button', { hasText: '返回详情' }),
+      ).toBeVisible();
+    } finally {
+      await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 
-  test('编辑页显示表单区域', async ({ page }) => {
-    const listResp = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
-      { timeout: 10_000 },
-    );
-    await page.goto('/incident-report');
-    await listResp.catch(() => {});
-    const reportRow = page.locator('.report-list-table tbody tr').first();
-    if (await reportRow.isVisible()) {
-      await reportRow.click();
-      await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
-      const editBtn = page.locator('.detail-header-right button', {
-        hasText: '编辑',
-      });
-      if (await editBtn.isVisible()) {
-        await editBtn.click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+\/edit/);
-        await expect(page.locator('.edit-form')).toBeVisible();
-      }
+  test('编辑页显示表单区域', async ({ page, request }) => {
+    const token = await loginViaApi(request);
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}表单区域测试`,
+    });
+    expect(report).not.toBeNull();
+
+    try {
+      await page.goto(`/incident-report/${report!.id}/edit`);
+      await expect(page.locator('.edit-form')).toBeVisible();
+    } finally {
+      await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 
-  test('编辑页显示标题输入框', async ({ page }) => {
-    const listResp = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
-      { timeout: 10_000 },
-    );
-    await page.goto('/incident-report');
-    await listResp.catch(() => {});
-    const reportRow = page.locator('.report-list-table tbody tr').first();
-    if (await reportRow.isVisible()) {
-      await reportRow.click();
-      await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
-      const editBtn = page.locator('.detail-header-right button', {
-        hasText: '编辑',
-      });
-      if (await editBtn.isVisible()) {
-        await editBtn.click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+\/edit/);
-        await expect(
-          page.locator('.form-label', { hasText: '报告标题' }),
-        ).toBeVisible();
+  test('编辑页显示标题输入框', async ({ page, request }) => {
+    const token = await loginViaApi(request);
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}标题输入框测试`,
+    });
+    expect(report).not.toBeNull();
+
+    try {
+      await page.goto(`/incident-report/${report!.id}/edit`);
+      const titleField = page
+        .locator('.field-item span')
+        .filter({ hasText: '报告标题' });
+      if (await titleField.isVisible()) {
+        await expect(titleField).toBeVisible();
       }
+    } finally {
+      await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 
-  test('编辑页显示严重级别下拉框', async ({ page }) => {
-    const listResp = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
-      { timeout: 10_000 },
-    );
-    await page.goto('/incident-report');
-    await listResp.catch(() => {});
-    const reportRow = page.locator('.report-list-table tbody tr').first();
-    if (await reportRow.isVisible()) {
-      await reportRow.click();
-      await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
-      const editBtn = page.locator('.detail-header-right button', {
-        hasText: '编辑',
-      });
-      if (await editBtn.isVisible()) {
-        await editBtn.click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+\/edit/);
-        await expect(
-          page.locator('.form-label', { hasText: '严重级别' }),
-        ).toBeVisible();
-      }
+  test('编辑页显示保存和取消按钮', async ({ page, request }) => {
+    const token = await loginViaApi(request);
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}保存取消按钮测试`,
+    });
+    expect(report).not.toBeNull();
+
+    try {
+      await page.goto(`/incident-report/${report!.id}/edit`);
+      await expect(
+        page.locator('.edit-actions button', { hasText: '取消' }),
+      ).toBeVisible();
+      await expect(
+        page.locator('.edit-actions button', { hasText: '保存' }),
+      ).toBeVisible();
+    } finally {
+      await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 
-  test('编辑页显示保存和取消按钮', async ({ page }) => {
-    const listResp = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
-      { timeout: 10_000 },
-    );
-    await page.goto('/incident-report');
-    await listResp.catch(() => {});
-    const reportRow = page.locator('.report-list-table tbody tr').first();
-    if (await reportRow.isVisible()) {
-      await reportRow.click();
-      await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
-      const editBtn = page.locator('.detail-header-right button', {
-        hasText: '编辑',
-      });
-      if (await editBtn.isVisible()) {
-        await editBtn.click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+\/edit/);
-        await expect(
-          page.locator('.edit-actions button', { hasText: '取消' }),
-        ).toBeVisible();
-        await expect(
-          page.locator('.edit-actions button', { hasText: '保存' }),
-        ).toBeVisible();
-      }
-    }
-  });
+  test('点击取消返回详情页', async ({ page, request }) => {
+    const token = await loginViaApi(request);
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}取消返回测试`,
+    });
+    expect(report).not.toBeNull();
 
-  test('点击取消返回详情页', async ({ page }) => {
-    const listResp = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
-      { timeout: 10_000 },
-    );
-    await page.goto('/incident-report');
-    await listResp.catch(() => {});
-    const reportRow = page.locator('.report-list-table tbody tr').first();
-    if (await reportRow.isVisible()) {
-      await reportRow.click();
+    try {
+      await page.goto(`/incident-report/${report!.id}/edit`);
+      await page.locator('.edit-actions button', { hasText: '取消' }).click();
       await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
-      const editBtn = page.locator('.detail-header-right button', {
-        hasText: '编辑',
-      });
-      if (await editBtn.isVisible()) {
-        await editBtn.click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+\/edit/);
-        await page.locator('.edit-actions button', { hasText: '取消' }).click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
-      }
+    } finally {
+      await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 });

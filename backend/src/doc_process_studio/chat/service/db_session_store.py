@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, select
 
 from ...core.database import async_session_factory
+from ...shared.dtutils import to_utc8
 from ..models.chat_session_orm import ChatSession as ChatSessionORM
 from ..models.session import ChatSessionSnapshot, ChatSessionSummary
 
@@ -28,8 +29,8 @@ async def load_chat_session_summary(session_id: str) -> ChatSessionSummary | Non
         return ChatSessionSummary(
             id=row.id,
             title=row.title,
-            created_at=row.created_at,
-            updated_at=row.updated_at,
+            created_at=to_utc8(row.created_at),
+            updated_at=to_utc8(row.updated_at),
             selected_model=row.selected_model,
             selected_reranker_model=row.selected_reranker_model,
         )

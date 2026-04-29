@@ -4,7 +4,7 @@
       <base-button variant="ghost" size="sm" @click="$emit('go-back')">
         ← 返回列表
       </base-button>
-      <span class="detail-ref">{{ report.ref_no }}</span>
+      <span class="detail-ref">{{ report.refNo }}</span>
       <span class="detail-title">{{ report.title }}</span>
     </div>
     <div class="detail-header-right">

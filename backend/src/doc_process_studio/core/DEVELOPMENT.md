@@ -40,5 +40,6 @@ backend/src/doc_process_studio/core/
 
 - 不要在业务代码中重复创建数据库连接或 Redis 连接，统一使用 `database.py` 和 `cache_client.py`
 - 不要在业务代码中直接调用 Ollama HTTP API，统一使用 `ollama.py`
+- `ollama_timeout_seconds`（默认 10s）用于连接/写入/池超时，`ollama_stream_idle_timeout_seconds`（默认 180s）用于流式读取超时
 - `get_current_user_id` 是被所有受保护路由共享的认证依赖
 - 新增全局基础设施时，优先放入 `core/` 而非散落在业务域中

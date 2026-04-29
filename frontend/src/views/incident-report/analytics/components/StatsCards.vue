@@ -1,30 +1,30 @@
 <template>
   <div class="stats-cards">
     <div class="stat-card">
-      <div class="stat-value">{{ overview?.total_this_month ?? 0 }}</div>
+      <div class="stat-value">{{ overview?.totalThisMonth ?? 0 }}</div>
       <div class="stat-label">本月报告总数</div>
     </div>
     <div class="stat-card">
       <div class="stat-value stat-pending">
-        {{ overview?.pending_count ?? 0 }}
+        {{ overview?.pendingCount ?? 0 }}
       </div>
       <div class="stat-label">待审核</div>
     </div>
     <div class="stat-card">
       <div class="stat-value stat-progress">
-        {{ overview?.in_progress_count ?? 0 }}
+        {{ overview?.inProgressCount ?? 0 }}
       </div>
       <div class="stat-label">处理中</div>
     </div>
     <div class="stat-card">
       <div class="stat-value stat-closed">
-        {{ overview?.closed_this_month ?? 0 }}
+        {{ overview?.closedThisMonth ?? 0 }}
       </div>
       <div class="stat-label">已关闭</div>
     </div>
     <div class="stat-card">
       <div class="stat-value">
-        {{ overview?.avg_resolution_hours?.toFixed(1) ?? '-' }}h
+        {{ overview?.avgResolutionHours?.toFixed(1) ?? '-' }}h
       </div>
       <div class="stat-label">平均处理时长</div>
     </div>

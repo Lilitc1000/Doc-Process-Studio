@@ -15,6 +15,7 @@ from .chat.router.attachments import router as chat_attachments_router
 from .incident_report.router.reports import router as incident_report_reports_router
 from .incident_report.router.roles import router as incident_report_roles_router
 from .incident_report.router.analytics import router as incident_report_analytics_router
+from .incident_report.service.role import ensure_incident_report_admin, seed_rbac_data
 from .skill.router.routes import router as skill_routes_router
 from .system.router.health import router as health_router
 from .system.router.models import router as models_router
@@ -27,6 +28,8 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     await ensure_admin_user()
+    await seed_rbac_data()
+    await ensure_incident_report_admin()
     cleanup_expired_attachments()
     await warmup_model_context_cache()
     yield

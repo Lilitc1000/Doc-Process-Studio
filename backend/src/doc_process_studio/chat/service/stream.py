@@ -20,7 +20,7 @@ from ...system.service.executor import (
 from ...system.service.feature_flags import is_feature_enabled_for_key
 from ...system.service.error_detail import build_exception_detail, summarize_exception
 from ...system.service.trace_store import AgentTraceRecorder
-from ...shared.dtutils import utcnow
+from ...shared.dtutils import to_utc8, utcnow
 from ...shared.error_utils import build_error_event_detail
 from ...shared.tool_args import build_normalized_tool_calls
 from ...skill.models.runtime import (
@@ -236,7 +236,7 @@ def _build_direct_skill_plan(
         confidence=None,
         reasons={"planner": "规划器灰度关闭，已回退到显式选择策略。"},
         candidates=[],
-        created_at=datetime.now(UTC),
+        created_at=to_utc8(datetime.now(UTC)),
     )
 
 

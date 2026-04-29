@@ -26,6 +26,22 @@ function makeNode(
   };
 }
 
+function makeCreateNodePayload(
+  overrides: Partial<Omit<ChatMessageNode, 'id' | 'childIds'>> & {
+    id?: string;
+  },
+): Omit<ChatMessageNode, 'id' | 'childIds'> & { id?: string } {
+  return {
+    role: 'user',
+    content: '',
+    parentId: null,
+    files: [],
+    toolStatuses: [],
+    timestamp: new Date(),
+    ...overrides,
+  };
+}
+
 describe('useChatStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -71,11 +87,9 @@ describe('useChatStore', () => {
   describe('createMessageNode', () => {
     it('创建根消息节点', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        role: 'user',
-        content: '你好',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({ role: 'user', content: '你好' }),
+      );
 
       expect(node.id).toBeTruthy();
       expect(node.role).toBe('user');
@@ -86,17 +100,17 @@ describe('useChatStore', () => {
 
     it('创建子消息节点', () => {
       const store = useChatStore();
-      const parent = store.createMessageNode({
-        role: 'user',
-        content: '问题',
-        parentId: null,
-      });
+      const parent = store.createMessageNode(
+        makeCreateNodePayload({ role: 'user', content: '问题' }),
+      );
 
-      const child = store.createMessageNode({
-        role: 'assistant',
-        content: '回答',
-        parentId: parent.id,
-      });
+      const child = store.createMessageNode(
+        makeCreateNodePayload({
+          role: 'assistant',
+          content: '回答',
+          parentId: parent.id,
+        }),
+      );
 
       expect(child.parentId).toBe(parent.id);
       expect(parent.childIds).toContain(child.id);
@@ -104,12 +118,13 @@ describe('useChatStore', () => {
 
     it('使用自定义 id', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        id: 'custom-id',
-        role: 'user',
-        content: 'test',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({
+          id: 'custom-id',
+          role: 'user',
+          content: 'test',
+        }),
+      );
       expect(node.id).toBe('custom-id');
     });
   });
@@ -117,11 +132,9 @@ describe('useChatStore', () => {
   describe('updateMessageContent', () => {
     it('更新消息内容', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        role: 'assistant',
-        content: '初始内容',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({ role: 'assistant', content: '初始内容' }),
+      );
 
       store.updateMessageContent(node.id, '更新内容');
       expect(store.findMessageById(node.id)?.content).toBe('更新内容');
@@ -138,11 +151,9 @@ describe('useChatStore', () => {
   describe('appendMessageContent', () => {
     it('追加消息内容', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        role: 'assistant',
-        content: 'Hello',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({ role: 'assistant', content: 'Hello' }),
+      );
 
       store.appendMessageContent(node.id, ' World');
       expect(store.findMessageById(node.id)?.content).toBe('Hello World');
@@ -159,11 +170,9 @@ describe('useChatStore', () => {
   describe('appendMessageAttachment', () => {
     it('添加新附件', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        role: 'assistant',
-        content: '回复',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({ role: 'assistant', content: '回复' }),
+      );
 
       const attachment: ChatAttachment = {
         attachmentId: 'att-1',
@@ -176,17 +185,16 @@ describe('useChatStore', () => {
       };
 
       store.appendMessageAttachment(node.id, attachment);
-      expect(store.findMessageById(node.id)?.files).toHaveLength(1);
-      expect(store.findMessageById(node.id)?.files[0].name).toBe('file.pdf');
+      const found1 = store.findMessageById(node.id)!;
+      expect(found1.files).toHaveLength(1);
+      expect(found1.files![0].name).toBe('file.pdf');
     });
 
     it('重复 attachmentId 的附件被替换', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        role: 'assistant',
-        content: '回复',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({ role: 'assistant', content: '回复' }),
+      );
 
       const att1: ChatAttachment = {
         attachmentId: 'att-1',
@@ -210,8 +218,9 @@ describe('useChatStore', () => {
 
       store.appendMessageAttachment(node.id, att1);
       store.appendMessageAttachment(node.id, att2);
-      expect(store.findMessageById(node.id)?.files).toHaveLength(1);
-      expect(store.findMessageById(node.id)?.files[0].name).toBe('new.pdf');
+      const found2 = store.findMessageById(node.id)!;
+      expect(found2.files).toHaveLength(1);
+      expect(found2.files![0].name).toBe('new.pdf');
     });
 
     it('消息不存在时不报错', () => {
@@ -225,16 +234,17 @@ describe('useChatStore', () => {
   describe('appendMessageToolStatus', () => {
     it('添加工具状态', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        role: 'assistant',
-        content: '回复',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({ role: 'assistant', content: '回复' }),
+      );
 
       const status: ChatToolStatus = {
+        id: 'tool-1',
         toolName: 'search',
         phase: 'start',
         label: '搜索中',
+        message: '正在搜索...',
+        createdAt: new Date().toISOString(),
       };
 
       store.appendMessageToolStatus(node.id, status);
@@ -252,11 +262,9 @@ describe('useChatStore', () => {
   describe('updateMessageTraceId', () => {
     it('更新 assistant 消息的 traceId', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        role: 'assistant',
-        content: '回复',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({ role: 'assistant', content: '回复' }),
+      );
 
       store.updateMessageTraceId(node.id, 'trace-123');
       expect(store.findMessageById(node.id)?.traceId).toBe('trace-123');
@@ -264,11 +272,9 @@ describe('useChatStore', () => {
 
     it('不更新非 assistant 消息的 traceId', () => {
       const store = useChatStore();
-      const node = store.createMessageNode({
-        role: 'user',
-        content: '问题',
-        parentId: null,
-      });
+      const node = store.createMessageNode(
+        makeCreateNodePayload({ role: 'user', content: '问题' }),
+      );
 
       store.updateMessageTraceId(node.id, 'trace-123');
       expect(store.findMessageById(node.id)?.traceId).toBeUndefined();
@@ -304,11 +310,9 @@ describe('useChatStore', () => {
   describe('resetChatState', () => {
     it('重置所有聊天状态', () => {
       const store = useChatStore();
-      store.createMessageNode({
-        role: 'user',
-        content: 'test',
-        parentId: null,
-      });
+      store.createMessageNode(
+        makeCreateNodePayload({ role: 'user', content: 'test' }),
+      );
       store.inputText = '输入文本';
       store.selectedFiles = [new File([''], 'test.txt')];
       store.selectedSkillIds = ['skill-1'];
@@ -332,11 +336,9 @@ describe('useChatStore', () => {
 
     it('有消息时显示消息链', () => {
       const store = useChatStore();
-      store.createMessageNode({
-        role: 'user',
-        content: '问题',
-        parentId: null,
-      });
+      store.createMessageNode(
+        makeCreateNodePayload({ role: 'user', content: '问题' }),
+      );
       expect(store.displayedMessages.some((m) => m.content === '问题')).toBe(
         true,
       );
@@ -382,11 +384,9 @@ describe('useChatStore', () => {
   describe('buildTitleSourceMessages', () => {
     it('返回非系统消息的内容片段', () => {
       const store = useChatStore();
-      store.createMessageNode({
-        role: 'user',
-        content: '用户消息',
-        parentId: null,
-      });
+      store.createMessageNode(
+        makeCreateNodePayload({ role: 'user', content: '用户消息' }),
+      );
       const titles = store.buildTitleSourceMessages();
       expect(titles).toContain('用户消息');
     });
@@ -414,8 +414,8 @@ describe('useChatStore', () => {
         rootChildIds: ['msg-1'],
         selectedRootChildId: 'msg-1',
         selectedChildIdByParent: {},
-        selectedModel: 'gpt-4o-mini',
-        selectedRerankerModel: 'gpt-4o-mini',
+        selectedModel: 'qwen3:8b',
+        selectedRerankerModel: 'qwen3:8b',
       });
 
       expect(store.findMessageById('msg-1')).toBeDefined();
@@ -426,20 +426,17 @@ describe('useChatStore', () => {
   describe('buildSessionSnapshotPayload', () => {
     it('构建快照包含消息节点', () => {
       const store = useChatStore();
-      store.createMessageNode({
-        role: 'user',
-        content: '测试',
-        parentId: null,
-        timestamp: new Date(),
-      });
+      store.createMessageNode(
+        makeCreateNodePayload({ role: 'user', content: '测试' }),
+      );
 
       const snapshot = store.buildSessionSnapshotPayload(
-        'gpt-4o-mini',
-        'gpt-4o-mini',
+        'qwen3:8b',
+        'qwen3:8b',
       );
       expect(snapshot.messageNodes.length).toBeGreaterThan(0);
-      expect(snapshot.selectedModel).toBe('gpt-4o-mini');
-      expect(snapshot.selectedRerankerModel).toBe('gpt-4o-mini');
+      expect(snapshot.selectedModel).toBe('qwen3:8b');
+      expect(snapshot.selectedRerankerModel).toBe('qwen3:8b');
     });
   });
 
@@ -451,7 +448,7 @@ describe('useChatStore', () => {
         title: '测试会话',
         createdAt: '2026-01-01T00:00:00Z',
         updatedAt: '2026-01-02T00:00:00Z',
-        selectedModel: 'gpt-4o-mini',
+        selectedModel: 'qwen3:8b',
       });
 
       expect(store.sessionSummaries).toHaveLength(1);

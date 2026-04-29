@@ -1,8 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { E2E_PREFIX, addRateLimitWhitelist } from '../../helpers';
+import {
+  getWorkerPrefix,
+  addRateLimitWhitelist,
+  cleanupWorkerData,
+} from '../../helpers';
 
 test.describe('认证流程', () => {
-  test.beforeAll(async ({ request }) => {
+  let workerPrefix: string;
+
+  test.beforeAll(async ({ request }, testInfo) => {
+    workerPrefix = getWorkerPrefix(testInfo.workerIndex);
     await addRateLimitWhitelist(request);
   });
 
@@ -32,7 +39,7 @@ test.describe('认证流程', () => {
     await page
       .locator('input')
       .nth(0)
-      .fill(`${E2E_PREFIX}${Date.now() % 100000}`);
+      .fill(`${workerPrefix}${Date.now() % 100000}`);
     await page.locator('input').nth(1).fill('test123456');
     await page.locator('input').nth(2).fill('test123456');
     await page.locator('button[type="submit"]').click();
@@ -153,10 +160,6 @@ test.describe('认证流程', () => {
   });
 
   test.afterAll(async ({ request }) => {
-    try {
-      await request.delete(`/api/auth/users/by-prefix/${E2E_PREFIX}`);
-    } catch {
-      // ignore cleanup errors
-    }
+    await cleanupWorkerData(request, workerPrefix);
   });
 });

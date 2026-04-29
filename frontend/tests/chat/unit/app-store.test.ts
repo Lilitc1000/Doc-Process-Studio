@@ -9,8 +9,8 @@ describe('useAppStore', () => {
 
   it('初始状态有默认模型', () => {
     const store = useAppStore();
-    expect(store.selectedModel).toBe('gpt-4o-mini');
-    expect(store.selectedRerankerModel).toBe('gpt-4o-mini');
+    expect(store.selectedModel).toBe('qwen3:8b');
+    expect(store.selectedRerankerModel).toBe('qwen3:8b');
   });
 
   it('初始 activePageId 为 home', () => {
@@ -20,8 +20,8 @@ describe('useAppStore', () => {
 
   it('初始 availableModels 包含默认模型', () => {
     const store = useAppStore();
-    expect(store.availableModels).toContain('gpt-4o-mini');
-    expect(store.availableModels).toContain('gpt-4o');
+    expect(store.availableModels).toContain('qwen3:8b');
+    expect(store.availableModels).toContain('qwen3:32b');
     expect(store.availableModels.length).toBeGreaterThanOrEqual(4);
   });
 
@@ -32,14 +32,14 @@ describe('useAppStore', () => {
 
   it('可以修改 selectedModel', () => {
     const store = useAppStore();
-    store.selectedModel = 'deepseek-v3';
-    expect(store.selectedModel).toBe('deepseek-v3');
+    store.selectedModel = 'qwen3:32b';
+    expect(store.selectedModel).toBe('qwen3:32b');
   });
 
   it('可以修改 selectedRerankerModel', () => {
     const store = useAppStore();
-    store.selectedRerankerModel = 'claude-3.5-sonnet';
-    expect(store.selectedRerankerModel).toBe('claude-3.5-sonnet');
+    store.selectedRerankerModel = 'qwen3-coder:30b';
+    expect(store.selectedRerankerModel).toBe('qwen3-coder:30b');
   });
 
   it('可以修改 activePageId', () => {

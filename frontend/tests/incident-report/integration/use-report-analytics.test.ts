@@ -21,11 +21,11 @@ describe('useReportAnalytics', () => {
 
   it('加载数据后更新概览和趋势', async () => {
     const mockOverview = {
-      total_this_month: 10,
-      pending_count: 3,
-      in_progress_count: 2,
-      closed_this_month: 5,
-      avg_resolution_hours: 24.5,
+      totalThisMonth: 10,
+      pendingCount: 3,
+      inProgressCount: 2,
+      closedThisMonth: 5,
+      avgResolutionHours: 24.5,
     };
     const mockTrend = [
       { date: '2026-04-20', count: 2 },
@@ -43,7 +43,7 @@ describe('useReportAnalytics', () => {
     await load(30);
 
     expect(overview.value).not.toBeNull();
-    expect(overview.value?.total_this_month).toBe(10);
+    expect(overview.value?.totalThisMonth).toBe(10);
     expect(trendData.value).toHaveLength(2);
   });
 });

@@ -2,6 +2,7 @@ import { apiClient } from './request';
 import type {
   IncidentReportFormSchemaPayload,
   IncidentReportPreviewResponse,
+  IncidentBodyGenerateResponse,
   IncidentReportListResponse,
   IncidentReportDetailItem,
   IncidentAuditLogEntry,
@@ -10,6 +11,8 @@ import type {
   IncidentAnalyticsTrend,
   IncidentUserRolesResponse,
   IncidentRoleEntry,
+  IncidentRoleDefinitionListResponse,
+  IncidentPermissionListResponse,
 } from '../types/incident-report/incident-report';
 
 export const fetchIncidentReportFormSchema =
@@ -58,9 +61,9 @@ export const createIncidentReport = async (payload: {
   title: string;
   severity?: string;
   system?: string;
-  site_id?: string;
-  fault_date?: string;
-  form_data?: Record<string, unknown>;
+  siteId?: string;
+  faultDate?: string;
+  formData?: Record<string, unknown>;
 }): Promise<IncidentReportDetailItem> => {
   const response = await apiClient.post<IncidentReportDetailItem>(
     '/incident-report/reports',
@@ -75,9 +78,9 @@ export const updateIncidentReport = async (
     title?: string;
     severity?: string;
     system?: string;
-    site_id?: string;
-    fault_date?: string;
-    form_data?: Record<string, unknown>;
+    siteId?: string;
+    faultDate?: string;
+    formData?: Record<string, unknown>;
   },
 ): Promise<IncidentReportDetailItem> => {
   const response = await apiClient.put<IncidentReportDetailItem>(
@@ -130,7 +133,7 @@ export const assignIncidentReport = async (
 ): Promise<IncidentReportDetailItem> => {
   const response = await apiClient.post<IncidentReportDetailItem>(
     `/incident-report/reports/${reportId}/assign`,
-    { assignee_id: assigneeId },
+    { assigneeId },
   );
   return response.data;
 };
@@ -177,7 +180,7 @@ export const fetchIncidentReportComments = async (
 
 export const createIncidentReportComment = async (
   reportId: string,
-  payload: { content: string; parent_id?: string },
+  payload: { content: string; parentId?: string },
 ): Promise<IncidentCommentEntry> => {
   const response = await apiClient.post<IncidentCommentEntry>(
     `/incident-report/reports/${reportId}/comments`,
@@ -211,6 +214,13 @@ export const fetchUserIncidentRoles = async (): Promise<string[]> => {
   return response.data.roles ?? [];
 };
 
+export const fetchUserIncidentPermissions = async (): Promise<string[]> => {
+  const response = await apiClient.get<IncidentUserRolesResponse>(
+    '/incident-report/roles/me',
+  );
+  return response.data.permissions ?? [];
+};
+
 export const fetchAllIncidentRoles = async (): Promise<IncidentRoleEntry[]> => {
   const response = await apiClient.get<{ items: IncidentRoleEntry[] }>(
     '/incident-report/roles',
@@ -218,8 +228,24 @@ export const fetchAllIncidentRoles = async (): Promise<IncidentRoleEntry[]> => {
   return response.data.items ?? [];
 };
 
+export const fetchRoleDefinitions =
+  async (): Promise<IncidentRoleDefinitionListResponse> => {
+    const response = await apiClient.get<IncidentRoleDefinitionListResponse>(
+      '/incident-report/role-definitions',
+    );
+    return response.data;
+  };
+
+export const fetchPermissions =
+  async (): Promise<IncidentPermissionListResponse> => {
+    const response = await apiClient.get<IncidentPermissionListResponse>(
+      '/incident-report/permissions',
+    );
+    return response.data;
+  };
+
 export const assignIncidentRole = async (payload: {
-  user_id: string;
+  userId: string;
   role: string;
 }): Promise<IncidentRoleEntry> => {
   const response = await apiClient.post<IncidentRoleEntry>(
@@ -247,6 +273,40 @@ export const previewIncidentReport = async (
 ): Promise<IncidentReportPreviewResponse> => {
   const response = await apiClient.post<IncidentReportPreviewResponse>(
     `/incident-report/reports/${reportId}/preview`,
+    payload,
+    { signal: options?.signal },
+  );
+  return response.data;
+};
+
+export const quickGenerateIncidentReportBody = async (
+  reportId: string,
+  payload?: {
+    model?: string;
+    rerankerModel?: string;
+  },
+  options?: { signal?: AbortSignal },
+): Promise<IncidentBodyGenerateResponse> => {
+  const response = await apiClient.post<IncidentBodyGenerateResponse>(
+    `/incident-report/reports/${reportId}/body/quick-generate`,
+    payload ?? {},
+    { signal: options?.signal },
+  );
+  return response.data;
+};
+
+export const generateIncidentReportBodySection = async (
+  reportId: string,
+  payload: {
+    sectionId: string;
+    timelineIndex?: number;
+    model?: string;
+    rerankerModel?: string;
+  },
+  options?: { signal?: AbortSignal },
+): Promise<IncidentBodyGenerateResponse> => {
+  const response = await apiClient.post<IncidentBodyGenerateResponse>(
+    `/incident-report/reports/${reportId}/body/section-generate`,
     payload,
     { signal: options?.signal },
   );

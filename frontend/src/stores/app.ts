@@ -3,10 +3,10 @@ import { ref } from 'vue';
 import type { SkillOption } from '../types/common/skill';
 
 const DEFAULT_MODELS = [
-  'gpt-4o-mini',
-  'gpt-4o',
-  'claude-3.5-sonnet',
-  'deepseek-v3',
+  'qwen3:8b',
+  'qwen3:32b',
+  'qwen3-coder:30b',
+  'llama3.3:70b',
 ];
 
 export type PageId = 'home' | 'chat' | 'incident-report' | 'settings';

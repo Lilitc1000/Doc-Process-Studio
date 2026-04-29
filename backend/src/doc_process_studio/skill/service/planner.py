@@ -4,7 +4,7 @@ from typing import Any, Iterable
 
 from ..models.catalog import SkillInterfaceConfig
 from ..models.runtime import SkillPlanDecision, SkillPlannerCandidate
-from ...shared.dtutils import utcnow
+from ...shared.dtutils import to_utc8, utcnow
 from ...shared.text_utils import parse_json_object
 from ...core.ollama import extract_first_message_content, post_chat_completion
 
@@ -489,5 +489,5 @@ async def plan_skill_activation(
         confidence=confidence,
         reasons=reasons,
         candidates=candidates,
-        created_at=utcnow(),
+        created_at=to_utc8(utcnow()),
     )

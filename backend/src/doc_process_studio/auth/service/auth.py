@@ -13,6 +13,7 @@ from ...core.security import (
     hash_password,
     verify_password,
 )
+from ...shared.dtutils import to_utc8
 from ..models.user import User
 from ..schemas.response import (
     RegisterResponse,
@@ -47,7 +48,7 @@ async def register_user(username: str, password: str) -> RegisterResponse:
         return RegisterResponse(
             user_id=user.user_id,
             username=user.username,
-            created_at=user.created_at,
+            created_at=to_utc8(user.created_at),
         )
 
 
@@ -121,7 +122,7 @@ async def get_current_user_info(user_id: str) -> UserInfoResponse:
             user_id=user.user_id,
             username=user.username,
             avatar_color=user.avatar_color,
-            created_at=user.created_at,
+            created_at=to_utc8(user.created_at),
         )
 
 
@@ -157,7 +158,7 @@ async def update_user_profile(
             user_id=user.user_id,
             username=user.username,
             avatar_color=user.avatar_color,
-            created_at=user.created_at,
+            created_at=to_utc8(user.created_at),
         )
 
 
@@ -211,7 +212,67 @@ async def delete_user(user_id: str) -> bool:
 
 
 async def delete_users_by_prefix(username_prefix: str) -> int:
+    from ...incident_report.models.incident_report_orm import (
+        IncidentComment,
+        IncidentReport,
+    )
+    from ...incident_report.models.audit_log import IncidentAuditLog
+    from ...incident_report.models.incident_report_role import IncidentReportUserRole
+
     async with async_session_factory() as session:
+        user_ids_result = await session.execute(
+            select(User.user_id).where(User.username.like(f"{username_prefix}%"))
+        )
+        user_ids = [row[0] for row in user_ids_result.all()]
+
+        if not user_ids:
+            return 0
+
+        report_ids_result = await session.execute(
+            select(IncidentReport.id).where(
+                IncidentReport.reporter_id.in_(user_ids)
+            )
+        )
+        report_ids = [row[0] for row in report_ids_result.all()]
+
+        if report_ids:
+            await session.execute(
+                delete(IncidentComment).where(
+                    IncidentComment.report_id.in_(report_ids)
+                )
+            )
+            await session.execute(
+                delete(IncidentAuditLog).where(
+                    IncidentAuditLog.report_id.in_(report_ids)
+                )
+            )
+            await session.execute(
+                delete(IncidentReport).where(
+                    IncidentReport.id.in_(report_ids)
+                )
+            )
+
+        await session.execute(
+            delete(IncidentComment).where(
+                IncidentComment.author_id.in_(user_ids)
+            )
+        )
+        await session.execute(
+            delete(IncidentAuditLog).where(
+                IncidentAuditLog.actor_id.in_(user_ids)
+            )
+        )
+        await session.execute(
+            delete(IncidentReportUserRole).where(
+                IncidentReportUserRole.user_id.in_(user_ids)
+            )
+        )
+        await session.execute(
+            delete(IncidentReport).where(
+                IncidentReport.reporter_id.in_(user_ids)
+            )
+        )
+
         result = await session.execute(
             delete(User).where(User.username.like(f"{username_prefix}%"))
         )
@@ -232,4 +293,18 @@ async def ensure_admin_user() -> None:
             avatar_color="#4f46e5",
         )
         session.add(admin)
+        await session.flush()
+
+        from ...incident_report.models.incident_report_role import IncidentReportUserRole
+        from ...incident_report.schemas.common import VALID_ROLES
+
+        for role_key in VALID_ROLES:
+            role_entry = IncidentReportUserRole(
+                id=generate_user_id(),
+                user_id=admin.user_id,
+                role_key=role_key,
+                assigned_by=admin.user_id,
+            )
+            session.add(role_entry)
+
         await session.commit()

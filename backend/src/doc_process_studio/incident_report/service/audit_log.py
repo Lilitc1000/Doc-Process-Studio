@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from ...core.database import async_session_factory
+from ...shared.dtutils import to_utc8
 from ..models.audit_log import IncidentAuditLog
 from ..schemas.response import IncidentAuditLogEntry
 
@@ -57,5 +58,5 @@ def orm_to_entry(record: IncidentAuditLog) -> IncidentAuditLogEntry:
         from_status=record.from_status,
         to_status=record.to_status,
         comment=record.comment,
-        created_at=record.created_at,
+        created_at=to_utc8(record.created_at),
     )

@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
@@ -62,3 +61,17 @@ def test_revoke_role_requires_admin():
         headers=_auth_headers(),
     )
     assert resp.status_code == 403
+
+
+def test_role_definitions_requires_auth():
+    app = _create_test_app()
+    client = TestClient(app)
+    resp = client.get("/api/incident-report/role-definitions")
+    assert resp.status_code in (401, 403)
+
+
+def test_permissions_requires_auth():
+    app = _create_test_app()
+    client = TestClient(app)
+    resp = client.get("/api/incident-report/permissions")
+    assert resp.status_code in (401, 403)

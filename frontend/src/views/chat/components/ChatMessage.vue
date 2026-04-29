@@ -122,13 +122,11 @@
           />
 
           <template v-if="message.role === 'assistant'">
-            <!-- eslint-disable vue/no-v-html -->
             <div
               v-if="normalizedDisplayContent.trim().length > 0"
+              v-safe-html="renderedContent"
               class="message-text"
-              v-html="renderedContent"
             ></div>
-            <!-- eslint-enable vue/no-v-html -->
 
             <message-files
               v-if="message.files && message.files.length > 0"
@@ -155,13 +153,11 @@
               @download="onMessageFileDownload"
             />
 
-            <!-- eslint-disable vue/no-v-html -->
             <div
               v-if="normalizedDisplayContent.trim().length > 0"
+              v-safe-html="renderedContent"
               class="message-text"
-              v-html="renderedContent"
             ></div>
-            <!-- eslint-enable vue/no-v-html -->
           </template>
         </template>
       </div>

@@ -73,13 +73,13 @@ backend/src/doc_process_studio/auth/
 
 ## 开发注意
 
-- **bcrypt 版本兼容性**：passlib 的 bcrypt 后端与 `bcrypt>=5.0.0` 不兼容，`pyproject.toml` 中已锁定 `bcrypt>=4.0.1,<5.0.0`
+- **bcrypt 直接使用**：已移除 `passlib` 依赖，直接使用 `bcrypt` 库进行密码哈希和验证。`bcrypt>=4.0.1,<5.0.0`，与旧版 passlib 生成的哈希向后兼容
 - **登录接口格式**：`/api/auth/login` 使用 `OAuth2PasswordRequestForm`，请求体必须是 `application/x-www-form-urlencoded`，不是 JSON
 - **JWT 令牌管理**：access_token 有效期 15 分钟，refresh_token 有效期 7 天；登出时 refresh_token 的 jti 写入 Redis 黑名单
 - **速率限制**：注册和登录接口共享内存级速率限制（5 次/60 秒/客户端 IP），白名单 IP 不受限制
 - **删除用户**：`DELETE /users/{user_id}` 仅允许删除自己的账号（token 中的 user_id 必须与路径参数一致）
 - **测试专用端点**：`DELETE /users/by-prefix/{prefix}`、`POST /rate-limit-whitelist`、`POST /ensure-admin` 仅在 `settings.env == "dev"` 时注册，生产环境不可访问
-- **E2E 测试数据标识**：测试创建的用户名统一使用 `e2e_` 前缀，清理时调用 `DELETE /users/by-prefix/e2e_` 批量删除
+- **E2E 测试数据标识**：测试创建的用户名统一使用 `e2e_w{n}_` 前缀（Worker 隔离），清理时调用 `DELETE /users/by-prefix/{prefix}` 批量删除
 - **不要在 `router/` 中写业务逻辑**，所有编排逻辑放 `service/`
 - **不要在 `models/` 中引入 Pydantic**
 - **ORM 模型归属**：每个业务域的 ORM 模型放在自己的 `models/` 目录下，`Base` 定义在 `core/database.py`

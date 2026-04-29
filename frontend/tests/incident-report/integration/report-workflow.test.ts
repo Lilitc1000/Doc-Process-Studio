@@ -4,6 +4,9 @@ import * as api from '../../../src/api/incident-report';
 
 vi.mock('../../../src/api/incident-report', () => ({
   fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
+  fetchUserIncidentPermissions: vi
+    .fn()
+    .mockResolvedValue(['report:create', 'report:edit_own', 'report:submit']),
   fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
   fetchIncidentReportDetail: vi.fn(),
   fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({
@@ -30,33 +33,33 @@ describe('报告状态流转集成测试', () => {
   it('reporter 可以创建并提交报告', async () => {
     const mockCreated = {
       id: 'rep-1',
-      ref_no: 'DAS-001',
+      refNo: 'DAS-001',
       title: '测试报告',
       status: 'draft',
       severity: 'P1',
-      reporter_id: 'usr-test',
-      reporter_name: null,
-      assignee_id: null,
-      assignee_name: null,
-      verifier_id: null,
-      verifier_name: null,
-      fault_date: null,
-      created_at: '2026-04-20',
-      updated_at: '2026-04-20',
+      reporterId: 'usr-test',
+      reporterName: null,
+      assigneeId: null,
+      assigneeName: null,
+      verifierId: null,
+      verifierName: null,
+      faultDate: null,
+      createdAt: '2026-04-20',
+      updatedAt: '2026-04-20',
       system: null,
-      site_id: null,
-      form_data: {},
-      report_data: null,
-      submitted_at: null,
-      approved_at: null,
-      closed_at: null,
-      resolution_date: null,
+      siteId: null,
+      formData: {},
+      reportData: null,
+      submittedAt: null,
+      approvedAt: null,
+      closedAt: null,
+      resolutionDate: null,
     };
 
     const mockSubmitted = {
       ...mockCreated,
       status: 'pending',
-      submitted_at: '2026-04-20',
+      submittedAt: '2026-04-20',
     };
 
     (api.createIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -76,27 +79,27 @@ describe('报告状态流转集成测试', () => {
   it('verifier 可以审核通过报告', async () => {
     const mockApproved = {
       id: 'rep-1',
-      ref_no: 'DAS-001',
+      refNo: 'DAS-001',
       title: '测试报告',
       status: 'approved',
       severity: 'P1',
-      reporter_id: 'usr-test',
-      reporter_name: null,
-      assignee_id: null,
-      assignee_name: null,
-      verifier_id: 'usr-verifier',
-      verifier_name: null,
-      fault_date: null,
-      created_at: '2026-04-20',
-      updated_at: '2026-04-21',
+      reporterId: 'usr-test',
+      reporterName: null,
+      assigneeId: null,
+      assigneeName: null,
+      verifierId: 'usr-verifier',
+      verifierName: null,
+      faultDate: null,
+      createdAt: '2026-04-20',
+      updatedAt: '2026-04-21',
       system: null,
-      site_id: null,
-      form_data: {},
-      report_data: null,
-      submitted_at: '2026-04-20',
-      approved_at: '2026-04-21',
-      closed_at: null,
-      resolution_date: null,
+      siteId: null,
+      formData: {},
+      reportData: null,
+      submittedAt: '2026-04-20',
+      approvedAt: '2026-04-21',
+      closedAt: null,
+      resolutionDate: null,
     };
 
     (api.approveIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -105,33 +108,33 @@ describe('报告状态流转集成测试', () => {
 
     const result = await api.approveIncidentReport('rep-1', '通过审核');
     expect(result.status).toBe('approved');
-    expect(result.verifier_id).toBe('usr-verifier');
+    expect(result.verifierId).toBe('usr-verifier');
   });
 
   it('verifier 可以驳回报告', async () => {
     const mockRejected = {
       id: 'rep-1',
-      ref_no: 'DAS-001',
+      refNo: 'DAS-001',
       title: '测试报告',
       status: 'rejected',
       severity: 'P1',
-      reporter_id: 'usr-test',
-      reporter_name: null,
-      assignee_id: null,
-      assignee_name: null,
-      verifier_id: 'usr-verifier',
-      verifier_name: null,
-      fault_date: null,
-      created_at: '2026-04-20',
-      updated_at: '2026-04-21',
+      reporterId: 'usr-test',
+      reporterName: null,
+      assigneeId: null,
+      assigneeName: null,
+      verifierId: 'usr-verifier',
+      verifierName: null,
+      faultDate: null,
+      createdAt: '2026-04-20',
+      updatedAt: '2026-04-21',
       system: null,
-      site_id: null,
-      form_data: {},
-      report_data: null,
-      submitted_at: '2026-04-20',
-      approved_at: null,
-      closed_at: null,
-      resolution_date: null,
+      siteId: null,
+      formData: {},
+      reportData: null,
+      submittedAt: '2026-04-20',
+      approvedAt: null,
+      closedAt: null,
+      resolutionDate: null,
     };
 
     (api.rejectIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -145,27 +148,27 @@ describe('报告状态流转集成测试', () => {
   it('handler 可以关闭报告', async () => {
     const mockClosed = {
       id: 'rep-1',
-      ref_no: 'DAS-001',
+      refNo: 'DAS-001',
       title: '测试报告',
       status: 'closed',
       severity: 'P1',
-      reporter_id: 'usr-test',
-      reporter_name: null,
-      assignee_id: 'usr-handler',
-      assignee_name: null,
-      verifier_id: 'usr-verifier',
-      verifier_name: null,
-      fault_date: null,
-      created_at: '2026-04-20',
-      updated_at: '2026-04-22',
+      reporterId: 'usr-test',
+      reporterName: null,
+      assigneeId: 'usr-handler',
+      assigneeName: null,
+      verifierId: 'usr-verifier',
+      verifierName: null,
+      faultDate: null,
+      createdAt: '2026-04-20',
+      updatedAt: '2026-04-22',
       system: null,
-      site_id: null,
-      form_data: {},
-      report_data: null,
-      submitted_at: '2026-04-20',
-      approved_at: '2026-04-21',
-      closed_at: '2026-04-22',
-      resolution_date: '2026-04-22',
+      siteId: null,
+      formData: {},
+      reportData: null,
+      submittedAt: '2026-04-20',
+      approvedAt: '2026-04-21',
+      closedAt: '2026-04-22',
+      resolutionDate: '2026-04-22',
     };
 
     (api.closeIncidentReport as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -174,6 +177,6 @@ describe('报告状态流转集成测试', () => {
 
     const result = await api.closeIncidentReport('rep-1', '问题已解决');
     expect(result.status).toBe('closed');
-    expect(result.closed_at).toBeTruthy();
+    expect(result.closedAt).toBeTruthy();
   });
 });

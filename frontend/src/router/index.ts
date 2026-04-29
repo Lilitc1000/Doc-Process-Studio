@@ -101,13 +101,6 @@ router.beforeEach(async (to, _from, next) => {
     next({ name: 'login', query: { redirect: to.fullPath } });
   } else if (hideForAuth && authStore.isAuthenticated) {
     next({ name: 'home' });
-  } else if (
-    to.name === 'incident-report-detail' &&
-    to.params.id &&
-    String(to.params.id).length >= 32 &&
-    /^[a-f0-9]+$/.test(String(to.params.id))
-  ) {
-    next({ name: 'incident-report-list' });
   } else {
     next();
   }

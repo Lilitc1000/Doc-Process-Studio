@@ -5,6 +5,9 @@ import * as incidentReportApi from '../../../src/api/incident-report';
 
 vi.mock('../../../src/api/incident-report', () => ({
   fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
+  fetchUserIncidentPermissions: vi
+    .fn()
+    .mockResolvedValue(['report:create', 'report:edit_own', 'report:submit']),
   fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
   fetchIncidentReportDetail: vi.fn().mockResolvedValue({}),
   fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({
@@ -22,11 +25,16 @@ describe('useIncidentReportStore', () => {
     setActivePinia(createPinia());
   });
 
-  it('加载用户角色后正确计算权限', async () => {
+  it('加载用户角色和权限后正确计算', async () => {
     const store = useIncidentReportStore();
     await store.loadUserIncidentRoles();
 
     expect(store.userIncidentRoles).toEqual(['reporter']);
+    expect(store.userIncidentPermissions).toEqual([
+      'report:create',
+      'report:edit_own',
+      'report:submit',
+    ]);
     expect(store.isReporter).toBe(true);
     expect(store.canAudit).toBe(false);
     expect(store.canCreateReport).toBe(true);
@@ -35,7 +43,28 @@ describe('useIncidentReportStore', () => {
   it('admin 角色拥有所有权限', async () => {
     const mockFetchRoles =
       incidentReportApi.fetchUserIncidentRoles as ReturnType<typeof vi.fn>;
+    const mockFetchPerms =
+      incidentReportApi.fetchUserIncidentPermissions as ReturnType<
+        typeof vi.fn
+      >;
     mockFetchRoles.mockResolvedValue(['viewer', 'admin']);
+    mockFetchPerms.mockResolvedValue([
+      'report:create',
+      'report:edit_own',
+      'report:submit',
+      'report:view',
+      'report:view_all',
+      'report:edit_assigned',
+      'report:close_assigned',
+      'report:audit',
+      'report:assign',
+      'report:delete',
+      'report:reopen',
+      'role:manage',
+      'system:config',
+      'data:export',
+      'analytics:view',
+    ]);
 
     const store = useIncidentReportStore();
     await store.loadUserIncidentRoles();
@@ -48,7 +77,18 @@ describe('useIncidentReportStore', () => {
   it('verifier 角色可以审核', async () => {
     const mockFetchRoles =
       incidentReportApi.fetchUserIncidentRoles as ReturnType<typeof vi.fn>;
+    const mockFetchPerms =
+      incidentReportApi.fetchUserIncidentPermissions as ReturnType<
+        typeof vi.fn
+      >;
     mockFetchRoles.mockResolvedValue(['verifier']);
+    mockFetchPerms.mockResolvedValue([
+      'report:view',
+      'report:view_all',
+      'report:audit',
+      'report:assign',
+      'analytics:view',
+    ]);
 
     const store = useIncidentReportStore();
     await store.loadUserIncidentRoles();
@@ -58,10 +98,15 @@ describe('useIncidentReportStore', () => {
     expect(store.isAdmin).toBe(false);
   });
 
-  it('无角色用户为 viewer', async () => {
+  it('无角色用户无权限', async () => {
     const mockFetchRoles =
       incidentReportApi.fetchUserIncidentRoles as ReturnType<typeof vi.fn>;
+    const mockFetchPerms =
+      incidentReportApi.fetchUserIncidentPermissions as ReturnType<
+        typeof vi.fn
+      >;
     mockFetchRoles.mockResolvedValue([]);
+    mockFetchPerms.mockResolvedValue([]);
 
     const store = useIncidentReportStore();
     await store.loadUserIncidentRoles();

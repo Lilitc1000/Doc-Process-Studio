@@ -46,9 +46,15 @@ def test_analytics_overview_returns_structure():
 
     mock_factory = MagicMock(return_value=mock_session)
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     with patch(
         "doc_process_studio.incident_report.router.analytics.async_session_factory",
         mock_factory,
+    ), patch(
+        "doc_process_studio.incident_report.router.analytics.has_permission",
+        _fake_has_permission,
     ), patch(
         "doc_process_studio.shared.dtutils.utcnow",
         return_value=__import__("datetime").datetime(2026, 4, 25, 12, 0, 0),
@@ -83,9 +89,15 @@ def test_analytics_trend_returns_list():
 
     mock_factory = MagicMock(return_value=mock_session)
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     with patch(
         "doc_process_studio.incident_report.router.analytics.async_session_factory",
         mock_factory,
+    ), patch(
+        "doc_process_studio.incident_report.router.analytics.has_permission",
+        _fake_has_permission,
     ), patch(
         "doc_process_studio.shared.dtutils.utcnow",
         return_value=__import__("datetime").datetime(2026, 4, 25, 12, 0, 0),

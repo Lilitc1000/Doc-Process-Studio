@@ -1,8 +1,18 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, addRateLimitWhitelist } from '../../helpers';
+import {
+  getWorkerPrefix,
+  loginAsAdmin,
+  loginViaApi,
+  addRateLimitWhitelist,
+  createIncidentReportViaApi,
+  deleteIncidentReportViaApi,
+} from '../../helpers';
 
 test.describe('事故报告列表页', () => {
-  test.beforeAll(async ({ request }) => {
+  let workerPrefix: string;
+
+  test.beforeAll(async ({ request }, testInfo) => {
+    workerPrefix = getWorkerPrefix(testInfo.workerIndex);
     await addRateLimitWhitelist(request);
   });
 
@@ -13,11 +23,12 @@ test.describe('事故报告列表页', () => {
   test('列表页正常加载', async ({ page }) => {
     const listResp = page.waitForResponse(
       (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
+        resp.url().includes('/incident-report/reports') &&
+        resp.status() === 200,
       { timeout: 10_000 },
     );
     await page.goto('/incident-report');
-    await listResp.catch(() => {});
+    await listResp;
     await expect(page.locator('.incident-report-list-view')).toBeVisible();
   });
 
@@ -41,11 +52,12 @@ test.describe('事故报告列表页', () => {
   test('列表页显示报告表格', async ({ page }) => {
     const listResp = page.waitForResponse(
       (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
+        resp.url().includes('/incident-report/reports') &&
+        resp.status() === 200,
       { timeout: 10_000 },
     );
     await page.goto('/incident-report');
-    await listResp.catch(() => {});
+    await listResp;
     await expect(page.locator('.report-list-table')).toBeVisible();
   });
 
@@ -90,18 +102,31 @@ test.describe('事故报告列表页', () => {
     }
   });
 
-  test('点击表格行进入详情页', async ({ page }) => {
-    const listResp = page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/incident-report?') && resp.status() === 200,
-      { timeout: 10_000 },
-    );
-    await page.goto('/incident-report');
-    await listResp.catch(() => {});
-    const reportRow = page.locator('.report-list-table tbody tr').first();
-    if (await reportRow.isVisible()) {
-      await reportRow.click();
+  test('有测试数据时点击表格行进入详情页', async ({ page, request }) => {
+    const token = await loginViaApi(request);
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}列表行点击测试`,
+    });
+    expect(report).not.toBeNull();
+
+    try {
+      const listResp = page.waitForResponse(
+        (resp) =>
+          resp.url().includes('/incident-report/reports') &&
+          resp.status() === 200,
+        { timeout: 10_000 },
+      );
+      await page.goto('/incident-report');
+      await listResp;
+
+      const reportRow = page
+        .locator('.report-list-table tbody tr')
+        .filter({ hasText: `${workerPrefix}列表行点击测试` });
+      await expect(reportRow).toBeVisible({ timeout: 10_000 });
+      await reportRow.locator('.action-view').click();
       await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
+    } finally {
+      await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 });

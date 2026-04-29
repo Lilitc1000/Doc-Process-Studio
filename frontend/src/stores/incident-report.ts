@@ -8,6 +8,7 @@ import type {
 } from '../types/incident-report/incident-report';
 import {
   fetchUserIncidentRoles,
+  fetchUserIncidentPermissions,
   fetchIncidentReportList,
   fetchIncidentReportDetail,
   fetchIncidentAnalyticsOverview,
@@ -33,6 +34,7 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
   const incidentReportPreviewSource = ref<'draft' | 'version'>('draft');
 
   const userIncidentRoles = ref<string[]>([]);
+  const userIncidentPermissions = ref<string[]>([]);
   const reportList = ref<IncidentReportSummaryItem[]>([]);
   const reportListTotal = ref(0);
   const reportListPage = ref(1);
@@ -56,16 +58,40 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
   );
 
   const canCreateReport = computed(() =>
-    userIncidentRoles.value.some((r) =>
-      ['reporter', 'handler', 'verifier', 'admin'].includes(r),
-    ),
+    userIncidentPermissions.value.includes('report:create'),
   );
 
-  const canAudit = computed(() => isVerifier.value || isAdmin.value);
-  const canManageSettings = computed(() => isAdmin.value);
+  const canAudit = computed(() =>
+    userIncidentPermissions.value.includes('report:audit'),
+  );
+  const canManageSettings = computed(() =>
+    userIncidentPermissions.value.includes('role:manage'),
+  );
+  const canDeleteReport = computed(() =>
+    userIncidentPermissions.value.includes('report:delete'),
+  );
+  const canReopenReport = computed(() =>
+    userIncidentPermissions.value.includes('report:reopen'),
+  );
+  const canAssignHandler = computed(() =>
+    userIncidentPermissions.value.includes('report:assign'),
+  );
+  const canExportData = computed(() =>
+    userIncidentPermissions.value.includes('data:export'),
+  );
+  const canViewAnalytics = computed(() =>
+    userIncidentPermissions.value.includes('analytics:view'),
+  );
+
+  const hasPermission = (permission: string) =>
+    userIncidentPermissions.value.includes(permission);
+
+  const hasAnyPermission = (...permissions: string[]) =>
+    permissions.some((p) => userIncidentPermissions.value.includes(p));
 
   const loadUserIncidentRoles = async () => {
     userIncidentRoles.value = await fetchUserIncidentRoles();
+    userIncidentPermissions.value = await fetchUserIncidentPermissions();
   };
 
   const loadReportList = async (params?: {
@@ -138,6 +164,7 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
     incidentReportPreviewVersion,
     incidentReportPreviewSource,
     userIncidentRoles,
+    userIncidentPermissions,
     reportList,
     reportListTotal,
     reportListPage,
@@ -153,6 +180,13 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
     canCreateReport,
     canAudit,
     canManageSettings,
+    canDeleteReport,
+    canReopenReport,
+    canAssignHandler,
+    canExportData,
+    canViewAnalytics,
+    hasPermission,
+    hasAnyPermission,
     loadUserIncidentRoles,
     loadReportList,
     loadActiveReport,

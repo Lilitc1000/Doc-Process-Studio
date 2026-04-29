@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from ..models.attachment import ChatAttachment, ChatAttachmentMetadata
 from ...core.config import settings
-from ...shared.dtutils import utcnow
+from ...shared.dtutils import to_utc8, utcnow
 
 _last_cleanup_timestamp: float = 0.0
 _cleanup_interval_seconds: float = 300.0
@@ -69,7 +69,7 @@ def _build_chat_attachment_from_metadata(metadata: ChatAttachmentMetadata) -> Ch
         size_bytes=metadata.size_bytes,
         size_label=_build_size_label(metadata.size_bytes),
         download_url=f"/api/attachments/{metadata.attachment_id}/download",
-        expires_at=metadata.expires_at,
+        expires_at=to_utc8(metadata.expires_at),
     )
 
 
@@ -162,7 +162,7 @@ def _save_session_attachment(
         size_bytes=stat_result.st_size,
         size_label=_build_size_label(stat_result.st_size),
         download_url=f"/api/attachments/{attachment_id}/download",
-        expires_at=expires_at,
+        expires_at=to_utc8(expires_at),
     )
 
 

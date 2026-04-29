@@ -8,19 +8,19 @@
           <div class="timeline-header">
             <span class="timeline-action">{{ actionLabel(log.action) }}</span>
             <span class="timeline-actor">{{
-              log.actor_name ?? log.actor_id
+              log.actorName ?? log.actorId
             }}</span>
-            <span class="timeline-time">{{ formatDate(log.created_at) }}</span>
+            <span class="timeline-time">{{ formatDate(log.createdAt) }}</span>
           </div>
           <div v-if="log.comment" class="timeline-comment">
             {{ log.comment }}
           </div>
           <div
-            v-if="log.from_status && log.to_status"
+            v-if="log.fromStatus && log.toStatus"
             class="timeline-status-change"
           >
-            {{ statusLabel(log.from_status) }} →
-            {{ statusLabel(log.to_status) }}
+            {{ statusLabel(log.fromStatus) }} →
+            {{ statusLabel(log.toStatus) }}
           </div>
         </div>
       </div>

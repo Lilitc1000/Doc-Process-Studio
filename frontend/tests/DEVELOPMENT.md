@@ -403,28 +403,41 @@ Playwright 配置会自动启动 Vite 开发服务器。
 
 ```typescript
 import {
-  E2E_PREFIX,
+  getWorkerPrefix,
   loginAsAdmin,
   loginViaApi,
   addRateLimitWhitelist,
+  cleanupWorkerData,
 } from '../../helpers';
 ```
 
-| 函数                             | 用途                                           |
-| -------------------------------- | ---------------------------------------------- |
-| `loginAsAdmin(page)`             | 通过 UI 登录 admin 用户                        |
-| `loginViaApi(request)`           | 通过 API 登录获取 access_token（用于数据清理） |
-| `addRateLimitWhitelist(request)` | 将测试 IP 加入速率限制白名单                   |
-| `E2E_PREFIX`                     | 测试数据前缀常量 `'e2e_'`                      |
+| 函数                                                  | 用途                                           |
+| ----------------------------------------------------- | ---------------------------------------------- |
+| `getWorkerPrefix(workerIndex)`                        | 生成 Worker 隔离的测试数据前缀 `'e2e_w{n}_'`   |
+| `loginAsAdmin(page)`                                  | 通过 UI 登录 admin 用户                        |
+| `loginViaApi(request)`                                | 通过 API 登录获取 access_token（用于数据清理） |
+| `loginViaApiAs(request, user, pw)`                    | 通过 API 以指定用户登录获取 token              |
+| `addRateLimitWhitelist(request)`                      | 将测试 IP 加入速率限制白名单                   |
+| `cleanupWorkerData(request, prefix)`                  | 清理指定前缀的测试报告和用户                   |
+| `createIncidentReportViaApi(request, token, payload)` | 通过 API 创建测试报告                          |
+| `deleteIncidentReportViaApi(request, token, id)`      | 通过 API 删除测试报告                          |
 
 #### 2. 测试结构模板
 
 ```typescript
 import { test, expect } from '@playwright/test';
-import { E2E_PREFIX, loginAsAdmin, addRateLimitWhitelist } from '../../helpers';
+import {
+  getWorkerPrefix,
+  loginAsAdmin,
+  addRateLimitWhitelist,
+  cleanupWorkerData,
+} from '../../helpers';
 
 test.describe('功能名称', () => {
-  test.beforeAll(async ({ request }) => {
+  let workerPrefix: string;
+
+  test.beforeAll(async ({ request }, testInfo) => {
+    workerPrefix = getWorkerPrefix(testInfo.workerIndex);
     await addRateLimitWhitelist(request);
   });
 
@@ -438,11 +451,7 @@ test.describe('功能名称', () => {
   });
 
   test.afterAll(async ({ request }) => {
-    try {
-      await request.delete(`/api/xxx/by-prefix/${E2E_PREFIX}`);
-    } catch {
-      // ignore cleanup errors
-    }
+    await cleanupWorkerData(request, workerPrefix);
   });
 });
 ```
@@ -450,8 +459,10 @@ test.describe('功能名称', () => {
 **要点**：
 
 - `beforeAll` 中必须调用 `addRateLimitWhitelist(request)` 避免并行测试触发速率限制
+- `beforeAll` 中使用 `getWorkerPrefix(testInfo.workerIndex)` 生成 Worker 隔离前缀
 - `beforeEach` 中登录，确保每个测试从已认证状态开始
-- `afterAll` 中清理测试数据，使用 `try/catch` 忽略清理错误
+- `afterAll` 中使用 `cleanupWorkerData` 清理该 Worker 创建的所有测试数据
+- **所有测试数据（标题、用户名等）必须以 `workerPrefix` 为前缀**，确保并行 Worker 之间数据隔离
 
 #### 3. 元素定位策略
 
@@ -486,34 +497,113 @@ await expect(page.locator('.some-element')).toBeVisible({ timeout: 5_000 });
 
 #### 5. 依赖外部服务的测试
 
-对依赖 Ollama 的 AI 生成测试，使用 `try/catch` + `test.skip()` 优雅降级：
+对依赖 Ollama 的 AI 生成测试，使用 `test.skip()` 优雅降级，并在 `beforeAll` 中检测可用性：
 
 ```typescript
-try {
-  const streamResp = await page.waitForResponse(
-    (resp) => resp.url().includes('/chat/stream'),
-    { timeout: 15_000 },
-  );
-  if (streamResp.status() !== 200) {
+let ollamaAvailable = false;
+let availableModel = '';
+
+test.beforeAll(async ({ request }, testInfo) => {
+  workerPrefix = getWorkerPrefix(testInfo.workerIndex);
+  await addRateLimitWhitelist(request);
+  try {
+    const accessToken = await loginViaApi(request);
+    if (accessToken) {
+      const resp = await request.get('/api/models', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 10_000,
+      });
+      if (resp.ok()) {
+        const data = await resp.json();
+        const models: { name: string }[] = data.models ?? [];
+        const chatModels = models.filter(
+          (m) =>
+            !m.name.includes('embed') &&
+            !m.name.includes('rerank') &&
+            !m.name.includes('bge'),
+        );
+        if (chatModels.length > 0) {
+          ollamaAvailable = true;
+          availableModel = chatModels[0].name;
+        }
+      }
+    }
+  } catch {
+    ollamaAvailable = false;
+  }
+});
+
+test('AI 生成测试', async ({ page }) => {
+  if (!ollamaAvailable) {
     test.skip();
     return;
   }
-} catch {
-  test.skip();
-  return;
-}
+  // ... 测试逻辑
+});
 ```
+
+**要点**：
+
+- 在 `beforeAll` 中检测 Ollama 可用性，避免每个测试重复检测
+- 使用 `availableModel` 动态获取远程服务器上实际可用的模型名称
+- 通过 `page.evaluate` 设置 localStorage 中的模型选择，确保前端使用正确的模型
+- 真实 AI 测试使用 `test.skip(({ browserName }) => browserName !== 'chromium')` 限制只在 Chromium 运行
+- 设置合理的超时时间（`test.setTimeout(300_000)`），AI 生成可能需要较长时间
 
 #### 6. 测试数据清理
 
-| 数据类型 | 标识方式             | 清理 API                                         |
-| -------- | -------------------- | ------------------------------------------------ |
-| 注册用户 | 用户名 `e2e_` 前缀   | `DELETE /api/auth/users/by-prefix/e2e_`          |
-| 聊天会话 | 消息内容 `e2e_` 前缀 | `DELETE /api/chat-sessions/by-title-prefix/e2e_` |
+| 数据类型 | 标识方式                  | 清理方式                                                          |
+| -------- | ------------------------- | ----------------------------------------------------------------- |
+| 注册用户 | 用户名 `e2e_w{n}_` 前缀   | `cleanupWorkerData` → `DELETE /api/auth/users/by-prefix/{prefix}` |
+| 测试报告 | 标题 `e2e_w{n}_` 前缀     | `cleanupWorkerData` → `deleteReportsByPrefix`                     |
+| 聊天会话 | 消息内容 `e2e_w{n}_` 前缀 | `DELETE /api/chat-sessions/by-title-prefix/{prefix}`              |
 
-清理在 `afterAll` 中通过 `request` fixture 直接调用 API，无需通过 UI 操作。
+清理在 `afterAll` 中通过 `cleanupWorkerData(request, workerPrefix)` 统一处理，无需手动逐个删除。
 
-#### 7. 首页特殊注意
+**数据清理最佳实践**：
+
+1. **每个 `describe` 块必须有 `afterAll` 清理**：即使测试中使用了 `try/finally` 逐个清理，`afterAll` 仍需调用 `cleanupWorkerData` 作为兜底
+2. **使用 `try/finally` 清理单条数据**：在测试中创建的单条数据，使用 `try/finally` + `deleteIncidentReportViaApi` 立即清理，避免数据残留
+3. **`cleanupWorkerData` 作为兜底**：即使单条清理失败，`afterAll` 中的 `cleanupWorkerData` 也会按前缀批量清理
+4. **不要使用 `test.describe.configure({ mode: 'serial' })`**：Worker 隔离已解决并发问题，无需串行执行
+
+#### 7. Worker 隔离机制
+
+Playwright 默认并行运行测试，多个 Worker 可能同时创建和操作数据。为确保数据隔离：
+
+```typescript
+test.describe('功能名称', () => {
+  let workerPrefix: string;
+
+  test.beforeAll(async ({ request }, testInfo) => {
+    // 每个 Worker 获得独立前缀，如 e2e_w0_、e2e_w1_、e2e_w2_
+    workerPrefix = getWorkerPrefix(testInfo.workerIndex);
+    await addRateLimitWhitelist(request);
+  });
+
+  test('创建测试数据', async ({ request }) => {
+    const token = await loginViaApi(request);
+    // 所有测试数据使用 workerPrefix 前缀
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}测试报告`,
+    });
+    // ...
+  });
+
+  test.afterAll(async ({ request }) => {
+    // 只清理本 Worker 创建的数据
+    await cleanupWorkerData(request, workerPrefix);
+  });
+});
+```
+
+**隔离原则**：
+
+- **前缀隔离**：每个 Worker 的数据使用 `e2e_w{n}_` 前缀，不同 Worker 的数据互不干扰
+- **清理隔离**：`afterAll` 只清理本 Worker 前缀的数据，不会误删其他 Worker 的数据
+- **RBAC 测试中的用户隔离**：注册的测试用户也使用 `workerPrefix` 前缀（如 `e2e_w0_reporter`），避免用户名冲突
+
+#### 8. 首页特殊注意
 
 首页不显示 `AppHeader`（`showHeader = computed(() => currentPageId.value !== 'home')`），因此：
 
@@ -549,9 +639,12 @@ try {
 
 - [ ] 使用 `helpers.ts` 中的共享辅助函数
 - [ ] `beforeAll` 中调用 `addRateLimitWhitelist`
-- [ ] 测试数据使用 `e2e_` 前缀
-- [ ] `afterAll` 中清理测试数据
-- [ ] 依赖外部服务的测试使用 `try/catch` + `test.skip()`
+- [ ] `beforeAll` 中使用 `getWorkerPrefix(testInfo.workerIndex)` 生成 Worker 隔离前缀
+- [ ] 测试数据使用 `workerPrefix` 前缀（不是固定的 `e2e_`）
+- [ ] `afterAll` 中使用 `cleanupWorkerData(request, workerPrefix)` 清理数据
+- [ ] 依赖外部服务的测试使用 `test.skip()` 优雅降级
+- [ ] 不要使用 `test.describe.configure({ mode: 'serial' })`，Worker 隔离已解决并发问题
+- [ ] 创建单条数据时使用 `try/finally` 立即清理，`afterAll` 作为兜底
 
 ---
 
@@ -614,6 +707,8 @@ E2E 测试运行在真实浏览器中，无法像单元测试那样通过代码�
 - [ ] 依赖后端数据的测试使用 `if (await element.isVisible())` 优雅降级
 - [ ] 依赖 Ollama 的测试必须在 `beforeAll` 中通过后端 API (`/api/models`) 检测 Ollama 可用性，不可用时 `test.skip()`
 - [ ] 不要直接检测 `localhost:11434`（Ollama 可能部署在远程服务器），应通过后端 API 间接检测
+- [ ] 所有测试数据使用 `workerPrefix` 前缀，确保 Worker 隔离
+- [ ] `afterAll` 中使用 `cleanupWorkerData(request, workerPrefix)` 清理数据
 
 ### E2E 测试运行命令
 
@@ -636,9 +731,22 @@ npx playwright show-report
 
 ### 依赖 Ollama 的测试编写规范
 
-部分端到端测试（如聊天 AI 回复）依赖 Ollama 服务。编写此类测试时：
+部分端到端测试（如聊天 AI 回复、事故报告快填生成）依赖 Ollama 服务。编写此类测试时：
 
 1. **在 `beforeAll` 中检测可用性**：通过后端 `/api/models` API 检测，不要直接访问 Ollama 端口
 2. **不可用时优雅跳过**：使用 `test.skip()` 而非 `test.fail()`
-3. **设置足够超时**：LLM 响应可能较慢，`test.setTimeout(120_000)` 和 `waitForResponse({ timeout: 30_000 })`
-4. **清理测试数据**：`afterAll` 中通过 API 删除 `e2e_` 前缀的测试数据
+3. **设置足够超时**：LLM 响应可能较慢，`test.setTimeout(300_000)` 和 `waitForResponse({ timeout: 180_000 })`
+4. **动态获取可用模型**：通过 `/api/models` API 获取远程服务器上实际可用的模型名称，不要硬编码模型名
+5. **设置 localStorage 模型选择**：通过 `page.evaluate` 设置 `localStorage` 中的 `selectedModel`，确保前端使用正确的模型
+6. **清理测试数据**：`afterAll` 中使用 `cleanupWorkerData(request, workerPrefix)` 清理数据
+7. **Mock 测试与真实测试分离**：Mock API 的测试和真实调用 Ollama 的测试放在不同的 `describe` 块中
+8. **API 错误时优雅跳过**：Ollama 生成请求返回 4xx/5xx 错误或超时时，使用 `test.skip()` 跳过而非 `throw`，避免因 Ollama 服务器不稳定导致 CI 失败
+
+### 后端事务与数据一致性规范
+
+E2E 测试涉及的后端数据操作需要遵循以下规范：
+
+1. **报告创建与审计日志必须在同一事务中**：`create_report` 函数将 `IncidentReportORM` 和 `IncidentAuditLog` 放在同一个事务中，先 `flush()` 报告记录确保 INSERT 执行，再添加审计日志并 `commit()`
+2. **唯一约束冲突需要重试**：`ref_no` 等唯一字段在并发场景下可能冲突，需要 `IntegrityError` 捕获并重试，重试时使用随机值
+3. **级联删除在同一个事务中**：删除报告时，先删除评论和审计日志，再删除报告，全部在同一个事务中
+4. **前端键名转换**：后端返回的 snake_case 键名会被 HTTP 拦截器转换为 camelCase。但流式接口（如聊天）使用原生 fetch，不经过拦截器，需要在前端手动使用 `humps.decamelize()` 转换

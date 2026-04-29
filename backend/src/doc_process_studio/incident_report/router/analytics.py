@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 
 from ...core.database import async_session_factory
 from ...core.security import get_current_user_id
+from ..service.role import has_permission
 from ..models.incident_report_orm import IncidentReport as IncidentReportORM
 from ..schemas.response import IncidentAnalyticsOverview, IncidentAnalyticsTrend
 
@@ -15,6 +16,9 @@ router = APIRouter(prefix="/api/incident-report/analytics", tags=["incident-repo
 async def get_analytics_overview(
     user_id: str = Depends(get_current_user_id),
 ) -> IncidentAnalyticsOverview:
+    if not await has_permission(user_id, "analytics:view"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="需要查看统计分析权限")
     from ...shared.dtutils import utcnow
     now = utcnow()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -77,6 +81,9 @@ async def get_analytics_trend(
     days: int = Query(default=30, ge=1, le=365),
     user_id: str = Depends(get_current_user_id),
 ) -> list[IncidentAnalyticsTrend]:
+    if not await has_permission(user_id, "analytics:view"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="需要查看统计分析权限")
     from ...shared.dtutils import utcnow
     now = utcnow()
     start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)

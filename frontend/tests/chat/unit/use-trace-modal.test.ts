@@ -7,11 +7,11 @@ vi.mock('../../../src/api/trace', () => ({
 }));
 
 describe('useTraceModal', () => {
-  let showCopyToast: ReturnType<typeof vi.fn>;
+  const showCopyToast =
+    vi.fn<(message: string, options?: { title?: string }) => void>();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    showCopyToast = vi.fn();
   });
 
   it('初始状态：模态框不可见', () => {
@@ -168,7 +168,7 @@ describe('useTraceModal', () => {
     const { openTraceModalByTraceId } = useTraceModal({
       showCopyToast,
     });
-    await openTraceModalByTraceId('trace-404', undefined);
+    await openTraceModalByTraceId('trace-404');
 
     expect(mockFetch).toHaveBeenCalled();
   });

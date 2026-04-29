@@ -213,7 +213,10 @@ function cancelEditing() {
 }
 
 async function saveProfile() {
-  const success = await doSaveProfile(editUsername.value, editAvatarColor.value);
+  const success = await doSaveProfile(
+    editUsername.value,
+    editAvatarColor.value,
+  );
   if (success) {
     isEditing.value = false;
   }

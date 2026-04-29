@@ -24,35 +24,35 @@ describe('useReportList', () => {
       items: [
         {
           id: 'rep-1',
-          ref_no: 'DAS-001',
+          refNo: 'DAS-001',
           title: '测试1',
           status: 'draft',
           severity: 'P1',
-          reporter_id: 'usr-1',
-          reporter_name: null,
-          assignee_id: null,
-          assignee_name: null,
-          verifier_id: null,
-          verifier_name: null,
-          fault_date: null,
-          created_at: '2026-04-20',
-          updated_at: '2026-04-20',
+          reporterId: 'usr-1',
+          reporterName: null,
+          assigneeId: null,
+          assigneeName: null,
+          verifierId: null,
+          verifierName: null,
+          faultDate: null,
+          createdAt: '2026-04-20',
+          updatedAt: '2026-04-20',
         },
         {
           id: 'rep-2',
-          ref_no: 'DAS-002',
+          refNo: 'DAS-002',
           title: '测试2',
           status: 'pending',
           severity: 'P2',
-          reporter_id: 'usr-2',
-          reporter_name: null,
-          assignee_id: null,
-          assignee_name: null,
-          verifier_id: null,
-          verifier_name: null,
-          fault_date: null,
-          created_at: '2026-04-19',
-          updated_at: '2026-04-19',
+          reporterId: 'usr-2',
+          reporterName: null,
+          assigneeId: null,
+          assigneeName: null,
+          verifierId: null,
+          verifierName: null,
+          faultDate: null,
+          createdAt: '2026-04-19',
+          updatedAt: '2026-04-19',
         },
       ],
     };
@@ -65,6 +65,6 @@ describe('useReportList', () => {
 
     expect(items.value).toHaveLength(2);
     expect(total.value).toBe(2);
-    expect(items.value[0].ref_no).toBe('DAS-001');
+    expect(items.value[0].refNo).toBe('DAS-001');
   });
 });

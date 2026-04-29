@@ -6,7 +6,7 @@ import * as catalogApi from '../../../src/api/catalog';
 vi.mock('../../../src/api/catalog', () => ({
   fetchAvailableModels: vi.fn(),
   fetchAvailableSkills: vi.fn(),
-  fallbackModels: ['gpt-4o-mini'],
+  fallbackModels: ['qwen3:8b'],
 }));
 
 describe('useCatalogLoader', () => {

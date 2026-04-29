@@ -133,7 +133,7 @@
 
 @media (max-width: 480px) {
   .report-table th:nth-child(3),
-  .report-table td:nth-cell(3) {
+  .report-table td:nth-child(3) {
     display: none;
   }
 

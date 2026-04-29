@@ -59,7 +59,7 @@ frontend/src/views/incident-report/
 │   ├── RichTextEditor.vue
 │   └── TimelineEditor.vue
 ├── composables/                   # 共享 composables
-│   └── useIncidentReportRoles.ts
+│   └── useIncidentReportRoles.ts  # RBAC 权限管理（角色 + 权限检查）
 └── styles/
     └── incident-report-mobile.css
 ```
@@ -71,6 +71,7 @@ frontend/src/views/incident-report/
 - 报告列表状态（`reportList`, `reportListTotal`, `reportListPage`, `reportListPageSize`, `reportListLoading`）
 - 当前报告（`activeReport`）
 - 用户角色（`userIncidentRoles`）
+- 用户权限（`userIncidentPermissions`）
 - 分析数据（`analyticsOverview`）
 - 表单定义（`incidentReportSchema`）
 - 生成状态（`isIncidentReportGenerating`, `generationState`, `generationTask`）
@@ -78,15 +79,27 @@ frontend/src/views/incident-report/
 
 ### 计算属性
 
-| 属性                | 说明                            |
-| ------------------- | ------------------------------- |
-| `isAdmin`           | 是否管理员                      |
-| `isVerifier`        | 是否审核人                      |
-| `isHandler`         | 是否处理人                      |
-| `isReporter`        | 是否报告人                      |
-| `canCreateReport`   | 是否可创建报告                  |
-| `canAudit`          | 是否可审核（verifier 或 admin） |
-| `canManageSettings` | 是否可管理设置（admin）         |
+| 属性                | 说明                              |
+| ------------------- | --------------------------------- |
+| `isAdmin`           | 是否管理员                        |
+| `isVerifier`        | 是否审核人                        |
+| `isHandler`         | 是否处理人                        |
+| `isReporter`        | 是否报告人                        |
+| `canCreateReport`   | 是否可创建报告（report:create）   |
+| `canAudit`          | 是否可审核（report:audit）        |
+| `canManageSettings` | 是否可管理设置（role:manage）     |
+| `canDeleteReport`   | 是否可删除报告（report:delete）   |
+| `canReopenReport`   | 是否可重开报告（report:reopen）   |
+| `canAssignHandler`  | 是否可分配处理人（report:assign） |
+| `canExportData`     | 是否可导出数据（data:export）     |
+| `canViewAnalytics`  | 是否可查看分析（analytics:view）  |
+
+### 权限方法
+
+| 方法                     | 说明                         |
+| ------------------------ | ---------------------------- |
+| `hasPermission(p)`       | 检查用户是否拥有指定权限     |
+| `hasAnyPermission(...p)` | 检查用户是否拥有任一指定权限 |
 
 ## 路由结构
 
@@ -103,49 +116,93 @@ frontend/src/views/incident-report/
 
 ## API 依赖
 
-| API                                        | 方法            | 用途                  |
-| ------------------------------------------ | --------------- | --------------------- |
-| `/incident-report/reports`                 | GET             | 报告列表（分页/筛选） |
-| `/incident-report/reports`                 | POST            | 创建报告              |
-| `/incident-report/reports/schema`          | GET             | 获取表单 Schema       |
-| `/incident-report/reports/{id}`            | GET             | 报告详情              |
-| `/incident-report/reports/{id}`            | PUT             | 更新报告              |
-| `/incident-report/reports/{id}`            | DELETE          | 删除报告              |
-| `/incident-report/reports/{id}/submit`     | POST            | 提交审核              |
-| `/incident-report/reports/{id}/approve`    | POST            | 批准                  |
-| `/incident-report/reports/{id}/reject`     | POST            | 驳回                  |
-| `/incident-report/reports/{id}/assign`     | POST            | 指派处理人            |
-| `/incident-report/reports/{id}/close`      | POST            | 关闭                  |
-| `/incident-report/reports/{id}/reopen`     | POST            | 重新打开              |
-| `/incident-report/reports/{id}/audit-logs` | GET             | 审计日志              |
-| `/incident-report/reports/{id}/comments`   | GET/POST        | 评论                  |
-| `/incident-report/roles/me`                | GET             | 当前用户角色          |
-| `/incident-report/roles`                   | GET/POST/DELETE | 角色管理              |
-| `/incident-report/analytics/overview`      | GET             | 月度概览              |
-| `/incident-report/analytics/trend`         | GET             | 趋势数据              |
+| API                                                   | 方法            | 用途                   |
+| ----------------------------------------------------- | --------------- | ---------------------- |
+| `/incident-report/reports`                            | GET             | 报告列表（分页/筛选）  |
+| `/incident-report/reports`                            | POST            | 创建报告               |
+| `/incident-report/reports/schema`                     | GET             | 获取表单 Schema        |
+| `/incident-report/reports/{id}`                       | GET             | 报告详情               |
+| `/incident-report/reports/{id}`                       | PUT             | 更新报告               |
+| `/incident-report/reports/{id}`                       | DELETE          | 删除报告               |
+| `/incident-report/reports/{id}/submit`                | POST            | 提交审核               |
+| `/incident-report/reports/{id}/approve`               | POST            | 批准                   |
+| `/incident-report/reports/{id}/reject`                | POST            | 驳回                   |
+| `/incident-report/reports/{id}/assign`                | POST            | 指派处理人             |
+| `/incident-report/reports/{id}/close`                 | POST            | 关闭                   |
+| `/incident-report/reports/{id}/reopen`                | POST            | 重新打开               |
+| `/incident-report/reports/{id}/audit-logs`            | GET             | 审计日志               |
+| `/incident-report/reports/{id}/comments`              | GET/POST        | 评论                   |
+| `/incident-report/reports/{id}/body/quick-generate`   | POST            | 快填 AI 一键生成正文   |
+| `/incident-report/reports/{id}/body/section-generate` | POST            | 分段 AI 生成正文段落   |
+| `/incident-report/reports/{id}/preview`               | POST            | 生成 PDF/DOCX 预览     |
+| `/incident-report/roles/me`                           | GET             | 当前用户角色和权限     |
+| `/incident-report/roles`                              | GET/POST/DELETE | 角色管理               |
+| `/incident-report/role-definitions`                   | GET             | 角色定义列表（含权限） |
+| `/incident-report/permissions`                        | GET             | 权限定义列表           |
+| `/incident-report/analytics/overview`                 | GET             | 月度概览               |
+| `/incident-report/analytics/trend`                    | GET             | 趋势数据               |
 
-## 核心交互流程
+## 创建页 5 步向导
 
-1. 列表页展示报告列表，支持状态/严重级别/关键词筛选
-2. 创建页使用 5 步向导（基本信息 → 事故描述 → 时间线 → 附录 → 确认提交）
-3. 详情页展示报告内容、审计时间线、评论
-4. 审核页供审核人批准/驳回报告
-5. 分析页展示月度统计、分布图、趋势图
+创建页使用 5 步向导流程，每步对应一个表单区域：
+
+| 步骤 | key        | 标签              | 说明                                                                     |
+| ---- | ---------- | ----------------- | ------------------------------------------------------------------------ |
+| 0    | cover      | 首页 / Cover      | SECTION A（故障记录）、SECTION B（维修与验证）、SECTION C（结案与签署）  |
+| 1    | quick_fill | 快填 / Quick Fill | 可跳过；填写简述后可一键 AI 生成完整正文                                 |
+| 2    | body       | AI 正文 / Body    | 事故简述、时间线、影响范围、根因分析、后续动作；可逐段 AI 生成或手动编辑 |
+| 3    | appendix   | 附录 / Appendix   | 附录文本输入                                                             |
+| 4    | preview    | 预览 / Preview    | 生成 PDF 预览，支持 PDF 浏览器查看和 DOCX 下载                           |
+
+### 向导核心逻辑
+
+向导逻辑封装在 `create/composables/useReportWizard.ts` 中：
+
+| 方法                    | 说明                                                 |
+| ----------------------- | ---------------------------------------------------- |
+| `saveAsDraft`           | 保存草稿（首次创建，后续更新）                       |
+| `createAndSubmit`       | 创建并提交审核                                       |
+| `quickGenerate`         | 调用快填 AI 生成 API，自动填充正文字段并跳转到步骤 2 |
+| `generateSection`       | 调用分段 AI 生成 API，生成指定正文段落               |
+| `generatePreview`       | 调用预览 API，生成 PDF/DOCX 预览                     |
+| `applyGenerationResult` | 将 AI 生成结果合并到 formAnswers                     |
+
+### AI 生成流程
+
+1. 步骤 1（快填）：用户填写事故简述 → 点击「一键生成正文」→ 调用 `quickGenerate` → 结果自动填充到步骤 2 各字段 → 自动跳转到步骤 2
+2. 步骤 2（正文）：每个正文段落旁有「AI 生成」按钮 → 调用 `generateSection` → 结果填充到对应字段
+3. 步骤 4（预览）：点击「生成预览」→ 调用 `generatePreview` → 返回 HTML/PDF/DOCX → 支持 PDF 浏览器查看和 DOCX 下载
+
+### 表单数据结构
+
+- `formData`：报告元数据（title, severity, system, siteId, faultDate）
+- `formAnswers`：表单字段键值对，前缀区分区域：
+  - `manual_*` — 首页 SECTION A-C 字段
+  - `quick_*` — 快填字段
+  - `body_*` — 正文字段
+  - `appendix_*` — 附录字段
+- `quickTimelineItems` / `bodyTimelineItems`：时间线数组，通过 watch 同步到 formAnswers
 
 ## 类型定义
 
 核心类型定义在 `types/incident-report/incident-report.ts`：
 
-| 类型                        | 说明                                                           |
-| --------------------------- | -------------------------------------------------------------- |
-| `IncidentReportStatus`      | 状态枚举（draft/pending/approved/rejected/in_progress/closed） |
-| `IncidentSeverity`          | 严重级别（P0/P1/P2/P3）                                        |
-| `IncidentReportSummaryItem` | 列表项                                                         |
-| `IncidentReportDetailItem`  | 详情项                                                         |
-| `IncidentAuditLogEntry`     | 审计日志条目                                                   |
-| `IncidentCommentEntry`      | 评论条目                                                       |
-| `IncidentAnalyticsOverview` | 分析概览                                                       |
-| `IncidentAnalyticsTrend`    | 趋势数据                                                       |
+| 类型                            | 说明                                                           |
+| ------------------------------- | -------------------------------------------------------------- |
+| `IncidentReportStatus`          | 状态枚举（draft/pending/approved/rejected/in_progress/closed） |
+| `IncidentSeverity`              | 严重级别（P0/P1/P2/P3）                                        |
+| `IncidentReportPreviewResponse` | 预览响应（HTML + PDF Base64 + DOCX Base64）                    |
+| `IncidentBodyGenerateResponse`  | AI 生成响应（reportId + formAnswers + traceId + sectionId）    |
+| `IncidentReportSummaryItem`     | 列表项                                                         |
+| `IncidentReportDetailItem`      | 详情项                                                         |
+| `IncidentAuditLogEntry`         | 审计日志条目                                                   |
+| `IncidentCommentEntry`          | 评论条目                                                       |
+| `IncidentAnalyticsOverview`     | 分析概览                                                       |
+| `IncidentAnalyticsTrend`        | 趋势数据                                                       |
+| `IncidentUserRolesResponse`     | 用户角色和权限响应                                             |
+| `IncidentRoleEntry`             | 角色分配条目                                                   |
+| `IncidentRoleDefinitionEntry`   | 角色定义条目（含权限列表）                                     |
+| `IncidentPermissionEntry`       | 权限定义条目                                                   |
 
 ## 开发注意
 

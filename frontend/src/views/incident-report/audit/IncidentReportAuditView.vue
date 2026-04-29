@@ -11,7 +11,7 @@
         >
           ← 返回详情
         </base-button>
-        <h1>审核报告 - {{ report.ref_no }}</h1>
+        <h1>审核报告 - {{ report.refNo }}</h1>
       </div>
 
       <div class="audit-body">
@@ -19,18 +19,16 @@
           <report-status-badge :status="report.status" />
           <h2>{{ report.title }}</h2>
           <div class="audit-meta">
-            <span
-              >报告人: {{ report.reporter_name ?? report.reporter_id }}</span
-            >
+            <span>报告人: {{ report.reporterName ?? report.reporterId }}</span>
             <span>级别: {{ report.severity ?? '-' }}</span>
             <span>系统: {{ report.system ?? '-' }}</span>
           </div>
           <div
-            v-if="report.form_data && Object.keys(report.form_data).length > 0"
+            v-if="report.formData && Object.keys(report.formData).length > 0"
             class="audit-form-data"
           >
             <div
-              v-for="(value, key) in report.form_data"
+              v-for="(value, key) in report.formData"
               :key="key"
               class="audit-data-row"
             >

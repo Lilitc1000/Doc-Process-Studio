@@ -25,7 +25,7 @@ from .db_session_store import (
     save_chat_session_summary_with_user_id,
     touch_chat_session_updated_at,
 )
-from ...shared.dtutils import utcnow
+from ...shared.dtutils import to_utc8, utcnow
 
 
 def _normalize_title_candidate(value: str) -> str:
@@ -129,12 +129,12 @@ async def upsert_chat_session(
                 title_source_messages=title_source_messages,
             )
 
-    created_at = existing_session.created_at if existing_session else now
+    created_at = existing_session.created_at if existing_session else to_utc8(now)
     summary = ChatSessionSummary(
         id=session_id,
         title=normalized_title,
         created_at=created_at,
-        updated_at=now,
+        updated_at=to_utc8(now),
         selected_model=snapshot.selected_model,
         selected_reranker_model=(
             snapshot.selected_reranker_model or snapshot.selected_model
@@ -159,7 +159,7 @@ async def update_chat_session_title(
     summary = ChatSessionSummary(
         **existing_session.model_dump(exclude={"snapshot"}),
         title=title.strip(),
-        updated_at=utcnow(),
+        updated_at=to_utc8(utcnow()),
     )
     await save_chat_session_summary_with_user_id(
         summary,

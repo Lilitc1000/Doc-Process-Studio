@@ -10,7 +10,7 @@
             :style="{ width: barWidth('pending') }"
           />
         </div>
-        <span class="bar-value">{{ overview?.pending_count ?? 0 }}</span>
+        <span class="bar-value">{{ overview?.pendingCount ?? 0 }}</span>
       </div>
       <div class="bar-item">
         <span class="bar-label">处理中</span>
@@ -20,7 +20,7 @@
             :style="{ width: barWidth('in_progress') }"
           />
         </div>
-        <span class="bar-value">{{ overview?.in_progress_count ?? 0 }}</span>
+        <span class="bar-value">{{ overview?.inProgressCount ?? 0 }}</span>
       </div>
       <div class="bar-item">
         <span class="bar-label">已关闭</span>
@@ -30,7 +30,7 @@
             :style="{ width: barWidth('closed') }"
           />
         </div>
-        <span class="bar-value">{{ overview?.closed_this_month ?? 0 }}</span>
+        <span class="bar-value">{{ overview?.closedThisMonth ?? 0 }}</span>
       </div>
     </div>
   </div>
@@ -45,11 +45,11 @@ const props = defineProps<{
 
 const barWidth = (type: 'pending' | 'in_progress' | 'closed') => {
   if (!props.overview) return '0%';
-  const total = props.overview.total_this_month || 1;
+  const total = props.overview.totalThisMonth || 1;
   let count = 0;
-  if (type === 'pending') count = props.overview.pending_count;
-  else if (type === 'in_progress') count = props.overview.in_progress_count;
-  else count = props.overview.closed_this_month;
+  if (type === 'pending') count = props.overview.pendingCount;
+  else if (type === 'in_progress') count = props.overview.inProgressCount;
+  else count = props.overview.closedThisMonth;
   return `${Math.round((count / total) * 100)}%`;
 };
 </script>

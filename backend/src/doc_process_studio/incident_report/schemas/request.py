@@ -70,21 +70,47 @@ class IncidentRoleAssignRequest(BaseModel):
         return v
 
 
+class IncidentRolePermissionUpdateRequest(BaseModel):
+    permission_keys: list[str] = Field(..., min_length=1, description="权限标识列表")
+
+
 class IncidentCommentCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, description="评论内容")
     parent_id: str | None = Field(default=None, description="父评论ID")
 
 
+class IncidentBodyQuickGenerateRequest(BaseModel):
+    model: str | None = Field(default=None, description="生成模型名称")
+    reranker_model: str | None = Field(default=None, description="Reranker 模型名称")
+
+
+class IncidentBodySectionGenerateRequest(BaseModel):
+    section_id: str = Field(..., min_length=1, description="分段标识（description/timeline/impact/root_cause/follow_up/timeline_item）")
+    timeline_index: int | None = Field(default=None, description="时间线条目索引（仅 timeline_item 时使用）")
+    model: str | None = Field(default=None, description="生成模型名称")
+    reranker_model: str | None = Field(default=None, description="Reranker 模型名称")
+
+
+class IncidentReportPreviewRequest(BaseModel):
+    version: int | None = Field(default=None, description="历史版本号（空则使用当前草稿）")
+    model: str | None = Field(default=None, description="生成模型名称")
+    reranker_model: str | None = Field(default=None, description="Reranker 模型名称")
+
+
 __all__ = [
+    "IncidentBodyQuickGenerateRequest",
+    "IncidentBodySectionGenerateRequest",
     "IncidentCommentCreateRequest",
     "IncidentReportApproveRequest",
     "IncidentReportAssignRequest",
     "IncidentReportCloseRequest",
     "IncidentReportCreateRequest",
     "IncidentReportListRequest",
+    "IncidentReportPreviewRequest",
     "IncidentReportReopenRequest",
     "IncidentReportRejectRequest",
     "IncidentRoleAssignRequest",
+    "IncidentRolePermissionUpdateRequest",
     "IncidentReportSubmitRequest",
     "IncidentReportUpdateRequest",
 ]

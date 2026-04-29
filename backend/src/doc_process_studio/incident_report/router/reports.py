@@ -4,12 +4,16 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...core.security import get_current_user_id
+from ...shared.dtutils import to_utc8
 from ..schemas.request import (
+    IncidentBodyQuickGenerateRequest,
+    IncidentBodySectionGenerateRequest,
     IncidentCommentCreateRequest,
     IncidentReportApproveRequest,
     IncidentReportAssignRequest,
     IncidentReportCloseRequest,
     IncidentReportCreateRequest,
+    IncidentReportPreviewRequest,
     IncidentReportReopenRequest,
     IncidentReportRejectRequest,
     IncidentReportSubmitRequest,
@@ -17,9 +21,11 @@ from ..schemas.request import (
 )
 from ..schemas.response import (
     IncidentAuditLogEntry,
+    IncidentBodyGenerateResponse,
     IncidentCommentEntry,
     IncidentReportDetail,
     IncidentReportListResponse,
+    IncidentReportPreviewResponse,
 )
 from ..service.audit_log import list_audit_logs, orm_to_entry as audit_orm_to_entry
 from ..service.report import (
@@ -36,7 +42,7 @@ from ..service.report import (
     update_report,
 )
 from ..service.report_store import create_comment_record, list_comment_records
-from ..service.role import get_user_incident_roles, has_incident_role
+from ..service.role import has_permission
 from .dependencies import require_admin, require_verifier_or_admin
 
 router = APIRouter(prefix="/api/incident-report", tags=["incident-report"])
@@ -88,11 +94,7 @@ async def create_new_report(
     payload: IncidentReportCreateRequest,
     user_id: str = Depends(get_current_user_id),
 ) -> IncidentReportDetail:
-    can_create = await has_incident_role(user_id, "reporter") or await has_incident_role(user_id, "admin")
-    if not can_create:
-        roles = await get_user_incident_roles(user_id)
-        can_create = bool(roles.intersection({"reporter", "handler", "verifier", "admin"}))
-    if not can_create:
+    if not await has_permission(user_id, "report:create"):
         raise HTTPException(status_code=403, detail="需要报告人权限才能创建报告")
     return await create_report(
         title=payload.title,
@@ -111,6 +113,17 @@ async def update_existing_report(
     payload: IncidentReportUpdateRequest,
     user_id: str = Depends(get_current_user_id),
 ) -> IncidentReportDetail:
+    from ..service.report_store import load_report_orm
+    record = await load_report_orm(report_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="报告不存在")
+    can_edit = (
+        (record.reporter_id == user_id and await has_permission(user_id, "report:edit_own"))
+        or (record.assignee_id == user_id and await has_permission(user_id, "report:edit_assigned"))
+        or await has_permission(user_id, "report:delete")
+    )
+    if not can_edit:
+        raise HTTPException(status_code=403, detail="无权编辑此报告")
     fields = {k: v for k, v in payload.model_dump().items() if v is not None}
     try:
         result = await update_report(report_id=report_id, user_id=user_id, **fields)
@@ -136,6 +149,8 @@ async def submit_report_for_review(
     payload: IncidentReportSubmitRequest | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> IncidentReportDetail:
+    if not await has_permission(user_id, "report:submit"):
+        raise HTTPException(status_code=403, detail="需要报告人权限才能提交审核")
     from ..service.form_validation import validate_form_data_for_submit
     from ..service.report_store import load_report_orm
     record = await load_report_orm(report_id)
@@ -209,6 +224,8 @@ async def close_report_by_handler(
     payload: IncidentReportCloseRequest | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> IncidentReportDetail:
+    if not await has_permission(user_id, "report:close_assigned"):
+        raise HTTPException(status_code=403, detail="需要处理人权限才能关闭报告")
     comment = payload.comment if payload else None
     try:
         result = await close_report(report_id=report_id, actor_id=user_id, comment=comment)
@@ -235,6 +252,75 @@ async def reopen_closed_report(
     return result
 
 
+@router.post(
+    "/reports/{report_id}/body/quick-generate",
+    response_model=IncidentBodyGenerateResponse,
+)
+async def quick_generate_report_body(
+    report_id: str,
+    payload: IncidentBodyQuickGenerateRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> IncidentBodyGenerateResponse:
+    from ..service.generation import quick_generate_report_body as _quick_generate
+    try:
+        return await _quick_generate(
+            report_id=report_id,
+            model=payload.model,
+            reranker_model=payload.reranker_model,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post(
+    "/reports/{report_id}/body/section-generate",
+    response_model=IncidentBodyGenerateResponse,
+)
+async def generate_report_body_section(
+    report_id: str,
+    payload: IncidentBodySectionGenerateRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> IncidentBodyGenerateResponse:
+    from ..service.generation import generate_report_body_section as _section_generate
+    try:
+        return await _section_generate(
+            report_id=report_id,
+            section_id=payload.section_id,
+            timeline_index=payload.timeline_index,
+            model=payload.model,
+            reranker_model=payload.reranker_model,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post(
+    "/reports/{report_id}/preview",
+    response_model=IncidentReportPreviewResponse,
+)
+async def preview_report_attachment(
+    report_id: str,
+    payload: IncidentReportPreviewRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> IncidentReportPreviewResponse:
+    from ..service.preview import preview_report_attachment as _preview
+    try:
+        return await _preview(
+            report_id=report_id,
+            version=payload.version,
+            model=payload.model,
+            reranker_model=payload.reranker_model,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.get("/reports/{report_id}/audit-logs", response_model=list[IncidentAuditLogEntry])
 async def get_report_audit_logs(
     report_id: str,
@@ -258,7 +344,7 @@ async def get_report_comments(
             author_name=None,
             content=r.content,
             parent_id=r.parent_id,
-            created_at=r.created_at,
+            created_at=to_utc8(r.created_at),
         )
         for r in records
     ]
@@ -285,5 +371,5 @@ async def add_report_comment(
         author_name=None,
         content=record.content,
         parent_id=record.parent_id,
-        created_at=record.created_at,
+        created_at=to_utc8(record.created_at),
     )

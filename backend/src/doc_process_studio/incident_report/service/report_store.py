@@ -1,9 +1,14 @@
+import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
+
+logger = logging.getLogger(__name__)
 
 from ...core.database import async_session_factory
+from ...shared.dtutils import to_utc8
 from ..models.incident_report_orm import IncidentComment, IncidentReport as IncidentReportORM
 from ..schemas.common import VALID_STATUSES
 from ..schemas.response import IncidentReportDetail, IncidentReportSummary
@@ -12,16 +17,26 @@ from ..schemas.response import IncidentReportDetail, IncidentReportSummary
 async def generate_ref_no() -> str:
     async with async_session_factory() as session:
         result = await session.execute(
-            select(func.count(IncidentReportORM.id)),
+            select(func.max(IncidentReportORM.ref_no)),
         )
-        count = result.scalar_one() + 1
-        return f"DAS-{count:04d}"
+        max_ref = result.scalar_one_or_none()
+        if max_ref is None:
+            next_num = 1
+        else:
+            try:
+                next_num = int(max_ref.split("-")[1]) + 1
+            except (IndexError, ValueError):
+                next_num = 1
+        return f"DAS-{next_num:04d}"
+
+
+_REF_NO_RETRY_MAX = 8
 
 
 async def create_report_record(
     *,
     report_id: str,
-    ref_no: str,
+    ref_no: str | None = None,
     title: str,
     reporter_id: str,
     severity: str | None = None,
@@ -31,25 +46,37 @@ async def create_report_record(
     form_data: dict | None = None,
 ) -> IncidentReportORM:
     now = datetime.now(UTC)
-    record = IncidentReportORM(
-        id=report_id,
-        ref_no=ref_no,
-        title=title,
-        status="draft",
-        severity=severity,
-        reporter_id=reporter_id,
-        system=system,
-        site_id=site_id,
-        fault_date=fault_date,
-        form_data=form_data or {},
-        created_at=now,
-        updated_at=now,
-    )
-    async with async_session_factory() as session:
-        session.add(record)
-        await session.commit()
-        await session.refresh(record)
-    return record
+    effective_ref_no = ref_no
+    for attempt in range(_REF_NO_RETRY_MAX + 1):
+        if effective_ref_no is None:
+            effective_ref_no = await generate_ref_no()
+        record = IncidentReportORM(
+            id=report_id,
+            ref_no=effective_ref_no,
+            title=title,
+            status="draft",
+            severity=severity,
+            reporter_id=reporter_id,
+            system=system,
+            site_id=site_id,
+            fault_date=fault_date,
+            form_data=form_data or {},
+            created_at=now,
+            updated_at=now,
+        )
+        async with async_session_factory() as session:
+            session.add(record)
+            try:
+                await session.commit()
+                await session.refresh(record)
+                logger.info("Report created successfully: id=%s, ref_no=%s", record.id, record.ref_no)
+                return record
+            except IntegrityError:
+                await session.rollback()
+                logger.warning("IntegrityError creating report: id=%s, ref_no=%s, attempt=%d", report_id, effective_ref_no, attempt)
+                if ref_no is not None:
+                    raise
+                effective_ref_no = None
 
 
 async def load_report_orm(report_id: str) -> IncidentReportORM | None:
@@ -195,9 +222,9 @@ def orm_to_summary(record: IncidentReportORM) -> IncidentReportSummary:
         assignee_name=None,
         verifier_id=record.verifier_id,
         verifier_name=None,
-        fault_date=record.fault_date,
-        created_at=record.created_at,
-        updated_at=record.updated_at,
+        fault_date=to_utc8(record.fault_date),
+        created_at=to_utc8(record.created_at),
+        updated_at=to_utc8(record.updated_at),
     )
 
 
@@ -214,15 +241,15 @@ def orm_to_detail(record: IncidentReportORM) -> IncidentReportDetail:
         assignee_name=None,
         verifier_id=record.verifier_id,
         verifier_name=None,
-        fault_date=record.fault_date,
-        created_at=record.created_at,
-        updated_at=record.updated_at,
+        fault_date=to_utc8(record.fault_date),
+        created_at=to_utc8(record.created_at),
+        updated_at=to_utc8(record.updated_at),
         system=record.system,
         site_id=record.site_id,
         form_data=record.form_data or {},
         report_data=record.report_data,
-        submitted_at=record.submitted_at,
-        approved_at=record.approved_at,
-        closed_at=record.closed_at,
-        resolution_date=record.resolution_date,
+        submitted_at=to_utc8(record.submitted_at),
+        approved_at=to_utc8(record.approved_at),
+        closed_at=to_utc8(record.closed_at),
+        resolution_date=to_utc8(record.resolution_date),
     )

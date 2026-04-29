@@ -111,21 +111,15 @@ def test_get_my_roles():
 def test_create_report_success():
     app = _create_test_app()
 
-    async def _fake_has_role(user_id, role):
+    async def _fake_has_permission(user_id, permission):
         return True
-
-    async def _fake_get_roles(user_id):
-        return {"reporter"}
 
     async def _fake_create(**kwargs):
         return _mock_report()
 
     with patch(
-        "doc_process_studio.incident_report.router.reports.has_incident_role",
-        _fake_has_role,
-    ), patch(
-        "doc_process_studio.incident_report.router.reports.get_user_incident_roles",
-        _fake_get_roles,
+        "doc_process_studio.incident_report.router.reports.has_permission",
+        _fake_has_permission,
     ), patch(
         "doc_process_studio.incident_report.router.reports.create_report",
         _fake_create,

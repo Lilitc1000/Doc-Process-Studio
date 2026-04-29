@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     app_name: str = "doc-process-studio-service"
     env: str = resolve_runtime_env()
     ollama_base_url: str | None = None
-    ollama_timeout_seconds: float = 10.0
-    ollama_stream_idle_timeout_seconds: float = 120.0
+    ollama_timeout_seconds: float = 60.0
+    ollama_stream_idle_timeout_seconds: float = 180.0
     db_host: str | None = None
     db_port: int = 5432
     db_name: str | None = None

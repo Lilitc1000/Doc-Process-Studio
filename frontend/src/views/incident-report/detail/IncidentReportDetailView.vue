@@ -12,10 +12,18 @@
           >
             ← 返回列表
           </base-button>
-          <span class="detail-ref">{{ report.ref_no }}</span>
+          <span class="detail-ref">{{ report.refNo }}</span>
           <span class="detail-title">{{ report.title }}</span>
         </div>
         <div class="detail-header-right">
+          <base-button
+            variant="ghost"
+            size="sm"
+            :disabled="downloadingDocx"
+            @click="handleDownloadDocx"
+          >
+            {{ downloadingDocx ? '生成中...' : '下载 Word' }}
+          </base-button>
           <base-button
             v-if="canEdit"
             variant="secondary"
@@ -66,19 +74,19 @@
             <div class="info-row">
               <span class="info-label">报告人</span>
               <span class="info-value">{{
-                report.reporter_name ?? report.reporter_id
+                report.reporterName ?? report.reporterId
               }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">处理人</span>
               <span class="info-value">{{
-                report.assignee_name ?? report.assignee_id ?? '-'
+                report.assigneeName ?? report.assigneeId ?? '-'
               }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">审核人</span>
               <span class="info-value">{{
-                report.verifier_name ?? report.verifier_id ?? '-'
+                report.verifierName ?? report.verifierId ?? '-'
               }}</span>
             </div>
             <div class="info-row">
@@ -87,19 +95,15 @@
             </div>
             <div class="info-row">
               <span class="info-label">站点</span>
-              <span class="info-value">{{ report.site_id ?? '-' }}</span>
+              <span class="info-value">{{ report.siteId ?? '-' }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">故障日期</span>
-              <span class="info-value">{{
-                formatDate(report.fault_date)
-              }}</span>
+              <span class="info-value">{{ formatDate(report.faultDate) }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">创建时间</span>
-              <span class="info-value">{{
-                formatDate(report.created_at)
-              }}</span>
+              <span class="info-value">{{ formatDate(report.createdAt) }}</span>
             </div>
           </div>
 
@@ -123,6 +127,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useIncidentReportStore } from '../../../stores/incident-report';
+import { useAuthStore } from '../../../stores/auth';
 import {
   fetchIncidentReportDetail,
   fetchIncidentReportAuditLogs,
@@ -130,6 +135,7 @@ import {
   createIncidentReportComment,
   closeIncidentReport,
   reopenIncidentReport,
+  previewIncidentReport,
 } from '../../../api/incident-report';
 import type {
   IncidentReportDetailItem,
@@ -145,17 +151,27 @@ import ReportComments from './components/ReportComments.vue';
 const route = useRoute();
 const router = useRouter();
 const store = useIncidentReportStore();
+const authStore = useAuthStore();
 
 const report = ref<IncidentReportDetailItem | null>(null);
 const auditLogs = ref<IncidentAuditLogEntry[]>([]);
 const comments = ref<IncidentCommentEntry[]>([]);
 const loading = ref(true);
+const downloadingDocx = ref(false);
 
 const canEdit = computed(() => {
   if (!report.value) return false;
   const s = report.value.status;
   if (s !== 'draft' && s !== 'rejected') return false;
-  return store.isReporter || store.isAdmin;
+  if (
+    report.value.reporterId === authStore.userId &&
+    store.hasPermission('report:edit_own')
+  )
+    return true;
+  return (
+    store.hasPermission('report:edit_assigned') ||
+    store.hasPermission('report:delete')
+  );
 });
 
 const canAudit = computed(() => {
@@ -166,13 +182,14 @@ const canAudit = computed(() => {
 const canClose = computed(() => {
   if (!report.value) return false;
   return (
-    report.value.status === 'in_progress' && (store.isHandler || store.isAdmin)
+    report.value.status === 'in_progress' &&
+    store.hasPermission('report:close_assigned')
   );
 });
 
 const canReopen = computed(() => {
   if (!report.value) return false;
-  return report.value.status === 'closed' && store.isAdmin;
+  return report.value.status === 'closed' && store.canReopenReport;
 });
 
 const formatDate = (dateStr: string | null) => {
@@ -200,6 +217,33 @@ const handleAddComment = async (content: string) => {
     content,
   });
   comments.value.push(comment);
+};
+
+const handleDownloadDocx = async () => {
+  if (!report.value || downloadingDocx.value) return;
+  downloadingDocx.value = true;
+  try {
+    const preview = await previewIncidentReport(report.value.id, {});
+    if (!preview.docxBase64 || !preview.docxFileName) return;
+    const binaryString = atob(preview.docxBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = preview.docxFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } finally {
+    downloadingDocx.value = false;
+  }
 };
 
 onMounted(async () => {
