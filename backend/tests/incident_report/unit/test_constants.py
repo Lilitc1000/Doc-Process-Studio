@@ -59,7 +59,7 @@ def test_body_field_constants():
     assert BODY_BUSINESS_IMPACT == "body_business_impact"
     assert BODY_TRIGGER == "body_trigger"
     assert BODY_ROOT_CAUSE == "body_root_cause"
-    assert BODY_FOLLOW_UP == "body_follow_up_actions"
+    assert BODY_FOLLOW_UP == "body_follow_up"
 
 
 def test_quick_field_constants():

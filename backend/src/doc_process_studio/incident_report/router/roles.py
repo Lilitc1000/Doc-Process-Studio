@@ -12,13 +12,17 @@ from ..schemas.response import (
     IncidentRoleListResponse,
     IncidentUserPermissionsResponse,
     IncidentUserRolesResponse,
+    IncidentUserWithRolesEntry,
+    IncidentUserWithRolesListResponse,
 )
+from ..service.report_store import _resolve_usernames_safe
 from ..service.role import (
     assign_incident_role,
     get_user_incident_roles,
     get_user_permissions,
     get_role_permissions_map,
     list_all_role_assignments,
+    list_non_admin_users_with_roles,
     list_permissions,
     list_role_definitions,
     revoke_incident_role,
@@ -46,16 +50,35 @@ async def list_roles(
     user_id: str = Depends(require_admin),
 ) -> IncidentRoleListResponse:
     assignments = await list_all_role_assignments()
+    assigned_by_ids = {a.assigned_by for a in assignments if a.assigned_by}
+    usernames = await _resolve_usernames_safe(assigned_by_ids)
     items = [
         IncidentRoleEntry(
             user_id=a.user_id,
             role=a.role_key,
             assigned_by=a.assigned_by,
+            assigned_by_name=usernames.get(a.assigned_by) if a.assigned_by else None,
             assigned_at=to_utc8(a.assigned_at),
         )
         for a in assignments
     ]
     return IncidentRoleListResponse(items=items)
+
+
+@router.get("/users-with-roles", response_model=IncidentUserWithRolesListResponse)
+async def list_users_with_roles(
+    admin_id: str = Depends(require_admin),
+) -> IncidentUserWithRolesListResponse:
+    users = await list_non_admin_users_with_roles()
+    items = [
+        IncidentUserWithRolesEntry(
+            user_id=u["user_id"],
+            username=u["username"],
+            roles=u["roles"],
+        )
+        for u in users
+    ]
+    return IncidentUserWithRolesListResponse(items=items)
 
 
 @router.post("/roles", response_model=IncidentRoleEntry)
@@ -71,10 +94,12 @@ async def assign_role(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    admin_names = await _resolve_usernames_safe({admin_id})
     return IncidentRoleEntry(
         user_id=payload.user_id,
         role=payload.role,
         assigned_by=admin_id,
+        assigned_by_name=admin_names.get(admin_id),
     )
 
 

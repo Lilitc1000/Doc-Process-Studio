@@ -2,7 +2,19 @@
   <div class="report-detail-header">
     <div class="detail-header-left">
       <base-button variant="ghost" size="sm" @click="$emit('go-back')">
-        ← 返回列表
+        <svg
+          viewBox="0 0 20 20"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12.5 15L7.5 10L12.5 5" />
+        </svg>
+        返回列表
       </base-button>
       <span class="detail-ref">{{ report.refNo }}</span>
       <span class="detail-title">{{ report.title }}</span>

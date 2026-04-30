@@ -9,7 +9,6 @@ frontend/src/views/incident-report/
 │   ├── composables/
 │   │   └── useReportList.ts
 │   ├── components/
-│   │   ├── ReportListStats.vue
 │   │   ├── ReportListFilters.vue
 │   │   ├── ReportListTable.vue
 │   │   └── ReportListBulkActions.vue
@@ -32,11 +31,10 @@ frontend/src/views/incident-report/
 │   ├── components/
 │   │   └── ReportWizardSteps.vue
 │   └── styles/
-├── edit/                          # 编辑报告页
+├── edit/                          # 编辑报告页（向导式，4步）
 │   ├── IncidentReportEditView.vue
-│   ├── composables/
-│   │   └── useReportEdit.ts
-│   └── styles/
+│   └── composables/
+│       └── useReportEditWizard.ts
 ├── audit/                         # 审核报告页
 │   ├── IncidentReportAuditView.vue
 │   ├── composables/
@@ -53,6 +51,8 @@ frontend/src/views/incident-report/
 │   │   ├── DistributionChart.vue
 │   │   └── TrendChart.vue
 │   └── styles/
+├── roles/                         # 角色权限管理页
+│   └── RoleManagementView.vue
 ├── components/                    # 共享组件
 │   ├── ReportStatusBadge.vue
 │   ├── SchemaFormRenderer.vue
@@ -103,14 +103,15 @@ frontend/src/views/incident-report/
 
 ## 路由结构
 
-| 路径                         | 组件                        | 说明     |
-| ---------------------------- | --------------------------- | -------- |
-| `/incident-report`           | IncidentReportListView      | 报告列表 |
-| `/incident-report/create`    | IncidentReportCreateView    | 创建报告 |
-| `/incident-report/analytics` | IncidentReportAnalyticsView | 数据分析 |
-| `/incident-report/:id`       | IncidentReportDetailView    | 报告详情 |
-| `/incident-report/:id/edit`  | IncidentReportEditView      | 编辑报告 |
-| `/incident-report/:id/audit` | IncidentReportAuditView     | 审核报告 |
+| 路径                         | 组件                        | 说明         |
+| ---------------------------- | --------------------------- | ------------ |
+| `/incident-report`           | IncidentReportListView      | 报告列表     |
+| `/incident-report/create`    | IncidentReportCreateView    | 创建报告     |
+| `/incident-report/analytics` | IncidentReportAnalyticsView | 数据分析     |
+| `/incident-report/roles`     | RoleManagementView          | 角色权限管理 |
+| `/incident-report/:id`       | IncidentReportDetailView    | 报告详情     |
+| `/incident-report/:id/edit`  | IncidentReportEditView      | 编辑报告     |
+| `/incident-report/:id/audit` | IncidentReportAuditView     | 审核报告     |
 
 路由守卫：旧 32+ 字符 hex session ID 自动重定向到列表页。
 
@@ -137,6 +138,7 @@ frontend/src/views/incident-report/
 | `/incident-report/reports/{id}/preview`               | POST            | 生成 PDF/DOCX 预览     |
 | `/incident-report/roles/me`                           | GET             | 当前用户角色和权限     |
 | `/incident-report/roles`                              | GET/POST/DELETE | 角色管理               |
+| `/incident-report/users-with-roles`                   | GET             | 非admin用户及角色列表  |
 | `/incident-report/role-definitions`                   | GET             | 角色定义列表（含权限） |
 | `/incident-report/permissions`                        | GET             | 权限定义列表           |
 | `/incident-report/analytics/overview`                 | GET             | 月度概览               |
@@ -182,6 +184,36 @@ frontend/src/views/incident-report/
   - `body_*` — 正文字段
   - `appendix_*` — 附录字段
 - `quickTimelineItems` / `bodyTimelineItems`：时间线数组，通过 watch 同步到 formAnswers
+
+## 编辑页 4 步向导
+
+编辑页使用 4 步向导流程（与创建页一致，去掉快填步骤）：
+
+| 步骤 | key      | 标签            | 说明                                                                     |
+| ---- | -------- | --------------- | ------------------------------------------------------------------------ |
+| 0    | cover    | 首页 / Cover    | SECTION A（故障记录）、SECTION B（维修与验证）、SECTION C（结案与签署）  |
+| 1    | body     | AI 正文 / Body  | 事故简述、时间线、影响范围、根因分析、后续动作；可逐段 AI 生成或手动编辑 |
+| 2    | appendix | 附录 / Appendix | 附录文本输入                                                             |
+| 3    | preview  | 预览 / Preview  | 生成 PDF 预览，支持 PDF 浏览器查看和 DOCX 下载                           |
+
+### 编辑向导核心逻辑
+
+向导逻辑封装在 `edit/composables/useReportEditWizard.ts` 中：
+
+| 方法                    | 说明                                   |
+| ----------------------- | -------------------------------------- |
+| `load`                  | 加载报告详情并填充表单                 |
+| `save`                  | 保存报告更新                           |
+| `generateSection`       | 调用分段 AI 生成 API，生成指定正文段落 |
+| `generatePreview`       | 调用预览 API，生成 PDF/DOCX 预览       |
+| `applyGenerationResult` | 将 AI 生成结果合并到 formAnswers       |
+
+### 编辑页与创建页的差异
+
+- 编辑页无快填步骤（步骤 1），直接从首页进入 AI 正文编辑
+- 编辑页加载时自动填充已有数据
+- 编辑页底部操作栏为「取消」和「保存」，而非创建页的「保存草稿」和「提交报告」
+- 编辑页样式复用创建页的 CSS（`create/styles/incident-report-create.css`）
 
 ## 类型定义
 

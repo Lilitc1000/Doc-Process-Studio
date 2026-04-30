@@ -1,10 +1,11 @@
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from doc_process_studio.incident_report.service.preview import (
     _build_output_name,
-    convert_docx_bytes_to_preview_html,
+    _stable_payload_hash,
     convert_docx_bytes_to_pdf_bytes,
     is_docx_attachment,
     load_docx_bytes_from_attachment,
@@ -12,7 +13,10 @@ from doc_process_studio.incident_report.service.preview import (
     preview_cache_set,
     preview_template_token,
     render_docx_bytes_from_report_data,
-    build_preview_payload_from_docx_bytes,
+    translate_report_data_to_english,
+    _translation_cache_get,
+    _translation_cache_set,
+    _translation_cache_key,
 )
 from doc_process_studio.incident_report.schemas.response import IncidentReportPreviewResponse
 
@@ -70,17 +74,6 @@ def test_preview_template_token_with_existing_file():
     assert result == "1234567890"
 
 
-def test_convert_docx_bytes_to_preview_html_no_mammoth():
-    import doc_process_studio.incident_report.service.preview as preview_module
-    original_mammoth = preview_module.mammoth
-    preview_module.mammoth = None
-    try:
-        with pytest.raises(RuntimeError, match="mammoth"):
-            convert_docx_bytes_to_preview_html(b"fake docx")
-    finally:
-        preview_module.mammoth = original_mammoth
-
-
 def test_convert_docx_bytes_to_pdf_bytes_no_libreoffice():
     with patch("shutil.which", return_value=None):
         with pytest.raises(RuntimeError, match="LibreOffice"):
@@ -119,57 +112,18 @@ def test_load_docx_bytes_from_attachment_not_docx():
             load_docx_bytes_from_attachment("att-1")
 
 
-def test_build_preview_payload_from_docx_bytes_pdf_fallback():
-    with patch(
-        "doc_process_studio.incident_report.service.preview.convert_docx_bytes_to_pdf_bytes",
-        side_effect=RuntimeError("no libreoffice"),
-    ), patch(
-        "doc_process_studio.incident_report.service.preview.convert_docx_bytes_to_preview_html",
-        return_value=("<p>html</p>", []),
-    ):
-        html, pdf_base64, warnings = build_preview_payload_from_docx_bytes(b"fake")
-    assert html == "<p>html</p>"
-    assert pdf_base64 is None
-    assert any("PDF" in w for w in warnings)
-
-
-def test_build_preview_payload_from_docx_bytes_both_fail():
-    with patch(
-        "doc_process_studio.incident_report.service.preview.convert_docx_bytes_to_pdf_bytes",
-        side_effect=RuntimeError("no libreoffice"),
-    ), patch(
-        "doc_process_studio.incident_report.service.preview.convert_docx_bytes_to_preview_html",
-        side_effect=RuntimeError("no mammoth"),
-    ):
-        with pytest.raises(RuntimeError, match="文档预览失败"):
-            build_preview_payload_from_docx_bytes(b"fake")
-
-
-def test_build_preview_payload_from_docx_bytes_html_fail_with_pdf():
-    with patch(
-        "doc_process_studio.incident_report.service.preview.convert_docx_bytes_to_pdf_bytes",
-        return_value=b"%PDF-fake",
-    ), patch(
-        "doc_process_studio.incident_report.service.preview.convert_docx_bytes_to_preview_html",
-        side_effect=RuntimeError("no mammoth"),
-    ):
-        html, pdf_base64, warnings = build_preview_payload_from_docx_bytes(b"fake")
-    assert pdf_base64 is not None
-    assert any("HTML" in w for w in warnings)
-
-
 def test_preview_cache_returns_deep_copy():
     import doc_process_studio.incident_report.service.preview as preview_module
     preview_module._PREVIEW_RESULT_CACHE.clear()
-    payload = IncidentReportPreviewResponse(source="draft", label="test", html="<p>original</p>")
+    payload = IncidentReportPreviewResponse(source="draft", label="test")
     preview_cache_set(cache_key="deep-copy-test", payload=payload)
 
     cached = preview_cache_get("deep-copy-test")
     assert cached is not None
-    cached.html = "<p>modified</p>"
+    cached.label = "modified"
 
     cached_again = preview_cache_get("deep-copy-test")
-    assert cached_again.html == "<p>original</p>"
+    assert cached_again.label == "test"
 
 
 def test_render_docx_bytes_from_report_data():
@@ -188,3 +142,63 @@ def test_render_docx_bytes_from_report_data():
     assert isinstance(result, bytes)
     mock_module.normalize_incident_data.assert_called_once_with({"key": "value"})
     mock_generator.generate_form.assert_called_once_with({"normalized": True})
+
+
+def test_stable_payload_hash_deterministic():
+    data = {"b": 2, "a": 1}
+    h1 = _stable_payload_hash(data)
+    h2 = _stable_payload_hash(data)
+    assert h1 == h2
+
+
+def test_stable_payload_hash_different_data():
+    h1 = _stable_payload_hash({"a": 1})
+    h2 = _stable_payload_hash({"a": 2})
+    assert h1 != h2
+
+
+def test_translation_cache_round_trip():
+    import doc_process_studio.incident_report.service.preview as preview_module
+    preview_module._TRANSLATION_CACHE.clear()
+    key = _translation_cache_key(model_name="test", source_text="hello")
+    _translation_cache_set(key=key, value="你好")
+    assert _translation_cache_get(key) == "你好"
+
+
+def test_translation_cache_miss():
+    import doc_process_studio.incident_report.service.preview as preview_module
+    preview_module._TRANSLATION_CACHE.clear()
+    key = _translation_cache_key(model_name="test", source_text="missing")
+    assert _translation_cache_get(key) is None
+
+
+def test_translate_report_data_no_cjk():
+    data = {"title": "Hello World", "description": "This is a test"}
+    result = asyncio.run(translate_report_data_to_english(report_data=data))
+    assert result == data
+
+
+def test_translate_report_data_with_google_unavailable():
+    import doc_process_studio.incident_report.service.preview as preview_module
+    original = preview_module.GoogleTranslator
+    preview_module.GoogleTranslator = None
+    try:
+        data = {"title": "测试标题"}
+        result = asyncio.run(translate_report_data_to_english(report_data=data))
+        assert result == data
+    finally:
+        preview_module.GoogleTranslator = original
+
+
+def test_translate_report_data_skips_date_fields():
+    mock_translator = MagicMock()
+    mock_translator.translate.return_value = "translated"
+    mock_translator.translate_batch.return_value = ["translated"]
+
+    with patch(
+        "doc_process_studio.incident_report.service.preview.GoogleTranslator",
+        return_value=mock_translator,
+    ):
+        data = {"fault_date": "2024-01-01", "title": "测试标题"}
+        result = asyncio.run(translate_report_data_to_english(report_data=data))
+        assert result["fault_date"] == "2024-01-01"

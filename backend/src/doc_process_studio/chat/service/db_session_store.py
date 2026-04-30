@@ -131,3 +131,12 @@ async def delete_chat_sessions_by_title_prefix(
         )
         await session.commit()
         return result.rowcount
+
+
+async def delete_chat_sessions_by_user(user_id: str) -> int:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            delete(ChatSessionORM).where(ChatSessionORM.user_id == user_id)
+        )
+        await session.commit()
+        return result.rowcount

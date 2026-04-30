@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from ...core.database import async_session_factory
 from ...shared.dtutils import to_utc8
+from ...auth.service.auth import resolve_usernames
 from ..models.audit_log import IncidentAuditLog
 from ..schemas.response import IncidentAuditLogEntry
 
@@ -49,12 +50,12 @@ async def list_audit_logs(report_id: str) -> list[IncidentAuditLog]:
         return list(result.scalars().all())
 
 
-def orm_to_entry(record: IncidentAuditLog) -> IncidentAuditLogEntry:
+def orm_to_entry(record: IncidentAuditLog, actor_name: str | None = None) -> IncidentAuditLogEntry:
     return IncidentAuditLogEntry(
         id=record.id,
         action=record.action,
         actor_id=record.actor_id,
-        actor_name=None,
+        actor_name=actor_name,
         from_status=record.from_status,
         to_status=record.to_status,
         comment=record.comment,

@@ -566,6 +566,7 @@ test('AI 生成测试', async ({ page }) => {
 2. **使用 `try/finally` 清理单条数据**：在测试中创建的单条数据，使用 `try/finally` + `deleteIncidentReportViaApi` 立即清理，避免数据残留
 3. **`cleanupWorkerData` 作为兜底**：即使单条清理失败，`afterAll` 中的 `cleanupWorkerData` 也会按前缀批量清理
 4. **不要使用 `test.describe.configure({ mode: 'serial' })`**：Worker 隔离已解决并发问题，无需串行执行
+5. **前端表单输入的数据也必须使用 `workerPrefix` 前缀**：即使只通过 UI 填写未调用 API，表单提交后仍会持久化到数据库。例如 `await titleInput.fill(`${workerPrefix}测试报告`)`，确保 `cleanupWorkerData` 能正确清理
 
 #### 7. Worker 隔离机制
 

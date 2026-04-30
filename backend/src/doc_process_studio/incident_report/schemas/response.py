@@ -24,7 +24,7 @@ class IncidentReportPreviewResponse(BaseModel):
     source: Literal["draft", "version"] = Field(..., description="预览来源。")
     version: int | None = Field(default=None, description="历史版本号。")
     label: str = Field(..., description="预览标签。")
-    html: str = Field(..., description="转换后的 HTML 预览内容。")
+    html: str = Field(default="", description="HTML 预览内容（已弃用，保留兼容）。")
     docx_base64: str | None = Field(
         default=None,
         description="可选 DOCX 文档内容（base64 编码，草稿预览下载使用）。",
@@ -39,7 +39,7 @@ class IncidentReportPreviewResponse(BaseModel):
     )
     warnings: list[str] = Field(
         default_factory=list,
-        description="文档转 HTML 的提示信息。",
+        description="预览生成提示信息。",
     )
 
 
@@ -114,6 +114,7 @@ class IncidentRoleEntry(BaseModel):
     user_id: str = Field(...)
     role: str = Field(...)
     assigned_by: str | None = Field(default=None)
+    assigned_by_name: str | None = Field(default=None)
     assigned_at: datetime | None = Field(default=None)
 
 
@@ -154,6 +155,16 @@ class IncidentUserPermissionsResponse(BaseModel):
     permissions: list[str] = Field(default_factory=list)
 
 
+class IncidentUserWithRolesEntry(BaseModel):
+    user_id: str = Field(..., description="用户ID")
+    username: str = Field(..., description="用户名")
+    roles: list[str] = Field(default_factory=list, description="已分配的角色列表")
+
+
+class IncidentUserWithRolesListResponse(BaseModel):
+    items: list[IncidentUserWithRolesEntry] = Field(default_factory=list)
+
+
 __all__ = [
     "IncidentAnalyticsOverview",
     "IncidentAnalyticsTrend",
@@ -171,4 +182,6 @@ __all__ = [
     "IncidentRoleListResponse",
     "IncidentUserPermissionsResponse",
     "IncidentUserRolesResponse",
+    "IncidentUserWithRolesEntry",
+    "IncidentUserWithRolesListResponse",
 ]

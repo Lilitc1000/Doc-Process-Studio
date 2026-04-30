@@ -35,7 +35,7 @@ INCIDENT_REPORT_FORM_SCHEMA = FormSchemaDefinition(
             title="基本信息",
             description="填写事故的基本信息",
             fields=[
-                FormFieldSchema(field_id="manual_reference_no", label="参考编号", field_type="text", required=True, placeholder="如：DAS-001"),
+                FormFieldSchema(field_id="manual_reference_no", label="参考编号", field_type="text", placeholder="如：DAS-001，留空自动生成"),
                 FormFieldSchema(field_id="manual_fault_date", label="故障日期", field_type="datetime", required=True),
                 FormFieldSchema(field_id="manual_reporting_person", label="报告人", field_type="text", required=True),
                 FormFieldSchema(field_id="manual_site_id", label="站点编号", field_type="text", required=True, placeholder="如：SITE-01"),
@@ -47,7 +47,7 @@ INCIDENT_REPORT_FORM_SCHEMA = FormSchemaDefinition(
                     {"value": "investigating", "label": "调查中"},
                     {"value": "resolved", "label": "已解决"},
                 ]),
-                FormFieldSchema(field_id="manual_severity", label="严重级别", field_type="select", required=True, options=[
+                FormFieldSchema(field_id="manual_severity", label="严重级别", field_type="select", options=[
                     {"value": "P0", "label": "P0 - 紧急"},
                     {"value": "P1", "label": "P1 - 严重"},
                     {"value": "P2", "label": "P2 - 一般"},

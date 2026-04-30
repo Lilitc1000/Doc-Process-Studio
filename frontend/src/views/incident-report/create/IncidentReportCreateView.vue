@@ -6,7 +6,19 @@
         size="sm"
         @click="router.push('/incident-report')"
       >
-        ← 返回列表
+        <svg
+          viewBox="0 0 20 20"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12.5 15L7.5 10L12.5 5" />
+        </svg>
+        返回列表
       </base-button>
       <h1>新建事故报告 / New Incident Report</h1>
     </div>
@@ -17,9 +29,16 @@
         :key="step.key"
         :class="[
           'wizard-step',
-          { active: currentStep === index, completed: currentStep > index },
+          {
+            active: currentStep === index,
+            completed: currentStep > index,
+            clickable: currentStep > index || currentStep === index - 1,
+          },
         ]"
-        @click="currentStep > index && (currentStep = index as WizardStep)"
+        @click="
+          (currentStep > index || currentStep === index - 1) &&
+          (currentStep = index as WizardStep)
+        "
       >
         <span class="step-number">{{ index + 1 }}</span>
         <span class="step-label">{{ step.label }}</span>
@@ -32,9 +51,18 @@
           <h3>SECTION A - 故障记录 / Fault Details</h3>
         </div>
         <div class="zone-grid two-column">
-          <label class="field-item">
+          <label
+            ref="fieldTitle"
+            class="field-item"
+            :class="{ invalid: attemptedNextStep && !formData.title.trim() }"
+          >
             <span>报告标题 / Report Title *</span>
             <base-input v-model="formData.title" placeholder="请输入报告标题" />
+            <span
+              v-if="attemptedNextStep && !formData.title.trim()"
+              class="field-error"
+              >请填写报告标题</span
+            >
           </label>
           <label class="field-item">
             <span>参考编号 / Reference No.</span>
@@ -43,7 +71,11 @@
               placeholder="例如：DAS2 Fault Log Form-015"
             />
           </label>
-          <label class="field-item" :class="{ invalid: !formData.faultDate }">
+          <label
+            ref="fieldFaultDate"
+            class="field-item"
+            :class="{ invalid: attemptedNextStep && !formData.faultDate }"
+          >
             <span>故障上报日期 / Date of Fault Reporting *</span>
             <base-date-time-picker
               mode="date"
@@ -51,6 +83,11 @@
               :model-value="formData.faultDate"
               @update:model-value="formData.faultDate = $event"
             />
+            <span
+              v-if="attemptedNextStep && !formData.faultDate"
+              class="field-error"
+              >请选择故障上报日期</span
+            >
           </label>
           <label class="field-item">
             <span>故障上报时间 / Time of Fault Reporting</span>
@@ -61,12 +98,27 @@
               @update:model-value="formAnswers.manual_fault_time = $event"
             />
           </label>
-          <label class="field-item">
+          <label
+            ref="fieldReporter"
+            class="field-item"
+            :class="{
+              invalid:
+                attemptedNextStep &&
+                !formAnswers.manual_reporting_person.trim(),
+            }"
+          >
             <span>报告人 / Reporting Person *</span>
             <base-input
               v-model="formAnswers.manual_reporting_person"
               placeholder="报告人姓名"
             />
+            <span
+              v-if="
+                attemptedNextStep && !formAnswers.manual_reporting_person.trim()
+              "
+              class="field-error"
+              >请填写报告人</span
+            >
           </label>
           <label class="field-item">
             <span>审核人 / Verified By</span>
@@ -75,31 +127,74 @@
               placeholder="审核人姓名"
             />
           </label>
-          <label class="field-item" :class="{ invalid: !formData.siteId }">
+          <label
+            ref="fieldSiteId"
+            class="field-item"
+            :class="{ invalid: attemptedNextStep && !formData.siteId }"
+          >
             <span>站点编号 / Site ID *</span>
             <base-input v-model="formData.siteId" placeholder="如：SITE-01" />
+            <span
+              v-if="attemptedNextStep && !formData.siteId"
+              class="field-error"
+              >请填写站点编号</span
+            >
           </label>
-          <label class="field-item" :class="{ invalid: !formData.system }">
+          <label
+            ref="fieldSystem"
+            class="field-item"
+            :class="{ invalid: attemptedNextStep && !formData.system }"
+          >
             <span>系统 / 子系统 / System / Subsystems *</span>
             <base-input
               v-model="formData.system"
               placeholder="如：数据库系统"
             />
+            <span
+              v-if="attemptedNextStep && !formData.system"
+              class="field-error"
+              >请填写系统/子系统</span
+            >
           </label>
-          <label class="field-item">
+          <label
+            ref="fieldLocation"
+            class="field-item"
+            :class="{
+              invalid: attemptedNextStep && !formAnswers.manual_location.trim(),
+            }"
+          >
             <span>故障位置 / Location of Fault *</span>
             <base-input
               v-model="formAnswers.manual_location"
               placeholder="故障发生位置"
             />
+            <span
+              v-if="attemptedNextStep && !formAnswers.manual_location.trim()"
+              class="field-error"
+              >请填写故障位置</span
+            >
           </label>
-          <label class="field-item full-width">
+          <label
+            ref="fieldSymptom"
+            class="field-item full-width"
+            :class="{
+              invalid:
+                attemptedNextStep && !formAnswers.manual_fault_symptom.trim(),
+            }"
+          >
             <span>故障现象详情 / Details of Fault Symptom *</span>
             <base-textarea
               v-model="formAnswers.manual_fault_symptom"
               rows="3"
               placeholder="请详细描述故障现象..."
             />
+            <span
+              v-if="
+                attemptedNextStep && !formAnswers.manual_fault_symptom.trim()
+              "
+              class="field-error"
+              >请填写故障现象详情</span
+            >
           </label>
           <label class="field-item">
             <span>到场时间 / Arrival Datetime</span>
@@ -252,89 +347,36 @@
             可跳过此步骤直接进入正文编辑，也可填写简述后一键 AI 生成完整正文。
           </p>
         </div>
-        <div class="zone-grid">
-          <label class="field-item full-width">
-            <span>事故简述 / Quick Narrative</span>
-            <base-textarea
-              v-model="formAnswers.quick_narrative"
-              rows="4"
-              placeholder="例如：3月12号下午3点客户下单报错，定位数据库 CPU 打满，3点半降级并加索引，4点恢复，后续加强 code review。"
-            />
-          </label>
-          <label class="field-item full-width">
-            <span>时间线 / Quick Timeline</span>
-            <div class="timeline-list">
-              <div
-                v-for="(item, index) in quickTimelineItems"
-                :key="index"
-                class="timeline-row"
-              >
-                <base-input
-                  :value="item.time"
-                  placeholder="时间"
-                  @input="onQuickTimelineInput(index, 'time', $event)"
-                />
-                <base-input
-                  :value="item.event"
-                  placeholder="发生了什么"
-                  @input="onQuickTimelineInput(index, 'event', $event)"
-                />
-                <base-input
-                  :value="item.resolution"
-                  placeholder="如何处理"
-                  @input="onQuickTimelineInput(index, 'resolution', $event)"
-                />
-                <base-button
-                  type="button"
-                  variant="danger"
-                  size="sm"
-                  @click="quickTimelineItems.splice(index, 1)"
-                >
-                  删除
-                </base-button>
-              </div>
-            </div>
+        <div class="section-card">
+          <div class="section-header">
+            <h4>事故简述 / Quick Narrative</h4>
             <base-button
               type="button"
-              variant="secondary"
+              variant="ghost"
               size="sm"
-              @click="
-                quickTimelineItems.push({ time: '', event: '', resolution: '' })
-              "
+              :disabled="generating || !formAnswers.quick_narrative.trim()"
+              @click="handleQuickGenerate"
             >
-              新增时间线 / Add Timeline
+              <svg
+                viewBox="0 0 20 20"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z" />
+              </svg>
+              {{ generating ? '生成中...' : 'AI 生成' }}
             </base-button>
-          </label>
-          <label class="field-item">
-            <span>影响范围 / Impact Scope</span>
-            <base-input
-              v-model="formAnswers.quick_impact_scope"
-              placeholder="影响范围"
-            />
-          </label>
-          <label class="field-item">
-            <span>严重级别 / Impact Severity</span>
-            <base-input
-              v-model="formAnswers.quick_impact_severity"
-              placeholder="严重级别"
-            />
-          </label>
-          <label class="field-item full-width">
-            <span>根因推测 / Root Cause Guess</span>
-            <base-textarea
-              v-model="formAnswers.quick_root_cause_guess"
-              rows="2"
-              placeholder="根因推测..."
-            />
-          </label>
-          <label class="field-item full-width">
-            <span>后续动作 / Follow-up Action</span>
-            <base-textarea
-              v-model="formAnswers.quick_follow_up_action"
-              rows="2"
-              placeholder="后续动作..."
-            />
-          </label>
+          </div>
+          <base-textarea
+            v-model="formAnswers.quick_narrative"
+            rows="6"
+            placeholder="例如：3月12号下午3点客户下单报错，定位数据库 CPU 打满，3点半降级并加索引，4点恢复，后续加强 code review。"
+          />
         </div>
       </div>
 
@@ -354,6 +396,20 @@
               :disabled="generating"
               @click="handleSectionGenerate('description')"
             >
+              <svg
+                viewBox="0 0 20 20"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z"
+                />
+              </svg>
               AI 生成
             </base-button>
           </div>
@@ -367,48 +423,110 @@
         <div class="section-card">
           <div class="section-header">
             <h4>时间线 / Timeline *</h4>
-            <base-button
-              type="button"
-              variant="ghost"
-              size="sm"
-              :disabled="generating"
-              @click="handleSectionGenerate('timeline')"
-            >
-              AI 生成
-            </base-button>
+          </div>
+          <div class="timeline-summary">
+            <div class="zone-grid two-column">
+              <label class="field-item">
+                <span>开始时间 / Start Time</span>
+                <base-date-time-picker
+                  mode="datetime"
+                  placeholder="选择开始时间"
+                  :model-value="formAnswers.body_affected_start_time"
+                  @update:model-value="
+                    formAnswers.body_affected_start_time = $event
+                  "
+                />
+              </label>
+              <label class="field-item">
+                <span>结束时间 / End Time</span>
+                <base-date-time-picker
+                  mode="datetime"
+                  placeholder="选择结束时间"
+                  :model-value="formAnswers.body_affected_end_time"
+                  @update:model-value="
+                    formAnswers.body_affected_end_time = $event
+                  "
+                />
+              </label>
+            </div>
           </div>
           <div class="timeline-list">
             <div
               v-for="(item, index) in bodyTimelineItems"
               :key="index"
-              class="timeline-row"
+              class="timeline-item-wrapper"
             >
-              <base-date-time-picker
-                mode="time"
-                placeholder="时间"
-                :model-value="item.time"
-                @update:model-value="
-                  onBodyTimelineChange(index, 'time', $event)
-                "
-              />
-              <base-input
-                :value="item.event"
-                placeholder="发生了什么"
-                @input="onBodyTimelineInput(index, 'event', $event)"
-              />
-              <base-input
-                :value="item.resolution"
-                placeholder="如何处理"
-                @input="onBodyTimelineInput(index, 'resolution', $event)"
-              />
-              <base-button
-                type="button"
-                variant="danger"
-                size="sm"
-                @click="bodyTimelineItems.splice(index, 1)"
+              <div class="timeline-row">
+                <base-date-time-picker
+                  mode="time"
+                  placeholder="时间"
+                  :model-value="item.time"
+                  @update:model-value="
+                    onBodyTimelineChange(index, 'time', $event)
+                  "
+                />
+                <base-input
+                  :value="item.event"
+                  placeholder="发生了什么"
+                  @input="onBodyTimelineInput(index, 'event', $event)"
+                />
+                <base-input
+                  :value="item.resolution"
+                  placeholder="如何处理"
+                  @input="onBodyTimelineInput(index, 'resolution', $event)"
+                />
+                <base-button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  :disabled="generating"
+                  @click="handleTimelineItemGenerate(index)"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z"
+                    />
+                  </svg>
+                  AI 生成
+                </base-button>
+                <base-button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  @click="bodyTimelineItems.splice(index, 1)"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    width="12"
+                    height="12"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M4 5H16M8 5V3.5H12V5M5 5L5.5 16H14.5L15 5M8 8V13M12 8V13"
+                    />
+                  </svg>
+                  删除
+                </base-button>
+              </div>
+              <span
+                v-if="timelineTimeErrors[index]"
+                class="timeline-time-error"
               >
-                删除
-              </base-button>
+                {{ timelineTimeErrors[index] }}
+              </span>
             </div>
           </div>
           <base-button
@@ -433,6 +551,20 @@
               :disabled="generating"
               @click="handleSectionGenerate('impact')"
             >
+              <svg
+                viewBox="0 0 20 20"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z"
+                />
+              </svg>
               AI 生成
             </base-button>
           </div>
@@ -472,6 +604,20 @@
               :disabled="generating"
               @click="handleSectionGenerate('root_cause')"
             >
+              <svg
+                viewBox="0 0 20 20"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z"
+                />
+              </svg>
               AI 生成
             </base-button>
           </div>
@@ -504,6 +650,20 @@
               :disabled="generating"
               @click="handleSectionGenerate('follow_up')"
             >
+              <svg
+                viewBox="0 0 20 20"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z"
+                />
+              </svg>
               AI 生成
             </base-button>
           </div>
@@ -522,14 +682,13 @@
       <div v-if="currentStep === 3" class="step-form zone-card">
         <div class="section-heading">
           <h3>附录 / Appendix</h3>
-          <p>支持文本输入，附加信息将在生成文档时同步写入附录页。</p>
+          <p>支持富文本输入，附加信息将在生成文档时同步写入附录页。</p>
         </div>
         <div class="zone-grid">
           <label class="field-item full-width">
             <span>附录内容 / Appendix Notes</span>
-            <base-textarea
+            <rich-text-editor
               v-model="formAnswers.appendix_notes"
-              rows="6"
               placeholder="请输入附录内容..."
             />
           </label>
@@ -538,8 +697,8 @@
 
       <div v-if="currentStep === 4" class="step-form zone-card">
         <div class="section-heading">
-          <h3>预览附件 / Preview Attachment</h3>
-          <p>点击生成预览后，可使用 PDF 浏览器查看文档。</p>
+          <h3>预览 / Preview</h3>
+          <p>点击生成预览后，将自动打开 PDF 预览。</p>
         </div>
         <div class="preview-actions">
           <base-button
@@ -548,15 +707,21 @@
             :disabled="previewing"
             @click="handleGeneratePreview"
           >
-            {{ previewing ? '生成中...' : '生成预览 / Generate Preview' }}
-          </base-button>
-          <base-button
-            v-if="previewData?.pdfBase64"
-            type="button"
-            variant="secondary"
-            @click="openPdfPreview"
-          >
-            在 PDF 浏览器中查看 / View PDF
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z"
+              />
+            </svg>
+            {{ previewing ? '生成中...' : '生成预览' }}
           </base-button>
           <base-button
             v-if="previewData?.docxBase64"
@@ -564,16 +729,53 @@
             variant="secondary"
             @click="downloadDocx"
           >
-            下载 DOCX / Download
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M10 3V13M10 13L6.5 9.5M10 13L13.5 9.5M3 16H17" />
+            </svg>
+            下载 DOCX
           </base-button>
-        </div>
-        <div v-if="previewData?.html" class="preview-html-container">
-          <div v-safe-html="previewData.html" class="preview-html"></div>
         </div>
         <div v-if="previewData?.warnings?.length" class="preview-warnings">
           <p v-for="w in previewData.warnings" :key="w" class="warning-hint">
             {{ w }}
           </p>
+        </div>
+
+        <div
+          v-if="showPdfPreview && previewData?.pdfBase64"
+          class="pdf-preview-dialog"
+          @click.self="showPdfPreview = false"
+          @keydown.esc="showPdfPreview = false"
+        >
+          <div class="pdf-preview-content">
+            <iframe
+              :src="pdfPreviewUrl + '#toolbar=0&navpanes=0'"
+              class="pdf-preview-iframe"
+              frameborder="0"
+            />
+            <button class="pdf-preview-close" @click="showPdfPreview = false">
+              <svg
+                viewBox="0 0 20 20"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <path d="M5 5L15 15M15 5L5 15" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -592,7 +794,19 @@
           variant="ghost"
           @click="currentStep--"
         >
-          上一步 / Previous
+          <svg
+            viewBox="0 0 20 20"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12.5 15L7.5 10L12.5 5" />
+          </svg>
+          上一步
         </base-button>
         <base-button
           v-if="currentStep < WIZARD_STEPS.length - 1"
@@ -600,7 +814,19 @@
           class="wizard-btn-next"
           @click="handleNextStep"
         >
-          下一步 / Next
+          下一步
+          <svg
+            viewBox="0 0 20 20"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M7.5 5L12.5 10L7.5 15" />
+          </svg>
         </base-button>
         <base-button
           v-if="currentStep === WIZARD_STEPS.length - 1"
@@ -609,7 +835,19 @@
           :disabled="!formData.title.trim() || submitting"
           @click="handleSubmit"
         >
-          提交报告 / Submit
+          <svg
+            viewBox="0 0 20 20"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 10.5L8 14.5L16 5.5" />
+          </svg>
+          提交报告
         </base-button>
       </div>
     </div>
@@ -618,6 +856,12 @@
       :visible="generating || previewing"
       :label="generatingLabel"
       @stop="handleStopGeneration"
+    />
+
+    <floating-toast
+      :visible="showSubmitToast"
+      :title="submitToastTitle"
+      :message="submitToastMessage"
     />
   </div>
 </template>
@@ -628,12 +872,15 @@ import { useRouter } from 'vue-router';
 import { useAppStore } from '../../../stores/app';
 import { useReportWizard, WIZARD_STEPS } from './composables/useReportWizard';
 import type { WizardStep } from './composables/useReportWizard';
+import { convertToIso } from '../composables/useReportForm';
 import AiGeneratingModal from '../../../components/business/AiGeneratingModal.vue';
+import FloatingToast from '../../../components/business/FloatingToast.vue';
 import BaseButton from '../../../components/base/BaseButton.vue';
 import BaseInput from '../../../components/base/BaseInput.vue';
 import BaseTextarea from '../../../components/base/BaseTextarea.vue';
 import BaseDropdown from '../../../components/base/BaseDropdown.vue';
 import BaseDateTimePicker from '../../../components/base/BaseDateTimePicker.vue';
+import RichTextEditor from '../components/RichTextEditor.vue';
 
 const router = useRouter();
 
@@ -655,6 +902,19 @@ const {
 } = useReportWizard();
 
 let abortController: AbortController | null = null;
+
+const attemptedNextStep = ref(false);
+const showSubmitToast = ref(false);
+const submitToastMessage = ref('报告提交成功');
+const submitToastTitle = ref('提交成功');
+
+const fieldTitle = ref<HTMLLabelElement | null>(null);
+const fieldFaultDate = ref<HTMLLabelElement | null>(null);
+const fieldReporter = ref<HTMLLabelElement | null>(null);
+const fieldSiteId = ref<HTMLLabelElement | null>(null);
+const fieldSystem = ref<HTMLLabelElement | null>(null);
+const fieldLocation = ref<HTMLLabelElement | null>(null);
+const fieldSymptom = ref<HTMLLabelElement | null>(null);
 
 const appStore = useAppStore();
 
@@ -707,11 +967,9 @@ const formAnswers = ref<Record<string, string>>({
   manual_closeout_date: '',
   manual_comments: '',
   quick_narrative: '',
-  quick_impact_scope: '',
-  quick_impact_severity: '',
-  quick_root_cause_guess: '',
-  quick_follow_up_action: '',
   body_description: '',
+  body_affected_start_time: '',
+  body_affected_end_time: '',
   body_impact_scope: '',
   body_impact_severity: '',
   body_business_impact: '',
@@ -721,7 +979,6 @@ const formAnswers = ref<Record<string, string>>({
   appendix_notes: '',
 });
 
-const quickTimelineItems = ref<TimelineItem[]>([]);
 const bodyTimelineItems = ref<TimelineItem[]>([
   { time: '', event: '', resolution: '' },
 ]);
@@ -740,31 +997,12 @@ const statusOptions = [
 ];
 
 watch(
-  quickTimelineItems,
-  (items) => {
-    formAnswers.value.quick_timeline = JSON.stringify(items);
-  },
-  { deep: true },
-);
-
-watch(
   bodyTimelineItems,
   (items) => {
     formAnswers.value.body_timeline = JSON.stringify(items);
   },
   { deep: true },
 );
-
-const onQuickTimelineInput = (
-  index: number,
-  key: keyof TimelineItem,
-  event: Event,
-) => {
-  const value = (event.target as HTMLInputElement).value;
-  if (quickTimelineItems.value[index]) {
-    quickTimelineItems.value[index][key] = value;
-  }
-};
 
 const onBodyTimelineChange = (
   index: number,
@@ -773,6 +1011,23 @@ const onBodyTimelineChange = (
 ) => {
   if (bodyTimelineItems.value[index]) {
     bodyTimelineItems.value[index][key] = value;
+  }
+  if (key === 'time') {
+    validateTimelineTimeOrder();
+  }
+};
+
+const timelineTimeErrors = ref<Record<number, string>>({});
+
+const validateTimelineTimeOrder = () => {
+  timelineTimeErrors.value = {};
+  const items = bodyTimelineItems.value;
+  for (let i = 1; i < items.length; i++) {
+    const prevTime = items[i - 1].time?.trim();
+    const currTime = items[i].time?.trim();
+    if (prevTime && currTime && currTime < prevTime) {
+      timelineTimeErrors.value[i] = '时间不应早于前一条时间线';
+    }
   }
 };
 
@@ -788,7 +1043,24 @@ const onBodyTimelineInput = (
 const buildFormPayload = () => {
   const formDataPayload: Record<string, unknown> = { ...formAnswers.value };
   formDataPayload.body_timeline = bodyTimelineItems.value;
-  formDataPayload.quick_timeline = quickTimelineItems.value;
+  const startTime = formAnswers.value.body_affected_start_time?.trim();
+  const endTime = formAnswers.value.body_affected_end_time?.trim();
+  if (startTime || endTime) {
+    formDataPayload.body_affected_date_summary =
+      `${startTime || ''} - ${endTime || ''}`.trim();
+  }
+  if (formData.value.severity) {
+    formDataPayload.manual_severity = formData.value.severity;
+  }
+  if (formData.value.faultDate) {
+    formDataPayload.manual_fault_date = formData.value.faultDate;
+  }
+  if (formData.value.system) {
+    formDataPayload.manual_system = formData.value.system;
+  }
+  if (formData.value.siteId) {
+    formDataPayload.manual_site_id = formData.value.siteId;
+  }
   return {
     title: formData.value.title,
     severity: formData.value.severity || undefined,
@@ -801,41 +1073,87 @@ const buildFormPayload = () => {
 
 const handleNextStep = async () => {
   if (currentStep.value === 0) {
-    if (!formData.value.title.trim()) return;
-  }
-
-  if (currentStep.value === 1 && formAnswers.value.quick_narrative.trim()) {
-    try {
-      abortController = new AbortController();
-      const result = await quickGenerate(buildFormPayload(), {
-        model: appStore.selectedModel,
-        rerankerModel: appStore.selectedRerankerModel,
-        signal: abortController.signal,
-      });
-      applyGenerationResult(result, formAnswers.value);
-      if (result.formAnswers.bodyTimeline) {
-        const timeline = result.formAnswers.bodyTimeline.value;
-        if (Array.isArray(timeline)) {
-          bodyTimelineItems.value = timeline.map(
-            (item: Record<string, string>) => ({
-              time: item.time || '',
-              event: item.event || '',
-              resolution: item.resolution || '',
-            }),
-          );
-        }
-      }
-      currentStep.value = 2 as WizardStep;
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    } finally {
-      abortController = null;
+    attemptedNextStep.value = true;
+    const requiredFields = [
+      { ref: 'fieldTitle', valid: !!formData.value.title.trim() },
+      { ref: 'fieldFaultDate', valid: !!formData.value.faultDate },
+      {
+        ref: 'fieldReporter',
+        valid: !!formAnswers.value.manual_reporting_person.trim(),
+      },
+      { ref: 'fieldSiteId', valid: !!formData.value.siteId },
+      { ref: 'fieldSystem', valid: !!formData.value.system },
+      {
+        ref: 'fieldLocation',
+        valid: !!formAnswers.value.manual_location.trim(),
+      },
+      {
+        ref: 'fieldSymptom',
+        valid: !!formAnswers.value.manual_fault_symptom.trim(),
+      },
+    ];
+    const firstInvalid = requiredFields.find((f) => !f.valid);
+    if (firstInvalid) {
+      const refMap: Record<string, typeof fieldTitle> = {
+        fieldTitle,
+        fieldFaultDate,
+        fieldReporter,
+        fieldSiteId,
+        fieldSystem,
+        fieldLocation,
+        fieldSymptom,
+      };
+      const el = refMap[firstInvalid.ref]?.value;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
     }
-    return;
   }
 
   if (currentStep.value < WIZARD_STEPS.length - 1) {
     currentStep.value = (currentStep.value + 1) as WizardStep;
+  }
+};
+
+const handleQuickGenerate = async () => {
+  if (!formAnswers.value.quick_narrative.trim() || generating.value) return;
+  try {
+    abortController = new AbortController();
+    const result = await quickGenerate(buildFormPayload(), {
+      model: appStore.selectedModel,
+      rerankerModel: appStore.selectedRerankerModel,
+      signal: abortController.signal,
+    });
+    applyGenerationResult(result, formAnswers.value);
+    if (result.formAnswers.bodyTimeline) {
+      const timeline = result.formAnswers.bodyTimeline.value;
+      if (Array.isArray(timeline) && timeline.length > 0) {
+        bodyTimelineItems.value = timeline.map(
+          (item: Record<string, string>) => ({
+            time: item.time || '',
+            event: item.event || '',
+            resolution: item.resolution || '',
+          }),
+        );
+        const firstTime = timeline[0].time;
+        const lastTime = timeline[timeline.length - 1].time;
+        if (firstTime) {
+          formAnswers.value.body_affected_start_time = convertToIso(firstTime, formData.value.faultDate);
+        }
+        if (lastTime) {
+          formAnswers.value.body_affected_end_time = convertToIso(lastTime, formData.value.faultDate);
+        }
+      }
+    }
+    submitToastTitle.value = '生成成功';
+    submitToastMessage.value = 'AI 正文已生成，可进入下一步查看和编辑';
+    showSubmitToast.value = true;
+    setTimeout(() => {
+      showSubmitToast.value = false;
+    }, 3000);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return;
+  } finally {
+    abortController = null;
   }
 };
 
@@ -844,6 +1162,12 @@ const handleSaveDraft = async () => {
   saving.value = true;
   try {
     const report = await saveAsDraft(buildFormPayload());
+    submitToastTitle.value = '保存成功';
+    submitToastMessage.value = '草稿已保存';
+    showSubmitToast.value = true;
+    setTimeout(() => {
+      showSubmitToast.value = false;
+    }, 3000);
     if (!reportId.value) {
       router.push(`/incident-report/${report.id}`);
     }
@@ -856,8 +1180,25 @@ const handleSubmit = async () => {
   if (!formData.value.title.trim()) return;
   submitting.value = true;
   try {
-    const report = await createAndSubmit(buildFormPayload());
-    router.push(`/incident-report/${report.id}`);
+    await createAndSubmit(buildFormPayload());
+    sessionStorage.setItem('incident_report_submitted', '1');
+    router.push('/incident-report');
+  } catch (err: unknown) {
+    let message = '提交失败，请稍后重试';
+    if (err && typeof err === 'object' && 'response' in err) {
+      const resp = (err as { response?: { data?: { detail?: string } } }).response;
+      if (resp?.data?.detail) {
+        message = resp.data.detail;
+      }
+    } else if (err instanceof Error) {
+      message = err.message;
+    }
+    submitToastTitle.value = '提交失败';
+    submitToastMessage.value = message;
+    showSubmitToast.value = true;
+    setTimeout(() => {
+      showSubmitToast.value = false;
+    }, 5000);
   } finally {
     submitting.value = false;
   }
@@ -873,7 +1214,26 @@ const handleSectionGenerate = async (sectionId: string) => {
       signal: abortController.signal,
     });
     applyGenerationResult(result, formAnswers.value);
-    if (sectionId === 'timeline' && result.formAnswers.bodyTimeline) {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return;
+    throw err;
+  } finally {
+    abortController = null;
+  }
+};
+
+const handleTimelineItemGenerate = async (index: number) => {
+  if (generating.value) return;
+  try {
+    abortController = new AbortController();
+    generating.value = true;
+    await saveAsDraft(buildFormPayload());
+    const result = await generateSection('timeline_item', {
+      timelineIndex: index,
+      signal: abortController.signal,
+    });
+    applyGenerationResult(result, formAnswers.value);
+    if (result.formAnswers.bodyTimeline) {
       const timeline = result.formAnswers.bodyTimeline.value;
       if (Array.isArray(timeline)) {
         bodyTimelineItems.value = timeline.map(
@@ -893,29 +1253,33 @@ const handleSectionGenerate = async (sectionId: string) => {
   }
 };
 
+const showPdfPreview = ref(false);
+const pdfPreviewUrl = ref('');
+
 const handleGeneratePreview = async () => {
   try {
     abortController = new AbortController();
     await saveAsDraft(buildFormPayload());
     await generatePreview({ signal: abortController.signal });
+    if (previewData.value?.pdfBase64) {
+      const binaryString = atob(previewData.value.pdfBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      if (pdfPreviewUrl.value) {
+        URL.revokeObjectURL(pdfPreviewUrl.value);
+      }
+      pdfPreviewUrl.value = URL.createObjectURL(blob);
+      showPdfPreview.value = true;
+    }
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') return;
     throw err;
   } finally {
     abortController = null;
   }
-};
-
-const openPdfPreview = () => {
-  if (!previewData.value?.pdfBase64) return;
-  const binaryString = atob(previewData.value.pdfBase64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  const blob = new Blob([bytes], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
 };
 
 const downloadDocx = () => {

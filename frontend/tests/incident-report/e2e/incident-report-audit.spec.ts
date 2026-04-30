@@ -7,6 +7,7 @@ import {
   createIncidentReportViaApi,
   submitIncidentReportViaApi,
   deleteIncidentReportViaApi,
+  cleanupWorkerData,
 } from '../../helpers';
 
 test.describe('事故报告审核流程', () => {
@@ -19,6 +20,10 @@ test.describe('事故报告审核流程', () => {
 
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);
+  });
+
+  test.afterAll(async ({ request }) => {
+    await cleanupWorkerData(request, workerPrefix);
   });
 
   test('从详情页进入审核页', async ({ page, request }) => {
@@ -37,7 +42,9 @@ test.describe('事故报告审核流程', () => {
 
     try {
       await page.goto(`/incident-report/${report!.id}`);
-      await expect(page.locator('.incident-report-detail-view')).toBeVisible();
+      await expect(page.locator('.incident-report-detail-view')).toBeVisible({
+        timeout: 10_000,
+      });
 
       const auditBtn = page.locator('.detail-header-right button', {
         hasText: '审核',
@@ -63,7 +70,9 @@ test.describe('事故报告审核流程', () => {
 
     try {
       await page.goto(`/incident-report/${report!.id}/audit`);
-      await expect(page.locator('.incident-report-audit-view')).toBeVisible();
+      await expect(page.locator('.incident-report-audit-view')).toBeVisible({
+        timeout: 10_000,
+      });
 
       const auditPanel = page.locator('.audit-action-panel');
       if (await auditPanel.isVisible()) {
@@ -89,6 +98,9 @@ test.describe('事故报告审核流程', () => {
       if (await backBtn.isVisible()) {
         await backBtn.click();
         await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
+        await expect(page.locator('.incident-report-detail-view')).toBeVisible({
+          timeout: 10_000,
+        });
       }
     } finally {
       await deleteIncidentReportViaApi(request, token!, report!.id);

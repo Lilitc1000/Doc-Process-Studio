@@ -40,6 +40,7 @@
       <div
         v-if="isOpen"
         class="base-dropdown-panel"
+        :style="panelMinWidth ? { minWidth: panelMinWidth } : {}"
         role="listbox"
         :aria-labelledby="labelId"
       >
@@ -79,11 +80,13 @@ const props = withDefaults(
     placeholder?: string;
     disabled?: boolean;
     labelId?: string;
+    panelMinWidth?: string;
   }>(),
   {
     placeholder: '请选择',
     disabled: false,
     labelId: undefined,
+    panelMinWidth: undefined,
   },
 );
 
@@ -155,11 +158,11 @@ watch(
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 44px;
-  padding: 0.78rem 0.95rem;
+  min-height: 40px;
+  padding: 0.62rem 0.72rem;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: 12px;
   font-size: 0.9rem;
   color: #0f172a;
   cursor: pointer;
@@ -170,7 +173,7 @@ watch(
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     background 0.2s ease;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .base-dropdown-trigger:hover:not(:disabled):not(.open) {
@@ -211,8 +214,8 @@ watch(
 }
 
 .base-dropdown-trigger-icon {
-  width: 2rem;
-  height: 2rem;
+  width: 1.5rem;
+  height: 1.5rem;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -244,8 +247,8 @@ watch(
   position: absolute;
   top: calc(100% + 0.5rem);
   left: 0;
-  right: 0;
   z-index: 40;
+  min-width: 100%;
   padding: 0.45rem;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid #e2e8f0;

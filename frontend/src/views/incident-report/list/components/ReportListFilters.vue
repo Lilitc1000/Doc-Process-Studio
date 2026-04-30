@@ -12,6 +12,7 @@
       :options="statusOptions"
       placeholder="状态"
       class="filter-dropdown"
+      panel-min-width="160px"
       @update:model-value="$emit('update:status', $event)"
     />
     <base-dropdown
@@ -19,9 +20,10 @@
       :options="severityOptions"
       placeholder="严重级别"
       class="filter-dropdown"
+      panel-min-width="160px"
       @update:model-value="$emit('update:severity', $event)"
     />
-    <base-button variant="secondary" size="sm" @click="$emit('filter-change')">
+    <base-button variant="secondary" @click="$emit('filter-change')">
       筛选
     </base-button>
   </div>

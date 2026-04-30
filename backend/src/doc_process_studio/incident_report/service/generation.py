@@ -263,7 +263,7 @@ def _build_section_generation_prompt(
         )
     if section_key == "follow_up":
         return (
-            "仅生成后续动作段。只输出 JSON：{\"body_follow_up_actions\":\"按换行分隔\"}。不要修改其它章节。",
+            "仅生成后续动作段。只输出 JSON：{\"body_follow_up\":\"按换行分隔\"}。不要修改其它章节。",
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "timeline_item":
@@ -486,7 +486,7 @@ def _apply_section_payload(
         set_answer_if_non_empty(
             form_answers,
             BODY_FOLLOW_UP,
-            payload.get("body_follow_up_actions"),
+            payload.get("body_follow_up"),
         )
         return
     if section_key == "timeline_item":

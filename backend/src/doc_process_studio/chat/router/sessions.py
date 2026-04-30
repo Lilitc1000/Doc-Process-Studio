@@ -12,7 +12,10 @@ from ..service.sessions import (
     update_chat_session_title,
 )
 from ...core.security import get_current_user_id
-from ...chat.service.db_session_store import delete_chat_sessions_by_title_prefix
+from ...chat.service.db_session_store import (
+    delete_chat_sessions_by_title_prefix,
+    delete_chat_sessions_by_user,
+)
 from ...skill.service.conversation_store import clear_conversation_state
 
 router = APIRouter(prefix="/api/chat-sessions", tags=["chat-sessions"])
@@ -73,6 +76,17 @@ async def delete_sessions_by_title_prefix(
     user_id: str = Depends(get_current_user_id),
 ) -> dict[str, int]:
     count = await delete_chat_sessions_by_title_prefix(user_id, prefix)
+    return {"deleted": count}
+
+
+@router.delete("/by-user/{target_user_id}")
+async def delete_sessions_by_user(
+    target_user_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, int]:
+    if target_user_id != user_id:
+        raise HTTPException(status_code=403, detail="无权删除其他用户的会话。")
+    count = await delete_chat_sessions_by_user(target_user_id)
     return {"deleted": count}
 
 

@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import ChatPage from '../../../src/views/chat/ChatView.vue';
+import safeHtml from '../../../src/directives/safe-html';
 
 const streamChatReplyMock = vi.hoisted(() => vi.fn());
 const downloadAttachmentMock = vi.hoisted(() => vi.fn());
@@ -91,7 +92,13 @@ describe('chat attachment flow', () => {
       },
     );
 
-    const wrapper = mount(ChatPage);
+    const wrapper = mount(ChatPage, {
+      global: {
+        directives: {
+          'safe-html': safeHtml,
+        },
+      },
+    });
     await flushPromises();
 
     const textarea = wrapper.find('.chat-input textarea');

@@ -16,5 +16,8 @@ RUN mkdir -p /var/run/sshd \
     && echo "vscode ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vscode \
     && chmod 0440 /etc/sudoers.d/vscode
 
+RUN su - vscode -c "libreoffice --headless --terminate_after_init" 2>/dev/null || true \
+    && rm -rf /home/vscode/.config/libreoffice
+
 RUN pip3 install --no-cache-dir uv
 RUN npm install -g @openai/codex --no-progress

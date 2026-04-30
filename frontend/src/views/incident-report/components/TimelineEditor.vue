@@ -11,7 +11,17 @@
             size="sm"
             @click="removeItem(index)"
           >
-            ✕
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <path d="M5 5L15 15M15 5L5 15" />
+            </svg>
           </base-button>
         </div>
         <div class="timeline-item-fields">
@@ -35,7 +45,18 @@
       </div>
     </div>
     <base-button variant="ghost" size="sm" @click="addItem">
-      + 添加时间线条目
+      <svg
+        viewBox="0 0 20 20"
+        width="14"
+        height="14"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+      >
+        <path d="M10 4V16M4 10H16" />
+      </svg>
+      添加时间线条目
     </base-button>
   </div>
 </template>

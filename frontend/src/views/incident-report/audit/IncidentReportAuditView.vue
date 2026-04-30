@@ -9,7 +9,19 @@
           size="sm"
           @click="router.push(`/incident-report/${report.id}`)"
         >
-          ← 返回详情
+          <svg
+            viewBox="0 0 20 20"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12.5 15L7.5 10L12.5 5" />
+          </svg>
+          返回详情
         </base-button>
         <h1>审核报告 - {{ report.refNo }}</h1>
       </div>
@@ -54,6 +66,17 @@
                 :disabled="!comment.trim() || processing"
                 @click="handleReject"
               >
+                <svg
+                  viewBox="0 0 20 20"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 5L15 15M15 5L5 15" />
+                </svg>
                 驳回
               </base-button>
               <base-button
@@ -61,6 +84,18 @@
                 :disabled="!comment.trim() || processing"
                 @click="handleApprove"
               >
+                <svg
+                  viewBox="0 0 20 20"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 10.5L8 14.5L16 5.5" />
+                </svg>
                 通过
               </base-button>
             </div>

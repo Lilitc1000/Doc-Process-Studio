@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 
 from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport
@@ -36,27 +37,38 @@ def _make_report(**overrides) -> IncidentReport:
 
 
 def test_orm_to_summary_maps_fields():
+    from unittest.mock import AsyncMock, patch
+
     report = _make_report()
-    summary = orm_to_summary(report)
+    with patch(
+        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
+        new_callable=AsyncMock,
+        return_value={},
+    ):
+        summary = asyncio.run(orm_to_summary(report))
     assert summary.id == "rep-1"
     assert summary.ref_no == "DAS-0001"
     assert summary.title == "测试报告"
     assert summary.status == "draft"
     assert summary.severity == "P2"
     assert summary.reporter_id == "usr_test"
-    assert summary.reporter_name is None
     assert summary.assignee_id is None
-    assert summary.assignee_name is None
     assert summary.verifier_id is None
-    assert summary.verifier_name is None
     assert summary.fault_date is not None
     assert summary.created_at is not None
     assert summary.updated_at is not None
 
 
 def test_orm_to_detail_maps_fields():
+    from unittest.mock import AsyncMock, patch
+
     report = _make_report()
-    detail = orm_to_detail(report)
+    with patch(
+        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
+        new_callable=AsyncMock,
+        return_value={},
+    ):
+        detail = asyncio.run(orm_to_detail(report))
     assert detail.id == "rep-1"
     assert detail.system == "数据库"
     assert detail.site_id == "SITE-01"
@@ -69,6 +81,8 @@ def test_orm_to_detail_maps_fields():
 
 
 def test_orm_to_detail_with_all_fields():
+    from unittest.mock import AsyncMock, patch
+
     now = datetime.now(UTC)
     report = _make_report(
         assignee_id="usr_handler",
@@ -79,7 +93,12 @@ def test_orm_to_detail_with_all_fields():
         resolution_date=now,
         report_data={"severity": "P2"},
     )
-    detail = orm_to_detail(report)
+    with patch(
+        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
+        new_callable=AsyncMock,
+        return_value={},
+    ):
+        detail = asyncio.run(orm_to_detail(report))
     assert detail.assignee_id == "usr_handler"
     assert detail.verifier_id == "usr_verifier"
     assert detail.submitted_at is not None
@@ -97,12 +116,26 @@ def test_clear_sentinel_is_unique():
 
 
 def test_orm_to_summary_with_none_severity():
+    from unittest.mock import AsyncMock, patch
+
     report = _make_report(severity=None)
-    summary = orm_to_summary(report)
+    with patch(
+        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
+        new_callable=AsyncMock,
+        return_value={},
+    ):
+        summary = asyncio.run(orm_to_summary(report))
     assert summary.severity is None
 
 
 def test_orm_to_detail_empty_form_data():
+    from unittest.mock import AsyncMock, patch
+
     report = _make_report(form_data=None)
-    detail = orm_to_detail(report)
+    with patch(
+        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
+        new_callable=AsyncMock,
+        return_value={},
+    ):
+        detail = asyncio.run(orm_to_detail(report))
     assert detail.form_data == {}

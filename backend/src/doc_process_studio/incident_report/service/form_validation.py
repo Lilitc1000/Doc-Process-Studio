@@ -4,13 +4,11 @@ from ..schemas.common import VALID_SEVERITIES, VALID_STATUSES
 
 
 REQUIRED_FIELDS_FOR_SUBMIT = [
-    "manual_reference_no",
     "manual_fault_date",
     "manual_reporting_person",
     "manual_site_id",
     "manual_system",
     "manual_fault_symptom",
-    "manual_severity",
 ]
 
 

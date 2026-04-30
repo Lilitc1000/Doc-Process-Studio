@@ -57,14 +57,14 @@ const barWidth = (type: 'pending' | 'in_progress' | 'closed') => {
 <style scoped>
 .distribution-chart {
   padding: 20px;
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-secondary, #f8fafc);
   border-radius: 8px;
 }
 
 .distribution-chart h3 {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin: 0 0 16px;
 }
 
 .distribution-bars {
@@ -82,38 +82,44 @@ const barWidth = (type: 'pending' | 'in_progress' | 'closed') => {
 .bar-label {
   width: 60px;
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--color-text-secondary, #64748b);
+  flex-shrink: 0;
 }
 
 .bar-track {
   flex: 1;
-  height: 20px;
-  background: var(--color-bg-tertiary, #e5e7eb);
+  height: 24px;
+  background: var(--color-bg-tertiary, #e2e8f0);
   border-radius: 4px;
   overflow: hidden;
+  min-width: 0;
 }
 
 .bar-fill {
   height: 100%;
   border-radius: 4px;
   transition: width 0.3s ease;
+  min-width: 0;
 }
 
 .bar-pending {
-  background: var(--color-primary);
+  background: #3b82f6;
 }
+
 .bar-progress {
-  background: var(--color-warning);
+  background: #f59e0b;
 }
+
 .bar-closed {
-  background: var(--color-success);
+  background: #22c55e;
 }
 
 .bar-value {
-  width: 30px;
+  width: 36px;
   text-align: right;
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--color-text-primary, #0f172a);
+  flex-shrink: 0;
 }
 </style>

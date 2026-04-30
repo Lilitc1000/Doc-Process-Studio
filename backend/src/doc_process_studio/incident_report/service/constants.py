@@ -64,7 +64,7 @@ BODY_IMPACT_SEVERITY = "body_impact_severity"
 BODY_BUSINESS_IMPACT = "body_business_impact"
 BODY_TRIGGER = "body_trigger"
 BODY_ROOT_CAUSE = "body_root_cause"
-BODY_FOLLOW_UP = "body_follow_up_actions"
+BODY_FOLLOW_UP = "body_follow_up"
 
 APPENDIX_NOTES = "appendix_notes"
 APPENDIX_IMAGES = "appendix_images"

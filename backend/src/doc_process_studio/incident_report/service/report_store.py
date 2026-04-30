@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 from ...core.database import async_session_factory
 from ...shared.dtutils import to_utc8
+from ...auth.service.auth import resolve_usernames
 from ..models.incident_report_orm import IncidentComment, IncidentReport as IncidentReportORM
 from ..schemas.common import VALID_STATUSES
 from ..schemas.response import IncidentReportDetail, IncidentReportSummary
@@ -209,7 +210,19 @@ async def list_comment_records(report_id: str) -> list[IncidentComment]:
         return list(result.scalars().all())
 
 
-def orm_to_summary(record: IncidentReportORM) -> IncidentReportSummary:
+async def _resolve_usernames_safe(user_ids: set[str]) -> dict[str, str]:
+    if not user_ids:
+        return {}
+    try:
+        return await resolve_usernames(user_ids)
+    except Exception:
+        logger.warning("Failed to resolve usernames for ids: %s", user_ids, exc_info=True)
+        return {}
+
+
+async def orm_to_summary(record: IncidentReportORM) -> IncidentReportSummary:
+    user_ids = {uid for uid in (record.reporter_id, record.assignee_id, record.verifier_id) if uid}
+    usernames = await _resolve_usernames_safe(user_ids)
     return IncidentReportSummary(
         id=record.id,
         ref_no=record.ref_no,
@@ -217,18 +230,20 @@ def orm_to_summary(record: IncidentReportORM) -> IncidentReportSummary:
         status=record.status,
         severity=record.severity,
         reporter_id=record.reporter_id,
-        reporter_name=None,
+        reporter_name=usernames.get(record.reporter_id),
         assignee_id=record.assignee_id,
-        assignee_name=None,
+        assignee_name=usernames.get(record.assignee_id) if record.assignee_id else None,
         verifier_id=record.verifier_id,
-        verifier_name=None,
+        verifier_name=usernames.get(record.verifier_id) if record.verifier_id else None,
         fault_date=to_utc8(record.fault_date),
         created_at=to_utc8(record.created_at),
         updated_at=to_utc8(record.updated_at),
     )
 
 
-def orm_to_detail(record: IncidentReportORM) -> IncidentReportDetail:
+async def orm_to_detail(record: IncidentReportORM) -> IncidentReportDetail:
+    user_ids = {uid for uid in (record.reporter_id, record.assignee_id, record.verifier_id) if uid}
+    usernames = await _resolve_usernames_safe(user_ids)
     return IncidentReportDetail(
         id=record.id,
         ref_no=record.ref_no,
@@ -236,11 +251,11 @@ def orm_to_detail(record: IncidentReportORM) -> IncidentReportDetail:
         status=record.status,
         severity=record.severity,
         reporter_id=record.reporter_id,
-        reporter_name=None,
+        reporter_name=usernames.get(record.reporter_id),
         assignee_id=record.assignee_id,
-        assignee_name=None,
+        assignee_name=usernames.get(record.assignee_id) if record.assignee_id else None,
         verifier_id=record.verifier_id,
-        verifier_name=None,
+        verifier_name=usernames.get(record.verifier_id) if record.verifier_id else None,
         fault_date=to_utc8(record.fault_date),
         created_at=to_utc8(record.created_at),
         updated_at=to_utc8(record.updated_at),

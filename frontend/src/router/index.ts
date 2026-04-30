@@ -53,6 +53,13 @@ const router = createRouter({
           meta: { requiresAuth: true, pageTitle: '统计分析' },
         },
         {
+          path: '/incident-report/roles',
+          name: 'incident-report-roles',
+          component: () =>
+            import('../views/incident-report/roles/RoleManagementView.vue'),
+          meta: { requiresAuth: true, pageTitle: '角色权限管理' },
+        },
+        {
           path: '/incident-report/:id/audit',
           name: 'incident-report-audit',
           component: () =>

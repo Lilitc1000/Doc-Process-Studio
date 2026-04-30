@@ -16,7 +16,6 @@ def test_validate_form_data_missing_required_fields():
     assert "manual_site_id" in missing
     assert "manual_system" in missing
     assert "manual_fault_symptom" in missing
-    assert "manual_severity" in missing
 
 
 def test_validate_form_data_all_fields_present():
@@ -27,7 +26,6 @@ def test_validate_form_data_all_fields_present():
         "manual_site_id": "SITE-01",
         "manual_system": "数据库",
         "manual_fault_symptom": "服务中断",
-        "manual_severity": "P1",
     }
     missing = validate_form_data_for_submit(form_data)
     assert len(missing) == 0

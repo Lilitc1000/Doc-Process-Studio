@@ -1,78 +1,92 @@
 <template>
-  <div v-if="editor" class="rich-text-editor">
-    <div class="editor-toolbar">
-      <base-button
+  <div class="rich-text-editor">
+    <div v-if="editor" class="editor-toolbar">
+      <button
         type="button"
         class="toolbar-btn"
-        :variant="editor.isActive('bold') ? 'secondary' : 'ghost'"
-        size="sm"
+        :class="{ active: editor.isActive('bold') }"
         title="加粗"
         @click="editor.chain().focus().toggleBold().run()"
       >
         <strong>B</strong>
-      </base-button>
-      <base-button
+      </button>
+      <button
         type="button"
         class="toolbar-btn"
-        :variant="editor.isActive('italic') ? 'secondary' : 'ghost'"
-        size="sm"
+        :class="{ active: editor.isActive('italic') }"
         title="斜体"
         @click="editor.chain().focus().toggleItalic().run()"
       >
         <em>I</em>
-      </base-button>
-      <base-button
+      </button>
+      <button
         type="button"
         class="toolbar-btn"
-        :variant="editor.isActive('underline') ? 'secondary' : 'ghost'"
-        size="sm"
+        :class="{ active: editor.isActive('underline') }"
         title="下划线"
         @click="editor.chain().focus().toggleUnderline().run()"
       >
         <u>U</u>
-      </base-button>
+      </button>
       <span class="toolbar-divider" />
-      <base-button
+      <button
         type="button"
-        class="toolbar-btn"
-        :variant="editor.isActive('bulletList') ? 'secondary' : 'ghost'"
-        size="sm"
+        class="toolbar-btn toolbar-btn-wide"
+        :class="{ active: editor.isActive('bulletList') }"
         title="无序列表"
         @click="editor.chain().focus().toggleBulletList().run()"
       >
         • 列表
-      </base-button>
-      <base-button
+      </button>
+      <button
         type="button"
-        class="toolbar-btn"
-        :variant="editor.isActive('orderedList') ? 'secondary' : 'ghost'"
-        size="sm"
+        class="toolbar-btn toolbar-btn-wide"
+        :class="{ active: editor.isActive('orderedList') }"
         title="有序列表"
         @click="editor.chain().focus().toggleOrderedList().run()"
       >
         1. 列表
-      </base-button>
+      </button>
       <span class="toolbar-divider" />
-      <base-button
+      <button
         type="button"
         class="toolbar-btn"
-        variant="ghost"
-        size="sm"
         title="插入图片"
         @click="triggerImageUpload"
       >
-        📷
-      </base-button>
-      <base-button
+        <svg
+          viewBox="0 0 20 20"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="2.5" y="3.5" width="15" height="13" rx="2" />
+          <circle cx="7" cy="8" r="1.5" />
+          <path d="M2.5 14L7 10L10 12.5L13 9.5L17.5 14" />
+        </svg>
+      </button>
+      <button
         type="button"
         class="toolbar-btn"
-        variant="ghost"
-        size="sm"
         title="清除格式"
         @click="editor.chain().focus().clearNodes().unsetAllMarks().run()"
       >
-        ✕
-      </base-button>
+        <svg
+          viewBox="0 0 20 20"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+        >
+          <path d="M5 5L15 15M15 5L5 15" />
+        </svg>
+      </button>
     </div>
     <editor-content :editor="editor" class="editor-content" />
     <input
@@ -92,7 +106,6 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
-import BaseButton from './BaseButton.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -176,12 +189,37 @@ onBeforeUnmount(() => {
 }
 
 .toolbar-btn {
-  min-width: 28px;
-  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 28px;
   height: 28px;
-  padding: 0 !important;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
   font-size: 13px;
+  color: var(--color-text-secondary);
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.toolbar-btn.toolbar-btn-wide {
+  width: auto;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.toolbar-btn.active {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  font-weight: 600;
 }
 
 .toolbar-divider {

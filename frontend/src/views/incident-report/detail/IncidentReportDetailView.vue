@@ -10,7 +10,19 @@
             size="sm"
             @click="router.push('/incident-report')"
           >
-            ← 返回列表
+            <svg
+              viewBox="0 0 20 20"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12.5 15L7.5 10L12.5 5" />
+            </svg>
+            返回列表
           </base-button>
           <span class="detail-ref">{{ report.refNo }}</span>
           <span class="detail-title">{{ report.title }}</span>
@@ -22,6 +34,18 @@
             :disabled="downloadingDocx"
             @click="handleDownloadDocx"
           >
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M10 3V13M10 13L6.5 9.5M10 13L13.5 9.5M3 16H17" />
+            </svg>
             {{ downloadingDocx ? '生成中...' : '下载 Word' }}
           </base-button>
           <base-button
@@ -30,6 +54,18 @@
             size="sm"
             @click="router.push(`/incident-report/${report.id}/edit`)"
           >
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M13.5 3.5L16.5 6.5L7 16H4V13L13.5 3.5z" />
+            </svg>
             编辑
           </base-button>
           <base-button
@@ -38,6 +74,19 @@
             size="sm"
             @click="router.push(`/incident-report/${report.id}/audit`)"
           >
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M10 4C5 4 2 10 2 10s3 6 8 6 8-6 8-6-3-6-8-6z" />
+              <circle cx="10" cy="10" r="2.5" />
+            </svg>
             审核
           </base-button>
           <base-button
@@ -46,6 +95,19 @@
             size="sm"
             @click="handleClose"
           >
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="14" height="14" rx="2" />
+              <path d="M3 7H17M7 3V7" />
+            </svg>
             关闭
           </base-button>
           <base-button
@@ -54,6 +116,21 @@
             size="sm"
             @click="handleReopen"
           >
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M2.5 10A7.5 7.5 0 0 1 15 5.5M17.5 10A7.5 7.5 0 0 1 5 14.5"
+              />
+              <path d="M15 2V5.5H11.5M5 18V14.5H8.5" />
+            </svg>
             重新打开
           </base-button>
         </div>

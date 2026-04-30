@@ -248,9 +248,9 @@ def test_apply_section_payload_follow_up():
         form_answers=form_answers,
         section_id="follow_up",
         timeline_index=None,
-        payload={"body_follow_up_actions": "后续动作"},
+        payload={"body_follow_up": "后续动作"},
     )
-    assert form_answers["body_follow_up_actions"].value == "后续动作"
+    assert form_answers["body_follow_up"].value == "后续动作"
 
 
 def test_apply_section_payload_unsupported():

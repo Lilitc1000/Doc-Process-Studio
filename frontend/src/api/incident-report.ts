@@ -13,6 +13,7 @@ import type {
   IncidentRoleEntry,
   IncidentRoleDefinitionListResponse,
   IncidentPermissionListResponse,
+  IncidentUserWithRolesListResponse,
 } from '../types/incident-report/incident-report';
 
 export const fetchIncidentReportFormSchema =
@@ -227,6 +228,14 @@ export const fetchAllIncidentRoles = async (): Promise<IncidentRoleEntry[]> => {
   );
   return response.data.items ?? [];
 };
+
+export const fetchUsersWithRoles =
+  async (): Promise<IncidentUserWithRolesListResponse> => {
+    const response = await apiClient.get<IncidentUserWithRolesListResponse>(
+      '/incident-report/users-with-roles',
+    );
+    return response.data;
+  };
 
 export const fetchRoleDefinitions =
   async (): Promise<IncidentRoleDefinitionListResponse> => {

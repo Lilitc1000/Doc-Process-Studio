@@ -52,6 +52,16 @@ async def register_user(username: str, password: str) -> RegisterResponse:
         )
 
 
+async def resolve_usernames(user_ids: set[str]) -> dict[str, str]:
+    if not user_ids:
+        return {}
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(User.user_id, User.username).where(User.user_id.in_(user_ids)),
+        )
+        return {row[0]: row[1] for row in result.all()}
+
+
 async def authenticate_user(username: str, password: str) -> TokenResponse:
     async with async_session_factory() as session:
         result = await session.execute(

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   INCIDENT_STATUS_LABELS,
   INCIDENT_SEVERITY_LABELS,
+  INCIDENT_ROLE_LABELS,
 } from '../../../src/types/incident-report/incident-report';
 import type {
   IncidentReportStatus,
@@ -46,5 +47,21 @@ describe('IncidentReport 类型常量', () => {
     expect(INCIDENT_SEVERITY_LABELS.P1).toContain('P1');
     expect(INCIDENT_SEVERITY_LABELS.P2).toContain('P2');
     expect(INCIDENT_SEVERITY_LABELS.P3).toContain('P3');
+  });
+
+  it('INCIDENT_ROLE_LABELS 包含所有角色', () => {
+    const roleKeys = ['admin', 'verifier', 'handler', 'reporter', 'viewer'];
+    for (const key of roleKeys) {
+      expect(INCIDENT_ROLE_LABELS[key]).toBeDefined();
+      expect(typeof INCIDENT_ROLE_LABELS[key]).toBe('string');
+    }
+  });
+
+  it('角色标签为中文', () => {
+    expect(INCIDENT_ROLE_LABELS.admin).toBe('管理员');
+    expect(INCIDENT_ROLE_LABELS.verifier).toBe('审核人');
+    expect(INCIDENT_ROLE_LABELS.handler).toBe('处理人');
+    expect(INCIDENT_ROLE_LABELS.reporter).toBe('报告人');
+    expect(INCIDENT_ROLE_LABELS.viewer).toBe('观察者');
   });
 });

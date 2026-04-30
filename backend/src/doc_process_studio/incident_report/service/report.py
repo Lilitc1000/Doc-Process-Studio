@@ -16,6 +16,7 @@ from ..service.audit_log import create_audit_log
 from ..service.report_store import (
     _CLEAR_SENTINEL,
     _REF_NO_RETRY_MAX,
+    _resolve_usernames_safe,
     generate_ref_no,
     list_reports,
     load_report_orm,
@@ -87,7 +88,7 @@ async def create_report(
             try:
                 await session.commit()
                 await session.refresh(record)
-                return orm_to_detail(record)
+                return await orm_to_detail(record)
             except SAIntegrityError as e:
                 await session.rollback()
                 logger.warning("IntegrityError in audit log (attempt %d): %s", attempt, e)
@@ -101,7 +102,7 @@ async def get_report(report_id: str) -> IncidentReportDetail | None:
     record = await load_report_orm(report_id)
     if record is None:
         return None
-    return orm_to_detail(record)
+    return await orm_to_detail(record)
 
 
 async def update_report(
@@ -122,7 +123,7 @@ async def update_report(
     updated = await update_report_record(report_id, **fields)
     if updated is None:
         return None
-    return orm_to_detail(updated)
+    return await orm_to_detail(updated)
 
 
 async def list_incident_reports(
@@ -144,7 +145,9 @@ async def list_incident_reports(
         start_date=start_date,
         end_date=end_date,
     )
-    items = [orm_to_summary(r) for r in records]
+    items = []
+    for r in records:
+        items.append(await orm_to_summary(r))
     return IncidentReportListResponse(total=total, items=items)
 
 
@@ -180,7 +183,7 @@ async def submit_report(
         to_status="pending",
         comment=comment,
     )
-    return orm_to_detail(updated)
+    return await orm_to_detail(updated)
 
 
 async def approve_report(
@@ -212,7 +215,7 @@ async def approve_report(
         to_status="approved",
         comment=comment,
     )
-    return orm_to_detail(updated)
+    return await orm_to_detail(updated)
 
 
 async def reject_report(
@@ -243,7 +246,7 @@ async def reject_report(
         to_status="rejected",
         comment=comment,
     )
-    return orm_to_detail(updated)
+    return await orm_to_detail(updated)
 
 
 async def assign_handler(
@@ -267,15 +270,17 @@ async def assign_handler(
     )
     if updated is None:
         return None
+    assignee_names = await _resolve_usernames_safe({assignee_id})
+    assignee_display = assignee_names.get(assignee_id, assignee_id)
     await create_audit_log(
         report_id=report_id,
         action="assign",
         actor_id=actor_id,
         from_status=record.status,
         to_status=new_status,
-        comment=f"分配处理人: {assignee_id}",
+        comment=f"分配处理人: {assignee_display}",
     )
-    return orm_to_detail(updated)
+    return await orm_to_detail(updated)
 
 
 async def close_report(
@@ -311,7 +316,7 @@ async def close_report(
         to_status="closed",
         comment=comment,
     )
-    return orm_to_detail(updated)
+    return await orm_to_detail(updated)
 
 
 async def reopen_report(
@@ -342,7 +347,7 @@ async def reopen_report(
         to_status="draft",
         comment=comment,
     )
-    return orm_to_detail(updated)
+    return await orm_to_detail(updated)
 
 
 async def delete_report(

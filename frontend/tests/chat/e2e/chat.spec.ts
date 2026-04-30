@@ -1,19 +1,49 @@
 import { test, expect } from '@playwright/test';
 import {
   getWorkerPrefix,
-  loginAsAdmin,
-  loginViaApi,
+  loginAs,
+  loginViaApiAs,
   addRateLimitWhitelist,
+  registerUserViaApi,
+  deleteChatSessionsByUser,
+  deleteTestUsersByPrefix,
 } from '../../helpers';
 
 test.describe('对话页面 - UI 渲染', () => {
-  test.beforeAll(async ({ request }) => {
+  let workerPrefix: string;
+  let testUsername: string;
+  let testPassword: string;
+  let testUserId: string;
+
+  test.beforeAll(async ({ request }, testInfo) => {
+    workerPrefix = getWorkerPrefix(testInfo.workerIndex);
+    testUsername = `${workerPrefix}chat_ui_user`;
+    testPassword = 'Test123456!';
     await addRateLimitWhitelist(request);
+
+    const user = await registerUserViaApi(request, testUsername, testPassword);
+    if (user) {
+      testUserId = user.user_id;
+    }
   });
 
   test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginAs(page, testUsername, testPassword);
     await page.goto('/chat');
+  });
+
+  test.afterAll(async ({ request }) => {
+    try {
+      if (testUserId) {
+        const token = await loginViaApiAs(request, testUsername, testPassword);
+        if (token) {
+          await deleteChatSessionsByUser(request, token, testUserId);
+        }
+      }
+    } catch {
+      // ignore cleanup errors
+    }
+    await deleteTestUsersByPrefix(request, workerPrefix);
   });
 
   test('对话页面渲染侧边栏和输入区域', async ({ page }) => {
@@ -46,14 +76,29 @@ test.describe('对话页面 - 端到端场景', () => {
   test.setTimeout(120_000);
 
   let workerPrefix: string;
+  let testUsername: string;
+  let testPassword: string;
+  let testUserId: string;
   let ollamaAvailable = false;
   let availableModel = '';
 
   test.beforeAll(async ({ request }, testInfo) => {
     workerPrefix = getWorkerPrefix(testInfo.workerIndex);
+    testUsername = `${workerPrefix}chat_e2e_user`;
+    testPassword = 'Test123456!';
     await addRateLimitWhitelist(request);
+
+    const user = await registerUserViaApi(request, testUsername, testPassword);
+    if (user) {
+      testUserId = user.user_id;
+    }
+
     try {
-      const accessToken = await loginViaApi(request);
+      const accessToken = await loginViaApiAs(
+        request,
+        testUsername,
+        testPassword,
+      );
       if (accessToken) {
         const resp = await request.get('/api/models', {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -80,22 +125,21 @@ test.describe('对话页面 - 端到端场景', () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page);
+    await loginAs(page, testUsername, testPassword);
   });
 
   test.afterAll(async ({ request }) => {
     try {
-      const accessToken = await loginViaApi(request);
-      if (!accessToken) return;
-      await request.delete(
-        `/api/chat-sessions/by-title-prefix/${workerPrefix}`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        },
-      );
+      if (testUserId) {
+        const token = await loginViaApiAs(request, testUsername, testPassword);
+        if (token) {
+          await deleteChatSessionsByUser(request, token, testUserId);
+        }
+      }
     } catch {
       // ignore cleanup errors
     }
+    await deleteTestUsersByPrefix(request, workerPrefix);
   });
 
   test('侧边栏加载历史会话列表', async ({ page }) => {
@@ -139,7 +183,7 @@ test.describe('对话页面 - 端到端场景', () => {
     );
 
     const input = page.locator('.chat-input textarea');
-    await input.fill(`${workerPrefix}你好`);
+    await input.fill('你好');
 
     const sendBtn = page.locator('.chat-input .send-btn');
     await sendBtn.click();
@@ -198,7 +242,7 @@ test.describe('对话页面 - 端到端场景', () => {
       .count();
 
     const input = page.locator('.chat-input textarea');
-    await input.fill(`${workerPrefix}测试新会话`);
+    await input.fill('测试新会话');
 
     const sendBtn = page.locator('.chat-input .send-btn');
     await sendBtn.click();

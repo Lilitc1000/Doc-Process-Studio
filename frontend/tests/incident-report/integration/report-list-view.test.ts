@@ -84,7 +84,6 @@ describe('IncidentReportListView', () => {
           BaseInput: true,
           BaseDropdown: true,
           BaseTextarea: true,
-          ReportListStats: true,
           ReportListFilters: true,
           ReportListTable: {
             template:
@@ -117,7 +116,6 @@ describe('IncidentReportListView', () => {
           BaseInput: true,
           BaseDropdown: true,
           BaseTextarea: true,
-          ReportListStats: true,
           ReportListFilters: true,
           ReportListTable: true,
         },

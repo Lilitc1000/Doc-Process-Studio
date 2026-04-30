@@ -134,6 +134,7 @@ export interface IncidentRoleEntry {
   userId: string;
   role: string;
   assignedBy: string | null;
+  assignedByName: string | null;
   assignedAt: string | null;
 }
 
@@ -158,6 +159,24 @@ export interface IncidentPermissionEntry {
 export interface IncidentPermissionListResponse {
   items: IncidentPermissionEntry[];
 }
+
+export interface IncidentUserWithRolesEntry {
+  userId: string;
+  username: string;
+  roles: string[];
+}
+
+export interface IncidentUserWithRolesListResponse {
+  items: IncidentUserWithRolesEntry[];
+}
+
+export const INCIDENT_ROLE_LABELS: Record<string, string> = {
+  admin: '管理员',
+  verifier: '审核人',
+  handler: '处理人',
+  reporter: '报告人',
+  viewer: '观察者',
+};
 
 export const INCIDENT_STATUS_LABELS: Record<IncidentReportStatus, string> = {
   draft: '草稿',

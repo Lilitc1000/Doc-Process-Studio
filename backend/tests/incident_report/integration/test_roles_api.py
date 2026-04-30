@@ -75,3 +75,16 @@ def test_permissions_requires_auth():
     client = TestClient(app)
     resp = client.get("/api/incident-report/permissions")
     assert resp.status_code in (401, 403)
+
+
+def test_users_with_roles_requires_admin():
+    app = _create_test_app()
+
+    async def _reject_admin():
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+
+    app.dependency_overrides[require_admin] = _reject_admin
+
+    client = TestClient(app)
+    resp = client.get("/api/incident-report/users-with-roles", headers=_auth_headers())
+    assert resp.status_code == 403

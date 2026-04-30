@@ -69,6 +69,7 @@ backend/src/doc_process_studio/incident_report/
 | GET | `/api/incident-report/roles` | 全部角色分配（管理员） |
 | POST | `/api/incident-report/roles` | 分配角色（管理员） |
 | DELETE | `/api/incident-report/roles/{userId}/{role}` | 撤销角色（管理员） |
+| GET | `/api/incident-report/users-with-roles` | 非admin用户及角色列表（管理员） |
 | GET | `/api/incident-report/role-definitions` | 角色定义列表（含权限） |
 | GET | `/api/incident-report/permissions` | 权限定义列表 |
 
@@ -189,6 +190,12 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 3. 调用 AI 模型生成该段落 JSON
 4. `_apply_section_payload` 将生成结果回填到对应字段
 5. 返回 `IncidentBodyGenerateResponse`
+
+时间线段落支持两种生成方式：
+- `timeline`：一次性生成整条时间线（含 `body_timeline` 数组和 `body_affected_date_summary` 时间汇总）
+- `timeline_item`：按单条时间线生成，需传入 `timeline_index` 指定目标条目索引，仅更新该条时间线内容
+
+前端时间线区域采用按条生成模式：每条时间线行内有独立的 AI 生成按钮，调用 `timeline_item` + `timeline_index` 生成该条目。时间汇总字段（`body_affected_date_summary`）在时间线区域下方单独展示，可手动编辑或由 `timeline` 整段生成时自动填充。
 
 ### 预览流程
 

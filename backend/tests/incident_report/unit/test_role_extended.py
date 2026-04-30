@@ -11,6 +11,7 @@ from doc_process_studio.incident_report.service.role import (
     has_incident_role,
     has_permission,
     list_all_role_assignments,
+    list_non_admin_users_with_roles,
     require_incident_role,
     revoke_incident_role,
 )
@@ -276,3 +277,91 @@ def test_list_all_role_assignments(mock_session):
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
         result = asyncio.run(list_all_role_assignments())
     assert len(result) == 2
+
+
+def test_list_non_admin_users_with_roles(mock_session):
+    from doc_process_studio.auth.models.user import User
+    from doc_process_studio.incident_report.models.incident_report_role import IncidentReportUserRole
+
+    user1 = MagicMock(spec=User)
+    user1.user_id = "usr_001"
+    user1.username = "alice"
+    user2 = MagicMock(spec=User)
+    user2.user_id = "usr_002"
+    user2.username = "bob"
+
+    users_result = MagicMock()
+    users_result.scalars.return_value.all.return_value = [user1, user2]
+
+    role1 = MagicMock(spec=IncidentReportUserRole)
+    role1.user_id = "usr_001"
+    role1.role_key = "reporter"
+    role2 = MagicMock(spec=IncidentReportUserRole)
+    role2.user_id = "usr_001"
+    role2.role_key = "handler"
+    role3 = MagicMock(spec=IncidentReportUserRole)
+    role3.user_id = "usr_002"
+    role3.role_key = "viewer"
+
+    roles_result = MagicMock()
+    roles_result.scalars.return_value.all.return_value = [role1, role2, role3]
+
+    mock_session.execute = AsyncMock(side_effect=[users_result, roles_result])
+
+    with patch(
+        "doc_process_studio.incident_report.service.role.async_session_factory"
+    ) as mock_factory:
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        result = asyncio.run(list_non_admin_users_with_roles())
+
+    assert len(result) == 2
+    assert result[0]["user_id"] == "usr_001"
+    assert result[0]["username"] == "alice"
+    assert set(result[0]["roles"]) == {"reporter", "handler"}
+    assert result[1]["user_id"] == "usr_002"
+    assert result[1]["username"] == "bob"
+    assert result[1]["roles"] == ["viewer"]
+
+
+def test_list_non_admin_users_with_roles_empty(mock_session):
+    users_result = MagicMock()
+    users_result.scalars.return_value.all.return_value = []
+    mock_session.execute = AsyncMock(return_value=users_result)
+
+    with patch(
+        "doc_process_studio.incident_report.service.role.async_session_factory"
+    ) as mock_factory:
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        result = asyncio.run(list_non_admin_users_with_roles())
+
+    assert result == []
+
+
+def test_list_non_admin_users_with_roles_no_roles(mock_session):
+    from doc_process_studio.auth.models.user import User
+
+    user1 = MagicMock(spec=User)
+    user1.user_id = "usr_001"
+    user1.username = "charlie"
+
+    users_result = MagicMock()
+    users_result.scalars.return_value.all.return_value = [user1]
+
+    roles_result = MagicMock()
+    roles_result.scalars.return_value.all.return_value = []
+
+    mock_session.execute = AsyncMock(side_effect=[users_result, roles_result])
+
+    with patch(
+        "doc_process_studio.incident_report.service.role.async_session_factory"
+    ) as mock_factory:
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        result = asyncio.run(list_non_admin_users_with_roles())
+
+    assert len(result) == 1
+    assert result[0]["user_id"] == "usr_001"
+    assert result[0]["username"] == "charlie"
+    assert result[0]["roles"] == []

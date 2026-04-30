@@ -312,6 +312,31 @@ export async function deleteReportsByPrefix(
   }
 }
 
+export async function deleteChatSessionsByTitlePrefix(
+  request: APIRequestContext,
+  token: string,
+  prefix: string,
+) {
+  const resp = await request.delete(
+    `/api/chat-sessions/by-title-prefix/${encodeURIComponent(prefix)}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  return resp.ok();
+}
+
+export async function deleteChatSessionsByUser(
+  request: APIRequestContext,
+  token: string,
+  userId: string,
+) {
+  const resp = await request.delete(`/api/chat-sessions/by-user/${userId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return resp.ok();
+}
+
 export async function cleanupWorkerData(
   request: APIRequestContext,
   workerPrefix: string,
@@ -319,6 +344,7 @@ export async function cleanupWorkerData(
   const token = await loginViaApi(request);
   if (token) {
     await deleteReportsByPrefix(request, token, workerPrefix);
+    await deleteChatSessionsByTitlePrefix(request, token, workerPrefix);
   }
   await deleteTestUsersByPrefix(request, workerPrefix);
 }

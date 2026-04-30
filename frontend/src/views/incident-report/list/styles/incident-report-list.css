@@ -12,6 +12,11 @@
   margin-bottom: 20px;
 }
 
+.incident-report-list-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .incident-report-list-title {
   font-size: 20px;
   font-weight: 600;
@@ -20,15 +25,8 @@
 }
 
 .incident-report-list-body {
-  display: flex;
-  gap: 24px;
   flex: 1;
   min-height: 0;
-}
-
-.incident-report-list-sidebar {
-  width: 200px;
-  flex-shrink: 0;
 }
 
 .incident-report-list-main {
@@ -52,19 +50,5 @@
 @media (max-width: 768px) {
   .incident-report-list-body {
     flex-direction: column;
-  }
-
-  .incident-report-list-sidebar {
-    width: 100%;
-  }
-
-  .report-list-stats {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
-  .stat-card {
-    flex: 1;
-    min-width: 100px;
   }
 }

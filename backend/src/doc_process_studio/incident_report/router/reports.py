@@ -41,7 +41,7 @@ from ..service.report import (
     submit_report,
     update_report,
 )
-from ..service.report_store import create_comment_record, list_comment_records
+from ..service.report_store import _resolve_usernames_safe, create_comment_record, list_comment_records
 from ..service.role import has_permission
 from .dependencies import require_admin, require_verifier_or_admin
 
@@ -327,7 +327,9 @@ async def get_report_audit_logs(
     user_id: str = Depends(get_current_user_id),
 ) -> list[IncidentAuditLogEntry]:
     records = await list_audit_logs(report_id)
-    return [audit_orm_to_entry(r) for r in records]
+    actor_ids = {r.actor_id for r in records if r.actor_id}
+    usernames = await _resolve_usernames_safe(actor_ids)
+    return [audit_orm_to_entry(r, actor_name=usernames.get(r.actor_id)) for r in records]
 
 
 @router.get("/reports/{report_id}/comments", response_model=list[IncidentCommentEntry])
@@ -336,12 +338,14 @@ async def get_report_comments(
     user_id: str = Depends(get_current_user_id),
 ) -> list[IncidentCommentEntry]:
     records = await list_comment_records(report_id)
+    author_ids = {r.author_id for r in records if r.author_id}
+    usernames = await _resolve_usernames_safe(author_ids)
     return [
         IncidentCommentEntry(
             id=r.id,
             report_id=r.report_id,
             author_id=r.author_id,
-            author_name=None,
+            author_name=usernames.get(r.author_id),
             content=r.content,
             parent_id=r.parent_id,
             created_at=to_utc8(r.created_at),
@@ -368,7 +372,7 @@ async def add_report_comment(
         id=record.id,
         report_id=record.report_id,
         author_id=record.author_id,
-        author_name=None,
+        author_name=(await _resolve_usernames_safe({record.author_id})).get(record.author_id),
         content=record.content,
         parent_id=record.parent_id,
         created_at=to_utc8(record.created_at),

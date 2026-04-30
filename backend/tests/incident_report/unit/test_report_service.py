@@ -1,6 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
-
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from doc_process_studio.incident_report.service.report import (
     create_report,
@@ -10,300 +10,196 @@ from doc_process_studio.incident_report.service.report import (
     close_report,
     reopen_report,
 )
-from doc_process_studio.incident_report.service.report_store import (
-    _CLEAR_SENTINEL,
-)
 
 
-def _apply_fields(target, fields):
-    for k, v in fields.items():
-        if v is _CLEAR_SENTINEL:
-            setattr(target, k, None)
-        else:
-            setattr(target, k, v)
-
-
-def test_create_report_sets_default_status(monkeypatch):
-    async def _fake_generate_ref_no():
-        return "DAS-0001"
-
-    async def _fake_create_report_record(**kwargs):
-        from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport
-        now = datetime.now(UTC)
-        return IncidentReport(
-            id=kwargs["report_id"],
-            ref_no=kwargs["ref_no"],
-            title=kwargs["title"],
-            status="draft",
-            severity=kwargs.get("severity"),
-            reporter_id=kwargs["reporter_id"],
-            system=kwargs.get("system"),
-            site_id=kwargs.get("site_id"),
-            fault_date=kwargs.get("fault_date"),
-            form_data=kwargs.get("form_data") or {},
-            created_at=now,
-            updated_at=now,
-        )
-
-    async def _fake_create_audit_log(**kwargs):
-        from doc_process_studio.incident_report.models.audit_log import IncidentAuditLog
-        return IncidentAuditLog(
-            id="log-1",
-            report_id=kwargs["report_id"],
-            action=kwargs["action"],
-            actor_id=kwargs["actor_id"],
-            to_status=kwargs.get("to_status"),
-            created_at=datetime.now(UTC),
-        )
-
-    import doc_process_studio.incident_report.service.report as report_module
-    monkeypatch.setattr(report_module, "generate_ref_no", _fake_generate_ref_no)
-    monkeypatch.setattr(report_module, "create_report_record", _fake_create_report_record)
-    monkeypatch.setattr(report_module, "create_audit_log", _fake_create_audit_log)
-
-    report = asyncio.run(create_report(
-        title="测试报告",
-        reporter_id="usr_test",
-    ))
-
-    assert report.status == "draft"
-    assert report.ref_no.startswith("DAS-")
-
-
-def test_submit_report_changes_status_to_pending(monkeypatch):
+def _make_orm_report(**overrides):
     from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport
-
     now = datetime.now(UTC)
-    fake_report = IncidentReport(
+    defaults = dict(
         id="rep-1",
         ref_no="DAS-0001",
         title="测试报告",
         status="draft",
+        severity="P2",
         reporter_id="usr_test",
+        assignee_id=None,
+        verifier_id=None,
+        system=None,
+        site_id=None,
+        fault_date=None,
         form_data={},
+        report_data=None,
         created_at=now,
         updated_at=now,
+        submitted_at=None,
+        approved_at=None,
+        closed_at=None,
+        resolution_date=None,
     )
+    defaults.update(overrides)
+    return IncidentReport(**defaults)
 
-    async def _fake_load_report_orm(report_id):
-        if report_id == "rep-1":
-            return fake_report
-        return None
 
-    async def _fake_update_report_record(report_id, **fields):
-        _apply_fields(fake_report, fields)
-        return fake_report
+def test_create_report_sets_default_status():
+    fake_record = _make_orm_report()
 
-    async def _fake_create_audit_log(**kwargs):
-        from doc_process_studio.incident_report.models.audit_log import IncidentAuditLog
-        return IncidentAuditLog(
-            id="log-1",
-            report_id=kwargs["report_id"],
-            action=kwargs["action"],
-            actor_id=kwargs["actor_id"],
-            created_at=datetime.now(UTC),
-        )
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.flush = AsyncMock()
+    mock_session.commit = AsyncMock()
+    mock_session.refresh = AsyncMock()
+    mock_session.rollback = AsyncMock()
 
-    async def _fake_has_incident_role(user_id, role):
-        return True
+    with patch(
+        "doc_process_studio.incident_report.service.report.async_session_factory"
+    ) as mock_factory, patch(
+        "doc_process_studio.incident_report.service.report.orm_to_detail",
+        new_callable=AsyncMock,
+        return_value=MagicMock(status="draft", ref_no="DAS-0001"),
+    ):
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
-    import doc_process_studio.incident_report.service.report as report_module
-    monkeypatch.setattr(report_module, "load_report_orm", _fake_load_report_orm)
-    monkeypatch.setattr(report_module, "update_report_record", _fake_update_report_record)
-    monkeypatch.setattr(report_module, "create_audit_log", _fake_create_audit_log)
+        result = asyncio.run(create_report(
+            title="测试报告",
+            reporter_id="usr_test",
+        ))
 
-    result = asyncio.run(submit_report(
-        report_id="rep-1",
-        actor_id="usr_test",
-    ))
+    assert result.status == "draft"
+    assert result.ref_no.startswith("DAS-")
+
+
+def test_submit_report_changes_status_to_pending():
+    fake_report = _make_orm_report(status="draft")
+
+    with patch(
+        "doc_process_studio.incident_report.service.report.load_report_orm",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.update_report_record",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.create_audit_log",
+        new_callable=AsyncMock,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.orm_to_detail",
+        new_callable=AsyncMock,
+        return_value=MagicMock(status="pending"),
+    ):
+        result = asyncio.run(submit_report(
+            report_id="rep-1",
+            actor_id="usr_test",
+        ))
     assert result.status == "pending"
 
 
-def test_approve_report_changes_status_to_approved(monkeypatch):
-    from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport
+def test_approve_report_changes_status_to_approved():
+    fake_report = _make_orm_report(status="pending")
 
-    now = datetime.now(UTC)
-    fake_report = IncidentReport(
-        id="rep-1",
-        ref_no="DAS-0001",
-        title="测试报告",
-        status="pending",
-        reporter_id="usr_test",
-        form_data={},
-        created_at=now,
-        updated_at=now,
-    )
-
-    async def _fake_load_report_orm(report_id):
-        if report_id == "rep-1":
-            return fake_report
-        return None
-
-    async def _fake_update_report_record(report_id, **fields):
-        _apply_fields(fake_report, fields)
-        return fake_report
-
-    async def _fake_create_audit_log(**kwargs):
-        from doc_process_studio.incident_report.models.audit_log import IncidentAuditLog
-        return IncidentAuditLog(
-            id="log-1",
-            report_id=kwargs["report_id"],
-            action=kwargs["action"],
-            actor_id=kwargs["actor_id"],
-            created_at=datetime.now(UTC),
-        )
-
-    import doc_process_studio.incident_report.service.report as report_module
-    monkeypatch.setattr(report_module, "load_report_orm", _fake_load_report_orm)
-    monkeypatch.setattr(report_module, "update_report_record", _fake_update_report_record)
-    monkeypatch.setattr(report_module, "create_audit_log", _fake_create_audit_log)
-
-    result = asyncio.run(approve_report(
-        report_id="rep-1",
-        actor_id="usr_verifier",
-        comment="通过",
-    ))
+    with patch(
+        "doc_process_studio.incident_report.service.report.load_report_orm",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.update_report_record",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.create_audit_log",
+        new_callable=AsyncMock,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.orm_to_detail",
+        new_callable=AsyncMock,
+        return_value=MagicMock(status="approved"),
+    ):
+        result = asyncio.run(approve_report(
+            report_id="rep-1",
+            actor_id="usr_verifier",
+            comment="通过",
+        ))
     assert result.status == "approved"
 
 
-def test_reject_report_changes_status_to_rejected(monkeypatch):
-    from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport
+def test_reject_report_changes_status_to_rejected():
+    fake_report = _make_orm_report(status="pending")
 
-    now = datetime.now(UTC)
-    fake_report = IncidentReport(
-        id="rep-1",
-        ref_no="DAS-0001",
-        title="测试报告",
-        status="pending",
-        reporter_id="usr_test",
-        form_data={},
-        created_at=now,
-        updated_at=now,
-    )
-
-    async def _fake_load_report_orm(report_id):
-        if report_id == "rep-1":
-            return fake_report
-        return None
-
-    async def _fake_update_report_record(report_id, **fields):
-        _apply_fields(fake_report, fields)
-        return fake_report
-
-    async def _fake_create_audit_log(**kwargs):
-        from doc_process_studio.incident_report.models.audit_log import IncidentAuditLog
-        return IncidentAuditLog(
-            id="log-1",
-            report_id=kwargs["report_id"],
-            action=kwargs["action"],
-            actor_id=kwargs["actor_id"],
-            created_at=datetime.now(UTC),
-        )
-
-    import doc_process_studio.incident_report.service.report as report_module
-    monkeypatch.setattr(report_module, "load_report_orm", _fake_load_report_orm)
-    monkeypatch.setattr(report_module, "update_report_record", _fake_update_report_record)
-    monkeypatch.setattr(report_module, "create_audit_log", _fake_create_audit_log)
-
-    result = asyncio.run(reject_report(
-        report_id="rep-1",
-        actor_id="usr_verifier",
-        comment="信息不完整",
-    ))
+    with patch(
+        "doc_process_studio.incident_report.service.report.load_report_orm",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.update_report_record",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.create_audit_log",
+        new_callable=AsyncMock,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.orm_to_detail",
+        new_callable=AsyncMock,
+        return_value=MagicMock(status="rejected"),
+    ):
+        result = asyncio.run(reject_report(
+            report_id="rep-1",
+            actor_id="usr_verifier",
+            comment="信息不完整",
+        ))
     assert result.status == "rejected"
 
 
-def test_close_report_changes_status_to_closed(monkeypatch):
-    from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport
+def test_close_report_changes_status_to_closed():
+    fake_report = _make_orm_report(status="in_progress", assignee_id="usr_handler")
 
-    now = datetime.now(UTC)
-    fake_report = IncidentReport(
-        id="rep-1",
-        ref_no="DAS-0001",
-        title="测试报告",
-        status="in_progress",
-        reporter_id="usr_test",
-        assignee_id="usr_handler",
-        form_data={},
-        created_at=now,
-        updated_at=now,
-    )
-
-    async def _fake_load_report_orm(report_id):
-        if report_id == "rep-1":
-            return fake_report
-        return None
-
-    async def _fake_update_report_record(report_id, **fields):
-        _apply_fields(fake_report, fields)
-        return fake_report
-
-    async def _fake_create_audit_log(**kwargs):
-        from doc_process_studio.incident_report.models.audit_log import IncidentAuditLog
-        return IncidentAuditLog(
-            id="log-1",
-            report_id=kwargs["report_id"],
-            action=kwargs["action"],
-            actor_id=kwargs["actor_id"],
-            created_at=datetime.now(UTC),
-        )
-
-    async def _fake_has_incident_role(user_id, role):
-        return True
-
-    import doc_process_studio.incident_report.service.report as report_module
-    monkeypatch.setattr(report_module, "load_report_orm", _fake_load_report_orm)
-    monkeypatch.setattr(report_module, "update_report_record", _fake_update_report_record)
-    monkeypatch.setattr(report_module, "create_audit_log", _fake_create_audit_log)
-
-    result = asyncio.run(close_report(
-        report_id="rep-1",
-        actor_id="usr_handler",
-    ))
+    with patch(
+        "doc_process_studio.incident_report.service.report.load_report_orm",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.update_report_record",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.create_audit_log",
+        new_callable=AsyncMock,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.orm_to_detail",
+        new_callable=AsyncMock,
+        return_value=MagicMock(status="closed"),
+    ), patch(
+        "doc_process_studio.incident_report.service.role.has_permission",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        result = asyncio.run(close_report(
+            report_id="rep-1",
+            actor_id="usr_handler",
+        ))
     assert result.status == "closed"
 
 
-def test_reopen_report_changes_status_to_draft(monkeypatch):
-    from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport
+def test_reopen_report_changes_status_to_draft():
+    fake_report = _make_orm_report(status="closed")
 
-    now = datetime.now(UTC)
-    fake_report = IncidentReport(
-        id="rep-1",
-        ref_no="DAS-0001",
-        title="测试报告",
-        status="closed",
-        reporter_id="usr_test",
-        form_data={},
-        created_at=now,
-        updated_at=now,
-    )
-
-    async def _fake_load_report_orm(report_id):
-        if report_id == "rep-1":
-            return fake_report
-        return None
-
-    async def _fake_update_report_record(report_id, **fields):
-        _apply_fields(fake_report, fields)
-        return fake_report
-
-    async def _fake_create_audit_log(**kwargs):
-        from doc_process_studio.incident_report.models.audit_log import IncidentAuditLog
-        return IncidentAuditLog(
-            id="log-1",
-            report_id=kwargs["report_id"],
-            action=kwargs["action"],
-            actor_id=kwargs["actor_id"],
-            created_at=datetime.now(UTC),
-        )
-
-    import doc_process_studio.incident_report.service.report as report_module
-    monkeypatch.setattr(report_module, "load_report_orm", _fake_load_report_orm)
-    monkeypatch.setattr(report_module, "update_report_record", _fake_update_report_record)
-    monkeypatch.setattr(report_module, "create_audit_log", _fake_create_audit_log)
-
-    result = asyncio.run(reopen_report(
-        report_id="rep-1",
-        actor_id="usr_admin",
-    ))
+    with patch(
+        "doc_process_studio.incident_report.service.report.load_report_orm",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.update_report_record",
+        new_callable=AsyncMock,
+        return_value=fake_report,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.create_audit_log",
+        new_callable=AsyncMock,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.orm_to_detail",
+        new_callable=AsyncMock,
+        return_value=MagicMock(status="draft"),
+    ):
+        result = asyncio.run(reopen_report(
+            report_id="rep-1",
+            actor_id="usr_admin",
+        ))
     assert result.status == "draft"

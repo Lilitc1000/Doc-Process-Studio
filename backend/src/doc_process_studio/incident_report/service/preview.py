@@ -1,18 +1,24 @@
+import asyncio
 import base64
+import hashlib
 import importlib.util
 import io
+import json
+import os
+import re
 import shutil
 import subprocess
 import tempfile
 from collections import OrderedDict
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 try:
-    import mammoth
+    from deep_translator import GoogleTranslator
 except ImportError:
-    mammoth = None
+    GoogleTranslator = None
 
 from ...chat.models.attachment import ChatAttachment
 from ..schemas.response import IncidentReportPreviewResponse
@@ -22,6 +28,35 @@ from .normalization import normalize_text
 
 _PREVIEW_RESULT_CACHE_MAX_ENTRIES = 12
 _PREVIEW_RESULT_CACHE: OrderedDict[str, IncidentReportPreviewResponse] = OrderedDict()
+
+_TRANSLATION_ENGINE_NAME = "python-google-translator"
+_TRANSLATION_CACHE_MAX_ENTRIES = 4096
+_TRANSLATION_CACHE: OrderedDict[str, str] = OrderedDict()
+
+_CJK_CHAR_PATTERN = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3000-\u303F]")
+
+_TRANSLATION_SKIP_KEYS = {
+    "reference_no",
+    "fault_date",
+    "fault_time",
+    "arrival_datetime",
+    "clearance_datetime",
+    "contractor_date",
+    "closeout_date",
+    "start_time",
+    "detection_time",
+    "resolution_time",
+    "total_duration",
+    "time",
+    "date",
+    "data_url",
+    "download_url",
+    "attachment_id",
+    "mime_type",
+    "size_label",
+    "version",
+    "generated_at",
+}
 
 _incident_generator_module: Any | None = None
 
@@ -95,23 +130,34 @@ def convert_docx_bytes_to_pdf_bytes(docx_bytes: bytes) -> bytes:
         temp_path = Path(temp_dir)
         docx_path = temp_path / "incident-preview.docx"
         pdf_path = temp_path / "incident-preview.pdf"
+        user_profile_dir = temp_path / "lo_profile"
+        user_profile_dir.mkdir(exist_ok=True)
         docx_path.write_bytes(docx_bytes)
 
         command = [
             libreoffice_bin,
             "--headless",
+            "--norestore",
+            "--nologo",
+            f"-env:UserInstallation=file://{user_profile_dir}",
             "--convert-to",
             "pdf:writer_pdf_Export",
             "--outdir",
             str(temp_path),
             str(docx_path),
         ]
+        env = {
+            **os.environ,
+            "SAL_DISABLE_OPENGL": "1",
+            "SAL_DISABLE_CAIROCANVAS": "1",
+        }
         process = subprocess.run(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
             timeout=60,
+            env=env,
         )
         if process.returncode != 0 or not pdf_path.is_file():
             stderr_text = process.stderr.decode("utf-8", errors="ignore").strip()
@@ -119,18 +165,6 @@ def convert_docx_bytes_to_pdf_bytes(docx_bytes: bytes) -> bytes:
             detail = stderr_text or stdout_text or "unknown error"
             raise RuntimeError(f"DOCX 转 PDF 失败：{detail}")
         return pdf_path.read_bytes()
-
-
-def convert_docx_bytes_to_preview_html(docx_bytes: bytes) -> tuple[str, list[str]]:
-    if mammoth is None:
-        raise RuntimeError("缺少 mammoth 依赖，无法进行 Word 预览。")
-    result = mammoth.convert_to_html(io.BytesIO(docx_bytes))
-    warnings = [
-        normalize_text(getattr(message, "message", ""))
-        for message in result.messages
-        if normalize_text(getattr(message, "message", ""))
-    ]
-    return result.value, warnings
 
 
 def load_docx_bytes_from_attachment(attachment_id: str) -> bytes:
@@ -144,28 +178,37 @@ def load_docx_bytes_from_attachment(attachment_id: str) -> bytes:
     return attachment_path.read_bytes()
 
 
-def build_preview_payload_from_docx_bytes(
-    docx_bytes: bytes,
-) -> tuple[str, str | None, list[str]]:
-    warnings: list[str] = []
-    html = ""
-    pdf_base64: str | None = None
-
+def _stable_payload_hash(payload: Any) -> str:
     try:
-        pdf_bytes = convert_docx_bytes_to_pdf_bytes(docx_bytes)
-        pdf_base64 = base64.b64encode(pdf_bytes).decode("ascii")
-    except Exception as exc:
-        warnings.append(f"PDF 预览生成失败，已回退为 HTML：{normalize_text(exc)}")
+        normalized = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except Exception:
+        normalized = repr(payload)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
-    try:
-        html, html_warnings = convert_docx_bytes_to_preview_html(docx_bytes)
-        warnings.extend(html_warnings)
-    except Exception as exc:
-        if pdf_base64 is None:
-            raise RuntimeError(f"文档预览失败：{normalize_text(exc)}") from exc
-        warnings.append(f"HTML 预览生成失败：{normalize_text(exc)}")
 
-    return html, pdf_base64, warnings
+def _translation_cache_key(*, model_name: str, source_text: str) -> str:
+    source_hash = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
+    return f"{model_name}:{source_hash}"
+
+
+def _translation_cache_get(key: str) -> str | None:
+    cached = _TRANSLATION_CACHE.get(key)
+    if cached is None:
+        return None
+    _TRANSLATION_CACHE.move_to_end(key)
+    return cached
+
+
+def _translation_cache_set(*, key: str, value: str) -> None:
+    _TRANSLATION_CACHE[key] = value
+    _TRANSLATION_CACHE.move_to_end(key)
+    while len(_TRANSLATION_CACHE) > _TRANSLATION_CACHE_MAX_ENTRIES:
+        _TRANSLATION_CACHE.popitem(last=False)
 
 
 def preview_cache_get(cache_key: str) -> IncidentReportPreviewResponse | None:
@@ -192,6 +235,178 @@ def preview_template_token() -> str:
         return "unknown"
 
 
+def _should_skip_translation(path: list[str], value: str) -> bool:
+    if not path:
+        return False
+    key = path[-1]
+    if key in _TRANSLATION_SKIP_KEYS:
+        return True
+    lowered = value.lower()
+    if lowered.startswith("data:image"):
+        return True
+    return False
+
+
+def _collect_translation_targets(
+    payload: Any,
+    *,
+    path: list[str],
+    targets: dict[str, str],
+) -> None:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            _collect_translation_targets(value, path=[*path, key], targets=targets)
+        return
+    if isinstance(payload, list):
+        for index, value in enumerate(payload):
+            _collect_translation_targets(value, path=[*path, str(index)], targets=targets)
+        return
+    if not isinstance(payload, str):
+        return
+
+    normalized = normalize_text(payload)
+    if not normalized:
+        return
+    if _should_skip_translation(path, normalized):
+        return
+    if not _CJK_CHAR_PATTERN.search(normalized):
+        return
+    targets[".".join(path)] = normalized
+
+
+def _set_nested_string_value(payload: Any, path_key: str, value: str) -> bool:
+    path = [part for part in path_key.split(".") if part]
+    if not path:
+        return False
+
+    current = payload
+    for index, part in enumerate(path):
+        is_last = index == len(path) - 1
+        if isinstance(current, list):
+            if not part.isdigit():
+                return False
+            item_index = int(part)
+            if item_index < 0 or item_index >= len(current):
+                return False
+            if is_last:
+                current[item_index] = value
+                return True
+            current = current[item_index]
+            continue
+        if isinstance(current, dict):
+            if part not in current:
+                return False
+            if is_last:
+                current[part] = value
+                return True
+            current = current[part]
+            continue
+        return False
+    return False
+
+
+async def _translate_batch_via_google(
+    source_texts: list[str],
+) -> list[str]:
+    try:
+        translator = GoogleTranslator(source="auto", target="en")
+        translated_batch = await asyncio.to_thread(
+            translator.translate_batch,
+            source_texts,
+        )
+        if isinstance(translated_batch, list) and len(translated_batch) == len(source_texts):
+            return [
+                normalize_text(item) if isinstance(item, str) else ""
+                for item in translated_batch
+            ]
+    except Exception:
+        pass
+
+    results: list[str] = []
+    for source_text in source_texts:
+        try:
+            translator = GoogleTranslator(source="auto", target="en")
+            translated_value = normalize_text(
+                await asyncio.to_thread(translator.translate, source_text)
+            )
+            results.append(translated_value)
+        except Exception:
+            results.append("")
+    return results
+
+
+async def translate_report_data_to_english(
+    *,
+    report_data: dict[str, Any],
+) -> dict[str, Any]:
+    if GoogleTranslator is None:
+        return report_data
+
+    targets: dict[str, str] = {}
+    _collect_translation_targets(report_data, path=[], targets=targets)
+    if not targets:
+        return report_data
+
+    translations: dict[str, str] = {}
+    pending_targets: dict[str, str] = {}
+    for path_key, source_text in targets.items():
+        cache_key = _translation_cache_key(
+            model_name=_TRANSLATION_ENGINE_NAME,
+            source_text=source_text,
+        )
+        cached_text = _translation_cache_get(cache_key)
+        if cached_text:
+            translations[path_key] = cached_text
+        else:
+            pending_targets[path_key] = source_text
+
+    if pending_targets:
+        pending_items = list(pending_targets.items())
+        chunk_size = 48
+        chunks: list[list[tuple[str, str]]] = []
+        for start in range(0, len(pending_items), chunk_size):
+            chunks.append(pending_items[start : start + chunk_size])
+
+        batch_results = await asyncio.gather(
+            *(
+                _translate_batch_via_google(
+                    [text for _, text in chunk_items]
+                )
+                for chunk_items in chunks
+            )
+        )
+
+        for chunk_items, translated_texts in zip(chunks, batch_results):
+            for (path_key, source_text), translated_text in zip(
+                chunk_items,
+                translated_texts,
+                strict=False,
+            ):
+                if not translated_text:
+                    continue
+                translations[path_key] = translated_text
+                _translation_cache_set(
+                    key=_translation_cache_key(
+                        model_name=_TRANSLATION_ENGINE_NAME,
+                        source_text=source_text,
+                    ),
+                    value=translated_text,
+                )
+
+    if not translations:
+        return report_data
+
+    translated = deepcopy(report_data)
+    for path_key, original in targets.items():
+        translated_text = normalize_text(translations.get(path_key))
+        if not translated_text:
+            continue
+        if translated_text == original:
+            continue
+        _set_nested_string_value(translated, path_key, translated_text)
+    return translated
+
+
 def _build_output_name(*, report_title: str, report_id: str, suffix: str) -> str:
     normalized_title = report_title.strip().replace(" ", "-").replace("/", "-")
     if not normalized_title:
@@ -214,7 +429,6 @@ async def preview_report_attachment(
     model: str | None = None,
     reranker_model: str | None = None,
 ) -> IncidentReportPreviewResponse:
-    import base64
     from .report_store import load_report_orm
     from .report_data import build_report_data_from_snapshot
     from .generation import _build_snapshot_from_form_data
@@ -222,11 +436,6 @@ async def preview_report_attachment(
     record = await load_report_orm(report_id)
     if record is None:
         raise ValueError(f"报告 {report_id} 不存在。")
-
-    cache_key = f"report:{report_id}:v{version or 'draft'}:{preview_template_token()}"
-    cached = preview_cache_get(cache_key)
-    if cached is not None:
-        return cached
 
     snapshot = _build_snapshot_from_form_data(record.form_data)
     report_data, missing = build_report_data_from_snapshot(
@@ -236,8 +445,26 @@ async def preview_report_attachment(
     if report_data is None:
         report_data = {"missing_fields": missing}
 
-    docx_bytes = render_docx_bytes_from_report_data(report_data)
-    html, pdf_base64, warnings = build_preview_payload_from_docx_bytes(docx_bytes)
+    preview_model = normalize_text(model) or normalize_text(reranker_model)
+    draft_hash = _stable_payload_hash(report_data)
+    cache_key = f"report:{report_id}:v{version or 'draft'}:{preview_model}:{preview_template_token()}:{draft_hash}"
+    cached = preview_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    translated_report_data = await translate_report_data_to_english(
+        report_data=report_data,
+    )
+
+    docx_bytes = render_docx_bytes_from_report_data(translated_report_data)
+
+    warnings: list[str] = []
+    pdf_base64: str | None = None
+    try:
+        pdf_bytes = convert_docx_bytes_to_pdf_bytes(docx_bytes)
+        pdf_base64 = base64.b64encode(pdf_bytes).decode("ascii")
+    except Exception as exc:
+        warnings.append(f"PDF 预览生成失败：{normalize_text(exc)}")
 
     output_name = build_preview_output_name(
         report_title=record.title,
@@ -248,7 +475,7 @@ async def preview_report_attachment(
         source="draft",
         version=version,
         label=output_name.replace(".docx", ""),
-        html=html,
+        html="",
         docx_base64=base64.b64encode(docx_bytes).decode("ascii"),
         docx_file_name=output_name,
         pdf_base64=pdf_base64,

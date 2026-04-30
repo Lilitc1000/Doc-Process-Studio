@@ -108,7 +108,7 @@ def test_build_report_data_with_minimal_fields():
             "body_impact_scope": IncidentFormAnswer(value="影响范围"),
             "body_impact_severity": IncidentFormAnswer(value="Major"),
             "body_root_cause": IncidentFormAnswer(value="根因分析"),
-            "body_follow_up_actions": IncidentFormAnswer(value="后续动作"),
+            "body_follow_up": IncidentFormAnswer(value="后续动作"),
             "body_timeline": IncidentFormAnswer(value=[{"time": "09:10", "event": "故障发生"}]),
         }
     )

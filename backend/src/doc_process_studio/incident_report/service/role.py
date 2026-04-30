@@ -123,6 +123,38 @@ async def list_all_role_assignments() -> list[IncidentReportUserRole]:
         return list(result.scalars().all())
 
 
+async def list_non_admin_users_with_roles() -> list[dict]:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(User).where(User.username != "admin").order_by(User.username)
+        )
+        users = list(result.scalars().all())
+        if not users:
+            return []
+
+        user_ids = [u.user_id for u in users]
+        roles_result = await session.execute(
+            select(IncidentReportUserRole).where(
+                IncidentReportUserRole.user_id.in_(user_ids)
+            ).order_by(
+                IncidentReportUserRole.user_id,
+                IncidentReportUserRole.role_key,
+            )
+        )
+        role_map: dict[str, list[str]] = {}
+        for row in roles_result.scalars().all():
+            role_map.setdefault(row.user_id, []).append(row.role_key)
+
+        return [
+            {
+                "user_id": u.user_id,
+                "username": u.username,
+                "roles": role_map.get(u.user_id, []),
+            }
+            for u in users
+        ]
+
+
 async def list_role_definitions() -> list[IncidentReportRoleDefinition]:
     async with async_session_factory() as session:
         result = await session.execute(

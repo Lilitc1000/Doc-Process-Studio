@@ -40,8 +40,14 @@ test.describe('事故报告统计分析页', () => {
   });
 
   test('统计分析页显示图表区域', async ({ page }) => {
+    const overviewResp = page.waitForResponse(
+      (resp) =>
+        resp.url().includes('/incident-report/analytics/overview') ||
+        resp.url().includes('/incident-report/analytics/'),
+      { timeout: 10_000 },
+    );
     await page.goto('/incident-report/analytics');
-    await page.waitForTimeout(2000);
+    await overviewResp.catch(() => {});
     await expect(page.locator('.analytics-charts')).toBeVisible();
   });
 

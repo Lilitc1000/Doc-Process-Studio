@@ -776,10 +776,10 @@ onBeforeUnmount(() => {
 
 .date-time-trigger {
   width: 100%;
-  min-height: 44px;
-  padding: 0.78rem 0.95rem;
+  min-height: 40px;
+  padding: 0.62rem 0.72rem;
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
   color: #0f172a;
   font-size: 0.9rem;
@@ -787,7 +787,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.58rem;
+  gap: 0.4rem;
   box-shadow:
     0 10px 24px rgba(15, 23, 42, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
@@ -822,8 +822,8 @@ onBeforeUnmount(() => {
 }
 
 .date-time-trigger-icon {
-  width: 2rem;
-  height: 2rem;
+  width: 1.5rem;
+  height: 1.5rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
