@@ -22,6 +22,11 @@ test.describe('首页', () => {
     await expect(cardLabels.nth(2)).toHaveText('设置');
   });
 
+  test('首页右上角显示用户头像', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.app-header--home .user-avatar')).toBeVisible();
+  });
+
   test('点击"对话"卡片导航到对话页面', async ({ page }) => {
     await page.goto('/');
     await page.locator('.home-card-label', { hasText: '对话' }).click();

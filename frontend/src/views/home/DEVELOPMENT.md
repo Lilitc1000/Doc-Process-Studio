@@ -19,9 +19,10 @@ frontend/src/views/home/
 
 ## 布局特点
 
-- 首页不显示 `AppHeader`（`showHeader = computed(() => currentPageId.value !== 'home')`）
-- 因此首页断言使用 `.home-title`，不要用 `.app-header`
-- 需要操作用户菜单的测试，先导航到 `/chat` 等子页面
+- 首页显示 `AppHeader` 的首页模式（`.app-header--home`），仅在右上角显示用户头像
+- 首页内容区无 `padding-top`（`app-layout-content--home`），因为浮动头像不遮挡居中内容
+- 首页断言使用 `.home-title`，头像断言使用 `.app-header--home .user-avatar`
+- 需要操作完整用户菜单的测试，先导航到 `/chat` 等子页面
 
 ## 开发注意
 

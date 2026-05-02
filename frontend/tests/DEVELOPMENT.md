@@ -606,10 +606,11 @@ test.describe('功能名称', () => {
 
 #### 8. 首页特殊注意
 
-首页不显示 `AppHeader`（`showHeader = computed(() => currentPageId.value !== 'home')`），因此：
+首页显示 `AppHeader` 的首页模式（`.app-header--home`），仅在右上角显示用户头像：
 
-- 首页断言使用 `.home-title`，不要用 `.app-header`
-- 需要操作用户菜单的测试，先导航到 `/chat` 等子页面
+- 首页断言使用 `.home-title`，头像断言使用 `.app-header--home .user-avatar`
+- 首页模式下不显示首页按钮和页面标题
+- 需要操作完整用户菜单的测试，先导航到 `/chat` 等子页面
 
 ---
 

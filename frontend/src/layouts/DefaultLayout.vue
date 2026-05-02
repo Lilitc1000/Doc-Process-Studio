@@ -1,13 +1,15 @@
 <template>
   <div class="app-layout">
     <app-header
-      v-if="showHeader"
       :page-id="currentPageId"
       :title-clickable="isTitleClickable"
       @go-home="onGoHome"
       @title-click="onTitleClick"
     />
-    <main class="app-layout-content">
+    <main
+      class="app-layout-content"
+      :class="{ 'app-layout-content--home': currentPageId === 'home' }"
+    >
       <router-view v-slot="{ Component, route: viewRoute }">
         <Transition name="page-switch" mode="out-in">
           <component :is="Component" :key="viewRoute.fullPath" ref="viewRef" />
@@ -35,10 +37,8 @@ const currentPageId = computed(() => {
   return 'home';
 });
 
-const showHeader = computed(() => currentPageId.value !== 'home');
-
 const isTitleClickable = computed(() => {
-  if (!showHeader.value) return false;
+  if (currentPageId.value === 'home') return false;
   if (currentPageId.value === 'chat') return true;
   if (currentPageId.value === 'incident-report') {
     const child = viewRef.value?.$?.exposed ?? viewRef.value;
@@ -79,5 +79,16 @@ const onTitleClick = () => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  padding-top: 3rem;
+}
+
+.app-layout-content--home {
+  padding-top: 0;
+}
+
+@media (max-width: 640px) {
+  .app-layout-content {
+    padding-top: 2.75rem;
+  }
 }
 </style>

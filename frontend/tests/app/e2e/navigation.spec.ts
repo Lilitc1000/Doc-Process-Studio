@@ -70,4 +70,18 @@ test.describe('全局导航', () => {
     await page.goForward();
     await expect(page).toHaveURL('/');
   });
+
+  test('首页右上角显示用户头像', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.app-header--home .user-avatar')).toBeVisible();
+  });
+
+  test('子页面显示浮动导航栏', async ({ page }) => {
+    await page.goto('/chat');
+    const header = page.locator('.app-header--sub');
+    await expect(header).toBeVisible();
+    await expect(page.locator('.app-header-home')).toBeVisible();
+    await expect(page.locator('.app-header-title')).toHaveText('对话');
+    await expect(page.locator('.user-avatar')).toBeVisible();
+  });
 });
