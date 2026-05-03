@@ -1,282 +1,128 @@
-import json
+import asyncio
+from datetime import UTC, datetime
 
-import doc_process_studio.incident_report.service.generation as generation_module
-from doc_process_studio.incident_report.schemas.common import IncidentFormAnswer, IncidentFormSnapshot
-
-
-def _make_snapshot(**overrides) -> IncidentFormSnapshot:
-    defaults = dict(form_answers={}, report_data=None)
-    defaults.update(overrides)
-    return IncidentFormSnapshot(**defaults)
-
-
-def test_build_default_title():
-    from datetime import UTC, datetime
-    now = datetime(2026, 4, 8, 9, 10, tzinfo=UTC)
-    title = generation_module._build_default_title(now)
-    assert "2026/04/08" in title
-    assert "09:10" in title
+import doc_process_studio.incident_report.service.report_data as report_data_module
+import doc_process_studio.incident_report.service.reference as reference_module
+from doc_process_studio.incident_report.schemas.common import (
+    IncidentFormAnswer,
+    IncidentFormSnapshot,
+)
+from doc_process_studio.skill.models.runtime import SkillPlanDecision
 
 
-def test_build_language_policy_instruction():
-    result = generation_module._build_language_policy_instruction()
-    assert "语言" in result
-
-
-def test_build_enforced_language_instruction_en():
-    result = generation_module._build_enforced_language_instruction("en")
-    assert "English" in result or "英文" in result
-
-
-def test_build_enforced_language_instruction_zh():
-    result = generation_module._build_enforced_language_instruction("zh")
-    assert "中文" in result
-
-
-def test_build_language_detection_context():
-    result = generation_module._build_language_detection_context(
-        section_id="description",
-        timeline_index=None,
-        prompt="生成描述",
-        context_json='{"key":"value"}',
-    )
-    parsed = json.loads(result)
-    assert parsed["section_id"] == "description"
-    assert parsed["prompt"] == "生成描述"
-
-
-def test_build_quick_generation_context():
-    snapshot = _make_snapshot(
-        form_answers={
-            "quick_narrative": IncidentFormAnswer(value="简述内容"),
-            "body_description": IncidentFormAnswer(value="已有描述"),
-        }
-    )
-    context = generation_module._build_quick_generation_context(snapshot)
-    assert "quick_inputs" in context
-    assert "manual_cover_context" in context
-    assert "existing_full_body" in context
-
-
-def test_build_quick_generation_request():
-    snapshot = _make_snapshot(
-        form_answers={
-            "quick_narrative": IncidentFormAnswer(value="简述内容"),
-        }
-    )
-    prompt, context_json = generation_module._build_quick_generation_request(snapshot)
-    assert "快填模式" in prompt
-    assert "JSON" in prompt
-    parsed = json.loads(context_json)
-    assert "quick_inputs" in parsed
-
-
-def test_build_section_generation_prompt_description():
-    snapshot = _make_snapshot(form_answers={})
-    prompt, context = generation_module._build_section_generation_prompt(
-        snapshot, section_id="description", timeline_index=None,
-    )
-    assert "body_description" in prompt
-
-
-def test_build_section_generation_prompt_timeline():
-    snapshot = _make_snapshot(form_answers={})
-    prompt, context = generation_module._build_section_generation_prompt(
-        snapshot, section_id="timeline", timeline_index=None,
-    )
-    assert "body_timeline" in prompt
-
-
-def test_build_section_generation_prompt_impact():
-    snapshot = _make_snapshot(form_answers={})
-    prompt, context = generation_module._build_section_generation_prompt(
-        snapshot, section_id="impact", timeline_index=None,
-    )
-    assert "impact_scope" in prompt
-
-
-def test_build_section_generation_prompt_root_cause():
-    snapshot = _make_snapshot(form_answers={})
-    prompt, context = generation_module._build_section_generation_prompt(
-        snapshot, section_id="root_cause", timeline_index=None,
-    )
-    assert "root_cause" in prompt
-
-
-def test_build_section_generation_prompt_follow_up():
-    snapshot = _make_snapshot(form_answers={})
-    prompt, context = generation_module._build_section_generation_prompt(
-        snapshot, section_id="follow_up", timeline_index=None,
-    )
-    assert "follow_up" in prompt
-
-
-def test_build_section_generation_prompt_timeline_item_invalid_index():
-    snapshot = _make_snapshot(form_answers={})
-    try:
-        generation_module._build_section_generation_prompt(
-            snapshot, section_id="timeline_item", timeline_index=0,
+def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
+    async def fake_select_for_workspace_reference(**kwargs):
+        planner_messages = kwargs["messages"]
+        assert planner_messages
+        first_content = (
+            planner_messages[0].content
+            if hasattr(planner_messages[0], "content")
+            else planner_messages[0]["content"]
         )
-        assert False, "Should have raised ValueError"
-    except ValueError:
-        pass
-
-
-def test_build_section_generation_prompt_unsupported():
-    snapshot = _make_snapshot(form_answers={})
-    try:
-        generation_module._build_section_generation_prompt(
-            snapshot, section_id="unknown", timeline_index=None,
+        assert "incident-report SKILL.md" in first_content
+        return SkillPlanDecision(
+            planner_model="qwen3-coder-next:latest",
+            required_skill_ids=["body-sections/common.md"],
+            optional_skill_ids=["body-sections/impact.md"],
+            missing_explicit_skill_ids=[],
+            active_skill_ids=["body-sections/common.md", "body-sections/impact.md"],
+            primary_skill_id="body-sections/common.md",
+            confidence=0.88,
+            reasons={"planner": "planner:unified planner selected impact reference"},
+            candidates=[],
+            created_at=datetime.now(UTC),
         )
-        assert False, "Should have raised ValueError"
-    except ValueError:
-        pass
-
-
-def test_build_body_generation_messages():
-    messages = generation_module._build_body_generation_messages(
-        prompt="生成描述",
-        context_json='{"key":"value"}',
-        reference_context="参考文档内容",
-        enforced_language=None,
-    )
-    assert len(messages) == 2
-    assert messages[0]["role"] == "system"
-    assert messages[1]["role"] == "user"
-    assert "参考文档" in messages[1]["content"]
-
-
-def test_build_body_generation_messages_with_enforced_language():
-    messages = generation_module._build_body_generation_messages(
-        prompt="生成描述",
-        context_json='{}',
-        reference_context="参考",
-        enforced_language="en",
-    )
-    assert any("English" in m["content"] or "英文" in m["content"] for m in messages)
-
-
-def test_build_body_generation_messages_strict_retry():
-    messages = generation_module._build_body_generation_messages(
-        prompt="生成描述",
-        context_json='{}',
-        reference_context="参考",
-        enforced_language="en",
-        strict_retry=True,
-    )
-    assert any("不符合要求" in m["content"] for m in messages)
-
-
-def test_apply_quick_generation_payload():
-    form_answers = {}
-    payload = {
-        "description": "AI生成的描述",
-        "affected_date_summary": "08/04/2026 09:10 - 10:30",
-        "timeline": [{"time": "09:10", "event": "故障发生"}],
-        "impact_scope": "影响范围",
-        "impact_severity": "Major",
-        "business_impact": "业务影响",
-        "trigger": "触发原因",
-        "root_cause": "根因分析",
-        "follow_up_actions": "后续动作",
-    }
-    generation_module._apply_quick_generation_payload(
-        form_answers=form_answers,
-        payload=payload,
-    )
-    assert form_answers["body_description"].value == "AI生成的描述"
-    assert form_answers["body_impact_scope"].value == "影响范围"
-
-
-def test_apply_section_payload_description():
-    form_answers = {}
-    generation_module._apply_section_payload(
-        form_answers=form_answers,
-        section_id="description",
-        timeline_index=None,
-        payload={"body_description": "新描述"},
-    )
-    assert form_answers["body_description"].value == "新描述"
-
-
-def test_apply_section_payload_timeline():
-    form_answers = {}
-    generation_module._apply_section_payload(
-        form_answers=form_answers,
-        section_id="timeline",
-        timeline_index=None,
-        payload={
-            "body_timeline": [{"time": "09:10", "event": "故障"}],
-            "body_affected_date_summary": "日期摘要",
-        },
-    )
-    assert "body_timeline" in form_answers
-
-
-def test_apply_section_payload_impact():
-    form_answers = {}
-    generation_module._apply_section_payload(
-        form_answers=form_answers,
-        section_id="impact",
-        timeline_index=None,
-        payload={
-            "body_impact_scope": "影响范围",
-            "body_impact_severity": "Major",
-            "body_business_impact": "业务影响",
-        },
-    )
-    assert form_answers["body_impact_scope"].value == "影响范围"
-
-
-def test_apply_section_payload_root_cause():
-    form_answers = {}
-    generation_module._apply_section_payload(
-        form_answers=form_answers,
-        section_id="root_cause",
-        timeline_index=None,
-        payload={
-            "body_trigger": "触发原因",
-            "body_root_cause": "根因分析",
-        },
-    )
-    assert form_answers["body_trigger"].value == "触发原因"
-
-
-def test_apply_section_payload_follow_up():
-    form_answers = {}
-    generation_module._apply_section_payload(
-        form_answers=form_answers,
-        section_id="follow_up",
-        timeline_index=None,
-        payload={"body_follow_up": "后续动作"},
-    )
-    assert form_answers["body_follow_up"].value == "后续动作"
-
-
-def test_apply_section_payload_unsupported():
-    form_answers = {}
-    try:
-        generation_module._apply_section_payload(
-            form_answers=form_answers,
-            section_id="unknown",
-            timeline_index=None,
-            payload={},
-        )
-        assert False, "Should have raised ValueError"
-    except ValueError:
-        pass
-
-
-def test_resolve_document_assistant_prompt_fallback(monkeypatch):
-    import doc_process_studio.skill.service.registry as registry_module
-
-    def _fake_get_skill_interface(skill_id):
-        raise ValueError("not found")
 
     monkeypatch.setattr(
-        registry_module,
-        "get_skill_interface",
-        _fake_get_skill_interface,
+        reference_module,
+        "select_for_workspace_reference",
+        fake_select_for_workspace_reference,
     )
-    result = generation_module._resolve_document_assistant_prompt()
-    assert result == ""
+
+    reference_context, selected_files, selection_reason = asyncio.run(
+        reference_module.resolve_generation_reference_context(
+            model="qwen3-coder-next:latest",
+            section_id="impact",
+            timeline_index=None,
+            prompt="Generate impact scope and severity",
+            context_json='{"impact_scope":"Order placement chain"}',
+        )
+    )
+
+    assert "body-sections/impact.md" in selected_files
+    assert "impact.md" in reference_context
+    assert selection_reason.startswith("planner:")
+
+
+def test_translate_report_data_returns_input_unchanged() -> None:
+    import doc_process_studio.incident_report.service.translation as translation_module
+
+    report_data = {
+        "reference_no": "DAS-20260420-001",
+        "report_body": {
+            "description": "Customer reported order placement errors",
+        },
+    }
+
+    result = asyncio.run(
+        translation_module.translate_report_data_to_english(
+            report_data=report_data,
+        )
+    )
+
+    assert result == report_data
+    assert result["reference_no"] == "DAS-20260420-001"
+    assert result["report_body"]["description"] == "Customer reported order placement errors"
+
+
+def test_build_report_data_supports_rich_text_appendix() -> None:
+    snapshot = IncidentFormSnapshot(
+        form_answers={
+            "appendix_notes": IncidentFormAnswer(
+                value=(
+                    "<p>Appendix note line 1</p><p>Appendix note line 2</p>"
+                    "<p><img alt='chart.png' src='data:image/png;base64,AAAA' /></p>"
+                ),
+                custom_value="",
+            ),
+        }
+    )
+    report_data, missing = report_data_module.build_report_data_from_snapshot(
+        snapshot,
+        strict_required=False,
+    )
+
+    assert report_data is not None
+    assert isinstance(missing, list)
+    assert report_data["appendix"]["notes"] == "Appendix note line 1\nAppendix note line 2"
+    assert report_data["appendix"]["images"] == [
+        {
+            "name": "chart.png",
+            "data_url": "data:image/png;base64,AAAA",
+        }
+    ]
+
+
+def test_build_report_data_rich_text_appendix_image_only_does_not_fallback_raw_html() -> None:
+    snapshot = IncidentFormSnapshot(
+        form_answers={
+            "appendix_notes": IncidentFormAnswer(
+                value="<p><img alt='photo.png' src='data:image/png;base64,BBBB' /></p>",
+                custom_value="",
+            ),
+        }
+    )
+    report_data, missing = report_data_module.build_report_data_from_snapshot(
+        snapshot,
+        strict_required=False,
+    )
+
+    assert report_data is not None
+    assert isinstance(missing, list)
+    assert report_data["appendix"]["notes"] == ""
+    assert report_data["appendix"]["images"] == [
+        {
+            "name": "photo.png",
+            "data_url": "data:image/png;base64,BBBB",
+        }
+    ]

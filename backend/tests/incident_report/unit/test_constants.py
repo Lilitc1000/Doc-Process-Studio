@@ -28,8 +28,6 @@ from doc_process_studio.incident_report.service.constants import (
     STATUS_OPTION_FAULT_CLEARED,
     STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED,
     STATUS_OPTION_TEMPORARILY_FIXED,
-    _CJK_CHAR_PATTERN,
-    _TRANSLATION_SKIP_KEYS,
 )
 
 
@@ -81,17 +79,3 @@ def test_severity_options():
     assert SEVERITY_OPTION_NOT_APPLICABLE == "not_applicable"
     assert SEVERITY_OPTION_MINOR == "minor"
     assert SEVERITY_OPTION_MAJOR == "major"
-
-
-def test_cjk_pattern_matches_chinese():
-    assert _CJK_CHAR_PATTERN.search("中文") is not None
-
-
-def test_cjk_pattern_no_match_english():
-    assert _CJK_CHAR_PATTERN.search("English") is None
-
-
-def test_translation_skip_keys():
-    assert "reference_no" in _TRANSLATION_SKIP_KEYS
-    assert "fault_date" in _TRANSLATION_SKIP_KEYS
-    assert "data_url" in _TRANSLATION_SKIP_KEYS

@@ -64,9 +64,11 @@ def format_datetime_text(value: str) -> str:
     normalized = normalize_text(value)
     if not normalized:
         return ""
+    cleaned = re.sub(r"[+-]\d{2}:\d{2}(?!\d)", "", normalized)
+    cleaned = re.sub(r"Z$", "", cleaned)
     iso_matched = re.match(
         r"^(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})[T\s](?P<hour>\d{1,2}):(?P<minute>\d{1,2})",
-        normalized,
+        cleaned,
     )
     if iso_matched:
         year = iso_matched.group("year")
@@ -82,19 +84,23 @@ def format_date_text(value: str) -> str:
     normalized = normalize_text(value)
     if not normalized:
         return ""
+    cleaned = re.sub(r"[T\s]\d{1,2}:\d{1,2}.*$", "", normalized)
+    cleaned = re.sub(r"[+-]\d{2}:\d{2}(?!\d)", "", cleaned)
+    cleaned = re.sub(r"Z$", "", cleaned)
+    cleaned = cleaned.strip()
     for pattern in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y", "%Y.%m.%d"):
         try:
-            parsed = datetime.strptime(normalized, pattern)
+            parsed = datetime.strptime(cleaned, pattern)
             return parsed.strftime("%d/%m/%Y")
         except ValueError:
             continue
-    matched = re.match(r"^(?P<day>\d{1,2})[./-](?P<month>\d{1,2})[./-](?P<year>\d{4})$", normalized)
+    matched = re.match(r"^(?P<day>\d{1,2})[./-](?P<month>\d{1,2})[./-](?P<year>\d{4})$", cleaned)
     if matched:
         day = str(int(matched.group("day"))).zfill(2)
         month = str(int(matched.group("month"))).zfill(2)
         year = matched.group("year")
         return f"{day}/{month}/{year}"
-    iso_matched = re.match(r"^(?P<year>\d{4})[./-](?P<month>\d{1,2})[./-](?P<day>\d{1,2})$", normalized)
+    iso_matched = re.match(r"^(?P<year>\d{4})[./-](?P<month>\d{1,2})[./-](?P<day>\d{1,2})$", cleaned)
     if iso_matched:
         day = str(int(iso_matched.group("day"))).zfill(2)
         month = str(int(iso_matched.group("month"))).zfill(2)

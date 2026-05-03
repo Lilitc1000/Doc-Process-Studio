@@ -33,8 +33,8 @@ def test_is_docx_attachment_wrong_mime():
 
 
 def test_build_initial_output_name():
-    result = build_initial_output_name(report_title="测试报告", report_id="abc12345")
-    assert result == "测试报告-V1.docx"
+    result = build_initial_output_name(report_title="Test Report", report_id="abc12345")
+    assert result == "Test-Report-V1.docx"
 
 
 def test_build_initial_output_name_empty_title():
@@ -50,8 +50,8 @@ def test_build_initial_output_name_special_chars():
 
 
 def test_build_preview_output_name():
-    result = build_preview_output_name(report_title="测试报告", report_id="abc12345")
-    assert result == "测试报告-preview.docx"
+    result = build_preview_output_name(report_title="Test Report", report_id="abc12345")
+    assert result == "Test-Report-preview.docx"
 
 
 def test_preview_cache_set_and_get():

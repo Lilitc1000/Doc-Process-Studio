@@ -128,7 +128,7 @@ const editor = useEditor({
   extensions: [
     StarterKit,
     Underline,
-    Image,
+    Image.configure({ allowBase64: true }),
     Placeholder.configure({
       placeholder: props.placeholder,
     }),

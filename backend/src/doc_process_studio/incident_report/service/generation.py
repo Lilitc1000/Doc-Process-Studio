@@ -16,12 +16,6 @@ from ...system.service.trace_store import AgentTraceRecorder
 from ...shared.dtutils import utcnow
 from ...shared.text_utils import parse_json_object
 from ...core.config import settings
-from ...core.language_policy import (
-    LANGUAGE_ZH,
-    describe_language,
-    detect_language_with_model,
-    verify_text_language_with_model,
-)
 from ...core.ollama import stream_chat_completion
 from .constants import (
     BODY_AFFECTED_DATE,
@@ -58,7 +52,7 @@ from .report_store import load_report_orm, update_report_record
 
 def _build_default_title(now: Any = None) -> str:
     current = now or utcnow()
-    return f"事故报告-{current.strftime('%Y/%m/%d %H:%M')}"
+    return f"Incident-Report-{current.strftime('%Y/%m/%d %H:%M')}"
 
 
 def _resolve_document_assistant_prompt() -> str:
@@ -67,77 +61,6 @@ def _resolve_document_assistant_prompt() -> str:
         return normalize_text(get_skill_interface(SYSTEM_DOCUMENT_SKILL_ID).default_prompt)
     except Exception:
         return ""
-
-
-def _build_language_policy_instruction() -> str:
-    return (
-        "请你自行判断当前用户在本次上下文里主要使用的语言，并使用同一种语言输出正文字段。"
-        "如果用户主要使用英文，就输出英文；如果主要使用中文，就输出中文；"
-        "若出现中英文混合，以用户最近一轮明确输入的主语言为准。"
-    )
-
-
-def _build_language_detection_context(
-    *,
-    section_id: str,
-    timeline_index: int | None,
-    prompt: str,
-    context_json: str,
-) -> str:
-    return json.dumps(
-        {
-            "workspace": "incident-report",
-            "section_id": section_id,
-            "timeline_index": timeline_index,
-            "prompt": prompt,
-            "context": parse_json_object(context_json) or context_json,
-        },
-        ensure_ascii=False,
-    )
-
-
-def _build_enforced_language_instruction(language: str) -> str:
-    normalized = language.strip().lower()
-    if normalized == "en":
-        return f"本次输出语言已确定为{describe_language(normalized)}，所有正文内容必须使用该语言。"
-    return f"本次输出语言已确定为{describe_language(LANGUAGE_ZH)}，所有正文内容必须使用该语言。"
-
-
-async def _detect_generation_language_with_model(
-    *,
-    model: str,
-    section_id: str,
-    timeline_index: int | None,
-    prompt: str,
-    context_json: str,
-) -> tuple[str | None, str]:
-    detection_context = _build_language_detection_context(
-        section_id=section_id,
-        timeline_index=timeline_index,
-        prompt=prompt,
-        context_json=context_json,
-    )
-    language, reason = await detect_language_with_model(
-        model=model,
-        context_text=detection_context,
-        task_name="incident-report-body-generation",
-    )
-    return language, reason
-
-
-async def _verify_generation_language_with_model(
-    *,
-    model: str,
-    expected_language: str,
-    generated_text: str,
-    section_id: str,
-) -> tuple[bool | None, str | None, str]:
-    return await verify_text_language_with_model(
-        model=model,
-        expected_language=expected_language,
-        text=generated_text,
-        task_name=f"incident-report-{section_id}",
-    )
 
 
 async def _run_plain_chat_completion(
@@ -208,13 +131,13 @@ def _build_quick_generation_request(
     snapshot: IncidentFormSnapshot,
 ) -> tuple[str, str]:
     prompt = (
-        "你将执行「快填模式 -> 完整模式」生成。"
-        "请根据参考文档规范，把快填输入扩展为完整模式字段。"
-        "禁止编造上下文不存在的事实；若信息不足可使用保守但可执行的表达。"
-        "只输出 JSON，不要输出解释。"
-        "JSON 键必须是：description, affected_date_summary, timeline, impact_scope, impact_severity, "
-        "business_impact, trigger, root_cause, follow_up_actions。"
-        "timeline 是数组，每项必须包含 time,event,resolution,evidence。"
+        "You will perform a quick-fill to full-mode generation. "
+        "Expand the quick-fill inputs into complete mode fields according to the reference documentation. "
+        "Do not fabricate facts not present in the context; use conservative but actionable expressions when information is insufficient. "
+        "Output JSON only, no explanations. "
+        "JSON keys must be: description, affected_date_summary, timeline, impact_scope, impact_severity, "
+        "business_impact, trigger, root_cause, follow_up_actions. "
+        "timeline is an array, each item must contain time, event, resolution, evidence."
     )
     return prompt, json.dumps(_build_quick_generation_context(snapshot), ensure_ascii=False)
 
@@ -241,38 +164,38 @@ def _build_section_generation_prompt(
 
     if section_key == "description":
         return (
-            "仅生成事故简述段。只输出 JSON：{\"body_description\":\"...\"}。不要修改其它章节。",
+            'Generate the incident description section only. Output JSON: {"body_description":"..."}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "timeline":
         return (
-            "仅生成时间线段。只输出 JSON：{\"body_timeline\":[{\"time\":\"\",\"event\":\"\",\"resolution\":\"\",\"evidence\":\"\"}],"
-            "\"body_affected_date_summary\":\"...\"}。不要修改其它章节。",
+            'Generate the timeline section only. Output JSON: {"body_timeline":[{"time":"","event":"","resolution":"","evidence":""}],'
+            '"body_affected_date_summary":"..."}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "impact":
         return (
-            "仅生成影响范围/严重级别/业务影响。只输出 JSON：{\"body_impact_scope\":\"...\","
-            "\"body_impact_severity\":\"...\",\"body_business_impact\":\"按换行分隔\"}。不要修改其它章节。",
+            'Generate impact scope, severity, and business impact only. Output JSON: {"body_impact_scope":"...",'
+            '"body_impact_severity":"...","body_business_impact":"separated by newlines"}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "root_cause":
         return (
-            "仅生成触发原因与根因。只输出 JSON：{\"body_trigger\":\"...\",\"body_root_cause\":\"...\"}。不要修改其它章节。",
+            'Generate trigger and root cause only. Output JSON: {"body_trigger":"...","body_root_cause":"..."}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "follow_up":
         return (
-            "仅生成后续动作段。只输出 JSON：{\"body_follow_up\":\"按换行分隔\"}。不要修改其它章节。",
+            'Generate follow-up actions only. Output JSON: {"body_follow_up":"separated by newlines"}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "timeline_item":
         timeline = body_context["timeline"]
         if timeline_index is None or timeline_index < 0 or timeline_index >= len(timeline):
-            raise ValueError("无效的时间线条目索引。")
+            raise ValueError("Invalid timeline item index.")
         return (
-            "仅生成指定时间线条目。只输出 JSON：{\"item\":{\"time\":\"\",\"event\":\"\",\"resolution\":\"\",\"evidence\":\"\"}}。"
-            "禁止改写其它时间线条目。",
+            'Generate the specified timeline item only. Output JSON: {"item":{"time":"","event":"","resolution":"","evidence":""}}. '
+            "Do not modify other timeline items.",
             json.dumps(
                 {
                     "target_item": timeline[timeline_index],
@@ -283,7 +206,7 @@ def _build_section_generation_prompt(
                 ensure_ascii=False,
             ),
         )
-    raise ValueError("不支持的 section_id。")
+    raise ValueError("Unsupported section_id.")
 
 
 def _build_body_generation_messages(
@@ -291,23 +214,10 @@ def _build_body_generation_messages(
     prompt: str,
     context_json: str,
     reference_context: str,
-    enforced_language: str | None,
-    strict_retry: bool = False,
 ) -> list[dict[str, Any]]:
-    language_policy = _build_language_policy_instruction()
-    enforcement_instruction = (
-        _build_enforced_language_instruction(enforced_language)
-        if enforced_language
-        else language_policy
-    )
-    retry_instruction = (
-        "注意：上一次输出语言不符合要求。本次必须严格遵守语言要求，否则视为失败。"
-        if strict_retry
-        else ""
-    )
     document_assistant_prompt = _resolve_document_assistant_prompt()
     system_prompt_prefix = (
-        f"系统级技能提示（{SYSTEM_DOCUMENT_SKILL_ID}）：{document_assistant_prompt}\n"
+        f"System-level skill prompt ({SYSTEM_DOCUMENT_SKILL_ID}): {document_assistant_prompt}\n"
         if document_assistant_prompt
         else ""
     )
@@ -316,21 +226,18 @@ def _build_body_generation_messages(
             "role": "system",
             "content": (
                 f"{system_prompt_prefix}"
-                "你是事故报告正文助手。"
-                "先遵循参考文档，再结合当前上下文生成内容。"
-                "只输出 JSON，不要输出代码块，不要编造事实。"
-                f"{enforcement_instruction}"
-                f"{retry_instruction}"
+                "You are an incident report body assistant. "
+                "Follow the reference documentation first, then generate content based on the current context. "
+                "All output must be in English. "
+                "Output JSON only, no code blocks, no fabricated facts."
             ),
         },
         {
             "role": "user",
             "content": (
                 f"{prompt}\n"
-                f"语言策略：{enforcement_instruction}\n"
-                f"{retry_instruction}\n"
-                f"参考文档：\n{reference_context}\n"
-                f"当前上下文：{context_json}"
+                f"Reference documentation:\n{reference_context}\n"
+                f"Current context:\n{context_json}"
             ),
         },
     ]
@@ -492,10 +399,10 @@ def _apply_section_payload(
     if section_key == "timeline_item":
         timeline = normalize_timeline_items(answer_value_from_answers(form_answers, BODY_TIMELINE))
         if timeline_index is None or timeline_index < 0 or timeline_index >= len(timeline):
-            raise ValueError("无效的时间线条目索引。")
+            raise ValueError("Invalid timeline item index.")
         item = payload.get("item")
         if not isinstance(item, dict):
-            raise ValueError("模型返回的 timeline_item 格式不正确。")
+            raise ValueError("Invalid timeline_item format returned by model.")
         normalized_time = compose_datetime_text(normalize_text(item.get("time")))
         if not normalized_time:
             normalized_time = normalize_time_text(normalize_text(item.get("time")))
@@ -507,7 +414,7 @@ def _apply_section_payload(
         }
         set_answer(form_answers, BODY_TIMELINE, timeline)
         return
-    raise ValueError("不支持的 section_id。")
+    raise ValueError("Unsupported section_id.")
 
 
 async def _run_body_generation_with_trace(
@@ -525,16 +432,9 @@ async def _run_body_generation_with_trace(
     from uuid import uuid4
 
     if not settings.ollama_base_url:
-        raise RuntimeError("未配置 OLLAMA_BASE_URL。")
+        raise RuntimeError("OLLAMA_BASE_URL is not configured.")
 
     effective_reranker_model = (reranker_model or "").strip() or model
-    detected_language, language_detection_reason = await _detect_generation_language_with_model(
-        model=model,
-        section_id=section_id,
-        timeline_index=timeline_index,
-        prompt=prompt,
-        context_json=context_json,
-    )
     trace_id = uuid4().hex
     recorder = AgentTraceRecorder(
         trace_id=trace_id,
@@ -549,24 +449,13 @@ async def _run_body_generation_with_trace(
         detail={
             "section_id": section_id,
             "timeline_index": timeline_index,
-            "language_policy": "model_detect_then_enforce",
+            "language_policy": "english_fixed",
             "system_skill_id": SYSTEM_DOCUMENT_SKILL_ID,
-            "detected_language": detected_language,
-            "language_detection_reason": language_detection_reason,
-        },
-    )
-    await _flush_trace_safely(recorder)
-    recorder.add_event(
-        event_type="body_generation_language_detection",
-        detail={
-            "section_id": section_id,
-            "detected_language": detected_language,
-            "reason": language_detection_reason,
         },
     )
     await _flush_trace_safely(recorder)
 
-    reference_context = "[fallback]\n参考文档不可用，按上下文生成。"
+    reference_context = "[fallback]\nReference documentation unavailable, generate from context."
     selected_reference_files: list[str] = []
     reference_selection_reason = "fallback:init"
 
@@ -598,79 +487,8 @@ async def _run_body_generation_with_trace(
                 prompt=prompt,
                 context_json=context_json,
                 reference_context=reference_context,
-                enforced_language=detected_language,
             ),
         )
-
-        verification_match: bool | None = None
-        detected_output_language: str | None = None
-        verification_reason = "verification_skipped_no_detected_language"
-        if detected_language:
-            (
-                verification_match,
-                detected_output_language,
-                verification_reason,
-            ) = await _verify_generation_language_with_model(
-                model=model,
-                expected_language=detected_language,
-                generated_text=response_text,
-                section_id=section_id,
-            )
-            recorder.add_event(
-                event_type="body_generation_language_verification",
-                detail={
-                    "section_id": section_id,
-                    "attempt": 1,
-                    "expected_language": detected_language,
-                    "detected_output_language": detected_output_language,
-                    "match": verification_match,
-                    "reason": verification_reason,
-                },
-            )
-            await _flush_trace_safely(recorder)
-
-            if verification_match is False:
-                recorder.add_event(
-                    event_type="body_generation_language_retry",
-                    detail={
-                        "section_id": section_id,
-                        "expected_language": detected_language,
-                        "reason": verification_reason,
-                    },
-                )
-                await _flush_trace_safely(recorder)
-                response_text, done_reason = await _run_plain_chat_completion(
-                    model=model,
-                    messages=_build_body_generation_messages(
-                        prompt=prompt,
-                        context_json=context_json,
-                        reference_context=reference_context,
-                        enforced_language=detected_language,
-                        strict_retry=True,
-                    ),
-                )
-                (
-                    verification_match,
-                    detected_output_language,
-                    verification_reason,
-                ) = await _verify_generation_language_with_model(
-                    model=model,
-                    expected_language=detected_language,
-                    generated_text=response_text,
-                    section_id=section_id,
-                )
-                recorder.add_event(
-                    event_type="body_generation_language_verification",
-                    detail={
-                        "section_id": section_id,
-                        "attempt": 2,
-                        "expected_language": detected_language,
-                        "detected_output_language": detected_output_language,
-                        "match": verification_match,
-                        "reason": verification_reason,
-                    },
-                )
-                await _flush_trace_safely(recorder)
     except httpx.HTTPError as exc:
         recorder.add_event(
             event_type="body_generation_error",
@@ -681,7 +499,7 @@ async def _run_body_generation_with_trace(
         )
         recorder.set_final(done_reason="error", error=summarize_exception(exc))
         await recorder.flush()
-        raise RuntimeError(f"正文生成失败：{summarize_exception(exc)}") from exc
+        raise RuntimeError(f"Body generation failed: {summarize_exception(exc)}") from exc
 
     payload = parse_json_object(response_text)
     if payload is None:
@@ -689,13 +507,13 @@ async def _run_body_generation_with_trace(
             event_type="body_generation_error",
             detail={
                 "ok": False,
-                "error": "模型未返回合法 JSON。",
+                "error": "Model did not return valid JSON.",
                 "raw_preview": response_text[:500],
             },
         )
-        recorder.set_final(done_reason="error", error="模型未返回合法 JSON。")
+        recorder.set_final(done_reason="error", error="Model did not return valid JSON.")
         await recorder.flush()
-        raise RuntimeError("模型未返回合法 JSON。")
+        raise RuntimeError("Model did not return valid JSON.")
 
     form_answers = deepcopy(snapshot.form_answers)
     apply_payload(form_answers, payload)
@@ -763,7 +581,7 @@ async def quick_generate_report_body(
 ) -> IncidentBodyGenerateResponse:
     record = await load_report_orm(report_id)
     if record is None:
-        raise ValueError(f"报告 {report_id} 不存在。")
+        raise ValueError(f"Report {report_id} does not exist.")
     snapshot = _build_snapshot_from_form_data(record.form_data)
     effective_model = model or "qwen3:8b"
     prompt, context_json = _build_quick_generation_request(snapshot)
@@ -790,7 +608,7 @@ async def generate_report_body_section(
 ) -> IncidentBodyGenerateResponse:
     record = await load_report_orm(report_id)
     if record is None:
-        raise ValueError(f"报告 {report_id} 不存在。")
+        raise ValueError(f"Report {report_id} does not exist.")
     snapshot = _build_snapshot_from_form_data(record.form_data)
     effective_model = model or "qwen3:8b"
     prompt, context_json = _build_section_generation_prompt(

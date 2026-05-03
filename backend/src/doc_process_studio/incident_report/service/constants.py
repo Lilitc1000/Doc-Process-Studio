@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 from typing import Any
 
@@ -82,27 +81,4 @@ SEVERITY_OPTION_NOT_APPLICABLE = "not_applicable"
 SEVERITY_OPTION_MINOR = "minor"
 SEVERITY_OPTION_MAJOR = "major"
 
-_CJK_CHAR_PATTERN = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3000-\u303F]")
 
-_TRANSLATION_SKIP_KEYS = {
-    "reference_no",
-    "fault_date",
-    "fault_time",
-    "arrival_datetime",
-    "clearance_datetime",
-    "contractor_date",
-    "closeout_date",
-    "start_time",
-    "detection_time",
-    "resolution_time",
-    "total_duration",
-    "time",
-    "date",
-    "data_url",
-    "download_url",
-    "attachment_id",
-    "mime_type",
-    "size_label",
-    "version",
-    "generated_at",
-}

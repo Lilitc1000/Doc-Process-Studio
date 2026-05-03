@@ -36,14 +36,14 @@ backend/tests/
 │   │   ├── test_audit_log.py               # 审计日志
 │   │   ├── test_form_validation.py         # 表单校验
 │   │   ├── test_form_schema.py             # 表单 Schema 结构
-│   │   ├── test_generation.py              # 正文生成（reference/translation/report_data）
-│   │   ├── test_generation_extended.py     # 正文生成（prompt 构建 + payload 应用）
+│   │   ├── test_generation.py              # 正文生成（prompt 构建 + payload 应用）
+│   │   ├── test_generation_extended.py     # 正文生成（reference/report_data/translation 直通）
 │   │   ├── test_normalization.py           # 文本归一化（日期/时间/状态/严重级别）
-│   │   ├── test_translation.py             # 翻译缓存与调度
+│   │   ├── test_translation.py             # 翻译模块（直通，返回原始数据）
 │   │   ├── test_preview.py                 # 预览缓存与文件名构建
-│   │   ├── test_preview_extended.py        # 预览转换（PDF/HTML/附件加载）
+│   │   ├── test_preview_extended.py        # 预览转换（PDF/附件加载）
 │   │   ├── test_reference.py               # 参考资料提取与启发式选择
-│   │   ├── test_constants.py               # 常量与正则模式
+│   │   ├── test_constants.py               # 常量定义
 │   │   └── test_schemas_common.py          # 公共 Schema（状态/角色/表单快照）
 │   ├── integration/
 │   │   ├── test_reports_api.py      # 报告 API（CRUD + 状态流转 + 权限）

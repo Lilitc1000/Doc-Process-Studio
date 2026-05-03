@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.oxml import OxmlElement
 from docx.shared import Cm
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -283,12 +284,12 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
     root_cause_raw = source.get("root_cause")
     root_cause_map = root_cause_raw if isinstance(root_cause_raw, dict) else {}
 
-    start_time = _first_non_empty(source.get("start_time"), default="N/A")
-    detection_time = _first_non_empty(source.get("detection_time"), default=start_time)
-    resolution_time = _first_non_empty(source.get("resolution_time"), default=detection_time)
+    start_time = _remove_iso_t_separator(_first_non_empty(source.get("start_time"), default="N/A"))
+    detection_time = _remove_iso_t_separator(_first_non_empty(source.get("detection_time"), default=start_time))
+    resolution_time = _remove_iso_t_separator(_first_non_empty(source.get("resolution_time"), default=detection_time))
 
     fault_date, fault_time = _split_date_time(
-        _first_non_empty(source.get("fault_date"), start_time, default="N/A")
+        _remove_iso_t_separator(_first_non_empty(source.get("fault_date"), start_time, default="N/A"))
     )
 
     event_sequence = _normalize_event_sequence(source.get("event_sequence"))
@@ -343,15 +344,15 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
             source.get("detailed_description"),
             default="",
         ),
-        "arrival_datetime": _first_non_empty(source.get("arrival_datetime"), start_time),
-        "clearance_datetime": _first_non_empty(source.get("clearance_datetime"), resolution_time),
+        "arrival_datetime": _remove_iso_t_separator(_first_non_empty(source.get("arrival_datetime"), start_time)),
+        "clearance_datetime": _remove_iso_t_separator(_first_non_empty(source.get("clearance_datetime"), resolution_time)),
         "service_person": _first_non_empty(source.get("service_person"), default=""),
         "fault_cause": _first_non_empty(source.get("fault_cause"), default=""),
         "materials_used": _first_non_empty(source.get("materials_used"), default=""),
         "repair_details": _first_non_empty(source.get("repair_details"), default=""),
         "contractor_staff": _first_non_empty(source.get("contractor_staff"), default=""),
         "contractor_signature": _first_non_empty(source.get("contractor_signature"), default=""),
-        "contractor_date": _first_non_empty(source.get("contractor_date"), source.get("fault_date"), default=fault_date),
+        "contractor_date": _remove_iso_t_separator(_first_non_empty(source.get("contractor_date"), source.get("fault_date"), default=fault_date)),
         "status_option": status_option,
         "status_ref_no": _first_non_empty(source.get("status_ref_no"), default=""),
         "status": _first_non_empty(source.get("status"), default="Fault has been Cleared"),
@@ -360,15 +361,15 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
         "comments": _first_non_empty(source.get("comments"), default=""),
         "employer_rep": _first_non_empty(source.get("employer_rep"), default=""),
         "employer_signature": _first_non_empty(source.get("employer_signature"), default=""),
-        "closeout_date": _first_non_empty(source.get("closeout_date"), source.get("fault_date"), default=fault_date),
+        "closeout_date": _remove_iso_t_separator(_first_non_empty(source.get("closeout_date"), source.get("fault_date"), default=fault_date)),
         "detailed_description": _first_non_empty(
             source.get("detailed_description"), body_map.get("description"), source.get("fault_details"), default=""
         ),
-        "affected_date_summary": _first_non_empty(
+        "affected_date_summary": _remove_iso_t_separator(_first_non_empty(
             source.get("affected_date_summary"),
             body_map.get("affected_date_summary"),
             default=f"{start_time} - {resolution_time}",
-        ),
+        )),
         "start_time": start_time,
         "detection_time": detection_time,
         "resolution_time": resolution_time,
@@ -592,6 +593,22 @@ def _sanitize_appendix_notes(notes: Any) -> str:
     return "\n".join(lines)
 
 
+def _remove_iso_t_separator(value: str) -> str:
+    result = re.sub(r"(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})", r"\1 \2", value)
+    result = re.sub(r"(\d{2}:\d{2}):\d{2}", r"\1", result)
+    result = re.sub(r"(\d{2}:\d{2})[+-]\d{2}:\d{2}", r"\1", result)
+    result = re.sub(r"(\d{2}:\d{2})Z", r"\1", result)
+    return result
+
+
+def _extract_time_only(datetime_text: str) -> str:
+    text = datetime_text.strip()
+    matched = re.search(r"(\d{1,2}:\d{2})\s*$", text)
+    if matched:
+        return matched.group(1)
+    return text
+
+
 class FaultLogFormGenerator:
     """按参考模板填充并输出文档。"""
 
@@ -619,11 +636,20 @@ class FaultLogFormGenerator:
                 return index
         return None
 
-    def _set_section_text_after_heading(self, heading_prefix: str, text: str) -> None:
+    def _set_section_text_after_heading(self, heading_prefix: str, text: str):
         heading_index = self._find_paragraph_index_by_prefix(heading_prefix)
         if heading_index is None:
-            return
-        self._set_paragraph_if_exists(heading_index + 1, text)
+            return None
+        content_index = heading_index + 1
+        if content_index < len(self.doc.paragraphs):
+            content_para = self.doc.paragraphs[content_index]
+            _set_paragraph_text(content_para, text)
+            return content_para
+        return None
+
+    def _add_blank_line_after_paragraph(self, paragraph) -> None:
+        new_p = OxmlElement("w:p")
+        paragraph._element.addnext(new_p)
 
     def _fill_page_one(self, data: dict[str, Any]) -> None:
         table = self.doc.tables[0]
@@ -687,9 +713,11 @@ class FaultLogFormGenerator:
         report_body = data.get("report_body", {}) if isinstance(data.get("report_body"), dict) else {}
 
         description_text = _to_text(data.get("detailed_description"), "")
-        self._set_section_text_after_heading("Description of the Incident:", description_text)
+        content_para = self._set_section_text_after_heading("Description of the Incident:", description_text)
+        if content_para is not None:
+            self._add_blank_line_after_paragraph(content_para)
 
-        affected_summary = _to_text(data.get("affected_date_summary"), "")
+        affected_summary = _remove_iso_t_separator(_to_text(data.get("affected_date_summary"), ""))
         timeline_lines: list[str] = []
         events = data.get("event_sequence", [])
         if isinstance(events, list):
@@ -700,16 +728,19 @@ class FaultLogFormGenerator:
                 event_text = _to_text(event.get("event"), "").strip()
                 if not time_text and not event_text:
                     continue
+                display_time = _extract_time_only(time_text) if time_text else ""
                 timeline_lines.append(
-                    f"{time_text} - {event_text}".strip(" -")
-                    if time_text and event_text
-                    else (event_text or time_text)
+                    f"{display_time} - {event_text}".strip(" -")
+                    if display_time and event_text
+                    else (event_text or display_time)
                 )
         affected_lines = [affected_summary] if affected_summary else []
         if timeline_lines:
             affected_lines.append("Timeline:")
             affected_lines.extend(timeline_lines)
-        self._set_section_text_after_heading("Affected Date:", "\n".join(affected_lines))
+        content_para = self._set_section_text_after_heading("Affected Date:", "\n".join(affected_lines))
+        if content_para is not None:
+            self._add_blank_line_after_paragraph(content_para)
 
         impact_lines: list[str] = []
         impact_scope = _to_text(impact.get("systems"), "").strip()
@@ -721,8 +752,10 @@ class FaultLogFormGenerator:
         business_impact_lines = _to_lines(impact.get("business_impact"))
         if business_impact_lines:
             impact_lines.append("Business Impact:")
-            impact_lines.extend([f"- {line}" for line in business_impact_lines if line.strip()])
-        self._set_section_text_after_heading("Impact:", "\n".join(impact_lines))
+            impact_lines.extend([f"• {line}" for line in business_impact_lines if line.strip()])
+        content_para = self._set_section_text_after_heading("Impact:", "\n".join(impact_lines))
+        if content_para is not None:
+            self._add_blank_line_after_paragraph(content_para)
 
         root_lines: list[str] = []
         trigger_text = _to_text(data.get("trigger"), "").strip()
@@ -734,14 +767,16 @@ class FaultLogFormGenerator:
         root_evidence = _to_text(data.get("root_cause_evidence"), "").strip()
         if root_evidence:
             root_lines.append(f"Evidence: {root_evidence}")
-        self._set_section_text_after_heading("Root Cause:", "\n".join(root_lines))
+        content_para = self._set_section_text_after_heading("Root Cause:", "\n".join(root_lines))
+        if content_para is not None:
+            self._add_blank_line_after_paragraph(content_para)
 
         follow_lines = _to_lines(report_body.get("follow_up_actions"))
         if not follow_lines:
             follow_lines = _extract_action_lines(data.get("preventive_actions"))
         self._set_section_text_after_heading(
             "Follow-Up Actions:",
-            "\n".join([f"- {line}" for line in follow_lines if line.strip()]),
+            "\n".join([f"• {line}" for line in follow_lines if line.strip()]),
         )
 
     def _fill_appendix(self, data: dict[str, Any]) -> None:

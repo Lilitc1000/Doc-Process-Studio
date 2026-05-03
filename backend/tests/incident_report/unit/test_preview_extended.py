@@ -1,4 +1,3 @@
-import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,10 +12,6 @@ from doc_process_studio.incident_report.service.preview import (
     preview_cache_set,
     preview_template_token,
     render_docx_bytes_from_report_data,
-    translate_report_data_to_english,
-    _translation_cache_get,
-    _translation_cache_set,
-    _translation_cache_key,
 )
 from doc_process_studio.incident_report.schemas.response import IncidentReportPreviewResponse
 
@@ -85,7 +80,7 @@ def test_load_docx_bytes_from_attachment_expired():
         "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
         return_value=(MagicMock(), MagicMock(), True),
     ):
-        with pytest.raises(RuntimeError, match="过期"):
+        with pytest.raises(RuntimeError, match="expired"):
             load_docx_bytes_from_attachment("att-1")
 
 
@@ -94,7 +89,7 @@ def test_load_docx_bytes_from_attachment_not_found():
         "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
         return_value=(None, None, False),
     ):
-        with pytest.raises(RuntimeError, match="未找到"):
+        with pytest.raises(RuntimeError, match="No previewable"):
             load_docx_bytes_from_attachment("att-1")
 
 
@@ -155,50 +150,3 @@ def test_stable_payload_hash_different_data():
     h1 = _stable_payload_hash({"a": 1})
     h2 = _stable_payload_hash({"a": 2})
     assert h1 != h2
-
-
-def test_translation_cache_round_trip():
-    import doc_process_studio.incident_report.service.preview as preview_module
-    preview_module._TRANSLATION_CACHE.clear()
-    key = _translation_cache_key(model_name="test", source_text="hello")
-    _translation_cache_set(key=key, value="你好")
-    assert _translation_cache_get(key) == "你好"
-
-
-def test_translation_cache_miss():
-    import doc_process_studio.incident_report.service.preview as preview_module
-    preview_module._TRANSLATION_CACHE.clear()
-    key = _translation_cache_key(model_name="test", source_text="missing")
-    assert _translation_cache_get(key) is None
-
-
-def test_translate_report_data_no_cjk():
-    data = {"title": "Hello World", "description": "This is a test"}
-    result = asyncio.run(translate_report_data_to_english(report_data=data))
-    assert result == data
-
-
-def test_translate_report_data_with_google_unavailable():
-    import doc_process_studio.incident_report.service.preview as preview_module
-    original = preview_module.GoogleTranslator
-    preview_module.GoogleTranslator = None
-    try:
-        data = {"title": "测试标题"}
-        result = asyncio.run(translate_report_data_to_english(report_data=data))
-        assert result == data
-    finally:
-        preview_module.GoogleTranslator = original
-
-
-def test_translate_report_data_skips_date_fields():
-    mock_translator = MagicMock()
-    mock_translator.translate.return_value = "translated"
-    mock_translator.translate_batch.return_value = ["translated"]
-
-    with patch(
-        "doc_process_studio.incident_report.service.preview.GoogleTranslator",
-        return_value=mock_translator,
-    ):
-        data = {"fault_date": "2024-01-01", "title": "测试标题"}
-        result = asyncio.run(translate_report_data_to_english(report_data=data))
-        assert result["fault_date"] == "2024-01-01"

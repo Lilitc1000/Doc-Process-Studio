@@ -2,7 +2,7 @@
 
 ## 概述
 
-Incident Report 域负责事故报告的全生命周期管理，包括创建、编辑、审核、关闭、数据分析，以及 AI 生成正文、预览和翻译。
+Incident Report 域负责事故报告的全生命周期管理，包括创建、编辑、审核、关闭、数据分析，以及 AI 生成正文和预览。
 
 ## 目录结构
 
@@ -20,9 +20,9 @@ backend/src/doc_process_studio/incident_report/
 │   ├── audit_log.py          # 审计日志记录
 │   ├── form_schema.py        # 表单 Schema 定义（4 步骤）
 │   ├── form_validation.py    # 服务端表单校验
-│   ├── generation.py         # AI 生成正文（一键 / 分段）
-│   ├── preview.py            # HTML 预览 + DOCX/PDF 导出
-│   ├── translation.py        # 多语言翻译
+│   ├── generation.py         # AI 生成正文（一键 / 分段），固定英文输出
+│   ├── preview.py            # DOCX/PDF 导出预览
+│   ├── translation.py        # 翻译模块（已简化为直通，AI 直接输出英文无需翻译）
 │   ├── report_data.py        # 表单数据 → report_data 转换
 │   └── reference.py          # Skill 参考文档加载
 ├── models/
@@ -166,6 +166,10 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 
 ## 正文生成链路
 
+### 语言策略
+
+AI 生成固定输出英文。系统提示词中明确要求所有输出使用英文，无需语言检测、校验或翻译步骤。生成结果直接用于文档输出。
+
 ### API 端点
 
 | 端点 | 说明 |
@@ -178,7 +182,7 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 
 1. 前端调用 `quick-generate`，传入 model/reranker_model（可选）
 2. 后端从 `form_data` 构建 `IncidentFormSnapshot`
-3. 调用 AI 模型生成完整正文 JSON（description, timeline, impact, root_cause, follow_up）
+3. 调用 AI 模型生成完整正文 JSON（description, timeline, impact, root_cause, follow_up），输出固定为英文
 4. `_apply_quick_generation_payload` 将生成结果回填到 form_answers
 5. 通过 `update_report_record` 持久化到数据库
 6. 返回 `IncidentBodyGenerateResponse`（含 form_answers + trace_id）
@@ -187,7 +191,7 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 
 1. 前端调用 `section-generate`，传入 section_id（description/timeline/impact/root_cause/follow_up/timeline_item）和可选的 timeline_index
 2. 后端构建对应段落的 prompt 和 context
-3. 调用 AI 模型生成该段落 JSON
+3. 调用 AI 模型生成该段落 JSON，输出固定为英文
 4. `_apply_section_payload` 将生成结果回填到对应字段
 5. 返回 `IncidentBodyGenerateResponse`
 
@@ -201,11 +205,10 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 
 1. 前端调用 `preview`，传入 version（可选）
 2. 后端从 `form_data` 构建 snapshot → report_data
-3. 调用 DOCX 模板生成 DOCX 字节
+3. 调用 DOCX 模板生成 DOCX 字节（report_data 已为英文，无需翻译）
 4. 通过 LibreOffice 转换为 PDF
-5. 通过 mammoth 转换为 HTML
-6. 返回 `IncidentReportPreviewResponse`（含 html + pdfBase64 + docxBase64）
-7. 预览结果缓存（最多 12 条，LRU）
+5. 返回 `IncidentReportPreviewResponse`（含 pdfBase64 + docxBase64）
+6. 预览结果缓存（最多 12 条，LRU）
 
 ### 关键数据模型
 
@@ -247,7 +250,8 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 - 表单 Schema 定义在 `service/form_schema.py`（4 步骤：basic_info/description/timeline/appendix）
 - 生成脚本在 `skills/incident-report/scripts/generate_incident_report.py`
 - 报告数据存储在 PostgreSQL，使用 `report_store.py`
-- 预览支持 HTML、DOCX、PDF 三种格式
+- 预览支持 DOCX、PDF 两种格式
+- AI 生成固定输出英文，系统提示词中包含 "All output must be in English" 指令
 - 快填生成入口：`service/generation.py` → `quick_generate_report_body()`
 - 分段生成入口：`service/generation.py` → `generate_report_body_section()`
 - 预览入口：`service/preview.py` → `preview_report_attachment()`
