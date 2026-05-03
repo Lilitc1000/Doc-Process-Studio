@@ -1,10 +1,14 @@
-from ..models.runtime import SkillContextChunk, SkillConversationState
+import logging
+
+from ..schemas.runtime import SkillContextChunk, SkillConversationState
 from ...core.config import settings
 from .context import get_skill_context_chunks_by_ids
 from .context_packer import (
     build_skill_context_budget_text,
     ensure_hierarchical_memory,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def sync_skill_context_state(
@@ -51,6 +55,7 @@ async def sync_skill_context_state(
 
         if compacted_chunks:
             compacted_chunks.reverse()
+            logger.debug("压缩 %d 个上下文 chunk: skill_id=%s", len(compacted_chunks), state.skill_id)
             await ensure_hierarchical_memory(
                 model=model,
                 state=state,

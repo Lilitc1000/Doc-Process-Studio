@@ -71,7 +71,8 @@ async def post_chat_completion(
             json=payload,
         )
         response.raise_for_status()
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
 
 async def stream_chat_completion(
@@ -119,7 +120,6 @@ def extract_first_message_content(response_payload: dict[str, Any]) -> str:
 async def fetch_remote_model_names() -> list[str]:
     from fastapi import HTTPException
 
-    from ..system.models.ollama import UpstreamOllamaModelRecord
 
     try:
         remote_url = _build_api_url("tags")
@@ -158,7 +158,7 @@ async def fetch_remote_model_names() -> list[str]:
 
 
 def extract_model_names(payload: dict[str, Any] | list[Any]) -> list[str]:
-    from ..system.models.ollama import UpstreamOllamaModelRecord
+    from ..system.schemas.ollama import UpstreamOllamaModelRecord
 
     if isinstance(payload, dict):
         if isinstance(payload.get("models"), list):

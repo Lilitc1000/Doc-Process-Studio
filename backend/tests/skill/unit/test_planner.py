@@ -1,7 +1,9 @@
 import asyncio
+import json
+from pathlib import Path
 
 from doc_process_studio.chat.schemas.request import ChatMessageInput
-from doc_process_studio.skill.models.catalog import SkillInterfaceConfig
+from doc_process_studio.skill.schemas.catalog import SkillInterfaceConfig
 from doc_process_studio.skill.service import planner as planner_module
 from doc_process_studio.skill.service.planner import plan_skill_activation
 
@@ -190,4 +192,59 @@ def test_plan_skill_activation_prefers_rerank_result(monkeypatch) -> None:
 
     assert plan.optional_skill_ids == ["project-architecture-docx"]
     assert plan.confidence == 0.88
+
+
+_BENCHMARK_SKILLS = [
+    SkillInterfaceConfig(
+        id="document-assistant",
+        display_name="文档处理助手",
+        short_description="阅读并整理 PDF/Word/Excel/PPT 等文档",
+        default_prompt="doc",
+        tools=[],
+    ),
+    SkillInterfaceConfig(
+        id="resume-transport-review",
+        display_name="交通简历审核",
+        short_description="审核候选人是否具备交通行业经验",
+        default_prompt="resume",
+        tools=[],
+    ),
+    SkillInterfaceConfig(
+        id="project-architecture-docx",
+        display_name="架构文档生成",
+        short_description="读取项目并生成架构设计 DOCX",
+        default_prompt="arch",
+        tools=[],
+    ),
+    SkillInterfaceConfig(
+        id="incident-report",
+        display_name="事故报告生成",
+        short_description="收集事故信息并生成事故报告文档",
+        default_prompt="incident",
+        tools=[],
+    ),
+]
+
+
+def test_skill_selection_precision_from_benchmark_cases() -> None:
+    dataset_path = Path(__file__).resolve().parent / "skill_selection_cases.json"
+    cases = json.loads(dataset_path.read_text(encoding="utf-8"))
+
+    matched = 0
+    for case in cases:
+        query = str(case["query"])
+        expected = str(case["expected_primary_skill"])
+        candidates = planner_module.build_implicit_skill_candidates(
+            messages=[ChatMessageInput(role="user", content=query)],
+            available_skills=_BENCHMARK_SKILLS,
+            explicit_skill_ids=[],
+            system_skill_id="document-assistant",
+            top_k=3,
+        )
+        predicted = candidates[0][0] if candidates else "document-assistant"
+        if predicted == expected:
+            matched += 1
+
+    precision = matched / len(cases)
+    assert precision >= 0.85
 

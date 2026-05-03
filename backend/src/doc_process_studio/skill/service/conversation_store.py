@@ -1,4 +1,6 @@
-from ..models.runtime import ConversationAgentState
+import logging
+
+from ..schemas.runtime import ConversationAgentState
 from ...core.config import settings
 from ...core.cache import (
     build_cache_key,
@@ -8,6 +10,8 @@ from ...core.cache import (
     refresh_ttl,
     set_json,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def build_conversation_state_key(

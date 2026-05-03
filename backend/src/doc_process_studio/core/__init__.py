@@ -28,18 +28,10 @@ from .model_context import (
     get_model_context_length,
     warmup_model_context_cache,
 )
-from .language_policy import (
-    LANGUAGE_EN,
-    LANGUAGE_ZH,
-    describe_language,
-    detect_language_with_model,
-    verify_text_language_with_model,
-)
 from .request_guard import guard_request_slot, normalize_tenant_id
+from .logging_config import setup_logging
 
 __all__ = [
-    "LANGUAGE_EN",
-    "LANGUAGE_ZH",
     "NotFoundError",
     "OllamaNotConfiguredError",
     "RequestGuardError",
@@ -48,8 +40,6 @@ __all__ = [
     "build_cache_key",
     "build_timeout",
     "delete_key",
-    "describe_language",
-    "detect_language_with_model",
     "estimate_prompt_tokens",
     "extract_first_message_content",
     "fetch_remote_model_names",
@@ -65,7 +55,7 @@ __all__ = [
     "refresh_ttl",
     "set_json",
     "settings",
+    "setup_logging",
     "stream_chat_completion",
-    "verify_text_language_with_model",
     "warmup_model_context_cache",
 ]

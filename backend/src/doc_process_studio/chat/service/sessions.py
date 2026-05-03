@@ -1,8 +1,8 @@
-from datetime import datetime
+import logging
 
 import httpx
 
-from ..models.session import (
+from ..schemas.session import (
     ChatSessionSnapshot,
     ChatSessionSummary,
 )
@@ -26,6 +26,8 @@ from .db_session_store import (
     touch_chat_session_updated_at,
 )
 from ...shared.dtutils import to_utc8, utcnow
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_title_candidate(value: str) -> str:
@@ -76,6 +78,7 @@ async def generate_session_title(
             ],
         )
     except httpx.HTTPError:
+        logger.warning("生成会话标题失败，使用本地回退: session_id=%s", "N/A")
         return fallback_title
 
     content = _normalize_title_candidate(
@@ -145,6 +148,7 @@ async def upsert_chat_session(
     await save_chat_session_snapshot(session_id, snapshot)
     await touch_chat_session_updated_at(session_id)
 
+    logger.info("保存会话: session_id=%s, user_id=%s, title=%s", session_id, user_id, normalized_title[:30])
     return summary
 
 
@@ -175,6 +179,7 @@ async def delete_chat_session(session_id: str) -> bool:
     deleted_traces = await delete_agent_traces_for_conversation(
         conversation_id=session_id
     )
+    logger.info("删除会话: session_id=%s", session_id)
     return bool(deleted_session or deleted_attachments > 0 or deleted_traces > 0)
 
 

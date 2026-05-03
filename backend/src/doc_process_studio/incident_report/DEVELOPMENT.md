@@ -22,7 +22,7 @@ backend/src/doc_process_studio/incident_report/
 │   ├── form_validation.py    # 服务端表单校验
 │   ├── generation.py         # AI 生成正文（一键 / 分段），固定英文输出
 │   ├── preview.py            # DOCX/PDF 导出预览
-│   ├── translation.py        # 翻译模块（已简化为直通，AI 直接输出英文无需翻译）
+│   ├── analytics.py          # 数据分析业务逻辑（概览统计 + 趋势数据）
 │   ├── report_data.py        # 表单数据 → report_data 转换
 │   └── reference.py          # Skill 参考文档加载
 ├── models/
@@ -113,6 +113,7 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 |------|----------------|------|
 | 创建报告 | `report:create` | report |
 | 编辑自己的报告 | `report:edit_own` | report |
+| 编辑所有报告 | `report:edit_all` | report |
 | 提交审核 | `report:submit` | report |
 | 查看报告 | `report:view` | report |
 | 查看所有报告 | `report:view_all` | report |
@@ -134,6 +135,7 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 | report:view | ✓ | ✓ | ✓ | ✓ | ✓ |
 | report:create | | ✓ | | | ✓ |
 | report:edit_own | | ✓ | | | ✓ |
+| report:edit_all | | | | | ✓ |
 | report:submit | | ✓ | | | ✓ |
 | report:view_all | | | ✓ | ✓ | ✓ |
 | report:edit_assigned | | | ✓ | | ✓ |
@@ -240,7 +242,7 @@ AI 生成固定输出英文。系统提示词中明确要求所有输出使用�
 
 - `skill.service.tool_loop` — 工具执行循环
 - `skill.service.context` — 上下文检索
-- `chat.models.attachment` — 附件类型
+- `chat.schemas.attachment` — 附件类型
 - `core.ollama` — Ollama 调用
 - `core.config` — 配置（含 BACKEND_DIR）
 - `core.security` — JWT 认证 + 用户 ID 提取
@@ -260,4 +262,31 @@ AI 生成固定输出英文。系统提示词中明确要求所有输出使用�
 - `update_report_record` 使用 `_CLEAR_SENTINEL` 标记需要清空的字段（如 reopen 时 `closed_at=None`）
 - 角色校验使用 `field_validator` 确保只接受 `VALID_ROLES` 中的值
 - 权限检查使用 `has_permission(user_id, permission_key)` 和 `has_any_permission(user_id, permission_set)`
+- 权限检查统一在 `service/` 层实现，`router/` 层仅负责捕获 `PermissionDenied` 异常并返回 HTTP 403
+- `PermissionDenied` 异常（定义在 `schemas/common.py`）用于权限不足的场景，与业务校验错误 `ValueError` 区分
+- 各接口的权限检查规则：
+
+| 接口 | 权限要求 | 说明 |
+|------|----------|------|
+| `GET /reports` | `report:view` + 数据过滤 | 无 `report:view_all` 则只返回自己参与的报告 |
+| `GET /reports/{id}` | `report:view` + 数据过滤 | 无 `report:view_all` 则只能查看自己参与的报告 |
+| `POST /reports` | `report:create` | 创建报告需要报告人权限 |
+| `PUT /reports/{id}` | `report:edit_own` / `report:edit_assigned` / `report:edit_all` | 报告人编辑自己的、处理人编辑被指派的、管理员编辑所有 |
+| `DELETE /reports/{id}` | `report:delete` | 删除报告需要管理员权限 |
+| `POST /reports/{id}/submit` | `report:submit` | 提交审核需要报告人权限 |
+| `POST /reports/{id}/approve` | `report:audit` | 审核通过需要审核人权限 |
+| `POST /reports/{id}/reject` | `report:audit` | 驳回需要审核人权限 |
+| `POST /reports/{id}/assign` | `report:assign` | 分配处理人需要审核人权限 |
+| `POST /reports/{id}/close` | `report:close_assigned` | 关闭报告需要处理人权限 |
+| `POST /reports/{id}/reopen` | `report:reopen` | 重新打开需要管理员权限 |
+| `POST /reports/{id}/body/quick-generate` | 编辑权限（同 PUT） | 生成操作需要报告编辑权限 |
+| `POST /reports/{id}/body/section-generate` | 编辑权限（同 PUT） | 分段生成需要报告编辑权限 |
+| `POST /reports/{id}/preview` | 查看权限（同 GET） | 预览需要报告查看权限 |
+| `GET /reports/{id}/audit-logs` | 查看权限（同 GET） | 审计日志需要报告查看权限 |
+| `GET /reports/{id}/comments` | 查看权限（同 GET） | 评论列表需要报告查看权限 |
+| `POST /reports/{id}/comments` | `report:view` | 添加评论需要报告查看权限 |
+| `GET /analytics/overview` | `analytics:view` | 统计分析需要查看权限 |
+| `GET /analytics/trend` | `analytics:view` | 趋势分析需要查看权限 |
 - 角色定义、权限定义和角色-权限映射在应用启动时通过 `seed_rbac_data()` 自动初始化
+- `seed_rbac_data()` 支持增量更新：当数据库已有角色数据时，仅添加新增的权限定义和角色-权限映射，不会覆盖现有数据
+- 严重级别映射：系统中报告的 severity 字段使用 P0/P1/P2/P3 分级，而 DOCX 文档模板使用 Not Applicable/Minor/Major 三级分类。`normalize_severity_option()` 负责将 P0/P1 映射为 major，P2/P3 映射为 minor，其他值映射为 not_applicable

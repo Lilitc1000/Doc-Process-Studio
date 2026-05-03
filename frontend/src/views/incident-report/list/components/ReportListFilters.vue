@@ -33,6 +33,7 @@
 import BaseInput from '../../../../components/base/BaseInput.vue';
 import BaseDropdown from '../../../../components/base/BaseDropdown.vue';
 import BaseButton from '../../../../components/base/BaseButton.vue';
+import { severityOptions as _severityOptions } from '../../../../utils/incident-report/constants';
 
 defineProps<{
   status: string;
@@ -57,13 +58,7 @@ const statusOptions = [
   { value: 'closed', label: '已关闭' },
 ];
 
-const severityOptions = [
-  { value: '', label: '全部级别' },
-  { value: 'P0', label: 'P0 - 紧急' },
-  { value: 'P1', label: 'P1 - 严重' },
-  { value: 'P2', label: 'P2 - 一般' },
-  { value: 'P3', label: 'P3 - 轻微' },
-];
+const severityOptions = [{ value: '', label: '全部级别' }, ..._severityOptions];
 </script>
 
 <style scoped>

@@ -11,8 +11,7 @@ frontend/src/utils/
 │   ├── message-tree.ts     # 消息树纯函数
 │   └── session-groups.ts   # 会话按日期分组
 ├── incident-report/
-│   ├── date-normalization.ts # 日期/时间归一化
-│   └── constants.ts        # 事故报告常量与归一化函数
+│   └── constants.ts        # 事故报告状态与严重级别选项
 └── common/
     ├── catalog.ts          # 目录归一化
     ├── avatar-colors.ts    # 头像颜色常量

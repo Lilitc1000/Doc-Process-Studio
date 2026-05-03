@@ -1,53 +1,55 @@
 import json
+import logging
 import os
 import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, Callable
 
-try:
-    import yaml
-except ModuleNotFoundError:
-    yaml = None
-
-try:
-    import resource
-except ModuleNotFoundError:
-    resource = None
-
-from ....chat.models.attachment import ChatAttachment
+from ....chat.schemas.attachment import ChatAttachment
 from ....chat.schemas.request import ChatStreamRequest
 from ....core.config import settings, BACKEND_DIR
 from ....chat.service.attachments import save_generated_attachment
-from ...models.catalog import SkillToolConfig
-from ...models.runtime import SkillConversationState
+from ...schemas.catalog import SkillToolConfig
+from ...schemas.runtime import SkillConversationState
 from ....shared.tool_args import parse_tool_arguments
 from ..context import get_skill_context_chunks_by_ids, search_skill_context_chunks
-from ..registry import SKILLS_DIR, get_skill_interface, get_skill_tool_config
+from ..registry import get_skill_tool_config
 from .skill_files import (
-    TEXT_FILE_EXTENSIONS,
     DEFAULT_STRUCTURED_TEXT_TITLE,
-    SCOPED_TOOL_SEPARATOR,
     _get_skill_root,
     _resolve_skill_relative_path,
     _list_directory_entries,
     _read_skill_file_content,
-    _normalize_relative_path,
-    _categorize_relative_path,
     _resolve_search_limit_bounds,
     _resolve_tool_scope,
     _get_tool_name,
     _primary_skill_id,
-    compose_scoped_tool_name,
-    split_scoped_tool_name,
 )
 from .tool_args import (
     _validate_tool_arguments_schema,
     _normalize_builtin_tool_arguments,
     _build_builtin_tool_parameters,
 )
+
+try:
+    import yaml as _yaml
+
+    yaml_module: ModuleType | None = _yaml
+except ModuleNotFoundError:
+    yaml_module = None
+
+try:
+    import resource as _resource
+
+    resource_module: ModuleType | None = _resource
+except ModuleNotFoundError:
+    resource_module = None
+
+logger = logging.getLogger(__name__)
 
 def _enforce_declared_tool_security_policy(
     *,
@@ -72,8 +74,8 @@ def _enforce_declared_tool_security_policy(
         )
 
 
-def _build_subprocess_preexec(*, skill_root: Path):
-    if resource is None:
+def _build_subprocess_preexec(*, skill_root: Path) -> Callable[[], None] | None:
+    if resource_module is None:
         return None
 
     cpu_seconds = max(1, settings.skill_tool_script_cpu_seconds)
@@ -82,9 +84,10 @@ def _build_subprocess_preexec(*, skill_root: Path):
 
     def _preexec() -> None:
         os.chdir(skill_root)
-        resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
-        resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
-        resource.setrlimit(resource.RLIMIT_FSIZE, (output_bytes, output_bytes))
+        assert resource_module is not None
+        resource_module.setrlimit(resource_module.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
+        resource_module.setrlimit(resource_module.RLIMIT_AS, (memory_bytes, memory_bytes))
+        resource_module.setrlimit(resource_module.RLIMIT_FSIZE, (output_bytes, output_bytes))
 
     return _preexec
 
@@ -111,6 +114,7 @@ def _format_declared_tool_default_name(
     try:
         return default_template.format(**format_payload)
     except Exception:
+        logger.debug("Failed to format output name template: %s", default_template)
         return f"{tool.name}-output.bin"
 
 
@@ -330,10 +334,11 @@ def _coerce_json_file_argument(
             if isinstance(repaired, (dict, list)):
                 return repaired
 
-        if yaml is not None:
+        if yaml_module is not None:
             try:
-                parsed_yaml = yaml.safe_load(normalized)
+                parsed_yaml = yaml_module.safe_load(normalized)
             except Exception:
+                logger.debug("Failed to parse YAML tool arguments")
                 parsed_yaml = None
             if isinstance(parsed_yaml, (dict, list)):
                 return parsed_yaml
@@ -374,7 +379,7 @@ def _try_repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
     例如缺少闭合的 ] 或 }。本函数尝试补全缺失的括号。
     """
     stripped = text.strip()
-    if not stripped or not stripped[0] in ("[", "{"):
+    if not stripped or stripped[0] not in ("[", "{"):
         return None
 
     try:
@@ -447,6 +452,7 @@ def _try_repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
         if isinstance(result, (dict, list)):
             return result
     except (json.JSONDecodeError, Exception):
+        logger.debug("Failed to repair truncated JSON")
         pass
 
     return None
@@ -488,7 +494,6 @@ def _merge_titleless_chapters(chapters: list[dict[str, Any]]) -> list[dict[str, 
             continue
 
         prev = result[-1]
-        prev_sections = prev.get("sections") or []
 
         ch_sections = ch.get("sections") or []
         ch_content = str(ch.get("content") or "").strip()
@@ -719,7 +724,7 @@ def _execute_declared_script_tool(
         }, [attachment]
 
 
-def _execute_builtin_tool(
+async def _execute_builtin_tool(
     *,
     request: ChatStreamRequest,
     state: SkillConversationState,
@@ -765,7 +770,7 @@ def _execute_builtin_tool(
             if isinstance(raw_limit, int) and 1 <= raw_limit <= max_search_limit
             else default_search_limit
         )
-        chunks = search_skill_context_chunks(
+        chunks = await search_skill_context_chunks(
             _primary_skill_id(request),
             query,
             exclude_chunk_ids=set(),
@@ -837,7 +842,7 @@ def _execute_builtin_tool(
     return None
 
 
-def execute_skill_tool_call(
+async def execute_skill_tool_call(
     *,
     request: ChatStreamRequest,
     state: SkillConversationState,
@@ -859,7 +864,7 @@ def execute_skill_tool_call(
                 parameters=builtin_parameters,
             )
 
-        builtin_result = _execute_builtin_tool(
+        builtin_result = await _execute_builtin_tool(
             request=request,
             state=state,
             tool_name=tool_name,
@@ -897,12 +902,12 @@ def execute_skill_tool_call(
         }, []
 
 
-def execute_scoped_skill_tool_call(
+async def execute_scoped_skill_tool_call(
     *,
     request: ChatStreamRequest,
     states_by_skill: dict[str, SkillConversationState],
     tool_call: dict[str, Any],
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[Any]]:
     default_skill_id = _primary_skill_id(request)
     resolved_skill_id, base_tool_name = _resolve_tool_scope(
         default_skill_id=default_skill_id,
@@ -926,12 +931,14 @@ def execute_scoped_skill_tool_call(
     }
 
     if isinstance(function_payload, dict) and "id" in function_payload:
-        normalized_tool_call["function"]["id"] = function_payload["id"]
+        func_dict = normalized_tool_call["function"]
+        if isinstance(func_dict, dict):
+            func_dict["id"] = function_payload["id"]
 
     scoped_request = request.model_copy(update={"skill_id": resolved_skill_id})
     scoped_state = states_by_skill[resolved_skill_id]
 
-    return execute_skill_tool_call(
+    return await execute_skill_tool_call(
         request=scoped_request,
         state=scoped_state,
         tool_call=normalized_tool_call,

@@ -1,10 +1,13 @@
+import logging
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Sequence
 
-from ..models.catalog import SkillInterfaceConfig
-from ..models.runtime import SkillPlanDecision
+from ..schemas.catalog import SkillInterfaceConfig
+from ..schemas.runtime import SkillPlanDecision
 from ...core.config import settings
 from .planner import plan_skill_activation
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -73,7 +76,7 @@ def build_selector_skill_interfaces(
 async def select_skills_with_planner(
     *,
     model: str,
-    messages: list[object],
+    messages: Sequence[object],
     available_skills: list[SkillInterfaceConfig],
     explicit_skill_ids: list[str] | None,
     missing_explicit_skill_ids: list[str] | None,
@@ -107,7 +110,7 @@ async def select_skills_with_planner(
 async def select_for_chat_skills(
     *,
     model: str,
-    messages: list[object],
+    messages: Sequence[object],
     available_skills: list[SkillInterfaceConfig],
     explicit_skill_ids: list[str] | None,
     missing_explicit_skill_ids: list[str] | None,
@@ -137,7 +140,7 @@ def _resolve_workspace_reference_top_k(available_count: int) -> int:
 async def select_for_workspace_reference(
     *,
     model: str,
-    messages: list[object],
+    messages: Sequence[object],
     available_skills: list[SkillInterfaceConfig],
     explicit_skill_ids: list[str] | None,
     system_skill_id: str,

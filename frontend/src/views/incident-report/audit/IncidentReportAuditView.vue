@@ -109,12 +109,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import {
-  fetchIncidentReportDetail,
-  approveIncidentReport,
-  rejectIncidentReport,
-} from '../../../api/incident-report';
-import type { IncidentReportDetailItem } from '../../../types/incident-report/incident-report';
+import { useReportAudit } from './composables/useReportAudit';
 import BaseButton from '../../../components/base/BaseButton.vue';
 import BaseTextarea from '../../../components/base/BaseTextarea.vue';
 import ReportStatusBadge from '../components/ReportStatusBadge.vue';
@@ -122,9 +117,7 @@ import ReportStatusBadge from '../components/ReportStatusBadge.vue';
 const route = useRoute();
 const router = useRouter();
 
-const report = ref<IncidentReportDetailItem | null>(null);
-const loading = ref(true);
-const processing = ref(false);
+const { report, loading, processing, load, approve, reject } = useReportAudit();
 const comment = ref('');
 
 const formatValue = (value: unknown): string => {
@@ -136,34 +129,21 @@ const formatValue = (value: unknown): string => {
 const handleApprove = async () => {
   if (!report.value || !comment.value.trim()) return;
   if (!confirm('确定通过此报告吗？')) return;
-  processing.value = true;
-  try {
-    await approveIncidentReport(report.value.id, comment.value);
-    router.push(`/incident-report/${report.value.id}`);
-  } finally {
-    processing.value = false;
-  }
+  const reportId = route.params.id as string;
+  await approve(reportId, comment.value);
+  router.push(`/incident-report/${reportId}`);
 };
 
 const handleReject = async () => {
   if (!report.value || !comment.value.trim()) return;
   if (!confirm('确定驳回此报告吗？')) return;
-  processing.value = true;
-  try {
-    await rejectIncidentReport(report.value.id, comment.value);
-    router.push(`/incident-report/${report.value.id}`);
-  } finally {
-    processing.value = false;
-  }
+  const reportId = route.params.id as string;
+  await reject(reportId, comment.value);
+  router.push(`/incident-report/${reportId}`);
 };
 
-onMounted(async () => {
-  const reportId = route.params.id as string;
-  try {
-    report.value = await fetchIncidentReportDetail(reportId);
-  } finally {
-    loading.value = false;
-  }
+onMounted(() => {
+  load(route.params.id as string);
 });
 </script>
 

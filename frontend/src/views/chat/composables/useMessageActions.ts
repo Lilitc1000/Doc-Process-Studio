@@ -170,7 +170,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
 
     chatStore.resetEditingState();
     options.scrollToBottom();
-    await options.persistCurrentSession();
+    void options.persistCurrentSession();
 
     await options.executeAssistantGeneration(
       chatStore.buildRequestSnapshotForUserMessage(
@@ -208,7 +208,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     chatStore.selectedFiles = [];
     chatStore.selectedSkillIds = [];
     chatStore.activeSessionId = chatStore.conversationId;
-    await options.persistCurrentSession();
+    void options.persistCurrentSession();
 
     await options.executeAssistantGeneration(
       chatStore.buildRequestSnapshotForUserMessage(
@@ -229,7 +229,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       return;
     }
 
-    await options.persistCurrentSession();
+    void options.persistCurrentSession();
     await options.executeAssistantGeneration(
       chatStore.buildRequestSnapshotForUserMessage(
         assistantNode.parentId,

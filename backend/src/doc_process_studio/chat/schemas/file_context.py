@@ -1,5 +1,6 @@
-from .attachment import ChatAttachment
 from pydantic import BaseModel, Field
+
+from .attachment import ChatAttachment
 
 
 class UploadedFileContext(BaseModel):

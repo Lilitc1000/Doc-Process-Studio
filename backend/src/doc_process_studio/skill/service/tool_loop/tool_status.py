@@ -1,9 +1,9 @@
 from typing import Any
 
-from ....chat.models.attachment import ChatAttachment
+from ....chat.schemas.attachment import ChatAttachment
 from ....chat.schemas.request import ChatStreamRequest
 from ....shared.tool_args import parse_tool_arguments
-from ...models.runtime import SkillConversationState
+from ...schemas.runtime import SkillConversationState
 from ..registry import get_skill_tool_config
 from ..context import get_skill_context_chunks_by_ids
 from .skill_files import _categorize_relative_path, _normalize_relative_path, _resolve_tool_scope
@@ -81,7 +81,7 @@ def build_tool_status_start(
     arguments = parse_tool_arguments(tool_call)
 
     if tool_name in {"list_skill_directory", "read_skill_file"}:
-        relative_path = str(arguments.get("relative_path", "")).strip()
+        relative_path: str | None = str(arguments.get("relative_path", "")).strip()
         label = _build_builtin_status_label(tool_name, relative_path)
         action = "查看" if tool_name == "list_skill_directory" else "读取"
         return {
@@ -158,7 +158,7 @@ def _build_reused_tool_status(
         return None
 
     if tool_name == "list_skill_directory":
-        relative_path = str(arguments.get("relative_path", "")).strip()
+        relative_path: str | None = str(arguments.get("relative_path", "")).strip()
         return {
             "label": _build_builtin_status_label(tool_name, relative_path),
             "message": "该目录内容已读取过，本轮不再重复查看。",
@@ -224,8 +224,8 @@ def _build_builtin_tool_status(
         }
 
     if tool_name == "read_skill_context":
-        relative_path = _get_read_context_relative_path(tool_result)
-        label = _build_builtin_status_label(tool_name, relative_path)
+        read_ctx_path: str | None = _get_read_context_relative_path(tool_result)
+        label = _build_builtin_status_label(tool_name, read_ctx_path)
         loaded_chunk_ids = tool_result.get("loaded_chunk_ids")
         chunk_count = len(loaded_chunk_ids) if isinstance(loaded_chunk_ids, list) else 0
         return {

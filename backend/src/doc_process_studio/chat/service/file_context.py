@@ -1,3 +1,4 @@
+import logging
 from io import BytesIO
 from pathlib import Path
 
@@ -6,11 +7,13 @@ from fastapi import UploadFile
 from openpyxl import load_workbook
 from pypdf import PdfReader
 
-from ..models.file_context import (
+from ..schemas.file_context import (
     PreparedUploadedFile,
     UploadedFileContext,
 )
 from .attachments import load_uploaded_attachment_context, save_uploaded_attachment
+
+logger = logging.getLogger(__name__)
 
 TEXT_EXTENSIONS = {
     ".txt",
@@ -153,6 +156,7 @@ def _build_uploaded_file_context(
         else:
             extracted_text = decode_file_bytes(raw_bytes)
     except Exception:
+        logger.warning("Failed to extract text from uploaded file: %s", filename, exc_info=True)
         extracted_text = None
 
     if extracted_text is None and suffix not in TEXT_EXTENSIONS:

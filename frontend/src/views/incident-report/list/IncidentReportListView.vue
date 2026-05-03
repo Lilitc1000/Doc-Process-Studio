@@ -78,7 +78,13 @@
         <report-list-table
           :items="store.reportList"
           :loading="store.reportListLoading"
-          :can-edit="store.isAdmin || store.canDeleteReport"
+          :can-edit="
+            store.hasAnyPermission(
+              'report:edit_own',
+              'report:edit_assigned',
+              'report:edit_all',
+            )
+          "
           :can-delete="store.isAdmin"
           @view="router.push(`/incident-report/${$event}`)"
           @edit="router.push(`/incident-report/${$event}/edit`)"
@@ -129,7 +135,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { useIncidentReportStore } from '../../../stores/incident-report';
 import { deleteIncidentReport } from '../../../api/incident-report';
 import BaseButton from '../../../components/base/BaseButton.vue';
@@ -138,7 +144,6 @@ import FloatingToast from '../../../components/business/FloatingToast.vue';
 import ReportListFilters from './components/ReportListFilters.vue';
 import ReportListTable from './components/ReportListTable.vue';
 
-const route = useRoute();
 const router = useRouter();
 const store = useIncidentReportStore();
 

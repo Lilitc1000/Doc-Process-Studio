@@ -3,6 +3,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+
+class PermissionDenied(ValueError):
+    pass
+
 IncidentReportStatus = Literal["draft", "pending", "approved", "rejected", "in_progress", "closed"]
 IncidentSeverity = Literal["P0", "P1", "P2", "P3"]
 
@@ -14,6 +18,7 @@ INCIDENT_VALID_ROLES: list[str] = sorted(VALID_ROLES)
 VALID_PERMISSIONS: set[str] = {
     "report:create",
     "report:edit_own",
+    "report:edit_all",
     "report:submit",
     "report:view",
     "report:view_all",
@@ -40,6 +45,7 @@ ROLE_DEFINITIONS: list[dict[str, str]] = [
 PERMISSION_DEFINITIONS: list[dict[str, str]] = [
     {"permission_key": "report:create", "permission_name": "创建报告", "description": "创建新的事故报告", "category": "report"},
     {"permission_key": "report:edit_own", "permission_name": "编辑自己的报告", "description": "编辑自己创建的草稿或被驳回的报告", "category": "report"},
+    {"permission_key": "report:edit_all", "permission_name": "编辑所有报告", "description": "编辑任意状态的任意报告", "category": "report"},
     {"permission_key": "report:submit", "permission_name": "提交审核", "description": "将报告提交审核", "category": "report"},
     {"permission_key": "report:view", "permission_name": "查看报告", "description": "查看报告列表和详情", "category": "report"},
     {"permission_key": "report:view_all", "permission_name": "查看所有报告", "description": "查看所有用户的报告", "category": "report"},

@@ -19,7 +19,7 @@ frontend/src/stores/
 | `useAppStore`            | 用户偏好和配置缓存           | ✅                   | `selectedModel`、`selectedRerankerModel`、`availableModels`、`processingModes` |
 | `useAuthStore`           | 认证状态管理                 | 部分（refreshToken） | `accessToken`、`refreshToken`、`userInfo`                                      |
 | `useChatStore`           | 聊天工作区全部运行时状态     | ❌                   | 消息树、会话状态、流式生成状态、输入状态                                       |
-| `useIncidentReportStore` | 事故报告工作区全部运行时状态 | ❌                   | 会话状态、表单定义、生成状态、附件预览                                         |
+| `useIncidentReportStore` | 事故报告工作区全部运行时状态 | ❌                   | 会话状态、生成状态                                                           |
 
 ## 持久化策略
 

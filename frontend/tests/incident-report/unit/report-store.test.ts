@@ -4,10 +4,10 @@ import { useIncidentReportStore } from '../../../src/stores/incident-report';
 import * as incidentReportApi from '../../../src/api/incident-report';
 
 vi.mock('../../../src/api/incident-report', () => ({
-  fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
-  fetchUserIncidentPermissions: vi
-    .fn()
-    .mockResolvedValue(['report:create', 'report:edit_own', 'report:submit']),
+  fetchUserIncidentRolesAndPermissions: vi.fn().mockResolvedValue({
+    roles: ['reporter'],
+    permissions: ['report:create', 'report:edit_own', 'report:submit'],
+  }),
   fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
   fetchIncidentReportDetail: vi.fn().mockResolvedValue({}),
   fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({
@@ -41,30 +41,30 @@ describe('useIncidentReportStore', () => {
   });
 
   it('admin 角色拥有所有权限', async () => {
-    const mockFetchRoles =
-      incidentReportApi.fetchUserIncidentRoles as ReturnType<typeof vi.fn>;
-    const mockFetchPerms =
-      incidentReportApi.fetchUserIncidentPermissions as ReturnType<
+    const mockFetch =
+      incidentReportApi.fetchUserIncidentRolesAndPermissions as ReturnType<
         typeof vi.fn
       >;
-    mockFetchRoles.mockResolvedValue(['viewer', 'admin']);
-    mockFetchPerms.mockResolvedValue([
-      'report:create',
-      'report:edit_own',
-      'report:submit',
-      'report:view',
-      'report:view_all',
-      'report:edit_assigned',
-      'report:close_assigned',
-      'report:audit',
-      'report:assign',
-      'report:delete',
-      'report:reopen',
-      'role:manage',
-      'system:config',
-      'data:export',
-      'analytics:view',
-    ]);
+    mockFetch.mockResolvedValue({
+      roles: ['viewer', 'admin'],
+      permissions: [
+        'report:create',
+        'report:edit_own',
+        'report:submit',
+        'report:view',
+        'report:view_all',
+        'report:edit_assigned',
+        'report:close_assigned',
+        'report:audit',
+        'report:assign',
+        'report:delete',
+        'report:reopen',
+        'role:manage',
+        'system:config',
+        'data:export',
+        'analytics:view',
+      ],
+    });
 
     const store = useIncidentReportStore();
     await store.loadUserIncidentRoles();
@@ -75,20 +75,20 @@ describe('useIncidentReportStore', () => {
   });
 
   it('verifier 角色可以审核', async () => {
-    const mockFetchRoles =
-      incidentReportApi.fetchUserIncidentRoles as ReturnType<typeof vi.fn>;
-    const mockFetchPerms =
-      incidentReportApi.fetchUserIncidentPermissions as ReturnType<
+    const mockFetch =
+      incidentReportApi.fetchUserIncidentRolesAndPermissions as ReturnType<
         typeof vi.fn
       >;
-    mockFetchRoles.mockResolvedValue(['verifier']);
-    mockFetchPerms.mockResolvedValue([
-      'report:view',
-      'report:view_all',
-      'report:audit',
-      'report:assign',
-      'analytics:view',
-    ]);
+    mockFetch.mockResolvedValue({
+      roles: ['verifier'],
+      permissions: [
+        'report:view',
+        'report:view_all',
+        'report:audit',
+        'report:assign',
+        'analytics:view',
+      ],
+    });
 
     const store = useIncidentReportStore();
     await store.loadUserIncidentRoles();
@@ -99,19 +99,19 @@ describe('useIncidentReportStore', () => {
   });
 
   it('无角色用户无权限', async () => {
-    const mockFetchRoles =
-      incidentReportApi.fetchUserIncidentRoles as ReturnType<typeof vi.fn>;
-    const mockFetchPerms =
-      incidentReportApi.fetchUserIncidentPermissions as ReturnType<
+    const mockFetch =
+      incidentReportApi.fetchUserIncidentRolesAndPermissions as ReturnType<
         typeof vi.fn
       >;
-    mockFetchRoles.mockResolvedValue([]);
-    mockFetchPerms.mockResolvedValue([]);
+    mockFetch.mockResolvedValue({
+      roles: [],
+      permissions: [],
+    });
 
     const store = useIncidentReportStore();
     await store.loadUserIncidentRoles();
 
-    expect(store.isViewer).toBe(true);
+    expect(store.userIncidentRoles).toEqual([]);
     expect(store.canCreateReport).toBe(false);
     expect(store.canAudit).toBe(false);
   });

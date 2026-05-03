@@ -37,9 +37,3 @@ export interface ChatSessionSummary {
 export interface ChatSessionDetail extends ChatSessionSummary {
   snapshot: ChatSessionSnapshotPayload;
 }
-
-export interface SessionGroup {
-  id: string;
-  label: string;
-  sessions: ChatSessionSummary[];
-}

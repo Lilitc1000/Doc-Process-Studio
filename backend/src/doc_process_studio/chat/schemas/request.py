@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+from .session import ChatSessionSnapshot
 
 
 class ChatMessageInput(BaseModel):
@@ -63,8 +67,6 @@ class ChatSessionUpsertRequest(BaseModel):
 class ChatSessionTitleUpdateRequest(BaseModel):
     title: str = Field(..., min_length=1, description="新的会话标题")
 
-
-from ..models.session import ChatSessionSnapshot
 
 __all__ = [
     "ChatMessageInput",

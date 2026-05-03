@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
 import doc_process_studio.chat.service.stream as chat_stream_module
-from doc_process_studio.chat.models.attachment import ChatAttachment
-from doc_process_studio.skill.models.runtime import SkillPlanDecision
+from doc_process_studio.chat.schemas.attachment import ChatAttachment
+from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
 
 
 def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch, auth_headers) -> None:

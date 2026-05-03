@@ -69,11 +69,10 @@ def test_update_report_non_owner_non_admin_rejected(monkeypatch):
         return False
 
     import doc_process_studio.incident_report.service.report as report_module
-    import doc_process_studio.incident_report.service.role as role_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
-    monkeypatch.setattr(role_module, "has_permission", _fake_has_permission)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
-    with pytest.raises(ValueError, match="只有报告人、被指派处理人或管理员可以编辑报告"):
+    with pytest.raises(ValueError, match="无权编辑此报告"):
         asyncio.run(update_report(report_id="rep-1", user_id="usr_test", title="new"))
 
 
@@ -97,9 +96,8 @@ def test_update_report_admin_can_edit_others(monkeypatch):
         return fake_report
 
     import doc_process_studio.incident_report.service.report as report_module
-    import doc_process_studio.incident_report.service.role as role_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
-    monkeypatch.setattr(role_module, "has_permission", _fake_has_permission)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
     monkeypatch.setattr(report_module, "update_report_record", _fake_update)
 
     result = asyncio.run(update_report(report_id="rep-1", user_id="usr_admin", title="updated"))
@@ -122,11 +120,10 @@ def test_submit_report_non_owner_non_admin_rejected(monkeypatch):
         return False
 
     import doc_process_studio.incident_report.service.report as report_module
-    import doc_process_studio.incident_report.service.role as role_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
-    monkeypatch.setattr(role_module, "has_permission", _fake_has_permission)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
-    with pytest.raises(ValueError, match="只有报告人或管理员可以提交审核"):
+    with pytest.raises(ValueError, match="需要报告人权限才能提交审核"):
         asyncio.run(submit_report(report_id="rep-1", actor_id="usr_test"))
 
 
@@ -142,8 +139,12 @@ def test_submit_report_wrong_status(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     import doc_process_studio.incident_report.service.report as report_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
     with pytest.raises(ValueError, match="不允许提交审核"):
         asyncio.run(submit_report(report_id="rep-1", actor_id="usr_test"))
@@ -161,8 +162,12 @@ def test_approve_report_wrong_status(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     import doc_process_studio.incident_report.service.report as report_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
     with pytest.raises(ValueError, match="不允许审核通过"):
         asyncio.run(report_module.approve_report(report_id="rep-1", actor_id="usr_verifier"))
@@ -180,8 +185,12 @@ def test_reject_report_wrong_status(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     import doc_process_studio.incident_report.service.report as report_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
     with pytest.raises(ValueError, match="不允许驳回"):
         asyncio.run(report_module.reject_report(report_id="rep-1", actor_id="usr_verifier", comment="no"))
@@ -199,8 +208,12 @@ def test_assign_handler_wrong_status(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     import doc_process_studio.incident_report.service.report as report_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
     with pytest.raises(ValueError, match="不允许分配处理人"):
         asyncio.run(assign_handler(report_id="rep-1", actor_id="usr_admin", assignee_id="usr_handler"))
@@ -218,8 +231,12 @@ def test_close_report_wrong_status(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     import doc_process_studio.incident_report.service.report as report_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
     with pytest.raises(ValueError, match="不允许关闭"):
         asyncio.run(report_module.close_report(report_id="rep-1", actor_id="usr_handler"))
@@ -237,8 +254,12 @@ def test_reopen_report_wrong_status(monkeypatch):
     async def _fake_load(report_id):
         return fake_report if report_id == "rep-1" else None
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     import doc_process_studio.incident_report.service.report as report_module
     monkeypatch.setattr(report_module, "load_report_orm", _fake_load)
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
     with pytest.raises(ValueError, match="不允许重新打开"):
         asyncio.run(reopen_report(report_id="rep-1", actor_id="usr_admin"))
@@ -264,8 +285,12 @@ def test_delete_report_with_actor_creates_audit(monkeypatch):
     mock_session.delete = AsyncMock()
     mock_session.commit = AsyncMock()
 
+    async def _fake_has_permission(user_id, permission):
+        return True
+
     import doc_process_studio.incident_report.service.report as report_module
     monkeypatch.setattr(report_module, "async_session_factory", lambda: _FakeCtx(mock_session))
+    monkeypatch.setattr(report_module, "has_permission", _fake_has_permission)
 
     result = asyncio.run(delete_report(report_id="rep-1", actor_id="usr_admin"))
     assert result is True

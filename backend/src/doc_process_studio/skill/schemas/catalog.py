@@ -102,4 +102,3 @@ class SkillInterfaceConfig(BaseModel):
         default_factory=list,
         description="当前 skill 声明的可执行工具",
     )
-

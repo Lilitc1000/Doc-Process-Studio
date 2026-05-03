@@ -28,12 +28,14 @@ frontend/src/layouts/
 AppHeader 有两种显示模式，由 `pageId` prop 控制：
 
 ### 首页模式（`pageId === 'home'`）
+
 - CSS 类：`.app-header--home`
 - 仅在右上角显示用户头像/登录按钮
 - 整体 `pointer-events: none`，仅头像区域可交互
 - 不显示首页按钮和页面标题
 
 ### 子页面模式（`pageId !== 'home'`）
+
 - CSS 类：`.app-header--sub`
 - 浮动圆角胶囊样式，带毛玻璃效果（`backdrop-filter: blur(16px) saturate(180%)`）
 - 左侧：首页按钮（房子图标）+ 可点击/不可点击的页面标题

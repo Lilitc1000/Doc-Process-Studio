@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..models.session import ChatSessionSummary
+from ..schemas.session import ChatSessionSummary
 from ..schemas.request import ChatSessionTitleUpdateRequest, ChatSessionUpsertRequest
 from ..schemas.response import ChatSessionDetail, ChatSessionListResponse
 from ..service.sessions import (

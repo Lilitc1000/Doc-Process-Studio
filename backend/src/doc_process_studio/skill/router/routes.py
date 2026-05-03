@@ -45,7 +45,7 @@ async def search_skill_context(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    matched_chunks = search_skill_context_chunks(skill_id, query)
+    matched_chunks = await search_skill_context_chunks(skill_id, query)
     return SkillContextSearchResponse(
         skill_id=skill_id,
         query=query,

@@ -1,6 +1,8 @@
-import { ref, watch } from 'vue';
-import humps from 'humps';
-import type { IncidentBodyGenerateResponse } from '../../../types/incident-report/incident-report';
+import { ref, watch, type Ref } from 'vue';
+import {
+  severityOptions as _severityOptions,
+  statusOptions as _statusOptions,
+} from '../../../utils/incident-report/constants';
 
 export interface TimelineItem {
   time: string;
@@ -10,15 +12,12 @@ export interface TimelineItem {
 
 export const severityOptions = [
   { value: '', label: '请选择 / Select' },
-  { value: 'minor', label: '一般 / Minor' },
-  { value: 'major', label: '严重 / Major' },
-  { value: 'critical', label: '致命 / Critical' },
+  ..._severityOptions,
 ];
 
 export const statusOptions = [
   { value: '', label: '请选择 / Select' },
-  { value: 'follow_up_action_required', label: '跟进中 / Follow-up' },
-  { value: 'closed', label: '已关闭 / Closed' },
+  ..._statusOptions,
 ];
 
 export const defaultFormAnswers: Record<string, string> = {
@@ -79,18 +78,14 @@ export function convertToIso(raw: string, baseDate?: string): string {
   return trimmed;
 }
 
-export function applyGenerationResult(
-  result: IncidentBodyGenerateResponse,
-  formAnswers: Record<string, unknown>,
-) {
-  for (const [key, answer] of Object.entries(result.formAnswers)) {
-    const snakeKey = humps.decamelize(key);
-    formAnswers[snakeKey] = answer.value ?? '';
-  }
-}
-
 export function buildFormPayload(
-  formData: { title: string; severity: string; system: string; siteId: string; faultDate: string },
+  formData: {
+    title: string;
+    severity: string;
+    system: string;
+    siteId: string;
+    faultDate: string;
+  },
   formAnswers: Record<string, string>,
   bodyTimelineItems: TimelineItem[],
 ) {
@@ -122,6 +117,20 @@ export function buildFormPayload(
     faultDate: formData.faultDate || undefined,
     formData: formDataPayload,
   };
+}
+
+export function validateTimelineTimeOrder(
+  items: Ref<TimelineItem[]>,
+  errors: Ref<Record<number, string>>,
+) {
+  errors.value = {};
+  for (let i = 1; i < items.value.length; i++) {
+    const prevTime = items.value[i - 1].time?.trim();
+    const currTime = items.value[i].time?.trim();
+    if (prevTime && currTime && currTime < prevTime) {
+      errors.value[i] = '时间不能早于上一条';
+    }
+  }
 }
 
 export function useReportFormState() {
@@ -156,19 +165,7 @@ export function useReportFormState() {
   ) => {
     bodyTimelineItems.value[index][key] = value;
     if (key === 'time') {
-      validateTimelineTimeOrder();
-    }
-  };
-
-  const validateTimelineTimeOrder = () => {
-    timelineTimeErrors.value = {};
-    const items = bodyTimelineItems.value;
-    for (let i = 1; i < items.length; i++) {
-      const prevTime = items[i - 1].time?.trim();
-      const currTime = items[i].time?.trim();
-      if (prevTime && currTime && currTime < prevTime) {
-        timelineTimeErrors.value[i] = '时间不能早于上一条';
-      }
+      validateTimelineTimeOrder(bodyTimelineItems, timelineTimeErrors);
     }
   };
 
@@ -182,7 +179,11 @@ export function useReportFormState() {
   };
 
   const getPayload = () =>
-    buildFormPayload(formData.value, formAnswers.value, bodyTimelineItems.value);
+    buildFormPayload(
+      formData.value,
+      formAnswers.value,
+      bodyTimelineItems.value,
+    );
 
   return {
     formData,
@@ -190,7 +191,6 @@ export function useReportFormState() {
     bodyTimelineItems,
     timelineTimeErrors,
     onBodyTimelineChange,
-    validateTimelineTimeOrder,
     onBodyTimelineInput,
     getPayload,
   };

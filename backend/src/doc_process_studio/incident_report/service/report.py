@@ -1,29 +1,34 @@
 import logging
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import delete
 
-logger = logging.getLogger(__name__)
-
 from ...core.database import async_session_factory
-from ...shared.dtutils import utcnow
+from ...shared.dtutils import to_utc8, utcnow
 from ..models.audit_log import IncidentAuditLog
-from ..models.incident_report_orm import IncidentReport as IncidentReportORM
-from ..schemas.common import STATUS_TRANSITIONS, VALID_STATUSES
-from ..schemas.response import IncidentReportDetail, IncidentReportListResponse, IncidentReportSummary
+from ..models.incident_report_orm import IncidentComment, IncidentReport as IncidentReportORM
+from ..schemas.common import PermissionDenied
+from ..schemas.response import IncidentAuditLogEntry, IncidentCommentEntry, IncidentReportDetail, IncidentReportListResponse
 from ..service.audit_log import create_audit_log
 from ..service.report_store import (
     _CLEAR_SENTINEL,
-    _REF_NO_RETRY_MAX,
     _resolve_usernames_safe,
-    generate_ref_no,
+    create_comment_record,
+    create_report_record,
+    list_comment_records,
     list_reports,
     load_report_orm,
     orm_to_detail,
     orm_to_summary,
     update_report_record,
 )
+from .audit_log import list_audit_logs, orm_to_entry as audit_orm_to_entry
+from .form_validation import validate_form_data_for_submit
+from .role import has_permission
+
+logger = logging.getLogger(__name__)
 
 
 async def create_report(
@@ -37,71 +42,43 @@ async def create_report(
     form_data: dict | None = None,
     ref_no: str | None = None,
 ) -> IncidentReportDetail:
-    from sqlalchemy.exc import IntegrityError as SAIntegrityError
+    if not await has_permission(reporter_id, "report:create"):
+        raise PermissionDenied("需要报告人权限才能创建报告")
 
-    report_id = uuid4().hex[:32]
     manual_ref_no = None
     if form_data and isinstance(form_data, dict):
         manual_ref_no = form_data.get("manual_reference_no") or None
     effective_ref_no = ref_no or manual_ref_no or None
 
-    now = utcnow()
-    for attempt in range(_REF_NO_RETRY_MAX + 1):
-        if effective_ref_no is None:
-            effective_ref_no = await generate_ref_no()
-            if attempt > 0:
-                import random
-                effective_ref_no = f"DAS-{random.randint(1, 99999):05d}"
-        record = IncidentReportORM(
-            id=report_id,
-            ref_no=effective_ref_no,
-            title=title,
-            status="draft",
-            severity=severity,
-            reporter_id=reporter_id,
-            system=system,
-            site_id=site_id,
-            fault_date=fault_date,
-            form_data=form_data or {},
-            created_at=now,
-            updated_at=now,
-        )
-        audit_record = IncidentAuditLog(
-            id=uuid4().hex[:32],
-            report_id=report_id,
-            action="create",
-            actor_id=reporter_id,
-            to_status="draft",
-            created_at=now,
-        )
-        async with async_session_factory() as session:
-            session.add(record)
-            try:
-                await session.flush()
-            except SAIntegrityError:
-                await session.rollback()
-                if ref_no is not None:
-                    raise
-                effective_ref_no = None
-                continue
-            session.add(audit_record)
-            try:
-                await session.commit()
-                await session.refresh(record)
-                return await orm_to_detail(record)
-            except SAIntegrityError as e:
-                await session.rollback()
-                logger.warning("IntegrityError in audit log (attempt %d): %s", attempt, e)
-                if ref_no is not None:
-                    raise
-                effective_ref_no = None
-    raise RuntimeError(f"Failed to create report after {_REF_NO_RETRY_MAX + 1} attempts")
+    record = await create_report_record(
+        report_id=uuid4().hex[:32],
+        ref_no=effective_ref_no,
+        title=title,
+        reporter_id=reporter_id,
+        severity=severity,
+        system=system,
+        site_id=site_id,
+        fault_date=fault_date,
+        form_data=form_data,
+    )
+    if record is None:
+        raise RuntimeError("Failed to create report after retries")
+    await create_audit_log(
+        report_id=record.id,
+        action="create",
+        actor_id=reporter_id,
+        to_status="draft",
+    )
+    return await orm_to_detail(record)
 
 
-async def get_report(report_id: str) -> IncidentReportDetail | None:
+async def get_report(report_id: str, user_id: str | None = None) -> IncidentReportDetail | None:
     record = await load_report_orm(report_id)
     if record is None:
         return None
+    if user_id and not await has_permission(user_id, "report:view_all"):
+        if record.reporter_id != user_id and record.assignee_id != user_id and record.verifier_id != user_id:
+            raise PermissionDenied("无权查看此报告")
     return await orm_to_detail(record)
 
 
@@ -109,17 +86,20 @@ async def update_report(
     *,
     report_id: str,
     user_id: str,
-    **fields,
+    **fields: Any,
 ) -> IncidentReportDetail | None:
     record = await load_report_orm(report_id)
     if record is None:
         return None
     if record.status not in ("draft", "rejected"):
         raise ValueError(f"当前状态 {record.status} 不允许编辑")
-    if record.reporter_id != user_id:
-        from .role import has_permission
-        if not await has_permission(user_id, "report:edit_assigned") and not await has_permission(user_id, "report:delete"):
-            raise ValueError("只有报告人、被指派处理人或管理员可以编辑报告")
+    can_edit = (
+        (record.reporter_id == user_id and await has_permission(user_id, "report:edit_own"))
+        or (record.assignee_id == user_id and await has_permission(user_id, "report:edit_assigned"))
+        or await has_permission(user_id, "report:edit_all")
+    )
+    if not can_edit:
+        raise PermissionDenied("无权编辑此报告")
     updated = await update_report_record(report_id, **fields)
     if updated is None:
         return None
@@ -128,6 +108,7 @@ async def update_report(
 
 async def list_incident_reports(
     *,
+    user_id: str | None = None,
     page: int = 1,
     page_size: int = 20,
     status: str | None = None,
@@ -136,6 +117,9 @@ async def list_incident_reports(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
 ) -> IncidentReportListResponse:
+    reporter_id_filter = None
+    if user_id and not await has_permission(user_id, "report:view_all"):
+        reporter_id_filter = user_id
     records, total = await list_reports(
         page=page,
         page_size=page_size,
@@ -144,6 +128,7 @@ async def list_incident_reports(
         search=search,
         start_date=start_date,
         end_date=end_date,
+        reporter_id=reporter_id_filter,
     )
     items = []
     for r in records:
@@ -157,15 +142,17 @@ async def submit_report(
     actor_id: str,
     comment: str | None = None,
 ) -> IncidentReportDetail | None:
+    if not await has_permission(actor_id, "report:submit"):
+        raise PermissionDenied("需要报告人权限才能提交审核")
     record = await load_report_orm(report_id)
     if record is None:
         return None
     if record.status not in ("draft", "rejected"):
         raise ValueError(f"当前状态 {record.status} 不允许提交审核")
-    if record.reporter_id != actor_id:
-        from .role import has_permission
-        if not await has_permission(actor_id, "report:delete"):
-            raise ValueError("只有报告人或管理员可以提交审核")
+    form_data = record.form_data or {}
+    missing = validate_form_data_for_submit(form_data)
+    if missing:
+        raise ValueError(f"缺少必填字段: {', '.join(missing)}")
     now = utcnow()
     updated = await update_report_record(
         report_id,
@@ -192,6 +179,8 @@ async def approve_report(
     actor_id: str,
     comment: str | None = None,
 ) -> IncidentReportDetail | None:
+    if not await has_permission(actor_id, "report:audit"):
+        raise PermissionDenied("需要审核人权限才能批准报告")
     record = await load_report_orm(report_id)
     if record is None:
         return None
@@ -224,6 +213,8 @@ async def reject_report(
     actor_id: str,
     comment: str,
 ) -> IncidentReportDetail | None:
+    if not await has_permission(actor_id, "report:audit"):
+        raise PermissionDenied("需要审核人权限才能驳回报告")
     record = await load_report_orm(report_id)
     if record is None:
         return None
@@ -255,6 +246,8 @@ async def assign_handler(
     actor_id: str,
     assignee_id: str,
 ) -> IncidentReportDetail | None:
+    if not await has_permission(actor_id, "report:assign"):
+        raise PermissionDenied("需要审核人权限才能分配处理人")
     record = await load_report_orm(report_id)
     if record is None:
         return None
@@ -289,15 +282,13 @@ async def close_report(
     actor_id: str,
     comment: str | None = None,
 ) -> IncidentReportDetail | None:
+    if not await has_permission(actor_id, "report:close_assigned"):
+        raise PermissionDenied("需要处理人权限才能关闭报告")
     record = await load_report_orm(report_id)
     if record is None:
         return None
     if record.status != "in_progress":
         raise ValueError(f"当前状态 {record.status} 不允许关闭")
-    if record.assignee_id != actor_id:
-        from .role import has_permission
-        if not await has_permission(actor_id, "report:delete"):
-            raise ValueError("只有处理人或管理员可以关闭报告")
     now = utcnow()
     updated = await update_report_record(
         report_id,
@@ -325,6 +316,8 @@ async def reopen_report(
     actor_id: str,
     comment: str | None = None,
 ) -> IncidentReportDetail | None:
+    if not await has_permission(actor_id, "report:reopen"):
+        raise PermissionDenied("需要管理员权限才能重新打开报告")
     record = await load_report_orm(report_id)
     if record is None:
         return None
@@ -355,9 +348,8 @@ async def delete_report(
     report_id: str,
     actor_id: str | None = None,
 ) -> bool:
-    from ..models.audit_log import IncidentAuditLog
-    from ..models.incident_report_orm import IncidentComment
-
+    if actor_id and not await has_permission(actor_id, "report:delete"):
+        raise PermissionDenied("需要管理员权限才能删除报告")
     async with async_session_factory() as session:
         record = await session.get(IncidentReportORM, report_id)
         if record is None:
@@ -376,3 +368,72 @@ async def delete_report(
         await session.delete(record)
         await session.commit()
     return True
+
+
+async def list_audit_log_entries(report_id: str, user_id: str | None = None) -> list[IncidentAuditLogEntry]:
+    record = await load_report_orm(report_id)
+    if record is None:
+        return []
+    if user_id and not await has_permission(user_id, "report:view_all"):
+        if record.reporter_id != user_id and record.assignee_id != user_id and record.verifier_id != user_id:
+            raise PermissionDenied("无权查看此报告的审计日志")
+    records = await list_audit_logs(report_id)
+    actor_ids = {r.actor_id for r in records if r.actor_id}
+    usernames = await _resolve_usernames_safe(actor_ids)
+    return [audit_orm_to_entry(r, actor_name=usernames.get(r.actor_id)) for r in records]
+
+
+async def list_comment_entries(report_id: str, user_id: str | None = None) -> list[IncidentCommentEntry]:
+    record = await load_report_orm(report_id)
+    if record is None:
+        return []
+    if user_id and not await has_permission(user_id, "report:view_all"):
+        if record.reporter_id != user_id and record.assignee_id != user_id and record.verifier_id != user_id:
+            raise PermissionDenied("无权查看此报告的评论")
+    records = await list_comment_records(report_id)
+    author_ids = {r.author_id for r in records if r.author_id}
+    usernames = await _resolve_usernames_safe(author_ids)
+    return [
+        IncidentCommentEntry(
+            id=r.id,
+            report_id=r.report_id,
+            author_id=r.author_id,
+            author_name=usernames.get(r.author_id),
+            content=r.content,
+            parent_id=r.parent_id,
+            created_at=to_utc8(r.created_at),
+        )
+        for r in records
+    ]
+
+
+async def add_comment_entry(
+    *,
+    report_id: str,
+    author_id: str,
+    content: str,
+    parent_id: str | None = None,
+) -> IncidentCommentEntry:
+    report_record = await load_report_orm(report_id)
+    if report_record is None:
+        raise ValueError(f"报告 {report_id} 不存在")
+    if not await has_permission(author_id, "report:view"):
+        raise PermissionDenied("无权对此报告添加评论")
+
+    comment_id = uuid4().hex[:32]
+    record = await create_comment_record(
+        comment_id=comment_id,
+        report_id=report_id,
+        author_id=author_id,
+        content=content,
+        parent_id=parent_id,
+    )
+    return IncidentCommentEntry(
+        id=record.id,
+        report_id=record.report_id,
+        author_id=record.author_id,
+        author_name=(await _resolve_usernames_safe({record.author_id})).get(record.author_id),
+        content=record.content,
+        parent_id=record.parent_id,
+        created_at=to_utc8(record.created_at),
+    )

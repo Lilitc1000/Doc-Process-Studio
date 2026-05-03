@@ -1,5 +1,8 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String, func
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
 
 from ...core.database import Base
 
@@ -11,23 +14,23 @@ class ChatSession(Base):
         Index("idx_chat_sessions_updated_at", "updated_at"),
     )
 
-    id = Column(String(64), primary_key=True)
-    user_id = Column(
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
         String(32),
         ForeignKey("users.user_id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    title = Column(String(255), nullable=False)
-    selected_model = Column(String(64), nullable=False)
-    selected_reranker_model = Column(String(64), nullable=True)
-    created_at = Column(
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    selected_model: Mapped[str] = mapped_column(String(64), nullable=False)
+    selected_reranker_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
     )
-    snapshot = Column(JSONB, nullable=True)
+    snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

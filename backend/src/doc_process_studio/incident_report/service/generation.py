@@ -1,7 +1,7 @@
 import json
+import logging
 import re
 from copy import deepcopy
-from dataclasses import dataclass
 from typing import Any, Callable
 
 import httpx
@@ -9,6 +9,7 @@ import httpx
 from ..schemas.common import (
     IncidentFormAnswer,
     IncidentFormSnapshot,
+    PermissionDenied,
 )
 from ..schemas.response import IncidentBodyGenerateResponse
 from ...system.service.error_detail import summarize_exception
@@ -49,6 +50,8 @@ from .report_data import answer_text, answer_value, answer_value_from_answers, s
 from ...chat.service.streaming import extract_delta_text, extract_done_reason
 from .report_store import load_report_orm, update_report_record
 
+logger = logging.getLogger(__name__)
+
 
 def _build_default_title(now: Any = None) -> str:
     current = now or utcnow()
@@ -60,6 +63,7 @@ def _resolve_document_assistant_prompt() -> str:
     try:
         return normalize_text(get_skill_interface(SYSTEM_DOCUMENT_SKILL_ID).default_prompt)
     except Exception:
+        logger.debug("Failed to resolve document assistant prompt for skill_id=%s", SYSTEM_DOCUMENT_SKILL_ID)
         return ""
 
 
@@ -90,7 +94,7 @@ async def _flush_trace_safely(recorder: AgentTraceRecorder) -> None:
     try:
         await recorder.flush()
     except Exception:
-        return
+        logger.warning("Failed to flush trace recorder for trace_id=%s", recorder.trace_id, exc_info=True)
 
 
 def _build_quick_generation_context(
@@ -518,7 +522,6 @@ async def _run_body_generation_with_trace(
     form_answers = deepcopy(snapshot.form_answers)
     apply_payload(form_answers, payload)
 
-    now = utcnow()
     next_snapshot = snapshot.model_copy(deep=True)
     next_snapshot.form_answers = form_answers
     next_snapshot.generated_trace_id = trace_id
@@ -576,12 +579,23 @@ def _build_snapshot_from_form_data(form_data: dict[str, Any]) -> IncidentFormSna
 async def quick_generate_report_body(
     *,
     report_id: str,
+    user_id: str | None = None,
     model: str | None = None,
     reranker_model: str | None = None,
 ) -> IncidentBodyGenerateResponse:
+    from .role import has_permission
+
     record = await load_report_orm(report_id)
     if record is None:
         raise ValueError(f"Report {report_id} does not exist.")
+    if user_id:
+        can_edit = (
+            (record.reporter_id == user_id and await has_permission(user_id, "report:edit_own"))
+            or (record.assignee_id == user_id and await has_permission(user_id, "report:edit_assigned"))
+            or await has_permission(user_id, "report:edit_all")
+        )
+        if not can_edit:
+            raise PermissionDenied("无权对此报告进行生成操作")
     snapshot = _build_snapshot_from_form_data(record.form_data)
     effective_model = model or "qwen3:8b"
     prompt, context_json = _build_quick_generation_request(snapshot)
@@ -603,12 +617,23 @@ async def generate_report_body_section(
     report_id: str,
     section_id: str,
     timeline_index: int | None = None,
+    user_id: str | None = None,
     model: str | None = None,
     reranker_model: str | None = None,
 ) -> IncidentBodyGenerateResponse:
+    from .role import has_permission
+
     record = await load_report_orm(report_id)
     if record is None:
         raise ValueError(f"Report {report_id} does not exist.")
+    if user_id:
+        can_edit = (
+            (record.reporter_id == user_id and await has_permission(user_id, "report:edit_own"))
+            or (record.assignee_id == user_id and await has_permission(user_id, "report:edit_assigned"))
+            or await has_permission(user_id, "report:edit_all")
+        )
+        if not can_edit:
+            raise PermissionDenied("无权对此报告进行生成操作")
     snapshot = _build_snapshot_from_form_data(record.form_data)
     effective_model = model or "qwen3:8b"
     prompt, context_json = _build_section_generation_prompt(

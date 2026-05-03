@@ -45,7 +45,7 @@ class ChatAttachmentMetadata(BaseModel):
         description="附件内容哈希，用于同会话内复用相同上传文件",
     )
     name: str = Field(..., description="附件文件名")
-    mime_type: str = Field(..., description="文件 MIME 类型")
-    size_bytes: int = Field(..., description="文件大小")
+    mime_type: str = Field(..., description="附件 MIME 类型")
+    size_bytes: int = Field(..., description="附件大小")
     created_at: datetime = Field(..., description="创建时间")
     expires_at: datetime = Field(..., description="过期时间")

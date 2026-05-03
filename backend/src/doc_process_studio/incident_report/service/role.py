@@ -1,9 +1,11 @@
-from typing import Iterable
+import logging
+from typing import Iterable, TypedDict
 
 from sqlalchemy import delete, func, select
 
 from ...core.database import async_session_factory
 from ...core.security import generate_user_id
+from ...shared.dtutils import to_utc8
 from ...auth.models.user import User
 from ..models.incident_report_role import (
     IncidentReportPermission,
@@ -17,6 +19,19 @@ from ..schemas.common import (
     ROLE_PERMISSIONS_MAP,
     VALID_ROLES,
 )
+from ..schemas.response import (
+    IncidentPermissionEntry,
+    IncidentPermissionListResponse,
+    IncidentRoleDefinitionEntry,
+    IncidentRoleDefinitionListResponse,
+    IncidentRoleEntry,
+    IncidentRoleListResponse,
+    IncidentUserWithRolesEntry,
+    IncidentUserWithRolesListResponse,
+)
+from ..service.report_store import _resolve_usernames_safe
+
+logger = logging.getLogger(__name__)
 
 
 async def get_user_incident_roles(user_id: str) -> set[str]:
@@ -97,6 +112,82 @@ async def assign_incident_role(
         )
         session.add(entry)
         await session.commit()
+        logger.info("分配角色: user_id=%s, role=%s, assigned_by=%s", user_id, role, assigned_by)
+
+
+async def list_role_assignments_with_names() -> IncidentRoleListResponse:
+    assignments = await list_all_role_assignments()
+    assigned_by_ids = {a.assigned_by for a in assignments if a.assigned_by}
+    usernames = await _resolve_usernames_safe(assigned_by_ids)
+    items = [
+        IncidentRoleEntry(
+            user_id=a.user_id,
+            role=a.role_key,
+            assigned_by=a.assigned_by,
+            assigned_by_name=usernames.get(a.assigned_by) if a.assigned_by else None,
+            assigned_at=to_utc8(a.assigned_at),
+        )
+        for a in assignments
+    ]
+    return IncidentRoleListResponse(items=items)
+
+
+async def list_users_with_roles_response() -> IncidentUserWithRolesListResponse:
+    users = await list_non_admin_users_with_roles()
+    items = [
+        IncidentUserWithRolesEntry(
+            user_id=u["user_id"],
+            username=u["username"],
+            roles=u["roles"],
+        )
+        for u in users
+    ]
+    return IncidentUserWithRolesListResponse(items=items)
+
+
+async def assign_role_and_return_entry(
+    *,
+    user_id: str,
+    role: str,
+    assigned_by: str,
+) -> IncidentRoleEntry:
+    await assign_incident_role(user_id=user_id, role=role, assigned_by=assigned_by)
+    admin_names = await _resolve_usernames_safe({assigned_by})
+    return IncidentRoleEntry(
+        user_id=user_id,
+        role=role,
+        assigned_by=assigned_by,
+        assigned_by_name=admin_names.get(assigned_by),
+    )
+
+
+async def list_role_definitions_with_permissions() -> IncidentRoleDefinitionListResponse:
+    definitions = await list_role_definitions()
+    role_perms_map = await get_role_permissions_map()
+    items = [
+        IncidentRoleDefinitionEntry(
+            role_key=d.role_key,
+            role_name=d.role_name,
+            description=d.description,
+            permissions=role_perms_map.get(d.role_key, []),
+        )
+        for d in definitions
+    ]
+    return IncidentRoleDefinitionListResponse(items=items)
+
+
+async def list_permissions_response() -> IncidentPermissionListResponse:
+    perms = await list_permissions()
+    items = [
+        IncidentPermissionEntry(
+            permission_key=p.permission_key,
+            permission_name=p.permission_name,
+            description=p.description,
+            category=p.category,
+        )
+        for p in perms
+    ]
+    return IncidentPermissionListResponse(items=items)
 
 
 async def revoke_incident_role(user_id: str, role: str) -> None:
@@ -110,6 +201,7 @@ async def revoke_incident_role(user_id: str, role: str) -> None:
             ),
         )
         await session.commit()
+        logger.info("撤销角色: user_id=%s, role=%s", user_id, role)
 
 
 async def list_all_role_assignments() -> list[IncidentReportUserRole]:
@@ -123,7 +215,13 @@ async def list_all_role_assignments() -> list[IncidentReportUserRole]:
         return list(result.scalars().all())
 
 
-async def list_non_admin_users_with_roles() -> list[dict]:
+class _UserWithRoles(TypedDict):
+    user_id: str
+    username: str
+    roles: list[str]
+
+
+async def list_non_admin_users_with_roles() -> list[_UserWithRoles]:
     async with async_session_factory() as session:
         result = await session.execute(
             select(User).where(User.username != "admin").order_by(User.username)
@@ -205,7 +303,33 @@ async def seed_rbac_data() -> None:
         existing_roles = await session.execute(
             select(func.count(IncidentReportRoleDefinition.role_key))
         )
-        if existing_roles.scalar() > 0:
+        if (existing_roles.scalar() or 0) > 0:
+            for perm_def in PERMISSION_DEFINITIONS:
+                existing_perm = await session.execute(
+                    select(IncidentReportPermission).where(
+                        IncidentReportPermission.permission_key == perm_def["permission_key"]
+                    )
+                )
+                if existing_perm.scalar_one_or_none() is None:
+                    session.add(IncidentReportPermission(**perm_def))
+
+            for role_key, permissions in ROLE_PERMISSIONS_MAP.items():
+                for perm_key in permissions:
+                    existing_mapping = await session.execute(
+                        select(IncidentReportRolePermission).where(
+                            IncidentReportRolePermission.role_key == role_key,
+                            IncidentReportRolePermission.permission_key == perm_key,
+                        )
+                    )
+                    if existing_mapping.scalar_one_or_none() is None:
+                        session.add(
+                            IncidentReportRolePermission(
+                                role_key=role_key,
+                                permission_key=perm_key,
+                            )
+                        )
+
+            await session.commit()
             return
 
         for role_def in ROLE_DEFINITIONS:
@@ -226,11 +350,10 @@ async def seed_rbac_data() -> None:
                 )
 
         await session.commit()
+        logger.info("RBAC 种子数据初始化完成")
 
 
 async def ensure_incident_report_admin() -> None:
-    from ...auth.models.user import User
-
     async with async_session_factory() as session:
         result = await session.execute(
             select(User).where(User.username == "admin").limit(1)
@@ -256,3 +379,4 @@ async def ensure_incident_report_admin() -> None:
         )
         session.add(entry)
         await session.commit()
+        logger.info("确保管理员角色: user_id=%s", admin_user.user_id)

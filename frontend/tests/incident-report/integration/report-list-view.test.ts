@@ -42,10 +42,10 @@ vi.mock('../../../src/api/incident-report', () => ({
       },
     ],
   }),
-  fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
-  fetchUserIncidentPermissions: vi
-    .fn()
-    .mockResolvedValue(['report:create', 'report:edit_own', 'report:submit']),
+  fetchUserIncidentRolesAndPermissions: vi.fn().mockResolvedValue({
+    roles: ['reporter'],
+    permissions: ['report:create', 'report:edit_own', 'report:submit'],
+  }),
   fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({
     total_this_month: 2,
     pending_count: 1,

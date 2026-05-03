@@ -3,20 +3,23 @@ import hashlib
 import importlib.util
 import io
 import json
+import logging
 import os
 import shutil
 import subprocess
 import tempfile
 from collections import OrderedDict
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from ...chat.models.attachment import ChatAttachment
+from ...chat.schemas.attachment import ChatAttachment
+from ..schemas.common import PermissionDenied
 from ..schemas.response import IncidentReportPreviewResponse
 from ...chat.service.attachments import resolve_attachment_path, save_generated_attachment
 from .constants import INCIDENT_REPORT_DOCX_MIME_TYPE, INCIDENT_REPORT_SCRIPT_PATH
 from .normalization import normalize_text
+
+logger = logging.getLogger(__name__)
 
 _PREVIEW_RESULT_CACHE_MAX_ENTRIES = 12
 _PREVIEW_RESULT_CACHE: OrderedDict[str, IncidentReportPreviewResponse] = OrderedDict()
@@ -81,7 +84,7 @@ def save_docx_bytes_as_generated_attachment(
         try:
             temp_path.unlink(missing_ok=True)
         except Exception:
-            pass
+            logger.debug("Failed to delete temp file %s", temp_path, exc_info=True)
 
 
 def convert_docx_bytes_to_pdf_bytes(docx_bytes: bytes) -> bytes:
@@ -150,6 +153,7 @@ def _stable_payload_hash(payload: Any) -> str:
             separators=(",", ":"),
         )
     except Exception:
+        logger.debug("Failed to serialize payload for hashing, using repr fallback")
         normalized = repr(payload)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
@@ -175,6 +179,7 @@ def preview_template_token() -> str:
     try:
         return str(INCIDENT_REPORT_SCRIPT_PATH.stat().st_mtime_ns)
     except Exception:
+        logger.debug("Failed to stat preview template, returning 'unknown'")
         return "unknown"
 
 
@@ -196,6 +201,7 @@ def build_preview_output_name(*, report_title: str, report_id: str) -> str:
 async def preview_report_attachment(
     *,
     report_id: str,
+    user_id: str | None = None,
     version: int | None = None,
     model: str | None = None,
     reranker_model: str | None = None,
@@ -207,6 +213,18 @@ async def preview_report_attachment(
     record = await load_report_orm(report_id)
     if record is None:
         raise ValueError(f"Report {report_id} does not exist.")
+
+    if user_id:
+        from .role import has_permission
+
+        can_view = (
+            record.reporter_id == user_id
+            or record.assignee_id == user_id
+            or record.verifier_id == user_id
+            or await has_permission(user_id, "report:view_all")
+        )
+        if not can_view:
+            raise PermissionDenied("无权预览此报告")
 
     snapshot = _build_snapshot_from_form_data(record.form_data)
     report_data, missing = build_report_data_from_snapshot(

@@ -18,6 +18,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.table import Table
 from docx.text.paragraph import Paragraph
+from docx.text.run import Run
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -191,7 +192,7 @@ def _refresh_with_windows_word(document_path: Path) -> None:
 
 
 def patch_revision_history_table_fonts(document_path: Path) -> None:
-    def set_run_font(run) -> None:
+    def set_run_font(run: Run) -> None:
         run.font.name = "Times New Roman"
         run.font.size = run.font.size or None
         r_pr = run._element.get_or_add_rPr()
@@ -220,7 +221,7 @@ def patch_revision_history_table_fonts(document_path: Path) -> None:
             r_pr.append(sz_cs)
         sz_cs.set(qn("w:val"), "20")
 
-    def set_paragraph_default_font(paragraph) -> None:
+    def set_paragraph_default_font(paragraph: Paragraph) -> None:
         p_pr = paragraph._p.get_or_add_pPr()
         r_pr = p_pr.find(qn("w:rPr"))
         if r_pr is None:

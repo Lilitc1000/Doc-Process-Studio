@@ -1,38 +1,23 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import type {
-  IncidentReportFormSchemaPayload,
   IncidentReportSummaryItem,
   IncidentReportDetailItem,
   IncidentAnalyticsOverview,
 } from '../types/incident-report/incident-report';
 import {
-  fetchUserIncidentRoles,
-  fetchUserIncidentPermissions,
+  fetchUserIncidentRolesAndPermissions,
   fetchIncidentReportList,
   fetchIncidentReportDetail,
   fetchIncidentAnalyticsOverview,
 } from '../api/incident-report';
 
 export const useIncidentReportStore = defineStore('incident-report', () => {
-  const incidentReportSchema = ref<IncidentReportFormSchemaPayload | null>(
-    null,
-  );
   const isIncidentReportGenerating = ref(false);
   const generationState = ref<'idle' | 'generating' | 'done'>('idle');
   const generationTask = ref<'none' | 'attachment' | 'quick-body' | 'section'>(
     'none',
   );
-  const incidentReportErrorMessage = ref('');
-  const incidentReportPreviewHtml = ref('');
-  const incidentReportPreviewPdfBase64 = ref('');
-  const incidentReportPreviewDocxBase64 = ref('');
-  const incidentReportPreviewDocxFileName = ref('');
-  const incidentReportPreviewLoading = ref(false);
-  const incidentReportPreviewError = ref('');
-  const incidentReportPreviewVersion = ref<number | null>(null);
-  const incidentReportPreviewSource = ref<'draft' | 'version'>('draft');
-
   const userIncidentRoles = ref<string[]>([]);
   const userIncidentPermissions = ref<string[]>([]);
   const reportList = ref<IncidentReportSummaryItem[]>([]);
@@ -51,11 +36,6 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
   const isReporter = computed(() =>
     userIncidentRoles.value.includes('reporter'),
   );
-  const isViewer = computed(
-    () =>
-      userIncidentRoles.value.length === 0 ||
-      userIncidentRoles.value.includes('viewer'),
-  );
 
   const canCreateReport = computed(() =>
     userIncidentPermissions.value.includes('report:create'),
@@ -70,17 +50,11 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
   const canDeleteReport = computed(() =>
     userIncidentPermissions.value.includes('report:delete'),
   );
+  const canEditAllReport = computed(() =>
+    userIncidentPermissions.value.includes('report:edit_all'),
+  );
   const canReopenReport = computed(() =>
     userIncidentPermissions.value.includes('report:reopen'),
-  );
-  const canAssignHandler = computed(() =>
-    userIncidentPermissions.value.includes('report:assign'),
-  );
-  const canExportData = computed(() =>
-    userIncidentPermissions.value.includes('data:export'),
-  );
-  const canViewAnalytics = computed(() =>
-    userIncidentPermissions.value.includes('analytics:view'),
   );
 
   const hasPermission = (permission: string) =>
@@ -90,8 +64,9 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
     permissions.some((p) => userIncidentPermissions.value.includes(p));
 
   const loadUserIncidentRoles = async () => {
-    userIncidentRoles.value = await fetchUserIncidentRoles();
-    userIncidentPermissions.value = await fetchUserIncidentPermissions();
+    const data = await fetchUserIncidentRolesAndPermissions();
+    userIncidentRoles.value = data.roles ?? [];
+    userIncidentPermissions.value = data.permissions ?? [];
   };
 
   const loadReportList = async (params?: {
@@ -135,34 +110,12 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
     isIncidentReportGenerating.value = false;
     generationState.value = 'idle';
     generationTask.value = 'none';
-    incidentReportErrorMessage.value = '';
-  };
-
-  const resetPreviewState = () => {
-    incidentReportPreviewHtml.value = '';
-    incidentReportPreviewPdfBase64.value = '';
-    incidentReportPreviewDocxBase64.value = '';
-    incidentReportPreviewDocxFileName.value = '';
-    incidentReportPreviewLoading.value = false;
-    incidentReportPreviewError.value = '';
-    incidentReportPreviewVersion.value = null;
-    incidentReportPreviewSource.value = 'draft';
   };
 
   return {
-    incidentReportSchema,
     isIncidentReportGenerating,
     generationState,
     generationTask,
-    incidentReportErrorMessage,
-    incidentReportPreviewHtml,
-    incidentReportPreviewPdfBase64,
-    incidentReportPreviewDocxBase64,
-    incidentReportPreviewDocxFileName,
-    incidentReportPreviewLoading,
-    incidentReportPreviewError,
-    incidentReportPreviewVersion,
-    incidentReportPreviewSource,
     userIncidentRoles,
     userIncidentPermissions,
     reportList,
@@ -176,15 +129,12 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
     isVerifier,
     isHandler,
     isReporter,
-    isViewer,
     canCreateReport,
     canAudit,
     canManageSettings,
     canDeleteReport,
+    canEditAllReport,
     canReopenReport,
-    canAssignHandler,
-    canExportData,
-    canViewAnalytics,
     hasPermission,
     hasAnyPermission,
     loadUserIncidentRoles,
@@ -192,6 +142,5 @@ export const useIncidentReportStore = defineStore('incident-report', () => {
     loadActiveReport,
     loadAnalyticsOverview,
     resetGenerationState,
-    resetPreviewState,
   };
 });

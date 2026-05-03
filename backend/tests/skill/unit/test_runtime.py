@@ -1,7 +1,7 @@
 import asyncio
 
 import doc_process_studio.skill.service.runtime as runtime_module
-from doc_process_studio.skill.models.runtime import SkillContextChunk, SkillConversationState
+from doc_process_studio.skill.schemas.runtime import SkillContextChunk, SkillConversationState
 
 
 def _make_chunk(chunk_id="c1", content="chunk content", title="Test", source_path="ref.md"):

@@ -13,59 +13,93 @@
             </div>
             <div class="field-row">
               <span class="field-label">参考编号 / Reference No.</span>
-              <span class="field-value">{{ getFormValue('manual_reference_no') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_reference_no')
+              }}</span>
             </div>
             <div class="field-row">
-              <span class="field-label">故障上报日期 / Date of Fault Reporting</span>
-              <span class="field-value">{{ report.faultDate || getFormValue('manual_fault_date') || '-' }}</span>
+              <span class="field-label"
+                >故障上报日期 / Date of Fault Reporting</span
+              >
+              <span class="field-value">{{
+                report.faultDate || getFormValue('manual_fault_date') || '-'
+              }}</span>
             </div>
             <div class="field-row">
-              <span class="field-label">故障上报时间 / Time of Fault Reporting</span>
-              <span class="field-value">{{ getFormValue('manual_fault_time') }}</span>
+              <span class="field-label"
+                >故障上报时间 / Time of Fault Reporting</span
+              >
+              <span class="field-value">{{
+                getFormValue('manual_fault_time')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">报告人 / Reporting Person</span>
-              <span class="field-value">{{ getFormValue('manual_reporting_person') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_reporting_person')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">审核人 / Verified By</span>
-              <span class="field-value">{{ getFormValue('manual_verified_by') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_verified_by')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">站点编号 / Site ID</span>
-              <span class="field-value">{{ report.siteId || getFormValue('manual_site_id') || '-' }}</span>
+              <span class="field-value">{{
+                report.siteId || getFormValue('manual_site_id') || '-'
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">系统 / 子系统 / System</span>
-              <span class="field-value">{{ report.system || getFormValue('manual_system') || '-' }}</span>
+              <span class="field-value">{{
+                report.system || getFormValue('manual_system') || '-'
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">故障位置 / Location of Fault</span>
-              <span class="field-value">{{ getFormValue('manual_location') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_location')
+              }}</span>
             </div>
             <div class="field-row full-width">
-              <span class="field-label">故障现象详情 / Details of Fault Symptom</span>
-              <span class="field-value">{{ getFormValue('manual_fault_symptom') }}</span>
+              <span class="field-label"
+                >故障现象详情 / Details of Fault Symptom</span
+              >
+              <span class="field-value">{{
+                getFormValue('manual_fault_symptom')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">到场时间 / Arrival Datetime</span>
-              <span class="field-value">{{ getFormValue('manual_arrival_datetime') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_arrival_datetime')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">恢复时间 / Clearance Datetime</span>
-              <span class="field-value">{{ getFormValue('manual_clearance_datetime') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_clearance_datetime')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">维护人员 / Service Person</span>
-              <span class="field-value">{{ getFormValue('manual_service_person') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_service_person')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">故障原因 / Fault Cause</span>
-              <span class="field-value">{{ getFormValue('manual_fault_cause') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_fault_cause')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">使用物料 / Materials Used</span>
-              <span class="field-value">{{ getFormValue('manual_materials_used') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_materials_used')
+              }}</span>
             </div>
           </div>
         </div>
@@ -79,19 +113,27 @@
           <div class="field-grid">
             <div class="field-row full-width">
               <span class="field-label">维修详情 / Repair Details</span>
-              <span class="field-value">{{ getFormValue('manual_repair_details') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_repair_details')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">承包商人员 / Contractor Staff</span>
-              <span class="field-value">{{ getFormValue('manual_contractor_staff') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_contractor_staff')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">承包商签名 / Contractor Signature</span>
-              <span class="field-value">{{ getFormValue('manual_contractor_signature') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_contractor_signature')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">承包商日期 / Contractor Date</span>
-              <span class="field-value">{{ getFormValue('manual_contractor_date') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_contractor_date')
+              }}</span>
             </div>
           </div>
         </div>
@@ -105,31 +147,45 @@
           <div class="field-grid two-column">
             <div class="field-row">
               <span class="field-label">严重级别 / Severity</span>
-              <span class="field-value">{{ report.severity || getFormValue('manual_severity') || '-' }}</span>
+              <span class="field-value">{{
+                report.severity || getFormValue('manual_severity') || '-'
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">状态 / Status</span>
-              <span class="field-value">{{ getFormValue('manual_status') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_status')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">跟进单号 / Follow-up Ref No.</span>
-              <span class="field-value">{{ getFormValue('manual_status_ref_no') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_status_ref_no')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">业主代表 / Employer Rep</span>
-              <span class="field-value">{{ getFormValue('manual_employer_rep') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_employer_rep')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">业主代表签名 / Employer Signature</span>
-              <span class="field-value">{{ getFormValue('manual_employer_signature') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_employer_signature')
+              }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">结案日期 / Closeout Date</span>
-              <span class="field-value">{{ getFormValue('manual_closeout_date') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_closeout_date')
+              }}</span>
             </div>
             <div class="field-row full-width">
               <span class="field-label">备注 / Comments</span>
-              <span class="field-value">{{ getFormValue('manual_comments') }}</span>
+              <span class="field-value">{{
+                getFormValue('manual_comments')
+              }}</span>
             </div>
           </div>
         </div>
@@ -149,7 +205,10 @@
             </div>
           </div>
 
-          <div v-if="timelineItems.length > 0 || hasTimelineTimeRange" class="sub-section-card">
+          <div
+            v-if="timelineItems.length > 0 || hasTimelineTimeRange"
+            class="sub-section-card"
+          >
             <div class="sub-section-header">
               <h4>时间线 / Timeline</h4>
             </div>
@@ -157,11 +216,15 @@
               <div v-if="hasTimelineTimeRange" class="timeline-range">
                 <div class="timeline-range-item">
                   <span class="field-label">开始时间 / Start Time</span>
-                  <span class="field-value">{{ getFormValue('body_affected_start_time') }}</span>
+                  <span class="field-value">{{
+                    getFormValue('body_affected_start_time')
+                  }}</span>
                 </div>
                 <div class="timeline-range-item">
                   <span class="field-label">结束时间 / End Time</span>
-                  <span class="field-value">{{ getFormValue('body_affected_end_time') }}</span>
+                  <span class="field-value">{{
+                    getFormValue('body_affected_end_time')
+                  }}</span>
                 </div>
               </div>
               <table v-if="timelineItems.length > 0" class="timeline-table">
@@ -191,15 +254,21 @@
               <div class="field-grid two-column">
                 <div class="field-row">
                   <span class="field-label">影响范围 / Impact Scope</span>
-                  <span class="field-value">{{ getFormValue('body_impact_scope') }}</span>
+                  <span class="field-value">{{
+                    getFormValue('body_impact_scope')
+                  }}</span>
                 </div>
                 <div class="field-row">
                   <span class="field-label">严重级别 / Impact Severity</span>
-                  <span class="field-value">{{ getFormValue('body_impact_severity') }}</span>
+                  <span class="field-value">{{
+                    getFormValue('body_impact_severity')
+                  }}</span>
                 </div>
                 <div class="field-row full-width">
                   <span class="field-label">业务影响 / Business Impact</span>
-                  <span class="field-value">{{ getFormValue('body_business_impact') }}</span>
+                  <span class="field-value">{{
+                    getFormValue('body_business_impact')
+                  }}</span>
                 </div>
               </div>
             </div>
@@ -213,11 +282,15 @@
               <div class="field-grid">
                 <div class="field-row">
                   <span class="field-label">触发原因 / Trigger</span>
-                  <span class="field-value">{{ getFormValue('body_trigger') }}</span>
+                  <span class="field-value">{{
+                    getFormValue('body_trigger')
+                  }}</span>
                 </div>
                 <div class="field-row full-width">
                   <span class="field-label">根因 / Root Cause</span>
-                  <span class="field-value">{{ getFormValue('body_root_cause') }}</span>
+                  <span class="field-value">{{
+                    getFormValue('body_root_cause')
+                  }}</span>
                 </div>
               </div>
             </div>
@@ -240,7 +313,11 @@
         </div>
         <div class="section-body">
           <div class="appendix-content">
-            <div v-if="isHtmlAppendix" v-safe-html="appendixContent" class="appendix-html" />
+            <div
+              v-if="isHtmlAppendix"
+              v-safe-html="appendixContent"
+              class="appendix-html"
+            />
             <p v-else class="text-block">{{ appendixContent }}</p>
           </div>
         </div>
@@ -261,7 +338,9 @@ const props = defineProps<{
 }>();
 
 const formData = computed(() => {
-  const fd = humps.decamelizeKeys((props.report.formData || {}) as Record<string, unknown>) as Record<string, unknown>;
+  const fd = humps.decamelizeKeys(
+    (props.report.formData || {}) as Record<string, unknown>,
+  ) as Record<string, unknown>;
   const result: Record<string, unknown> = {};
   for (const [key, raw] of Object.entries(fd)) {
     if (raw !== null && raw !== undefined) {
@@ -308,7 +387,11 @@ const hasTimelineTimeRange = computed(() => {
 });
 
 const hasImpactData = computed(() => {
-  const keys = ['body_impact_scope', 'body_impact_severity', 'body_business_impact'];
+  const keys = [
+    'body_impact_scope',
+    'body_impact_severity',
+    'body_business_impact',
+  ];
   return keys.some((key) => {
     const val = formData.value[key];
     return val !== undefined && val !== null && val !== '' && val !== '-';

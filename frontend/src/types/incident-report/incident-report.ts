@@ -8,34 +8,9 @@ export type IncidentReportStatus =
 
 export type IncidentSeverity = 'P0' | 'P1' | 'P2' | 'P3';
 
-export interface IncidentReportFormOption {
-  value: string;
-  label: string;
-  description?: string | null;
-}
-
-export type IncidentReportFormKind = 'single_select' | 'multi_select' | 'text';
-
-export interface IncidentReportFormStep {
-  id: string;
-  title: string;
-  prompt: string;
-  fieldPath: string;
-  kind: IncidentReportFormKind;
-  options: IncidentReportFormOption[];
-  allowCustom: boolean;
-  required: boolean;
-  placeholder?: string | null;
-}
-
 export interface IncidentReportFormAnswer {
   value?: unknown;
   customValue?: string;
-}
-
-export interface IncidentReportFormSchemaPayload {
-  introMessage: string;
-  steps: IncidentReportFormStep[];
 }
 
 export interface IncidentReportPreviewResponse {

@@ -28,12 +28,13 @@ backend/src/doc_process_studio/skill/
 │   │   └── skill_files.py  # Skill 文件操作与作用域
 │   └── runtime.py          # 上下文状态同步
 ├── models/
-│   ├── catalog.py          # Skill 目录模型
-│   ├── interaction.py      # 交互步骤模型
-│   └── runtime.py          # 运行时状态模型
+│   └── __init__.py
 └── schemas/
     ├── request.py          # 入参 Pydantic 模型
     ├── response.py         # 出参 Pydantic 模型
+    ├── catalog.py          # Skill 目录模型（SkillInterface, SkillToolConfig 等）
+    ├── interaction.py      # 交互步骤模型（InteractionStep 等）
+    ├── runtime.py          # 运行时状态模型（SkillConversationState, SkillPlanDecision 等）
     └── common.py           # 共享基类
 ```
 
@@ -57,10 +58,9 @@ backend/src/doc_process_studio/skill/
 
 ### 跨域依赖
 
-- `chat.models.attachment` — 附件类型
+- `chat.schemas.attachment` — 附件类型
 - `chat.schemas.request` — ChatStreamRequest
 - `system.service.executor` — DAG 执行器
-- `system.service.quality_gate` — 质量门控
 - `system.service.trace_store` — trace 审计
 - `core.ollama` — Ollama 调用
 - `core.config` — 配置（含 BACKEND_DIR）
@@ -71,4 +71,6 @@ backend/src/doc_process_studio/skill/
 - Skill 定义目录是 `backend/skills/`，每个 Skill 至少包含 `agents/config.yaml`
 - 工具执行支持 DAG 依赖，由 `system/service/executor.py` 处理
 - 会话状态存储在 Redis，使用 `conversation_store.py`
-- 不要在 `models/` 中引入 Pydantic
+- Pydantic 数据模型统一放在 `schemas/` 目录，`models/` 仅保留 ORM 模型
+- 上下文检索（`context.py`）使用异步 HTTP 客户端调用 Ollama embedding 接口（`/api/embed`）
+- 服务层异常处理使用 `logging` 记录上下文信息（如 model 名称、text 数量），与 `AgentTraceRecorder` 审计日志互补

@@ -1,5 +1,8 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
 
 from ...core.database import Base
 
@@ -10,12 +13,12 @@ class IncidentAuditLog(Base):
         Index("idx_incident_audit_logs_report_id", "report_id"),
     )
 
-    id = Column(String(32), primary_key=True)
-    report_id = Column(String(32), ForeignKey("incident_reports.id", ondelete="CASCADE"), nullable=False)
-    action = Column(String(20), nullable=False)
-    actor_id = Column(String(32), ForeignKey("users.user_id"), nullable=False)
-    from_status = Column(String(20), nullable=True)
-    to_status = Column(String(20), nullable=True)
-    comment = Column(Text, nullable=True)
-    metadata_ = Column("metadata", JSONB, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    report_id: Mapped[str] = mapped_column(String(32), ForeignKey("incident_reports.id", ondelete="CASCADE"), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.user_id"), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    to_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

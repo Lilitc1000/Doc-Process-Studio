@@ -45,3 +45,5 @@ skills/<skill-id>/
 - Skill ID 使用 kebab-case 命名
 - 工具脚本执行有资源限制（CPU 时间、内存、输出大小），配置在 `core/config.py`
 - 不要在 Skill 目录中存放敏感信息或密钥
+- `scripts/` 中的 Python 脚本需要完整的类型注解，mypy 检查覆盖此目录
+- python-docx 的 `Document` 是工厂函数，类型注解中使用 `from docx.document import Document as DocumentType`

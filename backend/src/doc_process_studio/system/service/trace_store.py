@@ -1,5 +1,6 @@
 import json
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, cast
 
 from ...core.config import settings
 from ...shared.dtutils import utcnow_iso
@@ -62,15 +63,15 @@ async def save_agent_trace(
         conversation_id=normalized_conversation_id
     )
     redis_client = get_redis_client()
-    await redis_client.sadd(
+    await cast(Awaitable[int], redis_client.sadd(
         index_key,
         _encode_trace_index_member(
             tenant_id=normalized_tenant_id,
             trace_id=normalized_trace_id,
         ),
-    )
+    ))
     if ttl_seconds is not None:
-        await redis_client.expire(index_key, ttl_seconds)
+        await cast(Awaitable[bool], redis_client.expire(index_key, ttl_seconds))
 
 
 async def load_agent_trace(
@@ -96,7 +97,7 @@ async def delete_agent_traces_for_conversation(
     index_key = build_agent_trace_conversation_index_key(
         conversation_id=normalized_conversation_id
     )
-    indexed_members = await redis_client.smembers(index_key)
+    indexed_members: set[str] = set(await cast(Awaitable[set[str]], redis_client.smembers(index_key)))
     trace_keys_to_delete: set[str] = set()
 
     for member in indexed_members:
@@ -108,11 +109,12 @@ async def delete_agent_traces_for_conversation(
             build_agent_trace_key(tenant_id=tenant_id, trace_id=trace_id)
         )
 
-    deleted_trace_count = 0
+    deleted_trace_count: int = 0
     if trace_keys_to_delete:
-        deleted_trace_count = int(await redis_client.delete(*trace_keys_to_delete))
+        raw_count: int = int(await cast(Awaitable[int], redis_client.delete(*trace_keys_to_delete)))
+        deleted_trace_count = int(raw_count)
 
-    await redis_client.delete(index_key)
+    await cast(Awaitable[int], redis_client.delete(index_key))
     return deleted_trace_count
 
 

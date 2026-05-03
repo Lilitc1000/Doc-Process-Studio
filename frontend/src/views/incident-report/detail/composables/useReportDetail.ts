@@ -22,6 +22,9 @@ export function useReportDetail() {
       ]);
       report.value = reportData;
       auditLogs.value = logs;
+    } catch {
+      report.value = null;
+      auditLogs.value = [];
     } finally {
       loading.value = false;
     }

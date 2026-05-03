@@ -36,10 +36,10 @@ async def _read_response_excerpt(
     except httpx.ResponseNotRead:
         try:
             raw_body = await response.aread()
-        except Exception:  # noqa: BLE001
+        except (httpx.HTTPError, OSError):
             raw_body = b""
         response_text = raw_body.decode("utf-8", errors="ignore")
-    except Exception:  # noqa: BLE001
+    except (httpx.HTTPError, OSError):
         response_text = ""
 
     return _truncate_text(response_text, max_chars=max_chars)

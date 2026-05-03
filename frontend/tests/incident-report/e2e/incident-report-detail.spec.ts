@@ -212,4 +212,24 @@ test.describe('事故报告详情页', () => {
       await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
+
+  test('点击导航栏标题导航到列表页', async ({ page, request }) => {
+    const token = await loginViaApi(request);
+    const report = await createIncidentReportViaApi(request, token!, {
+      title: `${workerPrefix}标题导航测试`,
+    });
+    expect(report).not.toBeNull();
+
+    try {
+      await page.goto(`/incident-report/${report!.id}`);
+      await expect(page.locator('.incident-report-detail-view')).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(page.locator('.app-header-title-btn')).toBeVisible();
+      await page.locator('.app-header-title-btn').click();
+      await expect(page).toHaveURL('/incident-report');
+    } finally {
+      await deleteIncidentReportViaApi(request, token!, report!.id);
+    }
+  });
 });

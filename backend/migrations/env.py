@@ -6,16 +6,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 from doc_process_studio.core.database import Base
-from doc_process_studio.auth.models.user import User  # noqa: F401
-from doc_process_studio.chat.models.chat_session_orm import ChatSession  # noqa: F401
-from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport, IncidentComment  # noqa: F401
-from doc_process_studio.incident_report.models.incident_report_role import (  # noqa: F401
-    IncidentReportPermission,
-    IncidentReportRoleDefinition,
-    IncidentReportRolePermission,
-    IncidentReportUserRole,
-)
-from doc_process_studio.incident_report.models.audit_log import IncidentAuditLog  # noqa: F401
+import doc_process_studio.auth.models
+import doc_process_studio.chat.models
+import doc_process_studio.incident_report.models
 
 config = context.config
 

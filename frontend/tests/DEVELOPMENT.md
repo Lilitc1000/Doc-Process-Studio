@@ -40,12 +40,9 @@ frontend/tests/
 │   │   ├── use-report-detail.test.ts         # 详情 composable 测试
 │   │   ├── use-report-wizard.test.ts         # 创建向导 composable 测试
 │   │   ├── use-report-edit.test.ts           # 编辑 composable 测试
-│   │   ├── use-incident-report-roles.test.ts # 角色查询 composable 测试
 │   │   ├── incident-report-types.test.ts     # 类型常量测试
 │   │   ├── report-status-badge.test.ts       # 状态徽章组件测试
-│   │   ├── stats-cards.test.ts               # 统计卡片组件测试
-│   │   ├── date-normalization.test.ts        # 日期归一化测试
-│   │   └── constants.test.ts                 # 常量归一化测试
+│   │   └── stats-cards.test.ts               # 统计卡片组件测试
 │   ├── integration/
 │   │   ├── report-list-view.test.ts      # 列表页集成测试
 │   │   ├── report-detail-view.test.ts    # 详情页集成测试
@@ -516,15 +513,10 @@ test.beforeAll(async ({ request }, testInfo) => {
       if (resp.ok()) {
         const data = await resp.json();
         const models: { name: string }[] = data.models ?? [];
-        const chatModels = models.filter(
-          (m) =>
-            !m.name.includes('embed') &&
-            !m.name.includes('rerank') &&
-            !m.name.includes('bge'),
-        );
-        if (chatModels.length > 0) {
+        const chosen = pickE2EModel(models);
+        if (chosen) {
           ollamaAvailable = true;
-          availableModel = chatModels[0].name;
+          availableModel = chosen;
         }
       }
     }
@@ -545,7 +537,7 @@ test('AI 生成测试', async ({ page }) => {
 **要点**：
 
 - 在 `beforeAll` 中检测 Ollama 可用性，避免每个测试重复检测
-- 使用 `availableModel` 动态获取远程服务器上实际可用的模型名称
+- 使用 `pickE2EModel` / `getE2EModel` 智能选择适合 E2E 测试的模型，优先选择小参数通用模型（如 `qwen3:8b`），避免选择编码模型和超大模型导致超时
 - 通过 `page.evaluate` 设置 localStorage 中的模型选择，确保前端使用正确的模型
 - 真实 AI 测试使用 `test.skip(({ browserName }) => browserName !== 'chromium')` 限制只在 Chromium 运行
 - 设置合理的超时时间（`test.setTimeout(300_000)`），AI 生成可能需要较长时间

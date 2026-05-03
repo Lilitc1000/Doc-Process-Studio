@@ -138,6 +138,7 @@
 <script setup lang="ts">
 import BaseButton from '../base/BaseButton.vue';
 import type { TraceReplayPayload } from '../../types/common/trace';
+import { formatDateTimeFull as formatDateTime } from '../../utils/common/date';
 
 defineProps<{
   visible: boolean;
@@ -152,19 +153,6 @@ defineEmits<{
   (e: 'retry'): void;
   (e: 'copy-trace-id'): void;
 }>();
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) {
-    return '-';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString('zh-CN', {
-    hour12: false,
-  });
-};
 
 const hasEventDetail = (event: { detail?: Record<string, unknown> }) => {
   return Boolean(event.detail && Object.keys(event.detail).length > 0);

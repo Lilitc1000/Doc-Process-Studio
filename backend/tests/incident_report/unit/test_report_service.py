@@ -43,23 +43,22 @@ def _make_orm_report(**overrides):
 def test_create_report_sets_default_status():
     fake_record = _make_orm_report()
 
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
-    mock_session.flush = AsyncMock()
-    mock_session.commit = AsyncMock()
-    mock_session.refresh = AsyncMock()
-    mock_session.rollback = AsyncMock()
-
     with patch(
-        "doc_process_studio.incident_report.service.report.async_session_factory"
-    ) as mock_factory, patch(
+        "doc_process_studio.incident_report.service.report.has_permission",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.create_report_record",
+        new_callable=AsyncMock,
+        return_value=fake_record,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.create_audit_log",
+        new_callable=AsyncMock,
+    ), patch(
         "doc_process_studio.incident_report.service.report.orm_to_detail",
         new_callable=AsyncMock,
         return_value=MagicMock(status="draft", ref_no="DAS-0001"),
     ):
-        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
-
         result = asyncio.run(create_report(
             title="测试报告",
             reporter_id="usr_test",
@@ -87,6 +86,13 @@ def test_submit_report_changes_status_to_pending():
         "doc_process_studio.incident_report.service.report.orm_to_detail",
         new_callable=AsyncMock,
         return_value=MagicMock(status="pending"),
+    ), patch(
+        "doc_process_studio.incident_report.service.report.has_permission",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch(
+        "doc_process_studio.incident_report.service.report.validate_form_data_for_submit",
+        return_value=[],
     ):
         result = asyncio.run(submit_report(
             report_id="rep-1",
@@ -99,6 +105,10 @@ def test_approve_report_changes_status_to_approved():
     fake_report = _make_orm_report(status="pending")
 
     with patch(
+        "doc_process_studio.incident_report.service.report.has_permission",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch(
         "doc_process_studio.incident_report.service.report.load_report_orm",
         new_callable=AsyncMock,
         return_value=fake_report,
@@ -126,6 +136,10 @@ def test_reject_report_changes_status_to_rejected():
     fake_report = _make_orm_report(status="pending")
 
     with patch(
+        "doc_process_studio.incident_report.service.report.has_permission",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch(
         "doc_process_studio.incident_report.service.report.load_report_orm",
         new_callable=AsyncMock,
         return_value=fake_report,
@@ -168,7 +182,7 @@ def test_close_report_changes_status_to_closed():
         new_callable=AsyncMock,
         return_value=MagicMock(status="closed"),
     ), patch(
-        "doc_process_studio.incident_report.service.role.has_permission",
+        "doc_process_studio.incident_report.service.report.has_permission",
         new_callable=AsyncMock,
         return_value=True,
     ):
@@ -183,6 +197,10 @@ def test_reopen_report_changes_status_to_draft():
     fake_report = _make_orm_report(status="closed")
 
     with patch(
+        "doc_process_studio.incident_report.service.report.has_permission",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch(
         "doc_process_studio.incident_report.service.report.load_report_orm",
         new_callable=AsyncMock,
         return_value=fake_report,

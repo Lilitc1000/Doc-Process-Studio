@@ -48,15 +48,16 @@ describe('useReportEditWizard', () => {
     expect(loading.value).toBe(false);
   });
 
-  it('load 失败时 loading 恢复为 false', async () => {
+  it('load 失败时 loading 恢复为 false 且 report 为 null', async () => {
     const mockFetch = incidentApi.fetchIncidentReportDetail as ReturnType<
       typeof vi.fn
     >;
     mockFetch.mockRejectedValue(new Error('加载失败'));
 
-    const { load, loading } = useReportEditWizard('report-1');
-    await expect(load()).rejects.toThrow();
+    const { load, loading, report } = useReportEditWizard('report-1');
+    await load();
     expect(loading.value).toBe(false);
+    expect(report.value).toBeNull();
   });
 
   it('save 成功保存并更新报告', async () => {

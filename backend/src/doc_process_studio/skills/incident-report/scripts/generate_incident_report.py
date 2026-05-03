@@ -17,8 +17,11 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.document import Document as DocumentType
 from docx.oxml import OxmlElement
 from docx.shared import Cm
+from docx.text.paragraph import Paragraph
+from docx.table import _Cell
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REFERENCE_TEMPLATE_PATH = (
@@ -438,7 +441,7 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
     return normalized_data
 
 
-def _set_paragraph_text(paragraph, text: str) -> None:
+def _set_paragraph_text(paragraph: Paragraph, text: str) -> None:
     text_value = _to_text(text, default="")
     if paragraph.runs:
         paragraph.runs[0].text = text_value
@@ -448,7 +451,7 @@ def _set_paragraph_text(paragraph, text: str) -> None:
         paragraph.add_run(text_value)
 
 
-def _set_cell_text(cell, text: str) -> None:
+def _set_cell_text(cell: _Cell, text: str) -> None:
     if not cell.paragraphs:
         paragraph = cell.add_paragraph()
         _set_paragraph_text(paragraph, text)
@@ -458,7 +461,7 @@ def _set_cell_text(cell, text: str) -> None:
         _set_paragraph_text(paragraph, "")
 
 
-def _append_cell_text_block(cell, text: str) -> None:
+def _append_cell_text_block(cell: _Cell, text: str) -> None:
     """在单元格末尾追加内容，避免覆盖模板中的固定标题与占位线。"""
     text_value = _to_text(text, "").strip()
     if not text_value:
@@ -475,7 +478,7 @@ def _append_cell_text_block(cell, text: str) -> None:
         _set_paragraph_text(paragraph, line)
 
 
-def _set_status_cell_text(cell, *, status_option: str, status_ref_no: str) -> None:
+def _set_status_cell_text(cell: _Cell, *, status_option: str, status_ref_no: str) -> None:
     if not cell.paragraphs:
         paragraph = cell.add_paragraph()
     else:
@@ -636,7 +639,7 @@ class FaultLogFormGenerator:
                 return index
         return None
 
-    def _set_section_text_after_heading(self, heading_prefix: str, text: str):
+    def _set_section_text_after_heading(self, heading_prefix: str, text: str) -> Paragraph | None:
         heading_index = self._find_paragraph_index_by_prefix(heading_prefix)
         if heading_index is None:
             return None
@@ -647,7 +650,7 @@ class FaultLogFormGenerator:
             return content_para
         return None
 
-    def _add_blank_line_after_paragraph(self, paragraph) -> None:
+    def _add_blank_line_after_paragraph(self, paragraph: Paragraph) -> None:
         new_p = OxmlElement("w:p")
         paragraph._element.addnext(new_p)
 
@@ -804,7 +807,7 @@ class FaultLogFormGenerator:
                 # 个别格式（如部分 webp/svg 转码失败）不应阻断整份事故报告预览。
                 continue
 
-    def generate_form(self, data: dict[str, Any], output_path: str | Path | None = None):
+    def generate_form(self, data: dict[str, Any], output_path: str | Path | None = None) -> DocumentType:
         self._fill_page_one(data)
         self._fill_body_sections(data)
         self._fill_appendix(data)

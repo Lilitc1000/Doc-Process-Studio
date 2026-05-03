@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
+from typing import cast
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
+from sqlalchemy.engine import CursorResult
 
 from ...core.cache import get_redis_client
 from ...core.config import settings
@@ -287,7 +289,8 @@ async def delete_users_by_prefix(username_prefix: str) -> int:
             delete(User).where(User.username.like(f"{username_prefix}%"))
         )
         await session.commit()
-        return result.rowcount
+        count: int = cast(CursorResult, result).rowcount
+        return count
 
 
 async def ensure_admin_user() -> None:

@@ -1,18 +1,19 @@
 import logging
 from datetime import UTC, datetime
-from uuid import uuid4
+from typing import Any, cast
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
-
-logger = logging.getLogger(__name__)
 
 from ...core.database import async_session_factory
 from ...shared.dtutils import to_utc8
 from ...auth.service.auth import resolve_usernames
 from ..models.incident_report_orm import IncidentComment, IncidentReport as IncidentReportORM
-from ..schemas.common import VALID_STATUSES
 from ..schemas.response import IncidentReportDetail, IncidentReportSummary
+from ..schemas.common import IncidentReportStatus, IncidentSeverity
+
+logger = logging.getLogger(__name__)
 
 
 async def generate_ref_no() -> str:
@@ -78,6 +79,7 @@ async def create_report_record(
                 if ref_no is not None:
                     raise
                 effective_ref_no = None
+    raise RuntimeError(f"Failed to create report after {_REF_NO_RETRY_MAX} retries: id={report_id}")
 
 
 async def load_report_orm(report_id: str) -> IncidentReportORM | None:
@@ -95,7 +97,7 @@ _CLEAR_SENTINEL = object()
 
 async def update_report_record(
     report_id: str,
-    **fields,
+    **fields: Any,
 ) -> IncidentReportORM | None:
     async with async_session_factory() as session:
         result = await session.execute(
@@ -131,7 +133,8 @@ async def delete_report_record(report_id: str) -> bool:
             ),
         )
         await session.commit()
-        return result.rowcount > 0
+        deleted: int = cast(CursorResult, result).rowcount
+        return deleted > 0
 
 
 async def list_reports(
@@ -143,11 +146,15 @@ async def list_reports(
     search: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
+    reporter_id: str | None = None,
 ) -> tuple[list[IncidentReportORM], int]:
     async with async_session_factory() as session:
         query = select(IncidentReportORM)
         count_query = select(func.count(IncidentReportORM.id))
 
+        if reporter_id is not None:
+            query = query.where(IncidentReportORM.reporter_id == reporter_id)
+            count_query = count_query.where(IncidentReportORM.reporter_id == reporter_id)
         if status is not None:
             query = query.where(IncidentReportORM.status == status)
             count_query = count_query.where(IncidentReportORM.status == status)
@@ -227,8 +234,8 @@ async def orm_to_summary(record: IncidentReportORM) -> IncidentReportSummary:
         id=record.id,
         ref_no=record.ref_no,
         title=record.title,
-        status=record.status,
-        severity=record.severity,
+        status=cast(IncidentReportStatus, record.status),
+        severity=cast(IncidentSeverity | None, record.severity),
         reporter_id=record.reporter_id,
         reporter_name=usernames.get(record.reporter_id),
         assignee_id=record.assignee_id,
@@ -242,23 +249,9 @@ async def orm_to_summary(record: IncidentReportORM) -> IncidentReportSummary:
 
 
 async def orm_to_detail(record: IncidentReportORM) -> IncidentReportDetail:
-    user_ids = {uid for uid in (record.reporter_id, record.assignee_id, record.verifier_id) if uid}
-    usernames = await _resolve_usernames_safe(user_ids)
+    summary = await orm_to_summary(record)
     return IncidentReportDetail(
-        id=record.id,
-        ref_no=record.ref_no,
-        title=record.title,
-        status=record.status,
-        severity=record.severity,
-        reporter_id=record.reporter_id,
-        reporter_name=usernames.get(record.reporter_id),
-        assignee_id=record.assignee_id,
-        assignee_name=usernames.get(record.assignee_id) if record.assignee_id else None,
-        verifier_id=record.verifier_id,
-        verifier_name=usernames.get(record.verifier_id) if record.verifier_id else None,
-        fault_date=to_utc8(record.fault_date),
-        created_at=to_utc8(record.created_at),
-        updated_at=to_utc8(record.updated_at),
+        **summary.model_dump(),
         system=record.system,
         site_id=record.site_id,
         form_data=record.form_data or {},

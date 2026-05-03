@@ -1,6 +1,5 @@
 import { apiClient } from './request';
 import type {
-  IncidentReportFormSchemaPayload,
   IncidentReportPreviewResponse,
   IncidentBodyGenerateResponse,
   IncidentReportListResponse,
@@ -15,23 +14,6 @@ import type {
   IncidentPermissionListResponse,
   IncidentUserWithRolesListResponse,
 } from '../types/incident-report/incident-report';
-
-export const fetchIncidentReportFormSchema =
-  async (): Promise<IncidentReportFormSchemaPayload> => {
-    const response = await apiClient.get<IncidentReportFormSchemaPayload>(
-      '/incident-report/schema',
-    );
-    return response.data;
-  };
-
-export const fetchIncidentReportSchema = async (): Promise<
-  Record<string, unknown>
-> => {
-  const response = await apiClient.get<Record<string, unknown>>(
-    '/incident-report/reports/schema',
-  );
-  return response.data;
-};
 
 export const fetchIncidentReportList = async (params: {
   page?: number;
@@ -208,19 +190,13 @@ export const fetchIncidentAnalyticsTrend = async (
   return response.data;
 };
 
-export const fetchUserIncidentRoles = async (): Promise<string[]> => {
-  const response = await apiClient.get<IncidentUserRolesResponse>(
-    '/incident-report/roles/me',
-  );
-  return response.data.roles ?? [];
-};
-
-export const fetchUserIncidentPermissions = async (): Promise<string[]> => {
-  const response = await apiClient.get<IncidentUserRolesResponse>(
-    '/incident-report/roles/me',
-  );
-  return response.data.permissions ?? [];
-};
+export const fetchUserIncidentRolesAndPermissions =
+  async (): Promise<IncidentUserRolesResponse> => {
+    const response = await apiClient.get<IncidentUserRolesResponse>(
+      '/incident-report/roles/me',
+    );
+    return response.data;
+  };
 
 export const fetchAllIncidentRoles = async (): Promise<IncidentRoleEntry[]> => {
   const response = await apiClient.get<{ items: IncidentRoleEntry[] }>(

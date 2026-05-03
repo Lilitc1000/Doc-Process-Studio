@@ -1,17 +1,13 @@
 import { ref } from 'vue';
-import humps from 'humps';
 import {
   fetchIncidentReportDetail,
   updateIncidentReport,
-  quickGenerateIncidentReportBody,
-  generateIncidentReportBodySection,
-  previewIncidentReport,
 } from '../../../../api/incident-report';
-import type {
-  IncidentReportDetailItem,
-  IncidentBodyGenerateResponse,
-  IncidentReportPreviewResponse,
-} from '../../../../types/incident-report/incident-report';
+import type { IncidentReportDetailItem } from '../../../../types/incident-report/incident-report';
+import {
+  useReportGeneration,
+  type ReportPayload,
+} from '../../composables/useReportGeneration';
 
 export type EditWizardStep = 0 | 1 | 2 | 3 | 4;
 
@@ -27,29 +23,33 @@ export function useReportEditWizard(reportId: string) {
   const currentStep = ref<EditWizardStep>(0);
   const loading = ref(true);
   const saving = ref(false);
-  const generating = ref(false);
-  const previewing = ref(false);
   const report = ref<IncidentReportDetailItem | null>(null);
-  const previewData = ref<IncidentReportPreviewResponse | null>(null);
-  const generationError = ref<string | null>(null);
+
+  const {
+    generating,
+    previewing,
+    previewData,
+    generationError,
+    quickGenerate: baseQuickGenerate,
+    generateSection: baseGenerateSection,
+    generatePreview: baseGeneratePreview,
+    applyGenerationResult,
+  } = useReportGeneration();
 
   const load = async () => {
     loading.value = true;
     try {
       report.value = await fetchIncidentReportDetail(reportId);
+    } catch {
+      report.value = null;
     } finally {
       loading.value = false;
     }
   };
 
-  const save = async (payload: {
-    title: string;
-    severity?: string;
-    system?: string;
-    siteId?: string;
-    faultDate?: string;
-    formData?: Record<string, unknown>;
-  }): Promise<IncidentReportDetailItem> => {
+  const save = async (
+    payload: ReportPayload,
+  ): Promise<IncidentReportDetailItem> => {
     saving.value = true;
     try {
       report.value = await updateIncidentReport(reportId, payload);
@@ -60,39 +60,10 @@ export function useReportEditWizard(reportId: string) {
   };
 
   const quickGenerate = async (
-    payload: {
-      title: string;
-      severity?: string;
-      system?: string;
-      siteId?: string;
-      faultDate?: string;
-      formData?: Record<string, unknown>;
-    },
+    payload: ReportPayload,
     options?: { model?: string; rerankerModel?: string; signal?: AbortSignal },
-  ): Promise<IncidentBodyGenerateResponse> => {
-    generating.value = true;
-    generationError.value = null;
-    try {
-      await save(payload);
-      const result = await quickGenerateIncidentReportBody(
-        reportId,
-        {
-          model: options?.model,
-          rerankerModel: options?.rerankerModel,
-        },
-        { signal: options?.signal },
-      );
-      return result;
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw err;
-      }
-      const message = err instanceof Error ? err.message : '快填生成失败';
-      generationError.value = message;
-      throw err;
-    } finally {
-      generating.value = false;
-    }
+  ) => {
+    return baseQuickGenerate(() => reportId, payload, save, options);
   };
 
   const generateSection = async (
@@ -103,31 +74,8 @@ export function useReportEditWizard(reportId: string) {
       rerankerModel?: string;
       signal?: AbortSignal;
     },
-  ): Promise<IncidentBodyGenerateResponse> => {
-    generating.value = true;
-    generationError.value = null;
-    try {
-      const result = await generateIncidentReportBodySection(
-        reportId,
-        {
-          sectionId,
-          timelineIndex: options?.timelineIndex,
-          model: options?.model,
-          rerankerModel: options?.rerankerModel,
-        },
-        { signal: options?.signal },
-      );
-      return result;
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw err;
-      }
-      const message = err instanceof Error ? err.message : '分段生成失败';
-      generationError.value = message;
-      throw err;
-    } finally {
-      generating.value = false;
-    }
+  ) => {
+    return baseGenerateSection(reportId, sectionId, options);
   };
 
   const generatePreview = async (options?: {
@@ -135,33 +83,8 @@ export function useReportEditWizard(reportId: string) {
     model?: string;
     rerankerModel?: string;
     signal?: AbortSignal;
-  }): Promise<IncidentReportPreviewResponse> => {
-    previewing.value = true;
-    try {
-      const result = await previewIncidentReport(
-        reportId,
-        {
-          version: options?.version,
-          model: options?.model,
-          rerankerModel: options?.rerankerModel,
-        },
-        { signal: options?.signal },
-      );
-      previewData.value = result;
-      return result;
-    } finally {
-      previewing.value = false;
-    }
-  };
-
-  const applyGenerationResult = (
-    result: IncidentBodyGenerateResponse,
-    formAnswers: Record<string, unknown>,
-  ) => {
-    for (const [key, answer] of Object.entries(result.formAnswers)) {
-      const snakeKey = humps.decamelize(key);
-      formAnswers[snakeKey] = answer.value ?? '';
-    }
+  }) => {
+    return baseGeneratePreview(reportId, options);
   };
 
   return {

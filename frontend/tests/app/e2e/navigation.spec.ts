@@ -84,4 +84,23 @@ test.describe('全局导航', () => {
     await expect(page.locator('.app-header-title')).toHaveText('对话');
     await expect(page.locator('.user-avatar')).toBeVisible();
   });
+
+  test('事故报告列表页标题不可点击', async ({ page }) => {
+    await page.goto('/incident-report');
+    await expect(page.locator('.app-header-title')).toHaveText('事故报告');
+    await expect(page.locator('.app-header-title-btn')).not.toBeVisible();
+  });
+
+  test('访问不存在的路由显示 404 页面', async ({ page }) => {
+    await page.goto('/nonexistent-page');
+    await expect(page.locator('.not-found-code')).toHaveText('404');
+    await expect(page.locator('.not-found-message')).toHaveText('页面不存在');
+  });
+
+  test('404 页面点击返回首页按钮导航到首页', async ({ page }) => {
+    await page.goto('/nonexistent-page');
+    await expect(page.locator('.not-found-code')).toBeVisible();
+    await page.locator('.not-found-view .base-button').click();
+    await expect(page).toHaveURL('/');
+  });
 });

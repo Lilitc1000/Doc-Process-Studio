@@ -2,7 +2,7 @@ import asyncio
 from datetime import UTC, datetime
 
 from doc_process_studio.chat.schemas.request import ChatMessageInput
-from doc_process_studio.skill.models.runtime import SkillPlanDecision
+from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
 from doc_process_studio.skill.service import selector as selector_module
 from doc_process_studio.skill.service.selector import (
     SelectorOption,

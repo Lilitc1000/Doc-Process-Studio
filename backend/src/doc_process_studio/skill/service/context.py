@@ -1,16 +1,17 @@
 import hashlib
 import json
+import logging
 import math
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from ..models.runtime import SkillContextChunk
+from ..schemas.runtime import SkillContextChunk
 from ...core.config import settings
 from ...shared.dtutils import utcnow
 from ...core.ollama import (
@@ -18,6 +19,8 @@ from ...core.ollama import (
     get_ollama_base_url,
 )
 from .registry import SKILLS_DIR, get_skill_interface
+
+logger = logging.getLogger(__name__)
 
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 TOKEN_PATTERN = re.compile(r"[\u4e00-\u9fff]{1,8}|[a-zA-Z0-9_-]{2,}")
@@ -288,7 +291,7 @@ def _extract_embeddings_from_embed_payload(payload: dict[str, Any]) -> list[list
     return None
 
 
-def _post_embed_with_ollama(
+async def _post_embed_with_ollama(
     *,
     model: str,
     texts: list[str],
@@ -299,15 +302,15 @@ def _post_embed_with_ollama(
     try:
         base_url = get_ollama_base_url()
     except Exception:
+        logger.warning("Ollama base URL not configured, skipping embedding")
         return None
 
     embed_url = f"{base_url}/api/embed"
-    embeddings_url = f"{base_url}/api/embeddings"
     timeout = build_timeout()
 
     try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
                 embed_url,
                 json={
                     "model": model,
@@ -320,30 +323,10 @@ def _post_embed_with_ollama(
             if parsed and len(parsed) == len(texts):
                 return parsed
     except Exception:
-        pass
-
-    # 兼容旧接口：逐条走 /api/embeddings
-    fallback_embeddings: list[list[float]] = []
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            for text in texts:
-                response = client.post(
-                    embeddings_url,
-                    json={
-                        "model": model,
-                        "prompt": text,
-                    },
-                )
-                response.raise_for_status()
-                payload = response.json()
-                parsed = _extract_embeddings_from_embed_payload(payload)
-                if not parsed:
-                    return None
-                fallback_embeddings.append(parsed[0])
-    except Exception:
+        logger.warning("Embedding request failed for model=%s, text_count=%d", model, len(texts), exc_info=True)
         return None
 
-    return fallback_embeddings if len(fallback_embeddings) == len(texts) else None
+    return None
 
 
 def _build_embedding_text(chunk: SkillContextChunk) -> str:
@@ -362,7 +345,7 @@ def _resolve_embedding_model() -> str:
     return configured or "nomic-embed-text"
 
 
-def _get_query_embedding(
+async def _get_query_embedding(
     *,
     embedding_model: str,
     query: str,
@@ -374,7 +357,7 @@ def _get_query_embedding(
         if utcnow() - cached_at <= _embedding_cache_ttl():
             return cached_vector
 
-    embedding_payload = _post_embed_with_ollama(
+    embedding_payload = await _post_embed_with_ollama(
         model=embedding_model,
         texts=[query],
     )
@@ -386,7 +369,7 @@ def _get_query_embedding(
     return vector
 
 
-def _get_chunk_embeddings(
+async def _get_chunk_embeddings(
     *,
     skill_id: str,
     chunks: list[SkillContextChunk],
@@ -405,7 +388,7 @@ def _get_chunk_embeddings(
     for start_index in range(0, len(chunks), batch_size):
         batch_chunks = chunks[start_index : start_index + batch_size]
         batch_texts = [_build_embedding_text(chunk) for chunk in batch_chunks]
-        batch_vectors = _post_embed_with_ollama(
+        batch_vectors = await _post_embed_with_ollama(
             model=embedding_model,
             texts=batch_texts,
         )
@@ -442,7 +425,7 @@ def _parse_rerank_json_object(raw_text: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _rerank_chunks_with_model(
+async def _rerank_chunks_with_model(
     *,
     query: str,
     candidates: list[SkillContextChunk],
@@ -454,6 +437,7 @@ def _rerank_chunks_with_model(
     try:
         base_url = get_ollama_base_url()
     except Exception:
+        logger.warning("Ollama base URL not configured, skipping rerank")
         return None
 
     chat_url = f"{base_url}/api/chat"
@@ -496,11 +480,12 @@ def _rerank_chunks_with_model(
     }
 
     try:
-        with httpx.Client(timeout=build_timeout()) as client:
-            response = client.post(chat_url, json=payload)
+        async with httpx.AsyncClient(timeout=build_timeout()) as client:
+            response = await client.post(chat_url, json=payload)
             response.raise_for_status()
             response_payload = response.json()
     except Exception:
+        logger.warning("Rerank request failed for model=%s", reranker_model, exc_info=True)
         return None
 
     message = response_payload.get("message")
@@ -533,7 +518,7 @@ def _rerank_chunks_with_model(
     return relevance_map or None
 
 
-def search_skill_context_chunks(
+async def search_skill_context_chunks(
     skill_id: str,
     query: str,
     exclude_chunk_ids: set[str] | None = None,
@@ -582,11 +567,11 @@ def search_skill_context_chunks(
     semantic_candidates: list[tuple[float, SkillContextChunk]] = []
     if settings.skill_retrieval_semantic_enabled:
         embedding_model = _resolve_embedding_model()
-        query_vector = _get_query_embedding(
+        query_vector = await _get_query_embedding(
             embedding_model=embedding_model,
             query=query,
         )
-        chunk_vectors = _get_chunk_embeddings(
+        chunk_vectors = await _get_chunk_embeddings(
             skill_id=skill_id,
             chunks=filtered_chunks,
             embedding_model=embedding_model,
@@ -635,7 +620,7 @@ def search_skill_context_chunks(
     if settings.skill_retrieval_rerank_enabled and rerank_candidates:
         reranker = (reranker_model or "").strip()
         if reranker:
-            relevance_map = _rerank_chunks_with_model(
+            relevance_map = await _rerank_chunks_with_model(
                 query=query,
                 candidates=rerank_candidates,
                 reranker_model=reranker,

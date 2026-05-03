@@ -1,5 +1,6 @@
 import json
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, cast
 
 from .config import settings
 from .cache_client import get_redis_client
@@ -11,10 +12,11 @@ def build_cache_key(*parts: str) -> str:
 
 
 async def get_json(key: str) -> dict[str, Any] | list[Any] | None:
-    raw_value = await get_redis_client().get(key)
+    raw_value: str | None = await get_redis_client().get(key)
     if raw_value is None:
         return None
-    return json.loads(raw_value)
+    loaded: dict[str, Any] | list[Any] = json.loads(raw_value)
+    return loaded
 
 
 async def set_json(
@@ -33,22 +35,22 @@ async def set_json(
 
 
 async def ping_redis() -> bool:
-    return bool(await get_redis_client().ping())
+    return bool(await cast(Awaitable[bool], get_redis_client().ping()))
 
 
 async def delete_key(key: str) -> int:
-    return int(await get_redis_client().delete(key))
+    return int(await cast(Awaitable[int], get_redis_client().delete(key)))
 
 
 async def get_ttl_seconds(key: str) -> int:
-    return int(await get_redis_client().ttl(key))
+    return int(await cast(Awaitable[int], get_redis_client().ttl(key)))
 
 
 async def refresh_ttl(key: str, ttl_seconds: int | None = None) -> bool:
     return bool(
-        await get_redis_client().expire(
+        await cast(Awaitable[bool], get_redis_client().expire(
             key,
             ttl_seconds or settings.redis_ttl_seconds,
-        )
+        )),
     )
 

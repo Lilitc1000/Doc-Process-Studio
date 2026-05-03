@@ -5,6 +5,69 @@ export function getWorkerPrefix(workerIndex: number): string {
   return `e2e_w${workerIndex}_`;
 }
 
+const PREFERRED_MODEL_PATTERNS = [
+  /^qwen3:8b$/,
+  /^qwen3\.5:9b$/,
+  /^mistral:7b$/,
+  /^llama3\.1:8b$/,
+  /^llama2:7b$/,
+  /^qwen2\.5-coder:1\.5b$/,
+];
+
+const EXCLUDED_MODEL_PATTERNS = [
+  /embed/i,
+  /rerank/i,
+  /^bge/i,
+  /coding/i,
+  /coder/i,
+  /devstral/i,
+  /deepseek-r1/i,
+];
+
+function estimateModelSize(name: string): number {
+  const match = name.match(/(\d+)b/i);
+  return match ? parseInt(match[1], 10) : 999;
+}
+
+export function pickE2EModel(models: { name: string }[]): string {
+  const chatModels = models.filter(
+    (m) => !EXCLUDED_MODEL_PATTERNS.some((p) => p.test(m.name)),
+  );
+  if (chatModels.length === 0) return 'qwen3:8b';
+
+  for (const pattern of PREFERRED_MODEL_PATTERNS) {
+    const found = chatModels.find((m) => pattern.test(m.name));
+    if (found) return found.name;
+  }
+
+  const smallModels = chatModels.filter((m) => estimateModelSize(m.name) <= 14);
+  if (smallModels.length > 0) return smallModels[0].name;
+
+  return chatModels[0].name;
+}
+
+export async function getE2EModel(
+  request: APIRequestContext,
+  token: string,
+): Promise<string> {
+  try {
+    const resp = await request.get('/api/models', {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 10_000,
+    });
+    if (resp.ok()) {
+      const data = await resp.json();
+      const models: { name: string }[] = data.models ?? [];
+      if (models.length > 0) {
+        return pickE2EModel(models);
+      }
+    }
+  } catch {
+    // fallback to default
+  }
+  return 'qwen3:8b';
+}
+
 export async function loginAsAdmin(page: Page) {
   await page.goto('/login');
   await page.locator('input').nth(0).fill('admin');

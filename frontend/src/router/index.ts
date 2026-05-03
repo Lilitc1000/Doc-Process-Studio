@@ -85,6 +85,12 @@ const router = createRouter({
           name: 'settings',
           component: () => import('../views/settings/SettingsView.vue'),
         },
+        {
+          path: '/:pathMatch(.*)*',
+          name: 'not-found',
+          component: () => import('../views/NotFoundView.vue'),
+          meta: { requiresAuth: true },
+        },
       ],
     },
   ],

@@ -176,11 +176,15 @@
             </div>
             <div class="info-row">
               <span class="info-label">故障日期</span>
-              <span class="info-value">{{ formatDate(report.faultDate) }}</span>
+              <span class="info-value">{{
+                formatDateTime(report.faultDate)
+              }}</span>
             </div>
             <div class="info-row">
               <span class="info-label">创建时间</span>
-              <span class="info-value">{{ formatDate(report.createdAt) }}</span>
+              <span class="info-value">{{
+                formatDateTime(report.createdAt)
+              }}</span>
             </div>
           </div>
 
@@ -205,35 +209,29 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useIncidentReportStore } from '../../../stores/incident-report';
 import { useAuthStore } from '../../../stores/auth';
+import { useReportDetail } from './composables/useReportDetail';
 import {
-  fetchIncidentReportDetail,
-  fetchIncidentReportAuditLogs,
   fetchIncidentReportComments,
   createIncidentReportComment,
   closeIncidentReport,
   reopenIncidentReport,
   previewIncidentReport,
 } from '../../../api/incident-report';
-import type {
-  IncidentReportDetailItem,
-  IncidentAuditLogEntry,
-  IncidentCommentEntry,
-} from '../../../types/incident-report/incident-report';
+import type { IncidentCommentEntry } from '../../../types/incident-report/incident-report';
 import BaseButton from '../../../components/base/BaseButton.vue';
 import ReportStatusBadge from '../components/ReportStatusBadge.vue';
 import ReportAuditTimeline from './components/ReportAuditTimeline.vue';
 import ReportDetailContent from './components/ReportDetailContent.vue';
 import ReportComments from './components/ReportComments.vue';
+import { formatDateTime } from '../../../utils/common/date';
 
 const route = useRoute();
 const router = useRouter();
 const store = useIncidentReportStore();
 const authStore = useAuthStore();
 
-const report = ref<IncidentReportDetailItem | null>(null);
-const auditLogs = ref<IncidentAuditLogEntry[]>([]);
+const { report, auditLogs, loading, load: loadDetail } = useReportDetail();
 const comments = ref<IncidentCommentEntry[]>([]);
-const loading = ref(true);
 const downloadingDocx = ref(false);
 
 const canEdit = computed(() => {
@@ -247,7 +245,7 @@ const canEdit = computed(() => {
     return true;
   return (
     store.hasPermission('report:edit_assigned') ||
-    store.hasPermission('report:delete')
+    store.hasPermission('report:edit_all')
   );
 });
 
@@ -268,15 +266,6 @@ const canReopen = computed(() => {
   if (!report.value) return false;
   return report.value.status === 'closed' && store.canReopenReport;
 });
-
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return '-';
-  try {
-    return new Date(dateStr).toLocaleString('zh-CN');
-  } catch {
-    return dateStr;
-  }
-};
 
 const handleClose = async () => {
   if (!report.value || !confirm('确定要关闭此报告吗？')) return;
@@ -325,18 +314,15 @@ const handleDownloadDocx = async () => {
 
 onMounted(async () => {
   const reportId = route.params.id as string;
+  await store.loadUserIncidentRoles();
   try {
-    await store.loadUserIncidentRoles();
-    const [reportData, logs, commentData] = await Promise.all([
-      fetchIncidentReportDetail(reportId),
-      fetchIncidentReportAuditLogs(reportId),
+    const [commentData] = await Promise.all([
       fetchIncidentReportComments(reportId),
+      loadDetail(reportId),
     ]);
-    report.value = reportData;
-    auditLogs.value = logs;
     comments.value = commentData;
-  } finally {
-    loading.value = false;
+  } catch {
+    // loadDetail sets report to null on failure, UI shows "报告不存在"
   }
 });
 </script>

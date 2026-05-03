@@ -31,7 +31,7 @@ frontend/src/views/incident-report/
 │   ├── components/
 │   │   └── ReportWizardSteps.vue
 │   └── styles/
-├── edit/                          # 编辑报告页（向导式，4步）
+├── edit/                          # 编辑报告页（向导式，5步）
 │   ├── IncidentReportEditView.vue
 │   └── composables/
 │       └── useReportEditWizard.ts
@@ -59,7 +59,8 @@ frontend/src/views/incident-report/
 │   ├── RichTextEditor.vue
 │   └── TimelineEditor.vue
 ├── composables/                   # 共享 composables
-│   └── useIncidentReportRoles.ts  # RBAC 权限管理（角色 + 权限检查）
+│   ├── useReportGeneration.ts     # AI 生成共享逻辑（快填、分段生成、预览、结果应用）
+│   └── useReportForm.ts           # 表单工具函数（severityOptions/statusOptions 从 constants.ts 导入，defaultFormAnswers/buildFormPayload/validateTimelineTimeOrder 独立导出）
 └── styles/
     └── incident-report-mobile.css
 ```
@@ -73,26 +74,22 @@ frontend/src/views/incident-report/
 - 用户角色（`userIncidentRoles`）
 - 用户权限（`userIncidentPermissions`）
 - 分析数据（`analyticsOverview`）
-- 表单定义（`incidentReportSchema`）
 - 生成状态（`isIncidentReportGenerating`, `generationState`, `generationTask`）
-- 预览状态（`incidentReportPreviewHtml`, `incidentReportPreviewPdfBase64`, `incidentReportPreviewLoading`）
 
 ### 计算属性
 
-| 属性                | 说明                              |
-| ------------------- | --------------------------------- |
-| `isAdmin`           | 是否管理员                        |
-| `isVerifier`        | 是否审核人                        |
-| `isHandler`         | 是否处理人                        |
-| `isReporter`        | 是否报告人                        |
-| `canCreateReport`   | 是否可创建报告（report:create）   |
-| `canAudit`          | 是否可审核（report:audit）        |
-| `canManageSettings` | 是否可管理设置（role:manage）     |
-| `canDeleteReport`   | 是否可删除报告（report:delete）   |
-| `canReopenReport`   | 是否可重开报告（report:reopen）   |
-| `canAssignHandler`  | 是否可分配处理人（report:assign） |
-| `canExportData`     | 是否可导出数据（data:export）     |
-| `canViewAnalytics`  | 是否可查看分析（analytics:view）  |
+| 属性                | 说明                                  |
+| ------------------- | ------------------------------------- |
+| `isAdmin`           | 是否管理员                            |
+| `isVerifier`        | 是否审核人                            |
+| `isHandler`         | 是否处理人                            |
+| `isReporter`        | 是否报告人                            |
+| `canCreateReport`   | 是否可创建报告（report:create）       |
+| `canAudit`          | 是否可审核（report:audit）            |
+| `canManageSettings` | 是否可管理设置（role:manage）         |
+| `canDeleteReport`   | 是否可删除报告（report:delete）       |
+| `canEditAllReport`  | 是否可编辑所有报告（report:edit_all） |
+| `canReopenReport`   | 是否可重开报告（report:reopen）       |
 
 ### 权限方法
 
@@ -121,7 +118,6 @@ frontend/src/views/incident-report/
 | ----------------------------------------------------- | --------------- | ---------------------- |
 | `/incident-report/reports`                            | GET             | 报告列表（分页/筛选）  |
 | `/incident-report/reports`                            | POST            | 创建报告               |
-| `/incident-report/reports/schema`                     | GET             | 获取表单 Schema        |
 | `/incident-report/reports/{id}`                       | GET             | 报告详情               |
 | `/incident-report/reports/{id}`                       | PUT             | 更新报告               |
 | `/incident-report/reports/{id}`                       | DELETE          | 删除报告               |
@@ -185,35 +181,38 @@ frontend/src/views/incident-report/
   - `appendix_*` — 附录字段
 - `quickTimelineItems` / `bodyTimelineItems`：时间线数组，通过 watch 同步到 formAnswers
 
-## 编辑页 4 步向导
+## 编辑页 5 步向导
 
-编辑页使用 4 步向导流程（与创建页一致，去掉快填步骤）：
+编辑页使用 5 步向导流程（与创建页完全一致）：
 
-| 步骤 | key      | 标签            | 说明                                                                     |
-| ---- | -------- | --------------- | ------------------------------------------------------------------------ |
-| 0    | cover    | 首页 / Cover    | SECTION A（故障记录）、SECTION B（维修与验证）、SECTION C（结案与签署）  |
-| 1    | body     | AI 正文 / Body  | 事故简述、时间线、影响范围、根因分析、后续动作；可逐段 AI 生成或手动编辑 |
-| 2    | appendix | 附录 / Appendix | 附录文本输入                                                             |
-| 3    | preview  | 预览 / Preview  | 生成 PDF 预览，支持 PDF 浏览器查看和 DOCX 下载                           |
+| 步骤 | key        | 标签              | 说明                                                                     |
+| ---- | ---------- | ----------------- | ------------------------------------------------------------------------ |
+| 0    | cover      | 首页 / Cover      | SECTION A（故障记录）、SECTION B（维修与验证）、SECTION C（结案与签署）  |
+| 1    | quick_fill | 快填 / Quick Fill | 填写事故简述后一键 AI 生成完整正文，可跳过                               |
+| 2    | body       | AI 正文 / Body    | 事故简述、时间线、影响范围、根因分析、后续动作；可逐段 AI 生成或手动编辑 |
+| 3    | appendix   | 附录 / Appendix   | 附录文本输入                                                             |
+| 4    | preview    | 预览 / Preview    | 生成 PDF 预览，支持 PDF 浏览器查看和 DOCX 下载                           |
 
 ### 编辑向导核心逻辑
 
-向导逻辑封装在 `edit/composables/useReportEditWizard.ts` 中：
+向导逻辑封装在 `edit/composables/useReportEditWizard.ts` 中，AI 生成相关逻辑复用自共享 composable `composables/useReportGeneration.ts`：
 
 | 方法                    | 说明                                   |
 | ----------------------- | -------------------------------------- |
 | `load`                  | 加载报告详情并填充表单                 |
 | `save`                  | 保存报告更新                           |
+| `quickGenerate`         | 调用快填 AI 生成 API，一键生成完整正文 |
 | `generateSection`       | 调用分段 AI 生成 API，生成指定正文段落 |
 | `generatePreview`       | 调用预览 API，生成 PDF/DOCX 预览       |
 | `applyGenerationResult` | 将 AI 生成结果合并到 formAnswers       |
 
 ### 编辑页与创建页的差异
 
-- 编辑页无快填步骤（步骤 1），直接从首页进入 AI 正文编辑
+- 编辑页与创建页使用相同的 5 步向导流程，均包含快填步骤
 - 编辑页加载时自动填充已有数据
 - 编辑页底部操作栏为「取消」和「保存」，而非创建页的「保存草稿」和「提交报告」
 - 编辑页样式复用创建页的 CSS（`create/styles/incident-report-create.css`）
+- AI 生成相关逻辑（quickGenerate、generateSection、generatePreview、applyGenerationResult）提取到共享 composable `composables/useReportGeneration.ts`，创建页和编辑页共同复用
 
 ## 类型定义
 

@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -5,9 +6,10 @@ from sqlalchemy import select
 
 from ...core.database import async_session_factory
 from ...shared.dtutils import to_utc8
-from ...auth.service.auth import resolve_usernames
 from ..models.audit_log import IncidentAuditLog
 from ..schemas.response import IncidentAuditLogEntry
+
+logger = logging.getLogger(__name__)
 
 
 async def create_audit_log(
@@ -37,6 +39,7 @@ async def create_audit_log(
         session.add(record)
         await session.commit()
         await session.refresh(record)
+    logger.info("创建审计日志: report_id=%s, action=%s, actor_id=%s", report_id, action, actor_id)
     return record
 
 

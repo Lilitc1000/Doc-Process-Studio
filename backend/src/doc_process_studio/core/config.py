@@ -105,7 +105,10 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "admin123"
 
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        env_file=str(resolve_env_file_path()),
+    )
 
     @field_validator("redis_url", mode="before")
     @classmethod
@@ -126,6 +129,4 @@ class Settings(BaseSettings):
         return normalized
 
 
-settings = Settings(
-    _env_file=resolve_env_file_path(),
-)
+settings = Settings()

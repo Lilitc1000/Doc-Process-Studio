@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import patch
 
-from doc_process_studio.skill.models.runtime import SkillContextChunk, SkillConversationState
+from doc_process_studio.skill.schemas.runtime import SkillContextChunk, SkillConversationState
 from doc_process_studio.skill.service.context_packer import (
     _build_local_summary_from_chunks,
     _build_local_summary_from_text,

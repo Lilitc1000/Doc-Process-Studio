@@ -323,7 +323,9 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z" />
+                  <path
+                    d="M10 2L12.1 7.1L17.5 8.1L13.7 12L14.5 17.5L10 14.8L5.5 17.5L6.3 12L2.5 8.1L7.9 7.1L10 2z"
+                  />
                 </svg>
                 {{ generating ? '生成中...' : 'AI 生成' }}
               </base-button>
@@ -718,7 +720,12 @@
                 class="pdf-preview-iframe"
                 frameborder="0"
               />
-              <button class="pdf-preview-close" @click="showPdfPreview = false">
+              <base-button
+                class="pdf-preview-close"
+                variant="ghost"
+                size="sm"
+                @click="showPdfPreview = false"
+              >
                 <svg
                   viewBox="0 0 20 20"
                   width="16"
@@ -730,7 +737,7 @@
                 >
                   <path d="M5 5L15 15M15 5L5 15" />
                 </svg>
-              </button>
+              </base-button>
             </div>
           </div>
         </div>
@@ -812,14 +819,14 @@
         :label="generatingLabel"
         @stop="handleStopGeneration"
       />
+
+      <floating-toast
+        :visible="showSaveToast"
+        :title="saveToastTitle"
+        :message="saveToastMessage"
+      />
     </template>
   </div>
-
-  <floating-toast
-    :visible="showSaveToast"
-    :title="saveToastTitle"
-    :message="saveToastMessage"
-  />
 </template>
 
 <script setup lang="ts">
@@ -827,13 +834,20 @@ import { onMounted, ref, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import humps from 'humps';
 import { useAppStore } from '../../../stores/app';
-import { previewIncidentReport } from '../../../api/incident-report';
 import {
   useReportEditWizard,
   EDIT_WIZARD_STEPS,
 } from './composables/useReportEditWizard';
 import type { EditWizardStep } from './composables/useReportEditWizard';
-import { convertToIso } from '../composables/useReportForm';
+import {
+  convertToIso,
+  severityOptions,
+  statusOptions,
+  defaultFormAnswers,
+  buildFormPayload as _buildFormPayload,
+  validateTimelineTimeOrder as _validateTimelineTimeOrder,
+  type TimelineItem,
+} from '../composables/useReportForm';
 import AiGeneratingModal from '../../../components/business/AiGeneratingModal.vue';
 import FloatingToast from '../../../components/business/FloatingToast.vue';
 import BaseButton from '../../../components/base/BaseButton.vue';
@@ -885,12 +899,6 @@ const downloadingDocx = ref(false);
 const showPdfPreview = ref(false);
 const pdfPreviewUrl = ref('');
 
-interface TimelineItem {
-  time: string;
-  event: string;
-  resolution: string;
-}
-
 const showSaveToast = ref(false);
 const saveToastTitle = ref('保存成功');
 const saveToastMessage = ref('草稿已保存');
@@ -903,59 +911,11 @@ const formData = ref({
   faultDate: '',
 });
 
-const defaultFormAnswers: Record<string, string> = {
-  manual_reference_no: '',
-  manual_fault_time: '',
-  manual_reporting_person: '',
-  manual_verified_by: '',
-  manual_location: '',
-  manual_fault_symptom: '',
-  manual_arrival_datetime: '',
-  manual_clearance_datetime: '',
-  manual_service_person: '',
-  manual_fault_cause: '',
-  manual_materials_used: '',
-  manual_repair_details: '',
-  manual_contractor_staff: '',
-  manual_contractor_signature: '',
-  manual_contractor_date: '',
-  manual_status: '',
-  manual_status_ref_no: '',
-  manual_employer_rep: '',
-  manual_employer_signature: '',
-  manual_closeout_date: '',
-  manual_comments: '',
-  quick_narrative: '',
-  body_description: '',
-  body_affected_start_time: '',
-  body_affected_end_time: '',
-  body_impact_scope: '',
-  body_impact_severity: '',
-  body_business_impact: '',
-  body_trigger: '',
-  body_root_cause: '',
-  body_follow_up: '',
-  appendix_notes: '',
-};
-
 const formAnswers = ref<Record<string, string>>({ ...defaultFormAnswers });
 
 const bodyTimelineItems = ref<TimelineItem[]>([
   { time: '', event: '', resolution: '' },
 ]);
-
-const severityOptions = [
-  { value: '', label: '请选择 / Select' },
-  { value: 'minor', label: '一般 / Minor' },
-  { value: 'major', label: '严重 / Major' },
-  { value: 'critical', label: '致命 / Critical' },
-];
-
-const statusOptions = [
-  { value: '', label: '请选择 / Select' },
-  { value: 'follow_up_action_required', label: '跟进中 / Follow-up' },
-  { value: 'closed', label: '已关闭 / Closed' },
-];
 
 watch(
   bodyTimelineItems,
@@ -974,23 +934,11 @@ const onBodyTimelineChange = (
     bodyTimelineItems.value[index][key] = value;
   }
   if (key === 'time') {
-    validateTimelineTimeOrder();
+    _validateTimelineTimeOrder(bodyTimelineItems, timelineTimeErrors);
   }
 };
 
 const timelineTimeErrors = ref<Record<number, string>>({});
-
-const validateTimelineTimeOrder = () => {
-  timelineTimeErrors.value = {};
-  const items = bodyTimelineItems.value;
-  for (let i = 1; i < items.length; i++) {
-    const prevTime = items[i - 1].time?.trim();
-    const currTime = items[i].time?.trim();
-    if (prevTime && currTime && currTime < prevTime) {
-      timelineTimeErrors.value[i] = '时间不应早于前一条时间线';
-    }
-  }
-};
 
 const onBodyTimelineInput = (
   index: number,
@@ -1001,36 +949,8 @@ const onBodyTimelineInput = (
   onBodyTimelineChange(index, key, value);
 };
 
-const buildFormPayload = () => {
-  const formDataPayload: Record<string, unknown> = { ...formAnswers.value };
-  formDataPayload.body_timeline = bodyTimelineItems.value;
-  const startTime = formAnswers.value.body_affected_start_time?.trim();
-  const endTime = formAnswers.value.body_affected_end_time?.trim();
-  if (startTime || endTime) {
-    formDataPayload.body_affected_date_summary =
-      `${startTime || ''} - ${endTime || ''}`.trim();
-  }
-  if (formData.value.severity) {
-    formDataPayload.manual_severity = formData.value.severity;
-  }
-  if (formData.value.faultDate) {
-    formDataPayload.manual_fault_date = formData.value.faultDate;
-  }
-  if (formData.value.system) {
-    formDataPayload.manual_system = formData.value.system;
-  }
-  if (formData.value.siteId) {
-    formDataPayload.manual_site_id = formData.value.siteId;
-  }
-  return {
-    title: formData.value.title,
-    severity: formData.value.severity || undefined,
-    system: formData.value.system || undefined,
-    siteId: formData.value.siteId || undefined,
-    faultDate: formData.value.faultDate || undefined,
-    formData: formDataPayload,
-  };
-};
+const buildFormPayload = () =>
+  _buildFormPayload(formData.value, formAnswers.value, bodyTimelineItems.value);
 
 const handleNextStep = () => {
   if (currentStep.value < EDIT_WIZARD_STEPS.length - 1) {
@@ -1061,10 +981,16 @@ const handleQuickGenerate = async () => {
         const firstTime = timeline[0].time;
         const lastTime = timeline[timeline.length - 1].time;
         if (firstTime) {
-          formAnswers.value.body_affected_start_time = convertToIso(firstTime, formData.value.faultDate);
+          formAnswers.value.body_affected_start_time = convertToIso(
+            firstTime,
+            formData.value.faultDate,
+          );
         }
         if (lastTime) {
-          formAnswers.value.body_affected_end_time = convertToIso(lastTime, formData.value.faultDate);
+          formAnswers.value.body_affected_end_time = convertToIso(
+            lastTime,
+            formData.value.faultDate,
+          );
         }
       }
     }
@@ -1193,7 +1119,7 @@ const handleDownloadDocx = async () => {
   if (!report.value || downloadingDocx.value) return;
   downloadingDocx.value = true;
   try {
-    const preview = await previewIncidentReport(report.value.id, {});
+    const preview = await generatePreview();
     if (!preview.docxBase64 || !preview.docxFileName) return;
     const binaryString = atob(preview.docxBase64);
     const bytes = new Uint8Array(binaryString.length);
@@ -1217,7 +1143,11 @@ const handleDownloadDocx = async () => {
 };
 
 onMounted(async () => {
-  await load();
+  try {
+    await load();
+  } catch {
+    // load sets report to null on failure, UI shows "报告不存在"
+  }
   if (report.value) {
     formData.value = {
       title: report.value.title,
@@ -1226,7 +1156,10 @@ onMounted(async () => {
       siteId: report.value.siteId ?? '',
       faultDate: report.value.faultDate ?? '',
     };
-    const fd = humps.decamelizeKeys(report.value.formData || {}) as Record<string, unknown>;
+    const fd = humps.decamelizeKeys(report.value.formData || {}) as Record<
+      string,
+      unknown
+    >;
     const answers = { ...defaultFormAnswers };
     for (const key of Object.keys(defaultFormAnswers)) {
       if (fd[key] !== undefined && fd[key] !== null) {

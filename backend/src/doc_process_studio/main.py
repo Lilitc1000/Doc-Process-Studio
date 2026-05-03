@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import FastAPI
-from sqlalchemy import text
 
 from .core.config import settings
+from .core.logging_config import setup_logging
 from .core.database import Base, engine
 from .core.model_context import warmup_model_context_cache
 from .auth.router.auth import router as auth_router
@@ -23,7 +24,9 @@ from .system.router.agent_traces import router as agent_traces_router
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    setup_logging()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

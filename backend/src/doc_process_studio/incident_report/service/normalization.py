@@ -11,6 +11,10 @@ from .constants import (
     SEVERITY_OPTION_MAJOR,
     SEVERITY_OPTION_MINOR,
     SEVERITY_OPTION_NOT_APPLICABLE,
+    SEVERITY_P0,
+    SEVERITY_P1,
+    SEVERITY_P2,
+    SEVERITY_P3,
 )
 
 
@@ -412,26 +416,31 @@ def status_option_to_text(option: str) -> str:
 
 
 def normalize_severity_option(value: str) -> str:
-    normalized = normalize_text(value).lower()
+    normalized = normalize_text(value).upper()
     if not normalized:
         return SEVERITY_OPTION_NOT_APPLICABLE
-    if normalized in {
+    if normalized in {SEVERITY_P0, SEVERITY_P1}:
+        return SEVERITY_OPTION_MAJOR
+    if normalized in {SEVERITY_P2, SEVERITY_P3}:
+        return SEVERITY_OPTION_MINOR
+    lower = normalize_text(value).lower()
+    if lower in {
         SEVERITY_OPTION_NOT_APPLICABLE,
         SEVERITY_OPTION_MINOR,
         SEVERITY_OPTION_MAJOR,
     }:
-        return normalized
+        return lower
     if (
-        "major" in normalized
-        or "high" in normalized
-        or "critical" in normalized
-        or "严重" in normalized
-        or "重大" in normalized
+        "major" in lower
+        or "high" in lower
+        or "critical" in lower
+        or "严重" in lower
+        or "重大" in lower
     ):
         return SEVERITY_OPTION_MAJOR
-    if "minor" in normalized or "low" in normalized or "轻微" in normalized:
+    if "minor" in lower or "low" in lower or "轻微" in lower:
         return SEVERITY_OPTION_MINOR
-    if "not applicable" in normalized or normalized in {"n/a", "na", "不适用"}:
+    if "not applicable" in lower or lower in {"n/a", "na", "不适用"}:
         return SEVERITY_OPTION_NOT_APPLICABLE
     return SEVERITY_OPTION_NOT_APPLICABLE
 

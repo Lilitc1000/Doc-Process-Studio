@@ -5,12 +5,12 @@ import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Coroutine, Literal
 
 from ...chat.schemas.request import ChatStreamRequest
 from ...shared.dtutils import to_utc8
 from ...shared.tool_args import parse_tool_arguments
-from ...skill.models.runtime import (
+from ...skill.schemas.runtime import (
     ConversationAgentState,
     SkillConversationState,
     SkillPlanDecision,
@@ -78,8 +78,8 @@ class ExecutorDeps:
     build_tool_call_signature: Callable[[dict[str, Any]], str]
     get_tool_call_name: Callable[[dict[str, Any]], str]
     detect_tool_call_progress: Callable[..., bool]
-    execute_skill_tool_call: Callable[..., tuple[dict[str, Any], list[Any]]]
-    execute_scoped_skill_tool_call: Callable[..., tuple[dict[str, Any], list[Any]]]
+    execute_skill_tool_call: Callable[..., Coroutine[Any, Any, tuple[dict[str, Any], list[Any]]]]
+    execute_scoped_skill_tool_call: Callable[..., Coroutine[Any, Any, tuple[dict[str, Any], list[Any]]]]
 
 
 @dataclass
@@ -196,17 +196,17 @@ def _copy_tool_call_with_arguments(
     arguments: dict[str, Any],
 ) -> dict[str, Any]:
     function_payload = tool_call.get("function")
-    copied = {
+    function_name = ""
+    if isinstance(function_payload, dict):
+        function_name = str(function_payload.get("name", "")).strip()
+    return {
         "id": tool_call.get("id"),
         "type": tool_call.get("type"),
         "function": {
-            "name": "",
+            "name": function_name,
             "arguments": arguments,
         },
     }
-    if isinstance(function_payload, dict):
-        copied["function"]["name"] = str(function_payload.get("name", "")).strip()
-    return copied
 
 
 def _build_retry_fallback_tool_call(
@@ -386,7 +386,7 @@ async def _execute_single_node(
         if existing_task is None:
             task_owned_by_current_node = True
 
-            async def _execute_once():
+            async def _execute_once() -> tuple[dict[str, Any], list[Any], dict[str, Any], bool, str | None]:
                 async with semaphore:
                     before_loaded_chunk_ids = _collect_loaded_chunk_signatures(
                         execution_input.states_by_skill
@@ -521,7 +521,7 @@ def _collect_outcome(
                 if not tool_result.get("ok") and tool_result.get("error") is not None
                 else None
             ),
-            created_at=to_utc8(datetime.now(UTC)),
+            created_at=to_utc8(datetime.now(UTC)) or datetime.now(UTC),
         ),
     )
     result.state_diff.tool_history_added += 1

@@ -496,6 +496,22 @@ def test_normalize_severity_option_unknown():
     assert normalize_severity_option("unknown") == "not_applicable"
 
 
+def test_normalize_severity_option_p0():
+    assert normalize_severity_option("P0") == "major"
+
+
+def test_normalize_severity_option_p1():
+    assert normalize_severity_option("P1") == "major"
+
+
+def test_normalize_severity_option_p2():
+    assert normalize_severity_option("P2") == "minor"
+
+
+def test_normalize_severity_option_p3():
+    assert normalize_severity_option("P3") == "minor"
+
+
 def test_severity_option_to_text():
     assert severity_option_to_text("major") == "Major"
     assert severity_option_to_text("minor") == "Minor"

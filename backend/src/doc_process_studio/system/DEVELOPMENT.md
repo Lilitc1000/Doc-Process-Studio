@@ -2,7 +2,7 @@
 
 ## 概述
 
-System 域负责系统级功能，包括健康检查、模型管理、Agent trace 审计、DAG 执行器、质量门控和灰度发布。
+System 域负责系统级功能，包括健康检查、模型管理、Agent trace 审计、DAG 执行器和灰度发布。
 
 ## 后端
 
@@ -16,16 +16,16 @@ backend/src/doc_process_studio/system/
 │   └── agent_traces.py     # GET /api/agent-traces/{trace_id}
 ├── service/
 │   ├── executor.py         # DAG 工具图执行器
-│   ├── quality_gate.py     # 质量门控
 │   ├── feature_flags.py    # SHA256 灰度发布
 │   ├── trace_store.py      # Redis trace 存储
 │   └── error_detail.py     # 异常详情构建
 ├── models/
-│   ├── agent_trace.py      # AgentTraceRecord
-│   └── ollama.py           # UpstreamOllamaModelRecord
+│   └── __init__.py
 └── schemas/
     ├── request.py          # 入参 Pydantic 模型
     ├── response.py         # 出参 Pydantic 模型
+    ├── agent_trace.py      # AgentTraceRecord
+    ├── ollama.py           # UpstreamOllamaModelRecord
     └── common.py           # 共享基类
 ```
 
@@ -44,10 +44,6 @@ backend/src/doc_process_studio/system/
 - 按拓扑序并行执行无依赖的工具
 - 支持超时控制和结果缓存
 
-**quality_gate.py** — 质量门控：
-- 评估工具执行结果的质量
-- 决定是否需要重试或降级
-
 **feature_flags.py** — 灰度发布：
 - 基于 SHA256 哈希的灰度策略
 - 按 conversation_id 决定是否启用新功能
@@ -59,7 +55,7 @@ backend/src/doc_process_studio/system/
 ### 跨域依赖
 
 - `chat.schemas.request` — ChatStreamRequest（executor 使用）
-- `skill.models.runtime` — 运行时状态模型（executor 使用）
+- `skill.schemas.runtime` — 运行时状态模型（executor 使用）
 - `core.ollama` — Ollama 调用
 - `core.cache` — Redis 缓存
 
@@ -68,4 +64,4 @@ backend/src/doc_process_studio/system/
 - `executor.py` 是跨域共享的执行器，被 Chat 和 Skill 域调用
 - trace 数据存储在 Redis，有过期时间
 - 灰度发布策略基于哈希，确保同一会话始终走同一分支
-- 不要在 `models/` 中引入 Pydantic
+- Pydantic 数据模型统一放在 `schemas/` 目录，`models/` 仅保留 ORM 模型

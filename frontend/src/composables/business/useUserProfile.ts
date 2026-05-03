@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import { updateProfile, changePassword } from '../../api/auth';
+import { getErrorMessage } from '../../utils/common/error';
 
 export function useUserProfile() {
   const authStore = useAuthStore();
@@ -20,10 +21,8 @@ export function useUserProfile() {
       await updateProfile({ username, avatarColor });
       await authStore.fetchUserInfo();
       return true;
-    } catch (err: any) {
-      const detail =
-        err?.response?.data?.detail || err?.message || '保存失败，请重试';
-      errorMessage.value = detail;
+    } catch (err: unknown) {
+      errorMessage.value = getErrorMessage(err, '保存失败，请重试');
       return false;
     } finally {
       isSaving.value = false;
@@ -51,10 +50,8 @@ export function useUserProfile() {
         newPassword: newPasswordVal,
       });
       return true;
-    } catch (err: any) {
-      const detail =
-        err?.response?.data?.detail || err?.message || '修改密码失败';
-      passwordError.value = detail;
+    } catch (err: unknown) {
+      passwordError.value = getErrorMessage(err, '修改密码失败');
       return false;
     } finally {
       isChangingPassword.value = false;

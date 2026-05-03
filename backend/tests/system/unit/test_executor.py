@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import time
 
 from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
-from doc_process_studio.skill.models.runtime import (
+from doc_process_studio.skill.schemas.runtime import (
     ConversationAgentState,
     SkillConversationState,
     SkillPlanDecision,

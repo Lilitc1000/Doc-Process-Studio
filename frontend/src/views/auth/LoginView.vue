@@ -49,6 +49,7 @@ import BaseButton from '../../components/base/BaseButton.vue';
 import BaseInput from '../../components/base/BaseInput.vue';
 import PasswordInput from '../../components/base/PasswordInput.vue';
 import { useAuthStore } from '../../stores/auth';
+import { getErrorMessage } from '../../utils/common/error';
 
 const router = useRouter();
 const route = useRoute();
@@ -76,10 +77,8 @@ async function onSubmit() {
     await authStore.login(username.value.trim(), password.value);
     const redirect = (route.query.redirect as string) || '/';
     router.push(redirect);
-  } catch (err: any) {
-    const detail =
-      err?.response?.data?.detail || err?.message || '登录失败，请重试';
-    errorMessage.value = detail;
+  } catch (err: unknown) {
+    errorMessage.value = getErrorMessage(err, '登录失败，请重试');
   } finally {
     isLoading.value = false;
   }

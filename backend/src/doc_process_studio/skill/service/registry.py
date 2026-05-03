@@ -1,9 +1,12 @@
 import json
+import logging
 from functools import lru_cache
 from pathlib import Path
 
-from ..models.catalog import SkillInterfaceConfig, SkillToolConfig
-from ..models.interaction import SkillInteractionConfig
+from ..schemas.catalog import SkillInterfaceConfig, SkillToolConfig
+from ..schemas.interaction import SkillInteractionConfig
+
+logger = logging.getLogger(__name__)
 
 SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
 
@@ -118,6 +121,7 @@ def _load_declared_tools(skill_dir: Path) -> list[SkillToolConfig]:
         try:
             declared_tools.append(SkillToolConfig.model_validate(raw_tool))
         except Exception:
+            logger.debug("Failed to parse tool config in skill, skipping", exc_info=True)
             continue
     return declared_tools
 
@@ -138,6 +142,7 @@ def _load_interaction_config(skill_dir: Path) -> SkillInteractionConfig | None:
     try:
         config = SkillInteractionConfig.model_validate(payload)
     except Exception:
+        logger.debug("Failed to parse interaction config", exc_info=True)
         return None
 
     if not config.enabled or not config.steps:

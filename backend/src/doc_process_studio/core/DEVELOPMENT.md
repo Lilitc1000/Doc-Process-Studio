@@ -11,10 +11,10 @@ backend/src/doc_process_studio/core/
 ├── security.py         # JWT 令牌 + 密码哈希 + get_current_user_id 依赖
 ├── cache_client.py     # Redis 连接池
 ├── cache.py            # Redis 缓存操作（get_json、set_json、build_cache_key）
-├── exceptions.py       # 全局异常层级（AppError、NotFoundError、ConflictError）
+├── exceptions.py       # 全局异常层级（AppError、NotFoundError）
+├── logging_config.py   # 日志配置（控制台 + 文件输出到 backend/logs/）
 ├── ollama.py           # Ollama HTTP 调用（流式/非流式聊天、模型列表）
 ├── model_context.py    # 模型上下文长度缓存与预热
-├── language_policy.py  # 语言检测与校验（LLM 驱动）
 └── request_guard.py    # 请求防护（速率限制、并发控制）
 ```
 
@@ -27,6 +27,7 @@ backend/src/doc_process_studio/core/
 | `security.py` | JWT 生成/验证、密码哈希/校验、用户认证依赖 | auth router、所有需要认证的 router |
 | `cache.py` | Redis 缓存读写封装 | 所有业务域 |
 | `exceptions.py` | 全局异常基类 | 所有业务域 |
+| `logging_config.py` | 日志初始化（控制台 + 文件双输出） | `main.py` 启动时调用 |
 | `ollama.py` | Ollama API 调用封装 | chat、skill、system |
 | `request_guard.py` | 速率限制 + 并发控制 | chat stream 入口 |
 
@@ -43,3 +44,14 @@ backend/src/doc_process_studio/core/
 - `ollama_timeout_seconds`（默认 10s）用于连接/写入/池超时，`ollama_stream_idle_timeout_seconds`（默认 180s）用于流式读取超时
 - `get_current_user_id` 是被所有受保护路由共享的认证依赖
 - 新增全局基础设施时，优先放入 `core/` 而非散落在业务域中
+
+## 日志配置
+
+`logging_config.py` 在应用启动时由 `main.py` 调用 `setup_logging()` 初始化日志系统：
+
+- **控制台输出**：`stdout`，所有级别
+- **文件输出**：`backend/logs/app.log`，所有级别，UTF-8 编码，延迟打开
+- **日志格式**：`时间 | 级别 | 模块名 | 消息`
+- **降噪**：`uvicorn.access` 和 `sqlalchemy.engine` 设为 WARNING 级别
+
+业务模块使用 `logger = logging.getLogger(__name__)` 获取日志器即可，无需额外配置。

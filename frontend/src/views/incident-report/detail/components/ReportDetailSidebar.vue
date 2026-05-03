@@ -24,6 +24,7 @@ import type {
 import { INCIDENT_STATUS_LABELS } from '../../../../types/incident-report/incident-report';
 import ReportStatusBadge from '../../components/ReportStatusBadge.vue';
 import ReportAuditTimeline from './ReportAuditTimeline.vue';
+import { formatDateTime } from '../../../../utils/common/date';
 
 const props = defineProps<{
   report: IncidentReportDetailItem;
@@ -57,23 +58,14 @@ const infoFields = computed(() => [
   {
     key: 'fault_date',
     label: '故障日期',
-    value: formatDate(props.report.faultDate),
+    value: formatDateTime(props.report.faultDate),
   },
   {
     key: 'created_at',
     label: '创建时间',
-    value: formatDate(props.report.createdAt),
+    value: formatDateTime(props.report.createdAt),
   },
 ]);
-
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return '-';
-  try {
-    return new Date(dateStr).toLocaleString('zh-CN');
-  } catch {
-    return dateStr;
-  }
-};
 </script>
 
 <style scoped>

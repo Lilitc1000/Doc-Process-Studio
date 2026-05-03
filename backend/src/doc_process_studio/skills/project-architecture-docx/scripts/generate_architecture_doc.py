@@ -15,19 +15,27 @@ import sys
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 try:
-    import yaml
+    import yaml as _yaml
+
+    yaml_module: ModuleType | None = _yaml
 except ModuleNotFoundError:  # pragma: no cover
-    yaml = None
+    yaml_module = None
 
 from docx import Document
+from docx.document import Document as DocumentType
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
+from docx.table import _Cell, Table
+from docx.text.paragraph import Paragraph
+from docx.text.run import Run
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -135,7 +143,8 @@ class TraditionalChineseConverter:
         if not text:
             return text
         if self.backend == "python-opencc":
-            return self._converter.convert(str(text))
+            assert self._converter is not None
+            return str(self._converter.convert(text))
         if self.backend == "opencc-cli":
             completed = subprocess.run(
                 ["opencc", "-c", "s2t.json"],
@@ -147,7 +156,7 @@ class TraditionalChineseConverter:
             return completed.stdout.rstrip("\n")
         if self.backend == "windows-python-opencc":
             encoded = base64.b64encode(str(text).encode("utf-8")).decode("ascii")
-            command_prefix = " ".join(self._windows_python_cmd)
+            command_prefix = " ".join(self._windows_python_cmd or [])
             command = (
                 "$OutputEncoding = [Console]::OutputEncoding = "
                 "[System.Text.UTF8Encoding]::new(); "
@@ -214,18 +223,18 @@ def read_text(path: Path) -> str:
             return path.read_text(encoding="latin-1", errors="ignore")
 
 
-def load_json(path: Path):
+def load_json(path: Path) -> Any:
     return json.loads(read_text(path))
 
 
-def load_yaml(path: Path):
-    if yaml is None:
+def load_yaml(path: Path) -> Any:
+    if yaml_module is None:
         return {}
-    data = yaml.safe_load(read_text(path))
+    data = yaml_module.safe_load(read_text(path))
     return data
 
 
-def clear_document_body(doc: Document) -> None:
+def clear_document_body(doc: DocumentType) -> None:
     body = doc._element.body
     sect_pr = body.sectPr
     for child in list(body):
@@ -233,7 +242,7 @@ def clear_document_body(doc: Document) -> None:
             body.remove(child)
 
 
-def ensure_page_setup(doc: Document) -> None:
+def ensure_page_setup(doc: DocumentType) -> None:
     section = doc.sections[0]
     section.page_width = Cm(21)
     section.page_height = Cm(29.7)
@@ -245,7 +254,7 @@ def ensure_page_setup(doc: Document) -> None:
     section.footer_distance = Cm(1.24)
 
 
-def set_style_font(style, size: int, bold: bool | None = None) -> None:
+def set_style_font(style: Any, size: int, bold: bool | None = None) -> None:
     """统一修正文档样式字体，避免 Word 更新域后回退到模板默认字体。"""
     font = style.font
     font.name = FONT_EN
@@ -281,7 +290,7 @@ def set_style_font(style, size: int, bold: bool | None = None) -> None:
 
 
 def set_style_tabs_and_indents(
-    style,
+    style: Any,
     *,
     right_tab_pos: int | None = None,
     right_tab_leader: str | None = None,
@@ -324,7 +333,7 @@ def set_style_tabs_and_indents(
         ind.set(qn("w:right"), str(right_indent))
 
 
-def find_style_by_name_or_id(doc: Document, style_key: str):
+def find_style_by_name_or_id(doc: DocumentType, style_key: str) -> Any:
     """按样式名称或 style_id 查找样式，避免触发 doc.styles[style_id] 的弃用警告。"""
     normalized_key = str(style_key).strip().lower()
     if not normalized_key:
@@ -340,7 +349,7 @@ def find_style_by_name_or_id(doc: Document, style_key: str):
     return None
 
 
-def normalize_document_styles(doc: Document) -> None:
+def normalize_document_styles(doc: DocumentType) -> None:
     """修正模板中的关键样式，确保 Word 更新目录和页码后字体仍然正确。"""
     style_map = {
         "Normal": (SIZE_BODY, False),
@@ -393,14 +402,17 @@ def normalize_document_styles(doc: Document) -> None:
         )
 
 
-def set_run_font(run, size: int | None = None, bold: bool | None = None) -> None:
+def set_run_font(run: Run, size: int | None = None, bold: bool | None = None) -> None:
     if size is not None:
         run.font.size = Pt(size)
     if bold is not None:
         run.font.bold = bold
     run.font.name = FONT_EN
     run._element.get_or_add_rPr()
-    r_fonts = run._element.rPr.rFonts
+    r_pr = run._element.rPr
+    assert r_pr is not None
+    r_fonts = r_pr.rFonts
+    assert r_fonts is not None
     r_fonts.set(qn("w:ascii"), FONT_EN)
     r_fonts.set(qn("w:hAnsi"), FONT_EN)
     r_fonts.set(qn("w:eastAsia"), FONT_ZH)
@@ -411,7 +423,7 @@ def set_run_font(run, size: int | None = None, bold: bool | None = None) -> None
             del r_fonts.attrib[key]
 
 
-def set_paragraph_default_font(paragraph, size: int, bold: bool = False) -> None:
+def set_paragraph_default_font(paragraph: Paragraph, size: int, bold: bool = False) -> None:
     p_pr = paragraph._p.get_or_add_pPr()
     r_pr = p_pr.find(qn("w:rPr"))
     if r_pr is None:
@@ -450,7 +462,7 @@ def set_paragraph_default_font(paragraph, size: int, bold: bool = False) -> None
         r_pr.remove(existing_b)
 
 
-def clear_paragraph_numbering(paragraph) -> None:
+def clear_paragraph_numbering(paragraph: Paragraph) -> None:
     p_pr = paragraph._p.get_or_add_pPr()
     num_pr = p_pr.find(qn("w:numPr"))
     if num_pr is not None:
@@ -458,8 +470,8 @@ def clear_paragraph_numbering(paragraph) -> None:
 
 
 def style_paragraph(
-    doc: Document,
-    paragraph,
+    doc: DocumentType,
+    paragraph: Paragraph,
     style_name: str,
     fallback_align: WD_ALIGN_PARAGRAPH | None = None,
 ) -> None:
@@ -472,7 +484,7 @@ def style_paragraph(
         paragraph.alignment = fallback_align
 
 
-def add_text_paragraph(doc: Document, text: str, style: str = "Normal", bold: bool = False) -> None:
+def add_text_paragraph(doc: DocumentType, text: str, style: str = "Normal", bold: bool = False) -> None:
     paragraph = doc.add_paragraph()
     style_paragraph(doc, paragraph, style)
     run = paragraph.add_run(to_traditional_text(text))
@@ -483,7 +495,7 @@ def add_text_paragraph(doc: Document, text: str, style: str = "Normal", bold: bo
 
 
 def add_heading(
-    doc: Document,
+    doc: DocumentType,
     text: str,
     level: int,
     bookmark_name: str | None = None,
@@ -499,7 +511,7 @@ def add_heading(
         add_bookmark(paragraph, bookmark_name, bookmark_id)
 
 
-def shade_cell(cell, fill: str = "D9E2F3") -> None:
+def shade_cell(cell: _Cell, fill: str = "D9E2F3") -> None:
     tc_pr = cell._tc.get_or_add_tcPr()
     shd = OxmlElement("w:shd")
     shd.set(qn("w:fill"), fill)
@@ -507,7 +519,7 @@ def shade_cell(cell, fill: str = "D9E2F3") -> None:
 
 
 def set_cell_text(
-    cell,
+    cell: _Cell,
     text: str,
     bold: bool = False,
     center: bool = False,
@@ -521,7 +533,7 @@ def set_cell_text(
     set_run_font(run, font_size, bold)
 
 
-def apply_table_borders(table) -> None:
+def apply_table_borders(table: Table) -> None:
     tbl = table._tbl
     tbl_pr = tbl.tblPr
     borders = tbl_pr.first_child_found_in("w:tblBorders")
@@ -540,7 +552,7 @@ def apply_table_borders(table) -> None:
 
 
 def add_table(
-    doc: Document,
+    doc: DocumentType,
     headers: list[str],
     rows: list[list[str]],
     style_name: str | None = None,
@@ -567,11 +579,11 @@ def add_table(
         apply_table_borders(table)
 
 
-def add_page_break(doc: Document) -> None:
+def add_page_break(doc: DocumentType) -> None:
     doc.add_page_break()
 
 
-def add_field(paragraph, field_code: str, result_text: str | None = None, result_size: int | None = None) -> None:
+def add_field(paragraph: Paragraph, field_code: str, result_text: str | None = None, result_size: int | None = None) -> None:
     begin_run = paragraph.add_run()
     set_run_font(begin_run, result_size or SIZE_BODY, False)
     begin = OxmlElement("w:fldChar")
@@ -606,7 +618,7 @@ def add_field(paragraph, field_code: str, result_text: str | None = None, result
     end_run._r.append(end)
 
 
-def set_update_fields_on_open(doc: Document) -> None:
+def set_update_fields_on_open(doc: DocumentType) -> None:
     settings = doc.settings.element
     existing = settings.find(qn("w:updateFields"))
     if existing is None:
@@ -615,19 +627,19 @@ def set_update_fields_on_open(doc: Document) -> None:
     existing.set(qn("w:val"), "true")
 
 
-def clear_paragraph(paragraph) -> None:
+def clear_paragraph(paragraph: Paragraph) -> None:
     for child in list(paragraph._p):
         paragraph._p.remove(child)
 
 
-def clear_container(container) -> None:
+def clear_container(container: Any) -> None:
     for paragraph in list(container.paragraphs):
         paragraph._element.getparent().remove(paragraph._element)
     for table in list(container.tables):
         table._element.getparent().remove(table._element)
 
 
-def hide_table_borders(table) -> None:
+def hide_table_borders(table: Table) -> None:
     tbl = table._tbl
     tbl_pr = tbl.tblPr
     borders = tbl_pr.first_child_found_in("w:tblBorders")
@@ -645,7 +657,7 @@ def hide_table_borders(table) -> None:
         element.set(qn("w:color"), "auto")
 
 
-def set_table_line(table, edge: str, size: str = "8", color: str = "808080") -> None:
+def set_table_line(table: Table, edge: str, size: str = "8", color: str = "808080") -> None:
     tbl = table._tbl
     tbl_pr = tbl.tblPr
     borders = tbl_pr.first_child_found_in("w:tblBorders")
@@ -663,7 +675,7 @@ def set_table_line(table, edge: str, size: str = "8", color: str = "808080") -> 
 
 
 def configure_header_footer(
-    doc: Document,
+    doc: DocumentType,
     system_name: str,
     document_title: str,
     version: str,
@@ -751,7 +763,7 @@ def resolve_logo_path(project_root: Path, explicit_logo: str | None) -> Path | N
 
 
 def add_cover(
-    doc: Document,
+    doc: DocumentType,
     system_name: str,
     document_title: str,
     version: str,
@@ -828,7 +840,7 @@ def make_bookmark_name(text: str, index: int) -> str:
     return f"sec-{index}-{cleaned or 'section'}"
 
 
-def add_bookmark(paragraph, bookmark_name: str, bookmark_id: int) -> None:
+def add_bookmark(paragraph: Paragraph, bookmark_name: str, bookmark_id: int) -> None:
     start = OxmlElement("w:bookmarkStart")
     start.set(qn("w:id"), str(bookmark_id))
     start.set(qn("w:name"), bookmark_name)
@@ -838,7 +850,7 @@ def add_bookmark(paragraph, bookmark_name: str, bookmark_id: int) -> None:
     paragraph._p.append(end)
 
 
-def add_internal_hyperlink(paragraph, text: str, anchor: str, bold: bool = False) -> None:
+def add_internal_hyperlink(paragraph: Paragraph, text: str, anchor: str, bold: bool = False) -> None:
     hyperlink = OxmlElement("w:hyperlink")
     hyperlink.set(qn("w:anchor"), anchor)
     hyperlink.set(qn("w:history"), "1")
@@ -868,7 +880,7 @@ def add_internal_hyperlink(paragraph, text: str, anchor: str, bold: bool = False
     paragraph._p.append(hyperlink)
 
 
-def add_revision_history(doc: Document, version: str, current: datetime) -> None:
+def add_revision_history(doc: DocumentType, version: str, current: datetime) -> None:
     heading = doc.add_paragraph()
     clear_paragraph_numbering(heading)
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -888,7 +900,7 @@ def add_revision_history(doc: Document, version: str, current: datetime) -> None
     add_page_break(doc)
 
 
-def add_toc(doc: Document, outline: list[tuple[int, str, str]]) -> None:
+def add_toc(doc: DocumentType, outline: list[tuple[int, str, str]]) -> None:
     title = doc.add_paragraph()
     clear_paragraph_numbering(title)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -925,7 +937,7 @@ def normalize_doc_plan(path: Path) -> list[dict]:
     return chapters
 
 
-def text_list(value) -> list[str]:
+def text_list(value: Any) -> list[str]:
     """把字符串或字符串列表规整成列表。"""
     if value is None:
         return []
@@ -937,7 +949,7 @@ def text_list(value) -> list[str]:
 
 
 def render_custom_node(
-    doc: Document,
+    doc: DocumentType,
     node: dict,
     level: int,
     bookmark_id: int,
@@ -959,7 +971,7 @@ def render_custom_node(
     return bookmark_id
 
 
-def render_custom_plan(doc: Document, chapters: list[dict]) -> None:
+def render_custom_plan(doc: DocumentType, chapters: list[dict]) -> None:
     """按用户提供的文档结构渲染正文。"""
     bookmark_id = 1
     total = len(chapters)
@@ -1106,7 +1118,7 @@ def main() -> None:
         refresh_with_word = refresh_backend is not None
         fail_on_refresh_error = False
     elif refresh_with_word and refresh_backend is None:
-        print(f"警告：指定了 --refresh-with-word，但当前环境无可用的刷新后端，将跳过刷新。")
+        print("警告：指定了 --refresh-with-word，但当前环境无可用的刷新后端，将跳过刷新。")
         refresh_with_word = False
         fail_on_refresh_error = False
     else:

@@ -1,11 +1,16 @@
+import logging
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import delete, select
+from sqlalchemy.engine import CursorResult
 
 from ...core.database import async_session_factory
 from ...shared.dtutils import to_utc8
 from ..models.chat_session_orm import ChatSession as ChatSessionORM
-from ..models.session import ChatSessionSnapshot, ChatSessionSummary
+from ..schemas.session import ChatSessionSnapshot, ChatSessionSummary
+
+logger = logging.getLogger(__name__)
 
 
 async def list_chat_session_ids_by_user(user_id: str) -> list[str]:
@@ -41,7 +46,7 @@ async def load_chat_session_snapshot(session_id: str) -> ChatSessionSnapshot | N
         result = await session.execute(
             select(ChatSessionORM.snapshot).where(ChatSessionORM.id == session_id),
         )
-        row = result.scalar_one_or_none()
+        row: dict | None = result.scalar_one_or_none()
         if row is None:
             return None
         return ChatSessionSnapshot.model_validate(row)
@@ -107,7 +112,8 @@ async def delete_chat_session_records(session_id: str) -> bool:
             delete(ChatSessionORM).where(ChatSessionORM.id == session_id),
         )
         await session.commit()
-        return result.rowcount > 0
+        deleted: int = cast(CursorResult, result).rowcount
+        return deleted > 0
 
 
 async def get_chat_session_user_id(session_id: str) -> str | None:
@@ -130,7 +136,8 @@ async def delete_chat_sessions_by_title_prefix(
             )
         )
         await session.commit()
-        return result.rowcount
+        count: int = cast(CursorResult, result).rowcount
+        return count
 
 
 async def delete_chat_sessions_by_user(user_id: str) -> int:
@@ -139,4 +146,5 @@ async def delete_chat_sessions_by_user(user_id: str) -> int:
             delete(ChatSessionORM).where(ChatSessionORM.user_id == user_id)
         )
         await session.commit()
-        return result.rowcount
+        count: int = cast(CursorResult, result).rowcount
+        return count

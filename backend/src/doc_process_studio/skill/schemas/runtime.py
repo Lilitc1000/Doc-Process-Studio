@@ -13,13 +13,6 @@ class SkillContextChunk(BaseModel):
     content: str = Field(..., description="chunk 正文")
 
 
-class SkillContextChunkSummary(BaseModel):
-    id: str = Field(..., description="chunk 唯一标识")
-    source_path: str = Field(..., description="源文件相对路径")
-    title: str = Field(..., description="chunk 标题")
-    preview: str = Field(..., description="chunk 预览")
-
-
 class SkillConversationState(BaseModel):
     conversation_id: str = Field(..., description="会话标识")
     skill_id: str = Field(..., description="当前 skill 标识")
@@ -53,7 +46,7 @@ class SkillPlannerCandidate(BaseModel):
         description="候选来源",
     )
     selected: bool = Field(default=False, description="是否被本轮规划选中")
-    lexical_score: int | None = Field(default=None, description="词法召回分数")
+    lexical_score: float | None = Field(default=None, description="词法召回分数")
     confidence: float | None = Field(default=None, description="模型重排置信度")
     reason: str | None = Field(default=None, description="规划理由")
 

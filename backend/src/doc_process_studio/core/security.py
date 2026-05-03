@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import uuid4
 
 import bcrypt
@@ -12,11 +13,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return str(bcrypt.hashpw(password.encode(), bcrypt.gensalt()), encoding="utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+    return bool(bcrypt.checkpw(plain_password.encode(), hashed_password.encode()))
 
 
 def create_access_token(user_id: str, username: str) -> str:
@@ -29,7 +30,8 @@ def create_access_token(user_id: str, username: str) -> str:
         "type": "access",
         "exp": expire,
     }
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    encoded: str = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return encoded
 
 
 def create_refresh_token(user_id: str) -> str:
@@ -42,16 +44,18 @@ def create_refresh_token(user_id: str) -> str:
         "jti": uuid4().hex,
         "exp": expire,
     }
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    encoded: str = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return encoded
 
 
-def decode_token(token: str) -> dict | None:
+def decode_token(token: str) -> dict[str, Any] | None:
     try:
-        return jwt.decode(
+        decoded: dict[str, Any] = jwt.decode(
             token,
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
+        return decoded
     except JWTError:
         return None
 
@@ -64,7 +68,7 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
     payload = decode_token(token)
     if payload is None or payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_id = payload.get("sub", "")
+    user_id: str = payload.get("sub", "")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user_id

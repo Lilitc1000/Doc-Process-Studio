@@ -7,6 +7,7 @@ import {
   createIncidentReportViaApi,
   deleteIncidentReportViaApi,
   cleanupWorkerData,
+  getE2EModel,
 } from '../../helpers';
 
 async function pickTodayDate(page: Page, fieldLabel: string) {
@@ -246,31 +247,10 @@ test.describe.serial('事故报告创建 - 真实 AI 生成（Ollama）', () => 
     request: import('@playwright/test').APIRequestContext,
   ): Promise<string> {
     const token = await loginViaApi(request);
-    let availableModel = 'qwen3:8b';
     if (token) {
-      try {
-        const resp = await request.get('/api/models', {
-          headers: { Authorization: `Bearer ${token}` },
-          timeout: 10_000,
-        });
-        if (resp.ok()) {
-          const data = await resp.json();
-          const models: { name: string }[] = data.models ?? [];
-          const chatModels = models.filter(
-            (m) =>
-              !m.name.includes('embed') &&
-              !m.name.includes('rerank') &&
-              !m.name.includes('bge'),
-          );
-          if (chatModels.length > 0) {
-            availableModel = chatModels[0].name;
-          }
-        }
-      } catch {
-        // use default model
-      }
+      return getE2EModel(request, token);
     }
-    return availableModel;
+    return 'qwen3:8b';
   }
 
   async function setupModelAndNavigate(

@@ -1,12 +1,16 @@
+import logging
+
 import httpx
 
-from ..models.runtime import SkillContextChunk, SkillConversationState
+from ..schemas.runtime import SkillContextChunk, SkillConversationState
 from ...core.config import settings
 from ...core.ollama import (
     OllamaNotConfiguredError,
     extract_first_message_content,
     post_chat_completion,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _build_local_summary_from_chunks(
@@ -58,6 +62,7 @@ async def _request_summary(
             ],
         )
     except (OllamaNotConfiguredError, ValueError, httpx.HTTPError):
+        logger.debug("AI 摘要请求失败，返回空字符串")
         return ""
 
     content = extract_first_message_content(response_payload).strip()

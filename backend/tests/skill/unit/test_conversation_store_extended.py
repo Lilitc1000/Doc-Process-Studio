@@ -1,7 +1,7 @@
 import asyncio
 
 import doc_process_studio.skill.service.conversation_store as cs_module
-from doc_process_studio.skill.models.runtime import ConversationAgentState, SkillConversationState
+from doc_process_studio.skill.schemas.runtime import ConversationAgentState, SkillConversationState
 
 
 class _FakeRedis:

@@ -2,8 +2,8 @@ import asyncio
 from datetime import UTC, datetime
 
 from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
-from doc_process_studio.skill.models.catalog import SkillInterfaceConfig
-from doc_process_studio.skill.models.runtime import SkillPlanDecision
+from doc_process_studio.skill.schemas.catalog import SkillInterfaceConfig
+from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
 import doc_process_studio.chat.service.stream as chat_stream_module
 
 

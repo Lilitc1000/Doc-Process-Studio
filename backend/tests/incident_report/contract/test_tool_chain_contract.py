@@ -1,9 +1,10 @@
+import asyncio
 import json
 
 from docx import Document
 
 from doc_process_studio.chat.schemas.request import ChatStreamRequest
-from doc_process_studio.skill.models.runtime import SkillConversationState
+from doc_process_studio.skill.schemas.runtime import SkillConversationState
 from doc_process_studio.chat.service import attachments as attachments_module
 from doc_process_studio.skill.service.tool_loop import execute_skill_tool_call
 
@@ -89,11 +90,11 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
         }
     )
 
-    tool_result, attachments = execute_skill_tool_call(
+    tool_result, attachments = asyncio.run(execute_skill_tool_call(
         request=request,
         state=state,
         tool_call=tool_call,
-    )
+    ))
 
     assert tool_result.get("ok") is True
     assert len(attachments) == 1

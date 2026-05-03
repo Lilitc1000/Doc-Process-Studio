@@ -103,7 +103,7 @@ def test_try_parse_json_like_value_double_encoded():
 
 
 def test_format_declared_tool_default_name():
-    from doc_process_studio.skill.models.catalog import SkillToolConfig
+    from doc_process_studio.skill.schemas.catalog import SkillToolConfig
     tool = SkillToolConfig.model_validate({
         "name": "my_tool",
         "description": "test",

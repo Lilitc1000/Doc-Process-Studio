@@ -21,6 +21,9 @@
         返回列表
       </base-button>
       <h1>角色权限管理</h1>
+      <p class="role-management-hint">
+        管理员角色由系统自动分配，不支持手动添加或移除
+      </p>
     </div>
 
     <div class="role-management-body">
@@ -45,14 +48,16 @@
               <div class="role-management-tags">
                 <span v-for="role in user.roles" :key="role" class="role-tag">
                   {{ roleLabel(role) }}
-                  <button
+                  <base-button
                     type="button"
                     class="role-tag-remove"
+                    variant="ghost"
+                    size="sm"
                     title="移除角色"
                     @click="handleRevoke(user.userId, role)"
                   >
                     ×
-                  </button>
+                  </base-button>
                 </span>
                 <span v-if="user.roles.length === 0" class="role-tag-empty">
                   未分配角色
@@ -153,6 +158,12 @@ onMounted(() => {
   margin: 0;
 }
 
+.role-management-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary, #888);
+}
+
 .role-management-body {
   flex: 1;
   min-height: 0;
@@ -216,14 +227,15 @@ onMounted(() => {
   justify-content: center;
   width: 16px;
   height: 16px;
-  border: none;
-  background: transparent;
+  border: none !important;
+  background: transparent !important;
   color: #93c5fd;
   border-radius: 999px;
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
-  padding: 0;
+  padding: 0 !important;
+  min-height: unset !important;
 }
 
 .role-tag-remove:hover {

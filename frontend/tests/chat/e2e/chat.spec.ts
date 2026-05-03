@@ -7,6 +7,7 @@ import {
   registerUserViaApi,
   deleteChatSessionsByUser,
   deleteTestUsersByPrefix,
+  pickE2EModel,
 } from '../../helpers';
 
 test.describe('对话页面 - UI 渲染', () => {
@@ -107,15 +108,10 @@ test.describe('对话页面 - 端到端场景', () => {
         if (resp.ok()) {
           const data = await resp.json();
           const models: { name: string }[] = data.models ?? [];
-          const chatModels = models.filter(
-            (m) =>
-              !m.name.includes('embed') &&
-              !m.name.includes('rerank') &&
-              !m.name.includes('bge'),
-          );
-          if (chatModels.length > 0) {
+          const chosen = pickE2EModel(models);
+          if (chosen) {
             ollamaAvailable = true;
-            availableModel = chatModels[0].name;
+            availableModel = chosen;
           }
         }
       }
@@ -186,12 +182,13 @@ test.describe('对话页面 - 端到端场景', () => {
     await input.fill('你好');
 
     const sendBtn = page.locator('.chat-input .send-btn');
-    await sendBtn.click();
-
-    const streamResp = await page.waitForResponse(
+    const streamRespPromise = page.waitForResponse(
       (resp) => resp.url().includes('/chat/stream'),
       { timeout: 60_000 },
     );
+    await sendBtn.click();
+
+    const streamResp = await streamRespPromise;
     expect(streamResp.status()).toBe(200);
 
     await page.waitForTimeout(5000);
@@ -245,12 +242,13 @@ test.describe('对话页面 - 端到端场景', () => {
     await input.fill('测试新会话');
 
     const sendBtn = page.locator('.chat-input .send-btn');
-    await sendBtn.click();
-
-    const streamResp = await page.waitForResponse(
+    const streamRespPromise = page.waitForResponse(
       (resp) => resp.url().includes('/chat/stream'),
       { timeout: 60_000 },
     );
+    await sendBtn.click();
+
+    const streamResp = await streamRespPromise;
     expect(streamResp.status()).toBe(200);
 
     await page.waitForTimeout(3000);

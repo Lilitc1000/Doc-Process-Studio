@@ -43,8 +43,11 @@ cd backend
 # 全量测试
 env ENV=dev uv run --no-sync pytest -q -p no:cacheprovider
 
-# 语法与导入完整性检查
-env ENV=dev uv run --no-sync python -m compileall src/doc_process_studio
+# 语法与代码规范检查
+env ENV=dev uv run --no-sync ruff check src/doc_process_studio
+
+# 类型检查
+env ENV=dev uv run --no-sync mypy src/doc_process_studio
 
 # 只跑某个域
 env ENV=dev uv run --no-sync pytest tests/auth/ -q
@@ -111,13 +114,17 @@ service → models
 
 类型注解覆盖率 > 90%。
 
+- ORM 模型统一使用 SQLAlchemy 2.0 的 `Mapped[]` + `mapped_column()` 声明式类型注解
+- 每个 `models/` 目录包含 `__init__.py`，通过包级导入将 ORM 模型注册到 `Base.metadata`，供 Alembic 迁移自动发现
+- mypy 配置启用 `sqlalchemy.ext.mypy.plugin` 插件，配置项见 `pyproject.toml`
+
 ## 提交改动前建议自查
 
 1. 新代码放在了正确的职责目录下（`router/` 不写业务，`service/` 不操作 HTTP，`models/` 不引入 Pydantic）
 2. 没有重复写新的 Ollama/Redis 调用，而是复用了 `core/` 或 `shared/`
 3. 涉及会话或 skill 的改动时，检查对应模型是否需要同步调整
 4. 没有在 Pydantic 模型里引入 `AliasChoices`、`serialization_alias` 或 `by_alias=True`
-5. `pytest` 和 `compileall` 通过
+5. `pytest`、`ruff check` 和 `mypy` 通过
 
 ## 目录开发文档
 

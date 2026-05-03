@@ -14,7 +14,7 @@
               <div class="modal-info-name">{{ userInfo?.username }}</div>
               <div class="modal-info-id">{{ userInfo?.userId }}</div>
               <div class="modal-info-date">
-                {{ formatDate(userInfo?.createdAt) }}
+                {{ formatDate(userInfo?.createdAt, '') }}
               </div>
             </div>
           </div>
@@ -157,6 +157,7 @@ import UserAvatar from './UserAvatar.vue';
 import { AVATAR_COLORS } from '../../utils/common/avatar-colors';
 import { useUserProfile } from '../../composables/business/useUserProfile';
 import type { UserInfoResponse } from '../../types/auth/auth';
+import { formatDate } from '../../utils/common/date';
 
 const props = defineProps<{
   visible: boolean;
@@ -232,20 +233,6 @@ async function savePassword() {
     currentPassword.value = '';
     newPassword.value = '';
     confirmPassword.value = '';
-  }
-}
-
-function formatDate(dateStr?: string) {
-  if (!dateStr) return '';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-  } catch {
-    return dateStr;
   }
 }
 </script>

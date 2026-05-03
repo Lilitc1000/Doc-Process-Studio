@@ -35,16 +35,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import {
-  fetchIncidentAnalyticsOverview,
-  fetchIncidentAnalyticsTrend,
-} from '../../../api/incident-report';
-import type {
-  IncidentAnalyticsOverview,
-  IncidentAnalyticsTrend,
-} from '../../../types/incident-report/incident-report';
+import { useReportAnalytics } from './composables/useReportAnalytics';
 import BaseButton from '../../../components/base/BaseButton.vue';
 import StatsCards from './components/StatsCards.vue';
 import DistributionChart from './components/DistributionChart.vue';
@@ -52,17 +45,15 @@ import TrendChart from './components/TrendChart.vue';
 
 const router = useRouter();
 
-const overview = ref<IncidentAnalyticsOverview | null>(null);
-const trendData = ref<IncidentAnalyticsTrend[]>([]);
-const trendLoading = ref(false);
+const {
+  overview,
+  trendData,
+  loading: trendLoading,
+  load,
+} = useReportAnalytics();
 
-onMounted(async () => {
-  const [overviewData, trend] = await Promise.all([
-    fetchIncidentAnalyticsOverview(),
-    fetchIncidentAnalyticsTrend(7),
-  ]);
-  overview.value = overviewData;
-  trendData.value = trend;
+onMounted(() => {
+  load(7);
 });
 </script>
 

@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -50,20 +49,4 @@ class SkillInteractionConfig(BaseModel):
     final_tool: SkillInteractionFinalToolConfig | None = Field(
         default=None,
         description="步骤完成后的工具调用配置",
-    )
-
-
-class SkillInteractionState(BaseModel):
-    session_id: str = Field(..., description="交互会话标识")
-    conversation_id: str = Field(..., description="所属聊天会话标识")
-    skill_id: str = Field(..., description="所属技能标识")
-    current_step_index: int = Field(default=0, description="当前步骤索引")
-    collected: dict[str, Any] = Field(default_factory=dict, description="已采集的结构化结果")
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
-        description="创建时间",
-    )
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
-        description="更新时间",
     )

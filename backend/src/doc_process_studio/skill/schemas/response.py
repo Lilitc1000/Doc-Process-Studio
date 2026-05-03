@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from ..models.catalog import SkillInterfaceConfig
+from .catalog import SkillInterfaceConfig
 
 
 class SkillListResponse(BaseModel):

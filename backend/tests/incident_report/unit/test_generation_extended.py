@@ -7,7 +7,7 @@ from doc_process_studio.incident_report.schemas.common import (
     IncidentFormAnswer,
     IncidentFormSnapshot,
 )
-from doc_process_studio.skill.models.runtime import SkillPlanDecision
+from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
 
 
 def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
@@ -52,27 +52,6 @@ def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
     assert "body-sections/impact.md" in selected_files
     assert "impact.md" in reference_context
     assert selection_reason.startswith("planner:")
-
-
-def test_translate_report_data_returns_input_unchanged() -> None:
-    import doc_process_studio.incident_report.service.translation as translation_module
-
-    report_data = {
-        "reference_no": "DAS-20260420-001",
-        "report_body": {
-            "description": "Customer reported order placement errors",
-        },
-    }
-
-    result = asyncio.run(
-        translation_module.translate_report_data_to_english(
-            report_data=report_data,
-        )
-    )
-
-    assert result == report_data
-    assert result["reference_no"] == "DAS-20260420-001"
-    assert result["report_body"]["description"] == "Customer reported order placement errors"
 
 
 def test_build_report_data_supports_rich_text_appendix() -> None:

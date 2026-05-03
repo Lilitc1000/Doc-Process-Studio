@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from doc_process_studio.skill.models.catalog import SkillToolConfig
-from doc_process_studio.skill.models.interaction import SkillInteractionConfig
+from doc_process_studio.skill.schemas.catalog import SkillToolConfig
+from doc_process_studio.skill.schemas.interaction import SkillInteractionConfig
 from doc_process_studio.skill.service.registry import (
     SKILLS_DIR,
     get_skill_interface,

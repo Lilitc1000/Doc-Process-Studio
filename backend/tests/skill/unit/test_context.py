@@ -7,7 +7,7 @@ from doc_process_studio.skill.service.context import (
     _parse_rerank_json_object,
     _rank_to_reciprocal_score,
 )
-from doc_process_studio.skill.models.runtime import SkillContextChunk
+from doc_process_studio.skill.schemas.runtime import SkillContextChunk
 
 
 def test_normalize_whitespace():

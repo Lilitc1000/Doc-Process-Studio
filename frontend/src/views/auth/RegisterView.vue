@@ -57,6 +57,7 @@ import BaseButton from '../../components/base/BaseButton.vue';
 import BaseInput from '../../components/base/BaseInput.vue';
 import PasswordInput from '../../components/base/PasswordInput.vue';
 import { useAuthStore } from '../../stores/auth';
+import { getErrorMessage } from '../../utils/common/error';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -92,10 +93,8 @@ async function onSubmit() {
   try {
     await authStore.register(trimmedUsername, password.value);
     router.push('/login');
-  } catch (err: any) {
-    const detail =
-      err?.response?.data?.detail || err?.message || '注册失败，请重试';
-    errorMessage.value = detail;
+  } catch (err: unknown) {
+    errorMessage.value = getErrorMessage(err, '注册失败，请重试');
   } finally {
     isLoading.value = false;
   }

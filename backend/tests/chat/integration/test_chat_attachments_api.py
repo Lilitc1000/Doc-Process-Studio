@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from doc_process_studio.chat.models.attachment import ChatAttachmentMetadata
+from doc_process_studio.chat.schemas.attachment import ChatAttachmentMetadata
 from doc_process_studio.chat.service import attachments as attachments_module
 
 

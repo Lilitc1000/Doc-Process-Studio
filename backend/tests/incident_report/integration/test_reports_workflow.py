@@ -63,7 +63,7 @@ def test_report_status_transitions():
         return []
 
     with patch(
-        "doc_process_studio.incident_report.router.reports.has_permission",
+        "doc_process_studio.incident_report.service.report.has_permission",
         _fake_has_permission,
     ), patch(
         "doc_process_studio.incident_report.router.reports.create_report",
@@ -102,15 +102,12 @@ def test_report_status_transitions():
 def test_report_audit_logs():
     app = _create_test_app()
 
-    async def _fake_list_logs(report_id):
+    async def _fake_list_logs(report_id, **kwargs):
         return []
 
     with patch(
-        "doc_process_studio.incident_report.router.reports.list_audit_logs",
+        "doc_process_studio.incident_report.router.reports.list_audit_log_entries",
         _fake_list_logs,
-    ), patch(
-        "doc_process_studio.incident_report.router.reports.audit_orm_to_entry",
-        lambda r: [],
     ):
         client = TestClient(app)
         logs_resp = client.get(
@@ -127,25 +124,26 @@ def test_report_comments():
     now = datetime.now(UTC)
 
     async def _fake_create(**kwargs):
-        from doc_process_studio.incident_report.models.incident_report_orm import IncidentComment
+        from doc_process_studio.incident_report.schemas.response import IncidentCommentEntry
 
-        return IncidentComment(
+        return IncidentCommentEntry(
             id="cmt-1",
             report_id="rep-1",
             author_id="usr_test",
+            author_name="testuser",
             content="测试评论",
             parent_id=None,
-            created_at=now,
+            created_at=now.isoformat(),
         )
 
-    async def _fake_list(report_id):
+    async def _fake_list(report_id, **kwargs):
         return []
 
     with patch(
-        "doc_process_studio.incident_report.router.reports.create_comment_record",
+        "doc_process_studio.incident_report.router.reports.add_comment_entry",
         _fake_create,
     ), patch(
-        "doc_process_studio.incident_report.router.reports.list_comment_records",
+        "doc_process_studio.incident_report.router.reports.list_comment_entries",
         _fake_list,
     ):
         client = TestClient(app)

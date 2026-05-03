@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any
 
 INCIDENT_REPORT_SKILL_ID = "incident-report"
 INCIDENT_REPORT_DOCX_MIME_TYPE = (
@@ -80,5 +79,10 @@ STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED = "follow_up_action_required"
 SEVERITY_OPTION_NOT_APPLICABLE = "not_applicable"
 SEVERITY_OPTION_MINOR = "minor"
 SEVERITY_OPTION_MAJOR = "major"
+
+SEVERITY_P0 = "P0"
+SEVERITY_P1 = "P1"
+SEVERITY_P2 = "P2"
+SEVERITY_P3 = "P3"
 
 

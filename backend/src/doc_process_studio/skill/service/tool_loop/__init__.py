@@ -1,6 +1,4 @@
-from typing import Any
-
-from ....chat.models.attachment import ChatAttachment
+from ....chat.schemas.attachment import ChatAttachment
 from ....chat.schemas.request import ChatStreamRequest
 from ....shared.tool_args import parse_tool_arguments
 from ....core.config import settings
@@ -28,7 +26,12 @@ from .tool_exec import (
 )
 
 __all__ = [
+    "ChatAttachment",
+    "ChatStreamRequest",
     "SCOPED_TOOL_SEPARATOR",
+    "_coerce_json_file_argument",
+    "_restructure_doc_plan",
+    "_try_repair_truncated_json",
     "build_skill_tools",
     "build_skill_tools_for_skills",
     "build_tool_status_finish",
@@ -36,5 +39,10 @@ __all__ = [
     "compose_scoped_tool_name",
     "execute_scoped_skill_tool_call",
     "execute_skill_tool_call",
+    "get_skill_context_chunks_by_ids",
+    "get_skill_tool_config",
+    "parse_tool_arguments",
+    "search_skill_context_chunks",
+    "settings",
     "split_scoped_tool_name",
 ]

@@ -1,10 +1,9 @@
 import json
+import logging
 import re
 from pathlib import Path
-from typing import Any
 
-from ...skill.models.runtime import SkillPlanDecision
-from ...shared.text_utils import parse_json_object
+from ...skill.schemas.runtime import SkillPlanDecision
 from ...skill.service.selector import (
     SelectorOption,
     build_selector_skill_interfaces,
@@ -18,6 +17,8 @@ from .constants import (
 )
 from .normalization import normalize_text
 
+logger = logging.getLogger(__name__)
+
 
 def load_text_file(path: Path) -> str:
     if not path.is_file():
@@ -25,6 +26,7 @@ def load_text_file(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8").strip()
     except Exception:
+        logger.debug("Failed to read text file: %s", path, exc_info=True)
         return ""
 
 

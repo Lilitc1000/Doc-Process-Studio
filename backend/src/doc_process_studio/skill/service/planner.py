@@ -1,21 +1,22 @@
 import json
+import logging
 import re
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal, Sequence
 
-from ..models.catalog import SkillInterfaceConfig
-from ..models.runtime import SkillPlanDecision, SkillPlannerCandidate
+from ..schemas.catalog import SkillInterfaceConfig
+from ..schemas.runtime import SkillPlanDecision, SkillPlannerCandidate
 from ...shared.dtutils import to_utc8, utcnow
 from ...shared.text_utils import parse_json_object
 from ...core.ollama import extract_first_message_content, post_chat_completion
 
-from ...chat.schemas.request import ChatMessageInput
+logger = logging.getLogger(__name__)
 
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9._-]+|[\u4e00-\u9fff]{2,}")
 _SPLIT_PATTERN = re.compile(r"[\s,，。；;、:：()（）\[\]{}<>!！?？/\\|+\-]+")
 _CJK_SEQUENCE_PATTERN = re.compile(r"[\u4e00-\u9fff]{2,}")
 
 
-def _collect_user_query(messages: list[ChatMessageInput]) -> str:
+def _collect_user_query(messages: Sequence[object]) -> str:
     user_contents: list[str] = []
     for message in messages:
         role = getattr(message, "role", None)
@@ -115,12 +116,12 @@ def _dedupe_keep_order(items: Iterable[str]) -> list[str]:
 
 def build_implicit_skill_candidates(
     *,
-    messages: list[object],
+    messages: Sequence[object],
     available_skills: list[SkillInterfaceConfig],
     explicit_skill_ids: list[str],
     system_skill_id: str,
     top_k: int = 4,
-) -> list[tuple[str, int]]:
+) -> list[tuple[str, float]]:
     """第一层：词法召回。返回按分数降序的候选 skill 列表。"""
     user_query = _collect_user_query(messages)
     if not user_query:
@@ -155,7 +156,7 @@ def build_implicit_skill_candidates(
         for score, skill_id in scored_skills
         if score >= threshold
     ]
-    ranked_candidates: list[tuple[str, int]] = []
+    ranked_candidates: list[tuple[str, float]] = []
     for score, skill_id in scored_skills:
         if skill_id in candidates:
             ranked_candidates.append((skill_id, score))
@@ -253,6 +254,7 @@ async def _rerank_implicit_skills_with_model(
             ],
         )
     except Exception:
+        logger.warning("Planner model request failed for model=%s", model, exc_info=True)
         return None
 
     response_text = extract_first_message_content(response_payload)
@@ -372,7 +374,9 @@ def _build_plan_candidates(
         )
 
     for skill_id, score in lexical_candidates:
-        source = "implicit_rerank" if rerank_output is not None else "implicit_lexical"
+        source: Literal["implicit_rerank", "implicit_lexical"] = (
+            "implicit_rerank" if rerank_output is not None else "implicit_lexical"
+        )
         candidates.append(
             SkillPlannerCandidate(
                 skill_id=skill_id,
@@ -400,7 +404,7 @@ def _build_plan_candidates(
 async def plan_skill_activation(
     *,
     model: str,
-    messages: list[object],
+    messages: Sequence[object],
     available_skills: list[SkillInterfaceConfig],
     explicit_skill_ids: list[str],
     missing_explicit_skill_ids: list[str],

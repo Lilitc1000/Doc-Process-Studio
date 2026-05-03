@@ -17,7 +17,9 @@
               :style="{ height: barHeight(item.count) }"
             />
           </div>
-          <span class="trend-bar-count" v-if="item.count > 0">{{ item.count }}</span>
+          <span v-if="item.count > 0" class="trend-bar-count">{{
+            item.count
+          }}</span>
           <span class="trend-bar-label">{{ formatLabel(item.date) }}</span>
         </div>
       </div>

@@ -3,10 +3,10 @@ import { setActivePinia, createPinia } from 'pinia';
 import * as api from '../../../src/api/incident-report';
 
 vi.mock('../../../src/api/incident-report', () => ({
-  fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
-  fetchUserIncidentPermissions: vi
-    .fn()
-    .mockResolvedValue(['report:create', 'report:edit_own', 'report:submit']),
+  fetchUserIncidentRolesAndPermissions: vi.fn().mockResolvedValue({
+    roles: ['reporter'],
+    permissions: ['report:create', 'report:edit_own', 'report:submit'],
+  }),
   fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
   fetchIncidentReportDetail: vi.fn(),
   fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({

@@ -55,16 +55,16 @@ vi.mock('../../../src/api/incident-report', () => ({
   createIncidentReportComment: vi.fn(),
   closeIncidentReport: vi.fn(),
   reopenIncidentReport: vi.fn(),
-  fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter', 'verifier']),
-  fetchUserIncidentPermissions: vi
-    .fn()
-    .mockResolvedValue([
+  fetchUserIncidentRolesAndPermissions: vi.fn().mockResolvedValue({
+    roles: ['reporter', 'verifier'],
+    permissions: [
       'report:create',
       'report:edit_own',
       'report:submit',
       'report:audit',
       'report:assign',
-    ]),
+    ],
+  }),
 }));
 
 describe('IncidentReportDetailView', () => {

@@ -10,7 +10,9 @@
             <span class="timeline-actor">{{
               log.actorName ?? log.actorId
             }}</span>
-            <span class="timeline-time">{{ formatDate(log.createdAt) }}</span>
+            <span class="timeline-time">{{
+              formatDateTime(log.createdAt)
+            }}</span>
           </div>
           <div v-if="log.comment" class="timeline-comment">
             {{ log.comment }}
@@ -34,6 +36,7 @@ import type {
   IncidentReportStatus,
 } from '../../../../types/incident-report/incident-report';
 import { INCIDENT_STATUS_LABELS } from '../../../../types/incident-report/incident-report';
+import { formatDateTime } from '../../../../utils/common/date';
 
 defineProps<{
   auditLogs: IncidentAuditLogEntry[];
@@ -55,14 +58,6 @@ const actionLabel = (action: string) => {
 
 const statusLabel = (status: string) =>
   INCIDENT_STATUS_LABELS[status as IncidentReportStatus] ?? status;
-
-const formatDate = (dateStr: string) => {
-  try {
-    return new Date(dateStr).toLocaleString('zh-CN');
-  } catch {
-    return dateStr;
-  }
-};
 </script>
 
 <style scoped>

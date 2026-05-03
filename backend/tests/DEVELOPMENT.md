@@ -37,9 +37,8 @@ backend/tests/
 │   │   ├── test_form_validation.py         # 表单校验
 │   │   ├── test_form_schema.py             # 表单 Schema 结构
 │   │   ├── test_generation.py              # 正文生成（prompt 构建 + payload 应用）
-│   │   ├── test_generation_extended.py     # 正文生成（reference/report_data/translation 直通）
+│   │   ├── test_generation_extended.py     # 正文生成（reference/report_data 直通）
 │   │   ├── test_normalization.py           # 文本归一化（日期/时间/状态/严重级别）
-│   │   ├── test_translation.py             # 翻译模块（直通，返回原始数据）
 │   │   ├── test_preview.py                 # 预览缓存与文件名构建
 │   │   ├── test_preview_extended.py        # 预览转换（PDF/附件加载）
 │   │   ├── test_reference.py               # 参考资料提取与启发式选择
@@ -74,10 +73,9 @@ backend/tests/
 │   └── integration/
 │       ├── test_skills_api.py
 │       └── test_skills_runtime_api.py
-├── system/                     # 系统域（执行器、质量门控、特性开关、链路追踪）
+├── system/                     # 系统域（执行器、特性开关、链路追踪）
 │   ├── unit/
 │   │   ├── test_executor.py
-│   │   ├── test_quality_gate.py
 │   │   ├── test_feature_flags.py
 │   │   ├── test_error_detail.py
 │   │   └── test_trace_store.py
@@ -106,7 +104,7 @@ backend/tests/
 | `chat/` | `doc_process_studio/chat/` | 对话（流式、会话、附件、文件上下文） |
 | `incident_report/` | `doc_process_studio/incident_report/` | 事故报告（报告 CRUD、状态流转、角色管理、审计日志、正文生成、数据分析） |
 | `skill/` | `doc_process_studio/skill/` | 技能系统（注册、选择、规划、工具循环、会话存储） |
-| `system/` | `doc_process_studio/system/` | 系统服务（执行器、质量门控、特性开关、错误详情、链路追踪、模型管理） |
+| `system/` | `doc_process_studio/system/` | 系统服务（执行器、特性开关、错误详情、链路追踪、模型管理） |
 | `core/` | `doc_process_studio/core/` | 核心基础设施（配置、请求防护、模型上下文、安全、缓存、数据库） |
 
 ## 测试分层
@@ -133,8 +131,11 @@ env ENV=dev uv run --no-sync pytest tests/incident_report/contract/ -q
 # 只跑某个文件
 env ENV=dev uv run --no-sync pytest tests/auth/unit/test_security.py -q
 
-# 语法与导入完整性检查
-env ENV=dev uv run --no-sync python -m compileall src/doc_process_studio
+# 语法与代码规范检查
+env ENV=dev uv run --no-sync ruff check src/doc_process_studio
+
+# 类型检查
+env ENV=dev uv run --no-sync mypy src/doc_process_studio
 ```
 
 ---
@@ -445,7 +446,7 @@ def test_tool_chain_generates_docx(tmp_path, monkeypatch):
 ```python
 # tests/skill/conftest.py
 import pytest
-from doc_process_studio.skill.models.catalog import SkillCatalogEntry
+from doc_process_studio.skill.schemas.catalog import SkillCatalogEntry
 
 
 @pytest.fixture

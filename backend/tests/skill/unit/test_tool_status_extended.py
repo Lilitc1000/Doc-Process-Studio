@@ -7,7 +7,7 @@ from doc_process_studio.skill.service.tool_loop.tool_status import (
     build_tool_status_finish,
     build_tool_status_start,
 )
-from doc_process_studio.chat.models.attachment import ChatAttachment
+from doc_process_studio.chat.schemas.attachment import ChatAttachment
 
 
 def _make_attachment(**overrides) -> ChatAttachment:
@@ -358,7 +358,7 @@ def test_build_declared_tool_status_unknown_tool():
 
 def test_build_tool_status_finish_reused():
     from doc_process_studio.chat.schemas.request import ChatStreamRequest
-    from doc_process_studio.skill.models.runtime import SkillConversationState
+    from doc_process_studio.skill.schemas.runtime import SkillConversationState
 
     request = MagicMock(spec=ChatStreamRequest)
     request.selected_skill_ids = ["test-skill"]
@@ -377,7 +377,7 @@ def test_build_tool_status_finish_reused():
 
 def test_build_tool_status_finish_builtin():
     from doc_process_studio.chat.schemas.request import ChatStreamRequest
-    from doc_process_studio.skill.models.runtime import SkillConversationState
+    from doc_process_studio.skill.schemas.runtime import SkillConversationState
 
     request = MagicMock(spec=ChatStreamRequest)
     request.selected_skill_ids = ["test-skill"]
@@ -396,7 +396,7 @@ def test_build_tool_status_finish_builtin():
 
 def test_build_tool_status_finish_declared():
     from doc_process_studio.chat.schemas.request import ChatStreamRequest
-    from doc_process_studio.skill.models.runtime import SkillConversationState
+    from doc_process_studio.skill.schemas.runtime import SkillConversationState
 
     request = MagicMock(spec=ChatStreamRequest)
     request.selected_skill_ids = ["test-skill"]

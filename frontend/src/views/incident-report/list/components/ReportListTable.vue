@@ -22,7 +22,9 @@
             <report-status-badge :status="item.status" />
           </td>
           <td class="cell-severity">{{ item.severity ?? '-' }}</td>
-          <td class="cell-reporter">{{ item.reporterName ?? item.reporterId }}</td>
+          <td class="cell-reporter">
+            {{ item.reporterName ?? item.reporterId }}
+          </td>
           <td class="cell-date">{{ formatDate(item.createdAt) }}</td>
           <td class="cell-actions">
             <base-button
@@ -47,7 +49,7 @@
               查看
             </base-button>
             <base-button
-              v-if="canEdit || item.status === 'draft' || item.status === 'rejected'"
+              v-if="canEdit"
               variant="ghost"
               size="sm"
               class="action-edit"
@@ -101,6 +103,7 @@
 import type { IncidentReportSummaryItem } from '../../../../types/incident-report/incident-report';
 import BaseButton from '../../../../components/base/BaseButton.vue';
 import ReportStatusBadge from '../../components/ReportStatusBadge.vue';
+import { formatDate } from '../../../../utils/common/date';
 
 defineProps<{
   items: IncidentReportSummaryItem[];
@@ -114,14 +117,6 @@ defineEmits<{
   (e: 'edit', id: string): void;
   (e: 'delete', id: string): void;
 }>();
-
-const formatDate = (dateStr: string) => {
-  try {
-    return new Date(dateStr).toLocaleDateString('zh-CN');
-  } catch {
-    return dateStr;
-  }
-};
 </script>
 
 <style scoped>

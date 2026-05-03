@@ -1,14 +1,17 @@
 import hashlib
+import logging
 import mimetypes
 import shutil
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from ..models.attachment import ChatAttachment, ChatAttachmentMetadata
+from ..schemas.attachment import ChatAttachment, ChatAttachmentMetadata
 from ...core.config import settings
 from ...shared.dtutils import to_utc8, utcnow
+
+logger = logging.getLogger(__name__)
 
 _last_cleanup_timestamp: float = 0.0
 _cleanup_interval_seconds: float = 300.0
@@ -92,6 +95,7 @@ def cleanup_expired_attachments() -> None:
                 metadata_path.read_text(encoding="utf-8")
             )
         except Exception:
+            logger.debug("Failed to parse attachment metadata in %s, removing", attachment_dir, exc_info=True)
             shutil.rmtree(attachment_dir, ignore_errors=True)
             continue
 
@@ -206,6 +210,7 @@ def _find_reusable_uploaded_attachment(
                 metadata_path.read_text(encoding="utf-8")
             )
         except Exception:
+            logger.debug("Failed to parse attachment metadata in %s", attachment_dir, exc_info=True)
             continue
 
         if metadata.expires_at <= utcnow():
@@ -274,6 +279,7 @@ def resolve_attachment_path(
             metadata_path.read_text(encoding="utf-8")
         )
     except Exception:
+        logger.debug("Failed to parse attachment metadata for %s", attachment_id, exc_info=True)
         shutil.rmtree(_build_attachment_dir(attachment_id), ignore_errors=True)
         if _should_run_cleanup():
             cleanup_expired_attachments()
@@ -339,6 +345,7 @@ def delete_attachments_for_conversation(conversation_id: str) -> int:
                 metadata_path.read_text(encoding="utf-8")
             )
         except Exception:
+            logger.debug("Failed to parse attachment metadata in %s during cleanup", attachment_dir, exc_info=True)
             shutil.rmtree(attachment_dir, ignore_errors=True)
             continue
 

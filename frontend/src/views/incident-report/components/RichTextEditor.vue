@@ -103,7 +103,6 @@
 import { ref, onBeforeUnmount, watch } from 'vue';
 import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 
@@ -127,7 +126,6 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const editor = useEditor({
   extensions: [
     StarterKit,
-    Underline,
     Image.configure({ allowBase64: true }),
     Placeholder.configure({
       placeholder: props.placeholder,

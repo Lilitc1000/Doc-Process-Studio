@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import time
 import uuid
@@ -18,12 +19,12 @@ from ...system.service.executor import (
     execute_tool_graph,
 )
 from ...system.service.feature_flags import is_feature_enabled_for_key
-from ...system.service.error_detail import build_exception_detail, summarize_exception
+from ...system.service.error_detail import summarize_exception
 from ...system.service.trace_store import AgentTraceRecorder
-from ...shared.dtutils import to_utc8, utcnow
+from ...shared.dtutils import to_utc8
 from ...shared.error_utils import build_error_event_detail
 from ...shared.tool_args import build_normalized_tool_calls
-from ...skill.models.runtime import (
+from ...skill.schemas.runtime import (
     ConversationAgentState,
     SkillConversationState,
     SkillPlanDecision,
@@ -37,7 +38,7 @@ from ...skill.service.registry import (
     get_skill_interface,
     list_skill_interfaces,
 )
-from ...skill.models.catalog import SkillInterfaceConfig
+from ...skill.schemas.catalog import SkillInterfaceConfig
 from ...skill.service.selector import select_for_chat_skills
 from ...skill.service.runtime import sync_skill_context_state
 from ...skill.service.tool_loop import (
@@ -48,7 +49,7 @@ from ...skill.service.tool_loop import (
     execute_scoped_skill_tool_call,
     execute_skill_tool_call,
 )
-from ..models.file_context import PreparedUploadedFile
+from ..schemas.file_context import PreparedUploadedFile
 from .file_context import build_persisted_uploaded_files_context, prepare_uploaded_files
 from .streaming import (
     build_ollama_assistant_chunk,
@@ -64,6 +65,8 @@ from .streaming import (
     merge_stream_tool_calls,
     merge_uploaded_files_context,
 )
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_DOCUMENT_SKILL_ID = "document-assistant"
 CHAT_SKILL_TYPE = "chat"
@@ -105,6 +108,7 @@ async def _extract_http_status_error_message(exc: httpx.HTTPStatusError) -> str:
         try:
             raw_body = await exc.response.aread()
         except Exception:
+            logger.debug("Failed to read error response body", exc_info=True)
             raw_body = b""
 
         if raw_body:
@@ -277,7 +281,7 @@ class _SkillContext:
     states_by_skill: dict[str, SkillConversationState]
     primary_state: SkillConversationState
     prepared_uploaded_files: list[PreparedUploadedFile]
-    uploaded_files_context: str
+    uploaded_files_context: str | None
     planner_enabled: bool
     executor_enabled: bool
 
@@ -881,4 +885,4 @@ async def stream_remote_chat_completion(
         try:
             await trace_recorder.flush()
         except Exception:
-            pass
+            logger.warning("Failed to flush trace recorder for trace_id=%s", trace_recorder.trace_id, exc_info=True)

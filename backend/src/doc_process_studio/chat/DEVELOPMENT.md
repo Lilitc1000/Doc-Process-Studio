@@ -20,12 +20,14 @@ backend/src/doc_process_studio/chat/
 │   ├── session_store.py    # PostgreSQL 会话存储（重新导出 db_session_store）
 │   └── streaming/          # SSE 格式化、工具调用合并、上下文构建
 ├── models/
-│   ├── session.py          # ChatSessionSummary, ChatSessionSnapshot
-│   ├── attachment.py       # ChatAttachment, ChatAttachmentMetadata
-│   └── file_context.py     # UploadedFileContext, PreparedUploadedFile
+│   ├── chat_session_orm.py # ChatSession ORM
+│   └── __init__.py
 └── schemas/
     ├── request.py          # ChatStreamRequest, ChatMessageInput 等
     ├── response.py         # ChatSessionListResponse, ChatSessionDetail
+    ├── session.py          # ChatSessionSummary, ChatSessionSnapshot
+    ├── attachment.py       # ChatAttachment, ChatAttachmentMetadata
+    ├── file_context.py     # UploadedFileContext, PreparedUploadedFile
     └── common.py           # 共享基类
 ```
 
@@ -74,3 +76,5 @@ backend/src/doc_process_studio/chat/
 - 流式响应使用 SSE 格式，事件类型定义在 `service/streaming/` 中
 - 会话数据存储在 PostgreSQL，使用 `session_store.py` 重新导出 `db_session_store` 中的函数
 - 不要在 `router/` 中写业务逻辑，所有编排逻辑放 `service/`
+- Pydantic 数据模型统一放在 `schemas/` 目录，`models/` 仅保留 ORM 模型
+- 服务层异常处理使用 `logging` 记录上下文信息（如 trace_id、model 名称），与 `AgentTraceRecorder` 审计日志互补

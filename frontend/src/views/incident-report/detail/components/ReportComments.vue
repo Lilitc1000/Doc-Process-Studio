@@ -7,7 +7,9 @@
           <span class="comment-author">{{
             comment.authorName ?? comment.authorId
           }}</span>
-          <span class="comment-time">{{ formatDate(comment.createdAt) }}</span>
+          <span class="comment-time">{{
+            formatDateTime(comment.createdAt)
+          }}</span>
         </div>
         <div class="comment-body">{{ comment.content }}</div>
       </div>
@@ -36,6 +38,7 @@ import { ref } from 'vue';
 import type { IncidentCommentEntry } from '../../../../types/incident-report/incident-report';
 import BaseTextarea from '../../../../components/base/BaseTextarea.vue';
 import BaseButton from '../../../../components/base/BaseButton.vue';
+import { formatDateTime } from '../../../../utils/common/date';
 
 defineProps<{
   reportId: string;
@@ -47,14 +50,6 @@ const emit = defineEmits<{
 }>();
 
 const newComment = ref('');
-
-const formatDate = (dateStr: string) => {
-  try {
-    return new Date(dateStr).toLocaleString('zh-CN');
-  } catch {
-    return dateStr;
-  }
-};
 
 const submitComment = () => {
   const content = newComment.value.trim();

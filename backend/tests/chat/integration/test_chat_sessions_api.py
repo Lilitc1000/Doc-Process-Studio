@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
 import doc_process_studio.chat.router.sessions as chat_sessions_router_module
-from doc_process_studio.chat.models.session import (
+from doc_process_studio.chat.schemas.session import (
     ChatSessionSnapshot,
     ChatSessionSummary,
 )

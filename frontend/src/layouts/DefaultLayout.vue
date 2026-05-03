@@ -41,6 +41,7 @@ const isTitleClickable = computed(() => {
   if (currentPageId.value === 'home') return false;
   if (currentPageId.value === 'chat') return true;
   if (currentPageId.value === 'incident-report') {
+    if (route.name === 'incident-report-list') return false;
     const child = viewRef.value?.$?.exposed ?? viewRef.value;
     if (child && typeof child.isTitleClickable === 'boolean') {
       return child.isTitleClickable;
@@ -63,6 +64,8 @@ const onTitleClick = () => {
   const child = viewRef.value?.$?.exposed ?? viewRef.value;
   if (child && typeof child.onHeaderTitleClick === 'function') {
     child.onHeaderTitleClick();
+  } else if (currentPageId.value === 'incident-report') {
+    router.push({ name: 'incident-report-list' });
   }
 };
 </script>

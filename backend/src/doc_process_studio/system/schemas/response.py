@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from ..models.agent_trace import AgentTracePayload
+from .agent_trace import AgentTracePayload
 
 
 class AgentTraceResponse(BaseModel):

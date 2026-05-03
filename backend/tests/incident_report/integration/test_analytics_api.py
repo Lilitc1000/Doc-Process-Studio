@@ -1,4 +1,4 @@
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -35,29 +35,25 @@ def test_analytics_trend_requires_auth():
 def test_analytics_overview_returns_structure():
     app = _create_test_app()
 
-    mock_result = MagicMock()
-    mock_result.scalar_one.side_effect = [5, 2, 1, 3]
-    mock_result.scalar_one_or_none.return_value = 12.5
-
-    mock_session = AsyncMock()
-    mock_session.execute.return_value = mock_result
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-
-    mock_factory = MagicMock(return_value=mock_session)
-
     async def _fake_has_permission(user_id, permission):
         return True
 
+    async def _fake_get_overview(user_id):
+        from doc_process_studio.incident_report.schemas.response import IncidentAnalyticsOverview
+        return IncidentAnalyticsOverview(
+            total_this_month=5,
+            pending_count=2,
+            in_progress_count=1,
+            closed_this_month=3,
+            avg_resolution_hours=12.5,
+        )
+
     with patch(
-        "doc_process_studio.incident_report.router.analytics.async_session_factory",
-        mock_factory,
-    ), patch(
-        "doc_process_studio.incident_report.router.analytics.has_permission",
+        "doc_process_studio.incident_report.service.role.has_permission",
         _fake_has_permission,
     ), patch(
-        "doc_process_studio.shared.dtutils.utcnow",
-        return_value=__import__("datetime").datetime(2026, 4, 25, 12, 0, 0),
+        "doc_process_studio.incident_report.service.analytics.get_analytics_overview",
+        _fake_get_overview,
     ):
         client = TestClient(app)
         resp = client.get(
@@ -75,32 +71,19 @@ def test_analytics_overview_returns_structure():
 def test_analytics_trend_returns_list():
     app = _create_test_app()
 
-    mock_row = MagicMock()
-    mock_row.day = __import__("datetime").date(2026, 4, 25)
-    mock_row.count = 3
-
-    mock_result = MagicMock()
-    mock_result.all.return_value = [mock_row]
-
-    mock_session = AsyncMock()
-    mock_session.execute.return_value = mock_result
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-
-    mock_factory = MagicMock(return_value=mock_session)
-
     async def _fake_has_permission(user_id, permission):
         return True
 
+    async def _fake_get_trend(user_id, days):
+        from doc_process_studio.incident_report.schemas.response import IncidentAnalyticsTrend
+        return [IncidentAnalyticsTrend(date="2026-04-25", count=3)]
+
     with patch(
-        "doc_process_studio.incident_report.router.analytics.async_session_factory",
-        mock_factory,
-    ), patch(
-        "doc_process_studio.incident_report.router.analytics.has_permission",
+        "doc_process_studio.incident_report.service.role.has_permission",
         _fake_has_permission,
     ), patch(
-        "doc_process_studio.shared.dtutils.utcnow",
-        return_value=__import__("datetime").datetime(2026, 4, 25, 12, 0, 0),
+        "doc_process_studio.incident_report.service.analytics.get_analytics_trend",
+        _fake_get_trend,
     ):
         client = TestClient(app)
         resp = client.get(

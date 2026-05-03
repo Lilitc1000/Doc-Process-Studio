@@ -1,14 +1,11 @@
 from unittest.mock import patch
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from doc_process_studio.core.security import create_access_token
 from doc_process_studio.incident_report.router.reports import router as reports_router
 from doc_process_studio.incident_report.router.roles import router as roles_router
-from doc_process_studio.incident_report.router.dependencies import (
-    require_verifier_or_admin,
-)
 from doc_process_studio.incident_report.schemas.response import (
     IncidentReportDetail,
     IncidentReportListResponse,
@@ -69,7 +66,7 @@ def test_list_reports_returns_structure():
 def test_get_report_detail_not_found():
     app = _create_test_app()
 
-    async def _fake_get(report_id):
+    async def _fake_get(report_id, **kwargs):
         return None
 
     with patch(
@@ -118,7 +115,7 @@ def test_create_report_success():
         return _mock_report()
 
     with patch(
-        "doc_process_studio.incident_report.router.reports.has_permission",
+        "doc_process_studio.incident_report.service.report.has_permission",
         _fake_has_permission,
     ), patch(
         "doc_process_studio.incident_report.router.reports.create_report",
@@ -139,15 +136,20 @@ def test_create_report_success():
 def test_approve_report_requires_verifier_role():
     app = _create_test_app()
 
-    async def _reject():
-        raise HTTPException(status_code=403, detail="需要审核人或管理员权限")
+    async def _fake_has_permission(user_id, permission):
+        return permission != "report:audit"
 
-    app.dependency_overrides[require_verifier_or_admin] = _reject
+    async def _fake_load(report_id):
+        return None
 
-    client = TestClient(app)
-    resp = client.post(
-        "/api/incident-report/reports/test-id/approve",
-        json={"comment": "通过"},
-        headers=_auth_headers(),
-    )
-    assert resp.status_code == 403
+    with patch(
+        "doc_process_studio.incident_report.service.report.has_permission",
+        _fake_has_permission,
+    ):
+        client = TestClient(app)
+        resp = client.post(
+            "/api/incident-report/reports/test-id/approve",
+            json={"comment": "通过"},
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 403
