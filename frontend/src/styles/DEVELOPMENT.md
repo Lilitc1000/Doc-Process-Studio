@@ -10,6 +10,14 @@ frontend/src/styles/
 └── transitions.css   # 全局过渡动画（fade / fade-slide-up / page-switch / session-switch）
 ```
 
+各业务域样式目录：
+
+| 业务域   | 样式目录                        |
+| -------- | ------------------------------- |
+| 对话     | `views/chat/styles/`            |
+| 事故报告 | `views/incident-report/styles/` |
+| 知识库   | `views/knowledge-base/styles/`  |
+
 ## base.css
 
 定义全局设计 Token，所有组件统一使用：

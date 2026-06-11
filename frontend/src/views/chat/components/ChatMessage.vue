@@ -235,6 +235,7 @@ const props = defineProps<{
   editingFiles?: ChatEditAttachment[];
   editingSkillIds?: string[];
   availableSkills?: SkillOption[];
+  kbProjects?: Array<{ id: string; name: string }>;
   canConfirmEdit?: boolean;
   showToolbarByDefault?: boolean;
 }>();
@@ -261,6 +262,7 @@ const editingText = computed(() => props.editingText ?? '');
 const editingFiles = computed(() => props.editingFiles ?? []);
 const editingSkillIds = computed(() => props.editingSkillIds ?? []);
 const availableSkills = computed(() => props.availableSkills ?? []);
+const kbProjects = computed(() => props.kbProjects ?? []);
 const showToolbarByDefault = computed(
   () => props.showToolbarByDefault ?? false,
 );
@@ -346,6 +348,7 @@ const {
   text: editingText,
   selectedSkillIds: editingSkillIds,
   availableSkills,
+  kbProjects,
   textareaRef: editTextareaRef,
   updateText: (value) => {
     emit('update-edit-text', value);

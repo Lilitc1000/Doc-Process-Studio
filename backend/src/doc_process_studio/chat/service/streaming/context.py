@@ -7,8 +7,36 @@ from ....skill.service.registry import (
     list_skill_interfaces,
 )
 
+KB_SKILL_ID_PREFIX = "kb:"
+
+
+def is_kb_skill_id(skill_id: str) -> bool:
+    return skill_id.startswith(KB_SKILL_ID_PREFIX)
+
+
+def extract_kb_project_name(skill_id: str) -> str:
+    if skill_id.startswith(KB_SKILL_ID_PREFIX):
+        return skill_id[len(KB_SKILL_ID_PREFIX):]
+    return ""
+
+
+def build_kb_skill_interface(project_name: str):
+    from ....knowledge_base.service.kb_skill import KNOWLEDGE_BASE_RAG_PROMPT
+    from ....skill.schemas import SkillInterfaceConfig
+    prompt = KNOWLEDGE_BASE_RAG_PROMPT.format(project_name=project_name)
+    return SkillInterfaceConfig(
+        id=f"kb:{project_name}",
+        display_name=f"📚 {project_name}",
+        skill_type="chat",
+        short_description=f"知识库：{project_name}",
+        default_prompt=prompt,
+        tools=[],
+    )
+
 
 def build_skill_prompt(skill_id: str) -> str:
+    if is_kb_skill_id(skill_id):
+        return build_kb_skill_interface(extract_kb_project_name(skill_id)).default_prompt
     return get_skill_interface(skill_id).default_prompt
 
 
@@ -21,12 +49,19 @@ def _build_skills_catalog_lines(active_skill_ids: list[str]) -> list[str]:
     lines: list[str] = []
     for skill_id in active_skill_ids:
         skill = interfaces.get(skill_id)
+        if skill is None and is_kb_skill_id(skill_id):
+            skill = build_kb_skill_interface(extract_kb_project_name(skill_id))
         if skill is None:
             continue
-        skill_path = (SKILLS_DIR / skill_id / "SKILL.md").as_posix()
-        lines.append(
-            f"- {skill.id}: {skill.short_description or '无描述'} (file: {skill_path})"
-        )
+        if is_kb_skill_id(skill_id):
+            lines.append(
+                f"- {skill.id}: {skill.short_description or '无描述'} (知识库 RAG)"
+            )
+        else:
+            skill_path = (SKILLS_DIR / skill_id / "SKILL.md").as_posix()
+            lines.append(
+                f"- {skill.id}: {skill.short_description or '无描述'} (file: {skill_path})"
+            )
     return lines
 
 

@@ -9,6 +9,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
     environment:
       - PYTHONUNBUFFERED=1
       - LOCAL_WORKSPACE_FOLDER=/workspace
@@ -16,6 +18,8 @@ services:
       - /var/run/docker.sock:/var/run/docker-host.sock
       - ..:/workspace:delegated
       - ~/.codex:/home/vscode/.codex
+      - ~/.trae-cn:/home/vscode/.trae-cn
+      - ~/.trae-cn-server:/home/vscode/.trae-cn-server
     ports:
       - "5173:5173"
       - "8000:8000"
@@ -51,7 +55,22 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: always
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3" ]
+      interval: 1s
+      timeout: 30s
+      start_period: 60s
+      retries: 3
 
 volumes:
   postgres_data:
   redis_data:
+  qdrant_data:

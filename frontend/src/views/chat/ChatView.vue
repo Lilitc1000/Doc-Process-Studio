@@ -30,8 +30,9 @@
               :editing-files="chatStore.editingDraftFiles"
               :editing-skill-ids="chatStore.editingDraftSkillIds"
               :available-skills="appStore.processingModes"
+              :kb-projects="appStore.kbProjects"
               :is-loading="chatStore.isLoading"
-              :live-tool-status="chatStore.latestLiveToolStatus"
+              :live-tool-status="chatStore.isMessageStreaming(message) ? chatStore.latestLiveToolStatus : null"
               :show-version-switcher="
                 chatStore.getMessageVersionCount(message.id) > 1
               "
@@ -40,6 +41,10 @@
               :can-go-prev="chatStore.canSwitchMessageVersion(message.id, -1)"
               :can-go-next="chatStore.canSwitchMessageVersion(message.id, 1)"
               :can-open-trace="!!message.traceId"
+              :can-edit="message.role === 'user' && !chatStore.isLoading && !chatStore.isMessageStreaming(message)"
+              :can-copy="!!message.content && !chatStore.isMessageStreaming(message)"
+              :can-regenerate="message.role === 'assistant' && !chatStore.isLoading && !chatStore.isMessageStreaming(message)"
+              :can-download="message.role === 'assistant' && !!message.content && !chatStore.isMessageStreaming(message)"
               @prev-version="chatStore.switchMessageVersion(message.id, -1)"
               @next-version="chatStore.switchMessageVersion(message.id, 1)"
               @start-edit="startEditingMessage(message.id)"
@@ -66,6 +71,7 @@
           v-model:text="chatStore.inputText"
           :files="chatStore.selectedFiles"
           :available-skills="appStore.processingModes"
+          :kb-projects="appStore.kbProjects"
           :selected-skill-ids="chatStore.selectedSkillIds"
           :is-loading="chatStore.isLoading"
           @update:selected-skill-ids="updateSelectedSkillIds"
@@ -240,13 +246,15 @@ defineExpose({
   isTitleClickable,
 });
 
-const { loadAvailableModels, loadAvailableSkills } = useCatalogLoader();
+const { loadAvailableModels, loadAvailableSkills, loadKBProjects } =
+  useCatalogLoader();
 
 onMounted(() => {
   scrollToBottom();
   void loadSessionSummaries();
   void loadAvailableSkills();
   void loadAvailableModels();
+  void loadKBProjects();
   chatStore.prewarmVisibleConversationCache(
     chatStore.activeSessionId ?? chatStore.conversationId,
   );

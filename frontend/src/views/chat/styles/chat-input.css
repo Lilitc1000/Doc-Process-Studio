@@ -264,6 +264,15 @@
   z-index: 20;
 }
 
+.skill-suggestion-group-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.4rem 0.58rem 0.15rem;
+}
+
 .skill-suggestion-item,
 .base-button.skill-suggestion-item {
   width: 100%;

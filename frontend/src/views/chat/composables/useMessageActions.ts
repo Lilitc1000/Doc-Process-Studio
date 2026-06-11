@@ -48,20 +48,27 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
   const createUserApiContent = (
     text: string,
     files: Array<{ name: string }>,
+    skillIds: string[] = [],
   ) => {
     const trimmedText = text.trim();
-    if (files.length === 0) {
-      return trimmedText;
+    const parts: string[] = [];
+
+    if (skillIds.length > 0) {
+      const skillMarkers = skillIds.map((id) => `$${id}`).join(' ');
+      parts.push(skillMarkers);
     }
 
-    const fileNames = files.map((file) => file.name).join('、');
-    const fileSummary = `[用户上传了 ${files.length} 个文件：${fileNames}]`;
-
-    if (!trimmedText) {
-      return `请结合我上传的文件进行处理。\n${fileSummary}`;
+    if (trimmedText) {
+      parts.push(trimmedText);
     }
 
-    return `${trimmedText}\n${fileSummary}`;
+    if (files.length > 0) {
+      const fileNames = files.map((file) => file.name).join('、');
+      const fileSummary = `[用户上传了 ${files.length} 个文件：${fileNames}]`;
+      parts.push(fileSummary);
+    }
+
+    return parts.join('\n');
   };
 
   const onFilesSelect = (files: File[]) => {
@@ -160,7 +167,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     const editedUserMessage = chatStore.createMessageNode({
       role: 'user',
       content: nextText,
-      apiContent: createUserApiContent(nextText, nextAttachments),
+      apiContent: createUserApiContent(nextText, nextAttachments, nextSkillIds),
       files: nextAttachments,
       requestFiles: nextFiles,
       requestSkillIds: nextSkillIds,
@@ -195,7 +202,7 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     const userMessage = chatStore.createMessageNode({
       role: 'user',
       content: text,
-      apiContent: createUserApiContent(text, currentRequestFiles),
+      apiContent: createUserApiContent(text, currentRequestFiles, currentRequestSkillIds),
       files: createAttachmentPreview(currentRequestFiles),
       requestFiles: currentRequestFiles,
       requestSkillIds: currentRequestSkillIds,

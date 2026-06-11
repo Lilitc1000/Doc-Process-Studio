@@ -104,6 +104,13 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     admin_username: str = "admin"
     admin_password: str = "admin123"
+    qdrant_url: str = "http://qdrant:6333"
+    kb_collection_name: str = "knowledge_base"
+    kb_max_upload_size_bytes: int = 100 * 1024 * 1024
+    kb_chunk_max_characters: int = 1_800
+    kb_embedding_model: str = "nomic-embed-text"
+    kb_search_top_k: int = 6
+    kb_embedding_batch_size: int = 16
 
     model_config = SettingsConfigDict(
         extra="ignore",

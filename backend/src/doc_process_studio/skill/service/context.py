@@ -126,6 +126,9 @@ def _split_large_section(title: str, content: str) -> list[tuple[str, str]]:
 
 @lru_cache(maxsize=32)
 def load_skill_context_chunks(skill_id: str) -> list[SkillContextChunk]:
+    if skill_id.startswith("kb:"):
+        return []
+
     get_skill_interface(skill_id)
 
     chunks: list[SkillContextChunk] = []

@@ -109,6 +109,42 @@
           type="button"
           class="home-card"
           variant="ghost"
+          @click="onNavigate('knowledge-base')"
+        >
+          <div class="home-card-icon">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <path
+                d="M6 10h36v28H6z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M6 18h36"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              />
+              <path
+                d="M14 26h8M14 32h12"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="2"
+              />
+            </svg>
+          </div>
+          <div class="home-card-text">
+            <span class="home-card-label">知识库</span>
+            <span class="home-card-desc">项目文档知识管理</span>
+          </div>
+        </base-button>
+
+        <base-button
+          type="button"
+          class="home-card"
+          variant="ghost"
           @click="onNavigate('settings')"
         >
           <div class="home-card-icon">
@@ -149,6 +185,7 @@ const router = useRouter();
 const routeMap: Record<string, string> = {
   chat: 'chat',
   'incident-report': 'incident-report-list',
+  'knowledge-base': 'knowledge-base-list',
   settings: 'settings',
 };
 

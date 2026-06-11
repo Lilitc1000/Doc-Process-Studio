@@ -124,6 +124,12 @@ def build_tool_status_start(
             "message": f"正在载入 {chunk_count or 1} 个技能片段到当前会话上下文。",
         }
 
+    if tool_name == "search_knowledge_base":
+        return {
+            "label": "检索知识库",
+            "message": "正在从知识库中检索相关文档。",
+        }
+
     try:
         declared_tool = get_skill_tool_config(resolved_skill_id, tool_name)
     except ValueError:
@@ -185,6 +191,12 @@ def _build_reused_tool_status(
             "message": "这些技能片段已经在上下文中，本轮不再重复载入。",
         }
 
+    if tool_name == "search_knowledge_base":
+        return {
+            "label": "检索知识库",
+            "message": "相同检索条件已执行过，本轮不再重复检索。",
+        }
+
     return None
 
 
@@ -231,6 +243,14 @@ def _build_builtin_tool_status(
         return {
             "label": label,
             "message": f"已将 {chunk_count or 1} 个相关片段加入当前会话上下文。",
+        }
+
+    if tool_name == "search_knowledge_base":
+        chunks = tool_result.get("chunks")
+        result_count = len(chunks) if isinstance(chunks, list) else 0
+        return {
+            "label": "检索知识库",
+            "message": f"已从知识库检索到 {result_count} 条相关文档片段。",
         }
 
     return None

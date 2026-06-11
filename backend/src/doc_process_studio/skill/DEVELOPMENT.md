@@ -74,3 +74,4 @@ backend/src/doc_process_studio/skill/
 - Pydantic 数据模型统一放在 `schemas/` 目录，`models/` 仅保留 ORM 模型
 - 上下文检索（`context.py`）使用异步 HTTP 客户端调用 Ollama embedding 接口（`/api/embed`）
 - 服务层异常处理使用 `logging` 记录上下文信息（如 model 名称、text 数量），与 `AgentTraceRecorder` 审计日志互补
+- `tool_status.py` 中内置工具（list_skill_directory、read_skill_file、search_skill_context、read_skill_context、search_knowledge_base）的状态文案需在 `build_tool_status_start`、`_build_reused_tool_status`、`_build_builtin_tool_status` 三个函数中同步添加，否则会误走到 `_build_declared_tool_status` 显示"工具执行失败：未知错误"

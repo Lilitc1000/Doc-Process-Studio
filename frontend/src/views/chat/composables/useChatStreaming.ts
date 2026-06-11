@@ -63,7 +63,7 @@ export const useChatStreaming = (options: UseChatStreamingOptions) => {
 
     chatStore.updateMessageContent(
       assistantId,
-      '模型已完成响应，但没有返回可显示的文本内容。',
+      '抱歉，我暂时无法回答这个问题。',
     );
   };
 

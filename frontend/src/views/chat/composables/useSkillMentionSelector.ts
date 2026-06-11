@@ -1,16 +1,29 @@
 import { computed, nextTick, ref, watch, type Ref } from 'vue';
 import type { SkillOption } from '../../../types/common/skill';
 
+interface KBProjectOption {
+  id: string;
+  name: string;
+}
+
 interface UseSkillMentionSelectorOptions {
   text: Readonly<Ref<string>>;
   selectedSkillIds: Readonly<Ref<string[]>>;
   availableSkills: Readonly<Ref<SkillOption[]>>;
+  kbProjects: Readonly<Ref<KBProjectOption[]>>;
   textareaRef: Readonly<Ref<HTMLTextAreaElement | null>>;
   updateText: (value: string) => void;
   updateSelectedSkillIds: (skillIds: string[]) => void;
 }
 
-const SKILL_TRIGGER_PATTERN = /(?:^|\s)\$([A-Za-z0-9._-]*)$/;
+const SKILL_TRIGGER_PATTERN = /(?:^|\s)\$([A-Za-z0-9._\u4e00-\u9fff-]*)$/;
+
+export interface GroupedSuggestion {
+  type: 'skill' | 'kb';
+  id: string;
+  displayName: string;
+  shortDescription?: string;
+}
 
 export const useSkillMentionSelector = (
   options: UseSkillMentionSelectorOptions,
@@ -21,6 +34,16 @@ export const useSkillMentionSelector = (
   const selectedSkillOptions = computed(() => {
     return options.selectedSkillIds.value
       .map((skillId) => {
+        if (skillId.startsWith('kb:')) {
+          const projectName = skillId.slice(3);
+          const project = options.kbProjects.value.find(
+            (p) => p.name === projectName,
+          );
+          return {
+            id: skillId,
+            displayName: project ? `📚 ${project.name}` : `📚 ${projectName}`,
+          } as SkillOption;
+        }
         return (
           options.availableSkills.value.find((skill) => skill.id === skillId) ??
           null
@@ -65,18 +88,38 @@ export const useSkillMentionSelector = (
 
     const selectedSet = new Set(options.selectedSkillIds.value);
     const normalizedQuery = triggerState.query.trim().toLowerCase();
-    return options.availableSkills.value.filter((skill) => {
-      if (selectedSet.has(skill.id)) {
-        return false;
-      }
-      if (!normalizedQuery) {
-        return true;
-      }
-      return (
-        skill.id.toLowerCase().includes(normalizedQuery) ||
-        skill.displayName.toLowerCase().includes(normalizedQuery)
-      );
-    });
+
+    const skillSuggestions: GroupedSuggestion[] = options.availableSkills.value
+      .filter((skill) => {
+        if (selectedSet.has(skill.id)) return false;
+        if (!normalizedQuery) return true;
+        return (
+          skill.id.toLowerCase().includes(normalizedQuery) ||
+          skill.displayName.toLowerCase().includes(normalizedQuery)
+        );
+      })
+      .map((skill) => ({
+        type: 'skill' as const,
+        id: skill.id,
+        displayName: skill.displayName,
+        shortDescription: skill.shortDescription,
+      }));
+
+    const kbSuggestions: GroupedSuggestion[] = options.kbProjects.value
+      .filter((project) => {
+        const kbId = `kb:${project.name}`;
+        if (selectedSet.has(kbId)) return false;
+        if (!normalizedQuery) return true;
+        return project.name.toLowerCase().includes(normalizedQuery);
+      })
+      .map((project) => ({
+        type: 'kb' as const,
+        id: `kb:${project.name}`,
+        displayName: `📚 ${project.name}`,
+        shortDescription: '知识库',
+      }));
+
+    return [...skillSuggestions, ...kbSuggestions];
   });
 
   const showSkillSuggestions = computed(() => {

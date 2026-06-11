@@ -60,11 +60,12 @@ env ENV=dev uv run --no-sync pytest tests/auth/ -q
 ```text
 backend/src/doc_process_studio/
 ├── main.py                     # FastAPI 应用入口
-├── core/                       # 基础设施（配置、数据库、安全、缓存、Ollama）
+├── core/                       # 基础设施（配置、数据库、安全、缓存、Ollama、Qdrant）
 ├── shared/                     # 跨模块共享工具
 ├── auth/                       # 业务域：认证
 ├── chat/                       # 业务域：对话
 ├── incident_report/            # 业务域：事故报告
+├── knowledge_base/             # 业务域：知识库
 ├── skill/                      # 业务域：Skill 管理
 ├── system/                     # 业务域：系统
 └── skills/                     # Skill 定义目录
@@ -141,5 +142,6 @@ service → models
 | Auth | [src/doc_process_studio/auth/DEVELOPMENT.md](src/doc_process_studio/auth/DEVELOPMENT.md) | 认证与用户管理 |
 | Chat | [src/doc_process_studio/chat/DEVELOPMENT.md](src/doc_process_studio/chat/DEVELOPMENT.md) | 对话功能 |
 | IncidentReport | [src/doc_process_studio/incident_report/DEVELOPMENT.md](src/doc_process_studio/incident_report/DEVELOPMENT.md) | 事故报告 |
+| KnowledgeBase | [src/doc_process_studio/knowledge_base/DEVELOPMENT.md](src/doc_process_studio/knowledge_base/DEVELOPMENT.md) | 知识库管理 |
 | Skill | [src/doc_process_studio/skill/DEVELOPMENT.md](src/doc_process_studio/skill/DEVELOPMENT.md) | Skill 管理 |
 | System | [src/doc_process_studio/system/DEVELOPMENT.md](src/doc_process_studio/system/DEVELOPMENT.md) | 系统功能 |

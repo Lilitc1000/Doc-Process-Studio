@@ -74,6 +74,10 @@ frontend/tests/
 │       ├── download.test.ts             # Blob 下载触发
 │       ├── use-copy-toast.test.ts       # 复制提示 composable
 │       └── use-catalog-loader.test.ts   # 目录加载 composable
+├── knowledge-base/             # 知识库域
+│   └── unit/
+│       ├── knowledge-base-types.test.ts  # 类型定义测试（KBProject/KBFolder/KBDocument/KBTreeNode）
+│       └── knowledge-base-store.test.ts  # Store 测试（项目 CRUD/树形加载/更新状态）
 └── app/                        # 全局/跨域
     └── e2e/
         └── navigation.spec.ts

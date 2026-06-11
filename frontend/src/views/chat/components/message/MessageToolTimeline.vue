@@ -78,6 +78,9 @@ const props = defineProps<{
 }>();
 
 const hasRunningToolStatus = computed(() => {
+  if (!(props.isStreaming ?? false)) {
+    return false;
+  }
   const lastToolStatus = props.toolStatuses[props.toolStatuses.length - 1];
   return lastToolStatus?.phase === 'start';
 });

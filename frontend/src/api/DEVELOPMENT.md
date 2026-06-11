@@ -13,6 +13,7 @@ frontend/src/api/
 ├── chat-sessions.ts    # 聊天会话 CRUD
 ├── chat-attachments.ts # 附件下载
 ├── incident-report.ts  # 事故报告接口
+├── knowledge-base.ts   # 知识库接口（项目/文件夹/文档/树形/更新）
 └── trace.ts            # 链路回放接口
 ```
 

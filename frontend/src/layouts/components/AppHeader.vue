@@ -92,6 +92,7 @@ const pageTitles: Record<PageId, string> = {
   home: '文档处理平台',
   chat: '对话',
   'incident-report': '事故报告',
+  'knowledge-base': '知识库',
   settings: '设置',
 };
 

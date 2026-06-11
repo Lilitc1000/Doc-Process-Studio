@@ -21,6 +21,7 @@ from .skill.router.routes import router as skill_routes_router
 from .system.router.health import router as health_router
 from .system.router.models import router as models_router
 from .system.router.agent_traces import router as agent_traces_router
+from .knowledge_base.router import router as knowledge_base_router
 
 
 @asynccontextmanager
@@ -35,6 +36,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await ensure_incident_report_admin()
     cleanup_expired_attachments()
     await warmup_model_context_cache()
+
+    from .core.qdrant import ensure_knowledge_base_collection
+    ensure_knowledge_base_collection()
+
     yield
 
 
@@ -54,3 +59,4 @@ app.include_router(skill_routes_router)
 app.include_router(health_router)
 app.include_router(models_router)
 app.include_router(agent_traces_router)
+app.include_router(knowledge_base_router)

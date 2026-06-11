@@ -82,16 +82,21 @@ backend/tests/
 │   └── integration/
 │       ├── test_agent_trace_api.py
 │       └── test_models_api.py
-└── core/                       # 核心基础设施域
+├── core/                       # 核心基础设施域
     └── unit/
         ├── test_settings.py
         ├── test_request_guard.py
         └── test_model_context.py
+└── knowledge_base/            # 知识库域
+    ├── unit/
+    │   └── test_kb_service.py       # 分块器、文件类型检测、Skill 工具 Schema、内容哈希
+    └── integration/
+        └── test_kb_api.py           # API 端点认证守卫测试
 ```
 
 ### 目录组织原则
 
-- **按业务域划分**：与 `src/doc_process_studio/` 的业务域一一对应（auth、chat、incident_report、skill、system、core）
+- **按业务域划分**：与 `src/doc_process_studio/` 的业务域一一对应（auth、chat、incident_report、skill、system、core、knowledge_base）
 - **域内按测试类型划分**：`unit/`（单元测试）、`integration/`（集成测试）、`contract/`（契约测试）
 - **域级 fixture**：同一域内多个测试文件共享的 fixture 放在 `<domain>/conftest.py`
 - **全局 fixture**：放在 `tests/conftest.py`
@@ -106,6 +111,7 @@ backend/tests/
 | `skill/` | `doc_process_studio/skill/` | 技能系统（注册、选择、规划、工具循环、会话存储） |
 | `system/` | `doc_process_studio/system/` | 系统服务（执行器、特性开关、错误详情、链路追踪、模型管理） |
 | `core/` | `doc_process_studio/core/` | 核心基础设施（配置、请求防护、模型上下文、安全、缓存、数据库） |
+| `knowledge_base/` | `doc_process_studio/knowledge_base/` | 知识库（项目/文件夹/文档管理、分块、向量化、Skill 集成） |
 
 ## 测试分层
 

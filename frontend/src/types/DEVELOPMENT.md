@@ -13,6 +13,8 @@ frontend/src/types/
 │   └── session.ts          # 历史会话与快照
 ├── incident-report/
 │   └── incident-report.ts  # 事故报告类型
+├── knowledge-base/
+│   └── knowledge-base.ts   # 知识库类型（项目、文件夹、文档、树形结构、更新状态）
 └── common/
     ├── skill.ts            # Skill 选项与 catalog
     └── trace.ts            # 链路回放数据

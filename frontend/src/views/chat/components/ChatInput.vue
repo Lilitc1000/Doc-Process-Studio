@@ -94,30 +94,65 @@
               class="skill-suggestion-panel"
               role="listbox"
             >
-              <base-button
-                v-for="(skill, index) in filteredSkillSuggestions"
-                :key="skill.id"
-                type="button"
-                class="skill-suggestion-item"
-                variant="ghost"
-                size="sm"
-                :class="{ active: index === activeSuggestionIndex }"
-                :title="skill.shortDescription || skill.displayName"
-                @mousedown.prevent="selectSkillSuggestion(skill.id)"
-                @mouseenter="activeSuggestionIndex = index"
-              >
-                <span class="skill-suggestion-main">
-                  <span class="skill-suggestion-name">{{
-                    skill.displayName
-                  }}</span>
-                </span>
-                <span
-                  v-if="skill.shortDescription"
-                  class="skill-suggestion-desc"
+              <template v-if="skillGroupItems.length > 0">
+                <div class="skill-suggestion-group-label">技能</div>
+                <base-button
+                  v-for="(item, index) in skillGroupItems"
+                  :key="item.id"
+                  type="button"
+                  class="skill-suggestion-item"
+                  variant="ghost"
+                  size="sm"
+                  :class="{ active: index === activeSuggestionIndex }"
+                  :title="item.shortDescription || item.displayName"
+                  @mousedown.prevent="selectSkillSuggestion(item.id)"
+                  @mouseenter="activeSuggestionIndex = index"
                 >
-                  {{ skill.shortDescription }}
-                </span>
-              </base-button>
+                  <span class="skill-suggestion-main">
+                    <span class="skill-suggestion-name">{{
+                      item.displayName
+                    }}</span>
+                  </span>
+                  <span
+                    v-if="item.shortDescription"
+                    class="skill-suggestion-desc"
+                  >
+                    {{ item.shortDescription }}
+                  </span>
+                </base-button>
+              </template>
+              <template v-if="kbGroupItems.length > 0">
+                <div class="skill-suggestion-group-label">知识库</div>
+                <base-button
+                  v-for="(item, index) in kbGroupItems"
+                  :key="item.id"
+                  type="button"
+                  class="skill-suggestion-item"
+                  variant="ghost"
+                  size="sm"
+                  :class="{
+                    active:
+                      skillGroupItems.length + index === activeSuggestionIndex,
+                  }"
+                  :title="item.shortDescription || item.displayName"
+                  @mousedown.prevent="selectSkillSuggestion(item.id)"
+                  @mouseenter="
+                    activeSuggestionIndex = skillGroupItems.length + index
+                  "
+                >
+                  <span class="skill-suggestion-main">
+                    <span class="skill-suggestion-name">{{
+                      item.displayName
+                    }}</span>
+                  </span>
+                  <span
+                    v-if="item.shortDescription"
+                    class="skill-suggestion-desc"
+                  >
+                    {{ item.shortDescription }}
+                  </span>
+                </base-button>
+              </template>
             </div>
           </Transition>
         </div>
@@ -212,6 +247,7 @@ const props = defineProps<{
   text: string;
   files: File[];
   availableSkills?: SkillOption[];
+  kbProjects?: Array<{ id: string; name: string }>;
   selectedSkillIds?: string[];
   accept?: string;
   isLoading?: boolean;
@@ -270,6 +306,7 @@ const resizeTextarea = () => {
   textareaRef.value.style.height = `${textareaRef.value.scrollHeight}px`;
 };
 const availableSkills = computed(() => props.availableSkills ?? []);
+const kbProjects = computed(() => props.kbProjects ?? []);
 const {
   activeSuggestionIndex,
   filteredSkillSuggestions,
@@ -285,6 +322,7 @@ const {
   text: localText,
   selectedSkillIds: localSelectedSkillIds,
   availableSkills,
+  kbProjects,
   textareaRef,
   updateText: (value) => {
     localText.value = value;
@@ -300,6 +338,14 @@ const {
 const canSend = computed(() => {
   return (localText.value.trim() || props.files.length > 0) && !props.isLoading;
 });
+
+const skillGroupItems = computed(() =>
+  filteredSkillSuggestions.value.filter((s) => s.type === 'skill'),
+);
+
+const kbGroupItems = computed(() =>
+  filteredSkillSuggestions.value.filter((s) => s.type === 'kb'),
+);
 
 watch(
   () => props.text,

@@ -9,7 +9,17 @@ const DEFAULT_MODELS = [
   'llama3.3:70b',
 ];
 
-export type PageId = 'home' | 'chat' | 'incident-report' | 'settings';
+export type PageId =
+  | 'home'
+  | 'chat'
+  | 'incident-report'
+  | 'knowledge-base'
+  | 'settings';
+
+export interface KBProjectOption {
+  id: string;
+  name: string;
+}
 
 export const useAppStore = defineStore(
   'app',
@@ -19,11 +29,13 @@ export const useAppStore = defineStore(
     const activePageId = ref<PageId>('home');
     const availableModels = ref<string[]>([...DEFAULT_MODELS]);
     const processingModes = ref<SkillOption[]>([]);
+    const kbProjects = ref<KBProjectOption[]>([]);
 
     return {
       activePageId,
       availableModels,
       processingModes,
+      kbProjects,
       selectedModel,
       selectedRerankerModel,
     };

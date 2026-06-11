@@ -1,4 +1,5 @@
 import { fetchAvailableModels, fetchAvailableSkills } from '../../api/catalog';
+import { listKBProjectsSimple } from '../../api/knowledge-base';
 import { useAppStore } from '../../stores/app';
 
 export const useCatalogLoader = () => {
@@ -38,8 +39,18 @@ export const useCatalogLoader = () => {
     }
   };
 
+  const loadKBProjects = async () => {
+    try {
+      const projects = await listKBProjectsSimple();
+      appStore.kbProjects = projects.map((p) => ({ id: p.id, name: p.name }));
+    } catch (error) {
+      console.error('加载知识库项目列表失败。', error);
+    }
+  };
+
   return {
     loadAvailableModels,
     loadAvailableSkills,
+    loadKBProjects,
   };
 };

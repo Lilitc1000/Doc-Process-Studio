@@ -33,6 +33,7 @@ const currentPageId = computed(() => {
   if (name === 'home') return 'home';
   if (name === 'chat') return 'chat';
   if (name?.startsWith('incident-report')) return 'incident-report';
+  if (name?.startsWith('knowledge-base')) return 'knowledge-base';
   if (name === 'settings') return 'settings';
   return 'home';
 });

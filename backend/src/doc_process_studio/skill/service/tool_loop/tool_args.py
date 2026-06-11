@@ -190,4 +190,13 @@ def _build_builtin_tool_parameters(tool_name: str) -> dict[str, Any] | None:
             "required": ["chunk_ids"],
             "additionalProperties": False,
         }
+    if tool_name == "search_knowledge_base":
+        return {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "检索查询文本"},
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        }
     return None

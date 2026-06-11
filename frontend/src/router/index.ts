@@ -86,6 +86,20 @@ const router = createRouter({
           component: () => import('../views/settings/SettingsView.vue'),
         },
         {
+          path: '/knowledge-base',
+          name: 'knowledge-base-list',
+          component: () =>
+            import('../views/knowledge-base/KnowledgeBaseListView.vue'),
+          meta: { requiresAuth: true, pageTitle: '知识库' },
+        },
+        {
+          path: '/knowledge-base/:id',
+          name: 'knowledge-base-detail',
+          component: () =>
+            import('../views/knowledge-base/KnowledgeBaseDetailView.vue'),
+          meta: { requiresAuth: true, pageTitle: '知识库项目' },
+        },
+        {
           path: '/:pathMatch(.*)*',
           name: 'not-found',
           component: () => import('../views/NotFoundView.vue'),

@@ -65,6 +65,11 @@ from .streaming import (
     merge_stream_tool_calls,
     merge_uploaded_files_context,
 )
+from .streaming.context import (
+    is_kb_skill_id,
+    extract_kb_project_name,
+    build_kb_skill_interface,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +78,49 @@ CHAT_SKILL_TYPE = "chat"
 
 
 def _list_chat_skill_interfaces() -> list[Any]:
-    return [
+    base_skills = [
         skill
         for skill in list_skill_interfaces()
         if str(getattr(skill, "skill_type", CHAT_SKILL_TYPE)).strip() == CHAT_SKILL_TYPE
     ]
+    return base_skills
+
+
+_KB_PRESCAN_PATTERN = re.compile(r"\$kb:([A-Za-z0-9._\u4e00-\u9fff-]+)")
+
+
+def _register_kb_skills_from_messages(
+    messages: Any,
+    initial_kb_ids: list[str],
+    available_skills: list[Any],
+    available_skill_ids: set[str] | list[str],
+) -> list[str]:
+    """Pre-scan messages for $kb:xxx mentions and register KB skills.
+
+    Returns the full list of KB skill IDs (initial + discovered from messages).
+    """
+    kb_skill_ids = list(initial_kb_ids)
+
+    for message in messages:
+        if getattr(message, "role", None) != "user":
+            continue
+        content = str(getattr(message, "content", "") or "")
+        for project_name in _KB_PRESCAN_PATTERN.findall(content):
+            kb_sid = f"kb:{project_name}"
+            if kb_sid not in kb_skill_ids:
+                kb_skill_ids.append(kb_sid)
+
+    for kb_sid in kb_skill_ids:
+        project_name = extract_kb_project_name(kb_sid)
+        if project_name and kb_sid not in available_skill_ids:
+            kb_interface = build_kb_skill_interface(project_name)
+            available_skills.append(kb_interface)
+            if isinstance(available_skill_ids, set):
+                available_skill_ids.add(kb_sid)
+            else:
+                available_skill_ids.append(kb_sid)
+
+    return kb_skill_ids
 
 
 def _format_assistant_delta_event(*, model: str, content: str) -> str:
@@ -154,7 +197,7 @@ def _extract_skill_ids_from_messages(
 ) -> tuple[list[str], list[str]]:
     mentioned_skill_ids: list[str] = []
     missing_skill_ids: list[str] = []
-    pattern = re.compile(r"\$([A-Za-z0-9._-]+)")
+    pattern = re.compile(r"\$([A-Za-z0-9._:\u4e00-\u9fff-]+)")
     available_skill_ids = {str(skill.id).strip() for skill in available_skills}
 
     for message in messages:
@@ -180,6 +223,12 @@ async def _resolve_skill_plan(
     available_skills = _list_chat_skill_interfaces()
     available_skill_ids = {skill.id for skill in available_skills}
     explicit_skill_ids = _normalize_skill_ids(request.selected_skill_ids)
+
+    kb_skill_ids = [sid for sid in explicit_skill_ids if is_kb_skill_id(sid)]
+    _register_kb_skills_from_messages(
+        request.messages, kb_skill_ids, available_skills, available_skill_ids,
+    )
+
     mentioned_skill_ids, missing_mentioned_skill_ids = _extract_skill_ids_from_messages(
         messages=request.messages,
         available_skills=available_skills,
@@ -211,9 +260,17 @@ def _build_direct_skill_plan(
 ) -> SkillPlanDecision:
     available_skills = _list_chat_skill_interfaces()
     available_skill_ids = [skill.id for skill in available_skills]
+
+    explicit_skill_ids_raw = _normalize_skill_ids(request.selected_skill_ids)
+
+    kb_skill_ids = [sid for sid in explicit_skill_ids_raw if is_kb_skill_id(sid)]
+    _register_kb_skills_from_messages(
+        request.messages, kb_skill_ids, available_skills, available_skill_ids,
+    )
+
     explicit_skill_ids = [
         skill_id
-        for skill_id in _normalize_skill_ids(request.selected_skill_ids)
+        for skill_id in explicit_skill_ids_raw
         if skill_id in available_skill_ids
     ]
     if explicit_skill_ids:
@@ -342,7 +399,11 @@ async def _prepare_skill_context(
 
     states_by_skill: dict[str, SkillConversationState] = {}
     for skill_id in active_skill_ids:
-        skill_interface = get_skill_interface(skill_id)
+        if is_kb_skill_id(skill_id):
+            project_name = extract_kb_project_name(skill_id)
+            skill_interface = build_kb_skill_interface(project_name)
+        else:
+            skill_interface = get_skill_interface(skill_id)
         state = agent_state.skills_state.get(skill_id)
         if state is None:
             state = SkillConversationState(
@@ -842,6 +903,16 @@ async def stream_remote_chat_completion(
                 tools_enabled = False
 
             await save_conversation_state(skill_ctx.agent_state, tenant_id=tenant_id)
+    except ValueError as exc:
+        stream_error_message = summarize_exception(exc)
+        trace_recorder.add_event(
+            event_type="error",
+            detail=build_error_event_detail(
+                message=stream_error_message,
+                exc=exc,
+            ),
+        )
+        yield format_sse_event({"type": "error", "message": stream_error_message})
     except OllamaNotConfiguredError as exc:
         stream_error_message = summarize_exception(exc)
         trace_recorder.add_event(
@@ -875,6 +946,17 @@ async def stream_remote_chat_completion(
         yield format_sse_event(
             {"type": "error", "message": stream_error_message}
         )
+    except Exception as exc:
+        stream_error_message = f"未预期的错误：{summarize_exception(exc)}"
+        logger.exception("stream_remote_chat_completion unhandled error")
+        trace_recorder.add_event(
+            event_type="error",
+            detail=build_error_event_detail(
+                message=stream_error_message,
+                exc=exc,
+            ),
+        )
+        yield format_sse_event({"type": "error", "message": stream_error_message})
     finally:
         if request_guard_entered:
             await request_guard.__aexit__(None, None, None)

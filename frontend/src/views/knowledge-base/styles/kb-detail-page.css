@@ -1,0 +1,103 @@
+.kb-detail-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.kb-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.kb-detail-title {
+  flex: 1;
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.kb-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.kb-detail-toolbar {
+  margin-bottom: 16px;
+}
+
+.kb-tree {
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 200px;
+}
+
+.kb-tree-empty {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--color-text-secondary, #888);
+}
+
+.kb-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.kb-dialog {
+  background: var(--color-bg-primary, #fff);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 360px;
+  max-width: 480px;
+}
+
+.kb-dialog--updating {
+  text-align: center;
+  min-width: 280px;
+}
+
+.kb-dialog-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.kb-dialog-label {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--color-text-secondary, #666);
+}
+
+.kb-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.kb-updating-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border, #e0e0e0);
+  border-top-color: var(--color-primary, #4a90d9);
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: kb-spin 0.8s linear infinite;
+}
+
+@keyframes kb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.kb-updating-text {
+  font-size: 15px;
+  color: var(--color-text-secondary, #666);
+}
