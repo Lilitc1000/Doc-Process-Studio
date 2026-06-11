@@ -72,19 +72,21 @@ const infoFields = computed(() => [
 .report-detail-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .detail-info-card {
-  padding: 16px;
-  background: var(--color-bg-secondary);
-  border-radius: 8px;
+  padding: var(--space-lg);
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-xs);
 }
 
 .detail-info-card h3 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--space-md);
   color: var(--color-text-primary);
 }
 
@@ -92,8 +94,8 @@ const infoFields = computed(() => [
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
-  font-size: 13px;
+  padding: var(--space-xs) 0;
+  font-size: var(--text-xs);
 }
 
 .info-label {
@@ -102,6 +104,6 @@ const infoFields = computed(() => [
 
 .info-value {
   color: var(--color-text-primary);
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 </style>

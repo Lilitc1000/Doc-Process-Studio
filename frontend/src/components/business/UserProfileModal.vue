@@ -241,7 +241,7 @@ async function savePassword() {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -251,27 +251,26 @@ async function savePassword() {
 
 .modal-container {
   display: flex;
-  gap: 2rem;
+  gap: var(--space-2xl);
   background: rgba(255, 255, 255, 0.98);
-  border-radius: 20px;
-  padding: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
   min-width: 520px;
   max-width: 600px;
-  box-shadow:
-    0 20px 40px rgba(15, 23, 42, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-modal), var(--shadow-inset);
 }
 
 .modal-left {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-lg);
   min-width: 140px;
 }
 
 .modal-avatar {
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-xs);
 }
 
 .modal-info {
@@ -279,21 +278,21 @@ async function savePassword() {
 }
 
 .modal-info-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
 }
 
 .modal-info-id {
-  font-size: 0.75rem;
-  color: #64748b;
-  margin-top: 0.15rem;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2xs);
 }
 
 .modal-info-date {
-  font-size: 0.72rem;
-  color: #94a3b8;
-  margin-top: 0.15rem;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-2xs);
 }
 
 .modal-right {
@@ -303,71 +302,71 @@ async function savePassword() {
 
 .modal-tabs {
   display: flex;
-  gap: 0.25rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 0.5rem;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-sm);
 }
 
 .modal-tab {
-  padding: 0.35rem 0.75rem;
+  padding: var(--space-xs) var(--space-md);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  font-size: 0.82rem;
-  color: #64748b;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition:
-    background 0.18s ease,
-    color 0.18s ease;
+    background var(--transition-base),
+    color var(--transition-base);
 }
 
 .modal-tab:hover {
-  background: #f8fafc;
-  color: #334155;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .modal-tab.active {
-  background: #eff6ff;
-  color: #2563eb;
-  font-weight: 600;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-weight: var(--font-semibold);
 }
 
 .modal-tab-content {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--space-lg);
 }
 
 .modal-field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-xs);
 }
 
 .modal-field-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #475569;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-secondary);
 }
 
 .modal-field-value {
-  font-size: 0.88rem;
-  color: #0f172a;
-  padding: 0.4rem 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  padding: var(--space-sm) 0;
 }
 
 .modal-color-preview {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
 }
 
 .modal-color-picker {
   display: flex;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
 }
 
 .modal-color-dot {
@@ -381,8 +380,8 @@ async function savePassword() {
   cursor: pointer;
   border: 2px solid transparent;
   transition:
-    border-color 0.18s ease,
-    transform 0.18s ease;
+    border-color var(--transition-base),
+    transform var(--transition-base);
 }
 
 .modal-color-dot-clickable:hover {
@@ -390,21 +389,21 @@ async function savePassword() {
 }
 
 .modal-color-dot-clickable.selected {
-  border-color: #0f172a;
+  border-color: var(--color-text-primary);
   transform: scale(1.15);
 }
 
 .modal-actions {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
 }
 
 .modal-error {
-  font-size: 0.8rem;
-  color: #ef4444;
-  background: #fef2f2;
-  padding: 0.4rem 0.65rem;
-  border-radius: 8px;
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+  background: var(--color-danger-light);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
 }
 </style>

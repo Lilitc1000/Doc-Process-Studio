@@ -1,5 +1,5 @@
 <template>
-  <div class="login-page">
+  <section class="login-page">
     <div class="login-card fade-slide-up-target">
       <h1 class="login-title">登录</h1>
       <form class="login-form" @submit.prevent="onSubmit">
@@ -39,7 +39,7 @@
         <router-link to="/register" class="login-link">去注册</router-link>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

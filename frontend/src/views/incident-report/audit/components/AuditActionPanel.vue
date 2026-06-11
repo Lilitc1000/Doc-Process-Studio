@@ -47,7 +47,7 @@ const comment = ref('');
 .audit-action-panel {
   padding: 20px;
   background: var(--color-bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .audit-action-panel h3 {

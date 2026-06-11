@@ -209,7 +209,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.2rem;
+  padding: var(--space-xl);
   background: rgba(15, 23, 42, 0.38);
   backdrop-filter: blur(3px);
 }
@@ -219,7 +219,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
   max-height: min(86vh, 920px);
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: #ffffff;
   box-shadow:
@@ -232,8 +232,8 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.9rem;
-  padding: 1rem 1.05rem 0.9rem;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl) var(--space-lg);
   border-bottom: 1px solid #e2e8f0;
   background: linear-gradient(180deg, #f8fafc, #ffffff);
 }
@@ -250,7 +250,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
 }
 
 .trace-modal-trace-id {
-  margin: 0.25rem 0 0;
+  margin: var(--space-xs) 0 0;
   font-size: 0.78rem;
   color: #475569;
   word-break: break-all;
@@ -259,7 +259,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
 .trace-modal-actions {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-sm);
 }
 
 .trace-modal-action-btn,
@@ -271,7 +271,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
   border: 1px solid #dbe2ea;
   background: #ffffff;
   color: #1e293b;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   min-height: 2rem;
   padding: 0 0.68rem;
   font-size: 0.8rem;
@@ -312,7 +312,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
 .trace-modal-loading,
 .trace-modal-empty,
 .trace-modal-error {
-  padding: 1.15rem 1.1rem;
+  padding: var(--space-lg) var(--space-xl);
   font-size: 0.88rem;
   color: #334155;
 }
@@ -324,16 +324,16 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
 
 .trace-modal-body {
   overflow: auto;
-  padding: 0.95rem 1.05rem 1.05rem;
+  padding: var(--space-lg) var(--space-xl) var(--space-xl);
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--space-lg);
 }
 
 .trace-modal-section {
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 0.78rem 0.82rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-md);
   background: #fcfdff;
 }
 
@@ -350,31 +350,31 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.52rem;
+  gap: var(--space-sm);
   font-size: 0.8rem;
   color: #334155;
 }
 
 .trace-modal-event-list li {
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: #fff;
-  padding: 0.56rem 0.62rem;
+  padding: var(--space-sm) var(--space-md);
 }
 
 .trace-event-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: var(--space-sm);
 }
 
 .trace-modal-code {
   margin: 0;
-  padding: 0.65rem 0.72rem;
+  padding: var(--space-sm) var(--space-md);
   max-height: 260px;
   overflow: auto;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid #e2e8f0;
   background: #0f172a;
   color: #e2e8f0;
@@ -384,13 +384,13 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
 
 .trace-round-item {
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-sm);
   background: #ffffff;
 }
 
 .trace-round-item + .trace-round-item {
-  margin-top: 0.5rem;
+  margin-top: var(--space-sm);
 }
 
 .trace-round-item summary {
@@ -400,7 +400,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
 }
 
 .trace-round-item[open] summary {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
 }
 
 .trace-event-type {
@@ -417,7 +417,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
 }
 
 .trace-event-message {
-  margin: 0.36rem 0 0;
+  margin: var(--space-xs) 0 0;
   color: #334155;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -425,7 +425,7 @@ const formatDetailJson = (value?: Record<string, unknown>) => {
 }
 
 .trace-event-detail-block {
-  margin-top: 0.5rem;
+  margin-top: var(--space-sm);
 }
 
 .trace-event-detail-block summary {

@@ -1,5 +1,5 @@
 <template>
-  <div class="incident-report-analytics-view">
+  <section class="incident-report-analytics-view">
     <div class="analytics-header">
       <base-button
         variant="ghost"
@@ -31,7 +31,7 @@
         <trend-chart :trend-data="trendData" :loading="trendLoading" />
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

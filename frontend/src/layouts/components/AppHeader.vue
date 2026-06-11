@@ -110,7 +110,7 @@ async function onLogout() {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 100;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -118,34 +118,33 @@ async function onLogout() {
 }
 
 .app-header--sub {
-  margin: 0.6rem 0.75rem;
-  padding: 0.45rem 0.75rem;
-  border-radius: 14px;
+  margin: var(--space-sm) var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.06),
-    0 4px 16px rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  box-shadow: var(--shadow-sm);
   pointer-events: auto;
 }
 
 .app-header--home {
-  padding: 0.75rem 1rem;
+  padding: var(--space-md) var(--space-lg);
   pointer-events: none;
 }
 
 .app-header-left {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   min-width: 0;
 }
 
 .app-header-right {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   flex-shrink: 0;
   pointer-events: auto;
 }
@@ -162,25 +161,25 @@ async function onLogout() {
   height: 1.85rem;
   padding: 0;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: #475569;
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition:
-    background 0.2s ease,
-    color 0.2s ease;
+    background var(--transition-base),
+    color var(--transition-base);
   flex-shrink: 0;
 }
 
 .app-header-home:hover {
-  background: rgba(59, 130, 246, 0.08);
-  color: #2563eb;
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
 }
 
 .app-header-home:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
-  border-radius: 10px;
+  box-shadow: 0 0 0 2px var(--color-primary-subtle);
+  border-radius: var(--radius-sm);
 }
 
 .app-header-home-icon {
@@ -189,9 +188,9 @@ async function onLogout() {
 }
 
 .app-header-title {
-  font-size: 0.85rem;
-  font-weight: 650;
-  color: #0f172a;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
   letter-spacing: 0.01em;
   white-space: nowrap;
   overflow: hidden;
@@ -203,46 +202,46 @@ async function onLogout() {
   align-items: center;
   border: none;
   background: transparent;
-  padding: 0.2rem 0.45rem;
-  border-radius: 8px;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
-    color 0.2s ease,
-    background 0.2s ease;
+    color var(--transition-base),
+    background var(--transition-base);
 }
 
 .app-header-title-btn:hover {
-  color: #1d4ed8;
-  background: rgba(59, 130, 246, 0.08);
+  color: var(--color-primary-hover);
+  background: var(--color-primary-subtle);
 }
 
 .app-header-title-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 0 0 2px var(--color-primary-subtle);
 }
 
 .app-header-login-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.35rem 0.85rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  padding: var(--space-xs) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(8px);
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #475569;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition:
-    border-color 0.2s ease,
-    color 0.2s ease,
-    background 0.2s ease;
+    border-color var(--transition-base),
+    color var(--transition-base),
+    background var(--transition-base);
 }
 
 .app-header-login-btn:hover {
-  border-color: #93c5fd;
-  color: #2563eb;
-  background: rgba(239, 246, 255, 0.9);
+  border-color: var(--color-border-focus);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
 }
 </style>

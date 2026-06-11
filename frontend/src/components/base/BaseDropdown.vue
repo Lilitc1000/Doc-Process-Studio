@@ -159,10 +159,10 @@ watch(
   justify-content: space-between;
   width: 100%;
   min-height: 40px;
-  padding: 0.62rem 0.72rem;
+  padding: var(--space-sm) var(--space-md);
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-size: 0.9rem;
   color: #0f172a;
   cursor: pointer;
@@ -173,7 +173,7 @@ watch(
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     background 0.2s ease;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 
 .base-dropdown-trigger:hover:not(:disabled):not(.open) {
@@ -220,7 +220,7 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: #475569;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -249,10 +249,10 @@ watch(
   left: 0;
   z-index: 40;
   min-width: 100%;
-  padding: 0.45rem;
+  padding: var(--space-sm);
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   backdrop-filter: blur(12px);
   box-shadow:
     0 20px 40px rgba(15, 23, 42, 0.12),
@@ -267,11 +267,11 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-md);
   width: 100%;
-  padding: 0.8rem 0.9rem;
+  padding: var(--space-lg) var(--space-lg);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: transparent;
   font-size: 0.9rem;
   color: #1e293b;
@@ -294,8 +294,8 @@ watch(
 }
 
 .base-dropdown-option-tag {
-  padding: 0.18rem 0.45rem;
-  border-radius: 999px;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-full);
   background: #dbeafe;
   color: #2563eb;
   font-size: 0.72rem;

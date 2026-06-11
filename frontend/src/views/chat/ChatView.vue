@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-page">
+  <section class="chat-page">
     <div class="chat-page-body">
       <session-sidebar
         :sessions="chatStore.sessionSummaries"
@@ -32,7 +32,11 @@
               :available-skills="appStore.processingModes"
               :kb-projects="appStore.kbProjects"
               :is-loading="chatStore.isLoading"
-              :live-tool-status="chatStore.isMessageStreaming(message) ? chatStore.latestLiveToolStatus : null"
+              :live-tool-status="
+                chatStore.isMessageStreaming(message)
+                  ? chatStore.latestLiveToolStatus
+                  : null
+              "
               :show-version-switcher="
                 chatStore.getMessageVersionCount(message.id) > 1
               "
@@ -41,10 +45,24 @@
               :can-go-prev="chatStore.canSwitchMessageVersion(message.id, -1)"
               :can-go-next="chatStore.canSwitchMessageVersion(message.id, 1)"
               :can-open-trace="!!message.traceId"
-              :can-edit="message.role === 'user' && !chatStore.isLoading && !chatStore.isMessageStreaming(message)"
-              :can-copy="!!message.content && !chatStore.isMessageStreaming(message)"
-              :can-regenerate="message.role === 'assistant' && !chatStore.isLoading && !chatStore.isMessageStreaming(message)"
-              :can-download="message.role === 'assistant' && !!message.content && !chatStore.isMessageStreaming(message)"
+              :can-edit="
+                message.role === 'user' &&
+                !chatStore.isLoading &&
+                !chatStore.isMessageStreaming(message)
+              "
+              :can-copy="
+                !!message.content && !chatStore.isMessageStreaming(message)
+              "
+              :can-regenerate="
+                message.role === 'assistant' &&
+                !chatStore.isLoading &&
+                !chatStore.isMessageStreaming(message)
+              "
+              :can-download="
+                message.role === 'assistant' &&
+                !!message.content &&
+                !chatStore.isMessageStreaming(message)
+              "
               @prev-version="chatStore.switchMessageVersion(message.id, -1)"
               @next-version="chatStore.switchMessageVersion(message.id, 1)"
               @start-edit="startEditingMessage(message.id)"
@@ -93,7 +111,7 @@
       @retry="retryTraceModalLoad"
       @copy-trace-id="copyTraceId"
     />
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

@@ -105,9 +105,9 @@ defineEmits<{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
-  padding: 2rem 2.5rem;
-  border-radius: 20px;
+  gap: var(--space-lg);
+  padding: var(--space-2xl) var(--space-3xl);
+  border-radius: var(--radius-xl);
   background: #ffffff;
   box-shadow:
     0 24px 48px rgba(15, 23, 42, 0.22),
@@ -194,7 +194,7 @@ defineEmits<{
 .ai-gen-text {
   display: flex;
   align-items: baseline;
-  gap: 0.15rem;
+  gap: var(--space-2xs);
   font-size: 1rem;
   color: #1e293b;
   font-weight: 500;
@@ -206,7 +206,7 @@ defineEmits<{
 
 .ai-gen-dots {
   display: inline-flex;
-  gap: 0.1rem;
+  gap: var(--space-2xs);
 }
 
 .ai-gen-dot-anim {
@@ -234,11 +234,11 @@ defineEmits<{
 
 .ai-gen-stop-btn,
 .base-button.ai-gen-stop-btn {
-  margin-top: 0.25rem;
+  margin-top: var(--space-xs);
   border: 1px solid #e2e8f0;
   background: #ffffff;
   color: #475569;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   min-height: 2rem;
   padding: 0 1rem;
   font-size: 0.82rem;

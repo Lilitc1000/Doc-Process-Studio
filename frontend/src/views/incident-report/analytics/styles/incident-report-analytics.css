@@ -2,32 +2,34 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 24px;
+  padding: var(--space-xl);
 }
 
 .analytics-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
 }
 
 .analytics-header h1 {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
   margin: 0;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
 }
 
 .analytics-body {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-xl);
   flex: 1;
 }
 
 .analytics-charts {
   display: flex;
-  gap: 20px;
+  gap: var(--space-xl);
   flex-wrap: wrap;
 }
 

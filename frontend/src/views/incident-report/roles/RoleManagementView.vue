@@ -1,5 +1,5 @@
 <template>
-  <div class="role-management-view">
+  <section class="role-management-view">
     <div class="role-management-header">
       <base-button
         variant="ghost"
@@ -79,7 +79,7 @@
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -142,26 +142,28 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 24px;
+  padding: var(--space-xl);
 }
 
 .role-management-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
 }
 
 .role-management-header h1 {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
   margin: 0;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
 }
 
 .role-management-hint {
   margin: 0;
-  font-size: 13px;
-  color: var(--color-text-secondary, #888);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
 }
 
 .role-management-body {
@@ -172,39 +174,53 @@ onMounted(() => {
 .role-management-loading,
 .role-management-empty {
   text-align: center;
-  padding: 40px;
+  padding: var(--space-2xl);
   color: var(--color-text-secondary);
 }
 
 .role-management-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--text-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-card);
 }
 
 .role-management-table th {
   text-align: left;
-  padding: 12px 16px;
-  font-weight: 600;
+  padding: var(--space-md) var(--space-lg);
+  font-weight: var(--font-semibold);
   color: var(--color-text-secondary);
   border-bottom: 2px solid var(--color-border);
-  font-size: 13px;
+  font-size: var(--text-xs);
+  background: var(--color-bg-secondary);
 }
 
 .role-management-table td {
-  padding: 12px 16px;
+  padding: var(--space-md) var(--space-lg);
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
 }
 
+.role-management-table tr:last-child td {
+  border-bottom: none;
+}
+
+.role-management-table tr:hover td {
+  background: var(--color-bg-hover);
+}
+
 .role-management-username {
-  font-weight: 500;
+  font-weight: var(--font-medium);
   color: var(--color-text-primary);
 }
 
 .role-management-tags {
   display: flex;
-  gap: 6px;
+  gap: var(--space-xs);
   flex-wrap: wrap;
   align-items: center;
 }
@@ -212,54 +228,58 @@ onMounted(() => {
 .role-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-size: 12px;
-  font-weight: 500;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-light);
+  color: var(--color-primary-hover);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  border: 1px solid var(--color-primary-lighter);
 }
 
 .role-tag-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   border: none !important;
   background: transparent !important;
-  color: #93c5fd;
-  border-radius: 999px;
+  color: var(--color-border-focus);
+  border-radius: var(--radius-full);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1;
   padding: 0 !important;
   min-height: unset !important;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .role-tag-remove:hover {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-primary-lighter);
+  color: var(--color-primary-hover);
 }
 
 .role-tag-empty {
   color: var(--color-text-tertiary);
-  font-size: 13px;
+  font-size: var(--text-xs);
 }
 
 .role-management-actions {
-  min-width: 120px;
+  min-width: 7.5rem;
 }
 
 @media (max-width: 768px) {
   .role-management-table {
-    font-size: 13px;
+    font-size: var(--text-xs);
   }
 
   .role-management-table th,
   .role-management-table td {
-    padding: 8px 10px;
+    padding: var(--space-sm) var(--space-sm);
   }
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="incident-report-list-view">
+  <section class="incident-report-list-view">
     <div class="incident-report-list-header">
       <h1 class="incident-report-list-title">事故报告管理</h1>
       <div class="incident-report-list-header-actions">
@@ -130,7 +130,7 @@
       title="提交成功"
       message="事故报告已成功提交"
     />
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

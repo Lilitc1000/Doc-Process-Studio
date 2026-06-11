@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .rich-text-editor {
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 

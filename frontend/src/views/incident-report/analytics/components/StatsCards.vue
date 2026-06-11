@@ -42,23 +42,37 @@ defineProps<{
 <style scoped>
 .stats-cards {
   display: flex;
-  gap: 16px;
+  gap: var(--space-lg);
   flex-wrap: wrap;
 }
 
 .stat-card {
   flex: 1;
   min-width: 140px;
-  padding: 20px;
-  background: var(--color-bg-secondary);
-  border-radius: 8px;
+  padding: var(--space-xl);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   text-align: center;
+  box-shadow: var(--shadow-xs);
+  transition:
+    border-color var(--transition-smooth),
+    box-shadow var(--transition-smooth),
+    transform var(--transition-smooth);
+}
+
+.stat-card:hover {
+  border-color: var(--color-primary-lighter);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .stat-value {
-  font-size: 32px;
-  font-weight: 700;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
   color: var(--color-text-primary);
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-pending {
@@ -72,8 +86,8 @@ defineProps<{
 }
 
 .stat-label {
-  font-size: 13px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 </style>

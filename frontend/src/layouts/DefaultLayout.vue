@@ -1,5 +1,5 @@
 <template>
-  <div class="app-layout">
+  <div class="app-layout" role="document">
     <app-header
       :page-id="currentPageId"
       :title-clickable="isTitleClickable"
@@ -75,7 +75,8 @@ const onTitleClick = () => {
 .app-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 100dvh;
   overflow: hidden;
 }
 
@@ -83,7 +84,7 @@ const onTitleClick = () => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding-top: 3rem;
+  padding-top: var(--space-3xl);
 }
 
 .app-layout-content--home {
@@ -92,7 +93,7 @@ const onTitleClick = () => {
 
 @media (max-width: 640px) {
   .app-layout-content {
-    padding-top: 2.75rem;
+    padding-top: var(--space-3xl);
   }
 }
 </style>

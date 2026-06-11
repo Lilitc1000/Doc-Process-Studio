@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-page">
+  <section class="settings-page">
     <div class="settings-body">
       <div class="settings-content">
         <section class="settings-section">
@@ -34,7 +34,7 @@
         </section>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

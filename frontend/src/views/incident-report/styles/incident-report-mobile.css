@@ -1,12 +1,12 @@
 @media (max-width: 768px) {
   .incident-report-list-view {
-    padding: 12px;
+    padding: var(--space-md);
   }
 
   .incident-report-list-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-sm);
   }
 
   .incident-report-list-body {
@@ -20,17 +20,17 @@
   .report-list-stats {
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-sm);
   }
 
   .stat-card {
     flex: 1;
     min-width: 80px;
-    padding: 8px;
+    padding: var(--space-sm);
   }
 
   .stat-value {
-    font-size: 18px;
+    font-size: 1.1rem;
   }
 
   .report-list-filters {
@@ -51,7 +51,7 @@
   }
 
   .incident-report-detail-view {
-    padding: 12px;
+    padding: var(--space-md);
   }
 
   .detail-header {
@@ -77,7 +77,7 @@
   }
 
   .incident-report-create-view {
-    padding: 12px;
+    padding: var(--space-md);
   }
 
   .wizard-steps {
@@ -87,7 +87,7 @@
 
   .wizard-step {
     min-width: 80px;
-    font-size: 12px;
+    font-size: var(--text-xs);
   }
 
   .step-label {
@@ -99,16 +99,16 @@
   }
 
   .incident-report-audit-view {
-    padding: 12px;
+    padding: var(--space-md);
   }
 
   .audit-meta {
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-xs);
   }
 
   .incident-report-analytics-view {
-    padding: 12px;
+    padding: var(--space-md);
   }
 
   .analytics-charts {
@@ -118,16 +118,16 @@
   .stats-cards {
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-sm);
   }
 
   .stat-card {
     min-width: 100px;
-    padding: 12px;
+    padding: var(--space-md);
   }
 
   .stat-value {
-    font-size: 20px;
+    font-size: 1.25rem;
   }
 }
 
@@ -143,6 +143,6 @@
   }
 
   .wizard-step {
-    padding: 6px 8px;
+    padding: var(--space-xs) var(--space-sm);
   }
 }

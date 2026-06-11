@@ -1,5 +1,5 @@
 <template>
-  <div class="incident-report-detail-view">
+  <section class="incident-report-detail-view">
     <div v-if="loading" class="detail-loading">加载中...</div>
     <div v-else-if="!report" class="detail-empty">报告不存在</div>
     <template v-else>
@@ -201,7 +201,7 @@
         </div>
       </div>
     </template>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

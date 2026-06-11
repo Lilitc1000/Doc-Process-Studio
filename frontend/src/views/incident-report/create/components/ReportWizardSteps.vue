@@ -33,7 +33,7 @@ defineEmits<{
   margin-bottom: 24px;
   padding: 8px;
   background: var(--color-bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .wizard-step {
@@ -41,9 +41,9 @@ defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 6px;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--color-text-secondary);
   cursor: default;

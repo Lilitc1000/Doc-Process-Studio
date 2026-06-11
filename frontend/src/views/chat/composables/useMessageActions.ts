@@ -202,7 +202,11 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
     const userMessage = chatStore.createMessageNode({
       role: 'user',
       content: text,
-      apiContent: createUserApiContent(text, currentRequestFiles, currentRequestSkillIds),
+      apiContent: createUserApiContent(
+        text,
+        currentRequestFiles,
+        currentRequestSkillIds,
+      ),
       files: createAttachmentPreview(currentRequestFiles),
       requestFiles: currentRequestFiles,
       requestSkillIds: currentRequestSkillIds,

@@ -132,7 +132,7 @@ const updateItem = (index: number, field: 'time' | 'event', value: string) => {
 .timeline-item {
   padding: 10px;
   background: var(--color-bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border-left: 3px solid var(--color-primary);
 }
 

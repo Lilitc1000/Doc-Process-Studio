@@ -127,49 +127,62 @@ defineEmits<{
 .report-list-loading,
 .report-list-empty {
   text-align: center;
-  padding: 40px;
+  padding: var(--space-2xl);
   color: var(--color-text-secondary);
 }
 
 .report-table {
   width: 100%;
   border-collapse: collapse;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-card);
+  font-variant-numeric: tabular-nums;
 }
 
 .report-table th {
   text-align: left;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
   border-bottom: 1px solid var(--color-border);
-  font-weight: 500;
+  font-weight: var(--font-semibold);
+  background: var(--color-bg-secondary);
 }
 
 .report-table td {
-  padding: 10px 12px;
-  font-size: 14px;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-sm);
   border-bottom: 1px solid var(--color-border);
 }
 
-.report-list-row {
-  transition: background-color 0.15s;
+.report-table tr:last-child td {
+  border-bottom: none;
 }
 
-.report-list-row:hover {
+.report-list-row {
+  transition: background-color var(--transition-fast);
+}
+
+.report-list-row:hover td {
   background: var(--color-bg-hover);
 }
 
 .cell-ref {
   color: var(--color-text-secondary);
-  font-family: monospace;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 .cell-title {
-  max-width: 300px;
+  max-width: 18rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--color-text-primary);
+  font-weight: var(--font-medium);
 }
 
 .cell-severity {
@@ -177,13 +190,13 @@ defineEmits<{
 }
 
 .cell-reporter {
-  color: var(--color-text-secondary, #64748b);
-  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 
 .cell-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 </style>

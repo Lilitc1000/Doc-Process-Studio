@@ -56,70 +56,73 @@ const barWidth = (type: 'pending' | 'in_progress' | 'closed') => {
 
 <style scoped>
 .distribution-chart {
-  padding: 20px;
-  background: var(--color-bg-secondary, #f8fafc);
-  border-radius: 8px;
+  padding: var(--space-xl);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
 }
 
 .distribution-chart h3 {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 16px;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  margin: 0 0 var(--space-lg);
+  color: var(--color-text-primary);
 }
 
 .distribution-bars {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .bar-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .bar-label {
-  width: 60px;
-  font-size: 13px;
-  color: var(--color-text-secondary, #64748b);
+  width: 3.75rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 
 .bar-track {
   flex: 1;
-  height: 24px;
-  background: var(--color-bg-tertiary, #e2e8f0);
-  border-radius: 4px;
+  height: 1.5rem;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   min-width: 0;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  border-radius: var(--radius-sm);
+  transition: width var(--transition-smooth);
   min-width: 0;
 }
 
 .bar-pending {
-  background: #3b82f6;
+  background: var(--color-primary);
 }
 
 .bar-progress {
-  background: #f59e0b;
+  background: var(--color-warning);
 }
 
 .bar-closed {
-  background: #22c55e;
+  background: var(--color-success);
 }
 
 .bar-value {
-  width: 36px;
+  width: 2.25rem;
   text-align: right;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary, #0f172a);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
   flex-shrink: 0;
 }
 </style>

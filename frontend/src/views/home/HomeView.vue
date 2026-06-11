@@ -1,5 +1,5 @@
 <template>
-  <div class="home-page">
+  <section class="home-page">
     <div class="home-content">
       <div class="home-hero">
         <h1 class="home-title">文档处理平台</h1>
@@ -173,7 +173,7 @@
         </base-button>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

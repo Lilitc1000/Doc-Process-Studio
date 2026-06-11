@@ -1,5 +1,5 @@
 <template>
-  <div class="incident-report-audit-view">
+  <section class="incident-report-audit-view">
     <div v-if="loading" class="audit-loading">加载中...</div>
     <div v-else-if="!report" class="audit-empty">报告不存在</div>
     <template v-else>
@@ -103,7 +103,7 @@
         </div>
       </div>
     </template>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

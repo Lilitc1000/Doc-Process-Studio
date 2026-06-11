@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: #f5f5f5;
+  background: var(--color-bg-page);
   overflow: hidden;
 }
 
@@ -14,50 +14,44 @@
   display: flex;
   justify-content: center;
   background:
-    radial-gradient(
-      circle at 8% 12%,
-      rgba(59, 130, 246, 0.06),
-      transparent 40%
-    ),
+    radial-gradient(circle at 8% 12%, rgba(37, 99, 235, 0.06), transparent 42%),
     radial-gradient(
       circle at 88% 80%,
       rgba(14, 165, 233, 0.04),
-      transparent 36%
+      transparent 38%
     ),
-    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    linear-gradient(180deg, #f8fafc 0%, var(--color-bg-page) 100%);
 }
 
 .settings-content {
-  width: min(560px, 100%);
-  padding: 2.5rem 2rem;
+  width: min(var(--container-sm), 100%);
+  padding: var(--space-2xl) var(--space-2xl);
 }
 
 .settings-section {
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
   background: rgba(255, 255, 255, 0.96);
-  box-shadow:
-    0 10px 24px rgba(15, 23, 42, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-card), var(--shadow-inset);
 }
 
 .settings-section-title {
-  margin: 0 0 0.35rem;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #0f172a;
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
 }
 
 .settings-section-desc {
-  margin: 0 0 1.5rem;
-  font-size: 0.85rem;
-  color: #64748b;
+  margin: 0 0 var(--space-xl);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
 }
 
 .selector-group {
   position: relative;
-  margin-bottom: 1.2rem;
+  margin-bottom: var(--space-xl);
 }
 
 .selector-group:last-child {
@@ -66,9 +60,9 @@
 
 .selector-label {
   display: block;
-  margin-bottom: 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #64748b;
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-secondary);
   letter-spacing: 0.02em;
 }

@@ -92,12 +92,12 @@ const inputRef = ref<InstanceType<typeof BaseInput> | null>(null);
 }
 
 .password-input-field {
-  padding-right: 2.5rem;
+  padding-right: var(--space-3xl);
 }
 
 .password-toggle-btn {
   position: absolute;
-  right: 0.35rem;
+  right: var(--space-xs);
   top: 50%;
   transform: translateY(-50%);
   min-height: 0 !important;
@@ -106,7 +106,7 @@ const inputRef = ref<InstanceType<typeof BaseInput> | null>(null);
   height: 2rem;
   padding: 0 !important;
   border: none !important;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;

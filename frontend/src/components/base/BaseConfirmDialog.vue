@@ -95,56 +95,58 @@ const handleCancel = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: var(--z-modal);
 }
 
 .confirm-dialog {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.15);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
   min-width: 360px;
   max-width: 480px;
   overflow: hidden;
 }
 
 .confirm-header {
-  padding: 16px 20px 0;
+  padding: var(--space-xl) var(--space-xl) 0;
 }
 
 .confirm-title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #0f172a;
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
 }
 
 .confirm-body {
-  padding: 12px 20px 20px;
+  padding: var(--space-md) var(--space-xl) var(--space-xl);
 }
 
 .confirm-body p {
   margin: 0;
-  font-size: 14px;
-  color: #475569;
-  line-height: 1.5;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
 }
 
 .confirm-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
 }
 
 .confirm-fade-enter-active,
 .confirm-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--transition-smooth);
 }
 
 .confirm-fade-enter-from,

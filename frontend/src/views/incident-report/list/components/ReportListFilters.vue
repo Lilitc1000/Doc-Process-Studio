@@ -64,18 +64,18 @@ const severityOptions = [{ value: '', label: '全部级别' }, ..._severityOptio
 <style scoped>
 .report-list-filters {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
-  padding: 12px 0;
+  padding: var(--space-md) 0;
   flex-wrap: wrap;
 }
 
 .filter-search {
   flex: 1;
-  min-width: 200px;
+  min-width: 12rem;
 }
 
 .filter-dropdown {
-  min-width: 120px;
+  min-width: 7.5rem;
 }
 </style>

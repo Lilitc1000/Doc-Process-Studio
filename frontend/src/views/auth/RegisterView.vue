@@ -1,5 +1,5 @@
 <template>
-  <div class="register-page">
+  <section class="register-page">
     <div class="register-card fade-slide-up-target">
       <h1 class="register-title">注册</h1>
       <form class="register-form" @submit.prevent="onSubmit">
@@ -47,7 +47,7 @@
         <router-link to="/login" class="register-link">去登录</router-link>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

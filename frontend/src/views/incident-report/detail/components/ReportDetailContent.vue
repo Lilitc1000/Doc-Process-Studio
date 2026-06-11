@@ -462,36 +462,37 @@ const hasAnyData = computed(() => {
 .detail-sections {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-xl);
 }
 
 .detail-section {
-  background: var(--color-bg-secondary);
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-xs);
 }
 
 .section-title {
-  padding: 12px 16px;
-  background: var(--color-bg-tertiary, #f1f5f9);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-bg-tertiary);
   border-bottom: 1px solid var(--color-border);
 }
 
 .section-title h3 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
   color: var(--color-text-primary);
 }
 
 .section-body {
-  padding: 16px;
+  padding: var(--space-lg);
 }
 
 .field-grid {
   display: grid;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .field-grid.two-column {
@@ -501,7 +502,7 @@ const hasAnyData = computed(() => {
 .field-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .field-row.full-width {
@@ -509,24 +510,24 @@ const hasAnyData = computed(() => {
 }
 
 .field-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
-  font-weight: 500;
+  font-weight: var(--font-medium);
 }
 
 .field-value {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 .sub-section-card {
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  margin-bottom: 12px;
-  background: var(--color-bg-primary, #fff);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-md);
+  background: var(--color-bg-primary);
 }
 
 .sub-section-card:last-child {
@@ -537,80 +538,80 @@ const hasAnyData = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
 }
 
 .sub-section-header h4 {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   color: var(--color-text-primary);
 }
 
 .sub-section-body {
-  padding: 12px;
+  padding: var(--space-md);
 }
 
 .text-block {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.6;
+  line-height: var(--leading-relaxed);
 }
 
 .timeline-range {
   display: flex;
-  gap: 24px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+  gap: var(--space-xl);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-md);
   border-bottom: 1px dashed var(--color-border);
 }
 
 .timeline-range-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .timeline-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .timeline-table th {
-  background: var(--color-bg-tertiary, #f1f5f9);
-  padding: 6px 10px;
+  background: var(--color-bg-tertiary);
+  padding: var(--space-xs) var(--space-sm);
   text-align: left;
-  font-weight: 600;
+  font-weight: var(--font-semibold);
   border: 1px solid var(--color-border);
   white-space: nowrap;
 }
 
 .timeline-table td {
-  padding: 6px 10px;
+  padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--color-border);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .appendix-content {
-  line-height: 1.6;
+  line-height: var(--leading-relaxed);
 }
 
 .appendix-html {
-  line-height: 1.6;
+  line-height: var(--leading-relaxed);
 }
 
 .appendix-html :deep(img) {
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
-  margin: 4px 0;
+  border-radius: var(--radius-sm);
+  margin: var(--space-xs) 0;
 }
 
 .appendix-html :deep(table) {
@@ -621,32 +622,33 @@ const hasAnyData = computed(() => {
 .appendix-html :deep(th),
 .appendix-html :deep(td) {
   border: 1px solid var(--color-border);
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   text-align: left;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .appendix-html :deep(th) {
-  background: var(--color-bg-tertiary, #f1f5f9);
-  font-weight: 600;
+  background: var(--color-bg-tertiary);
+  font-weight: var(--font-semibold);
 }
 
 .appendix-html :deep(ul),
 .appendix-html :deep(ol) {
-  padding-left: 20px;
-  margin: 4px 0;
+  padding-left: var(--space-xl);
+  margin: var(--space-xs) 0;
 }
 
 .appendix-html :deep(p) {
-  margin: 4px 0;
+  margin: var(--space-xs) 0;
 }
 
 .content-empty {
   text-align: center;
-  padding: 24px;
+  padding: var(--space-xl);
   color: var(--color-text-tertiary);
   background: var(--color-bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 768px) {
@@ -656,7 +658,7 @@ const hasAnyData = computed(() => {
 
   .timeline-range {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-md);
   }
 }
 </style>

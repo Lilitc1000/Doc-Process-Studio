@@ -40,33 +40,47 @@ defineExpose({
 .base-textarea {
   width: 100%;
   min-height: 90px;
-  padding: 0.62rem 0.72rem;
-  border-radius: 12px;
-  border: 1px solid #dbe3ee;
-  background: #fff;
-  color: inherit;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
   font: inherit;
-  line-height: 1.45;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   resize: vertical;
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
+    border-color var(--transition-smooth),
+    box-shadow var(--transition-smooth),
+    background-color var(--transition-smooth);
+}
+
+.base-textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.base-textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--color-border-hover);
 }
 
 .base-textarea:focus {
   outline: none;
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.35);
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px var(--color-primary-subtle);
 }
 
 .base-textarea.invalid {
-  border-color: #ef4444;
-  background: #fff8f8;
+  border-color: var(--color-danger);
+  background: var(--color-danger-light);
+}
+
+.base-textarea.invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 
 .base-textarea:disabled {
   cursor: not-allowed;
-  opacity: 0.65;
+  opacity: 0.5;
+  background: var(--color-bg-disabled);
 }
 </style>

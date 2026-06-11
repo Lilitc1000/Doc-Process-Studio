@@ -70,52 +70,55 @@ const formatLabel = (date: string) => {
 
 <style scoped>
 .trend-chart {
-  padding: 20px;
-  background: var(--color-bg-secondary, #f8fafc);
-  border-radius: 8px;
+  padding: var(--space-xl);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
 }
 
 .trend-chart h3 {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 16px;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  margin: 0 0 var(--space-lg);
+  color: var(--color-text-primary);
 }
 
 .trend-loading,
 .trend-empty {
   text-align: center;
-  padding: 24px;
-  color: var(--color-text-tertiary, #94a3b8);
+  padding: var(--space-xl);
+  color: var(--color-text-tertiary);
 }
 
 .trend-container {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .trend-y-axis {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 0 0 24px;
+  padding: 0 0 var(--space-xl);
   height: 180px;
   flex-shrink: 0;
 }
 
 .y-label {
-  font-size: 11px;
-  color: var(--color-text-tertiary, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
   text-align: right;
-  width: 24px;
+  width: var(--space-xl);
 }
 
 .trend-bars {
   flex: 1;
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: var(--space-xs);
   height: 180px;
-  padding-top: 8px;
+  padding-top: var(--space-xs);
 }
 
 .trend-bar-item {
@@ -137,26 +140,26 @@ const formatLabel = (date: string) => {
 
 .trend-bar-fill {
   width: 100%;
-  max-width: 28px;
-  background: #3b82f6;
-  border-radius: 3px 3px 0 0;
+  max-width: 1.75rem;
+  background: var(--color-primary);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   min-height: 0;
-  transition: height 0.3s ease;
+  transition: height var(--transition-smooth);
 }
 
 .trend-bar-count {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-primary, #0f172a);
-  margin-bottom: 2px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2xs);
   position: absolute;
   top: 0;
 }
 
 .trend-bar-label {
-  font-size: 11px;
-  color: var(--color-text-tertiary, #94a3b8);
-  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-xs);
   flex-shrink: 0;
   white-space: nowrap;
 }

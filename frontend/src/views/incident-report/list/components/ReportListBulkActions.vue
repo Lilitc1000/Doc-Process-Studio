@@ -36,7 +36,7 @@ defineEmits<{
   gap: 8px;
   padding: 8px 12px;
   background: var(--color-primary-bg, #eff6ff);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   margin-bottom: 8px;
 }
 

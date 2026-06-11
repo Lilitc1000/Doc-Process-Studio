@@ -1,5 +1,5 @@
 <template>
-  <div class="incident-report-create-view">
+  <section class="incident-report-create-view">
     <div class="create-header">
       <base-button
         variant="ghost"
@@ -237,7 +237,7 @@
           </label>
         </div>
 
-        <div class="section-heading" style="margin-top: 1.2rem">
+        <div class="section-heading section-heading--spaced">
           <h3>SECTION B - 维修与验证 / Repair Works & Verification</h3>
         </div>
         <div class="zone-grid two-column">
@@ -274,7 +274,7 @@
           </label>
         </div>
 
-        <div class="section-heading" style="margin-top: 1.2rem">
+        <div class="section-heading section-heading--spaced">
           <h3>SECTION C - 结案与签署 / Closeout & Sign-off</h3>
         </div>
         <div class="zone-grid two-column">
@@ -870,7 +870,7 @@
       :title="submitToastTitle"
       :message="submitToastMessage"
     />
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

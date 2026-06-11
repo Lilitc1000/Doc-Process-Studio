@@ -777,9 +777,9 @@ onBeforeUnmount(() => {
 .date-time-trigger {
   width: 100%;
   min-height: 40px;
-  padding: 0.62rem 0.72rem;
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.94);
   color: #0f172a;
   font-size: 0.9rem;
@@ -787,7 +787,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.4rem;
+  gap: var(--space-sm);
   box-shadow:
     0 10px 24px rgba(15, 23, 42, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
@@ -828,7 +828,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: #475569;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -875,9 +875,9 @@ onBeforeUnmount(() => {
 }
 
 .date-time-panel {
-  padding: 0.45rem;
+  padding: var(--space-sm);
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   box-shadow:
@@ -889,9 +889,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.45rem;
-  border-radius: 12px;
-  padding: 0.3rem 0.32rem 0.4rem;
+  margin-bottom: var(--space-sm);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-xs) var(--space-sm);
   background: #f8fafc;
 }
 
@@ -905,7 +905,7 @@ onBeforeUnmount(() => {
   width: 1.95rem;
   height: 1.95rem;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: #fff;
   color: #475569;
   cursor: pointer;
@@ -924,8 +924,8 @@ onBeforeUnmount(() => {
 .date-time-weekday-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.22rem;
-  margin-bottom: 0.18rem;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-2xs);
   padding-inline: 0.08rem;
 }
 
@@ -939,13 +939,13 @@ onBeforeUnmount(() => {
 .date-time-day-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.22rem;
+  gap: var(--space-xs);
 }
 
 .date-time-day-btn {
   min-height: 2.05rem;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: #334155;
   cursor: pointer;
@@ -981,13 +981,13 @@ onBeforeUnmount(() => {
 }
 
 .date-time-time-row {
-  margin-top: 0.62rem;
+  margin-top: var(--space-sm);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  padding: 0.46rem;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: #f8fafc;
   position: relative;
   isolation: isolate;
@@ -1001,7 +1001,7 @@ onBeforeUnmount(() => {
 .date-time-time-group {
   position: relative;
   display: grid;
-  gap: 0.3rem;
+  gap: var(--space-xs);
   z-index: 1;
 }
 
@@ -1022,8 +1022,8 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 2rem;
   border: 1px solid #dbe2ea;
-  border-radius: 12px;
-  padding: 0.3rem 0.5rem 0.3rem 0.58rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-md);
   background: #fff;
   color: #334155;
   font-size: 0.82rem;
@@ -1032,7 +1032,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease,
@@ -1099,9 +1099,9 @@ onBeforeUnmount(() => {
   z-index: 120;
   max-height: 10.5rem;
   overflow-y: auto;
-  padding: 0.32rem;
+  padding: var(--space-xs);
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(12px);
   box-shadow:
@@ -1113,12 +1113,12 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 2rem;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: #334155;
   font-size: 0.82rem;
   text-align: left;
-  padding: 0.3rem 0.55rem;
+  padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
   transition:
     background 0.18s ease,
@@ -1137,17 +1137,17 @@ onBeforeUnmount(() => {
 }
 
 .date-time-actions {
-  margin-top: 0.62rem;
+  margin-top: var(--space-sm);
   display: flex;
   justify-content: flex-end;
-  gap: 0.48rem;
+  gap: var(--space-sm);
 }
 
 .date-time-action-btn {
   min-width: 4.1rem;
   min-height: 2.05rem;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: #fff;
   color: #334155;
   font-size: 0.8rem;

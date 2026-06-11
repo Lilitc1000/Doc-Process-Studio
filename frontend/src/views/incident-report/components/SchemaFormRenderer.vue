@@ -181,7 +181,7 @@ const handleFileSelect = (fieldId: string, files: File[]) => {
 .form-step {
   padding: 16px;
   background: var(--color-bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .step-title {

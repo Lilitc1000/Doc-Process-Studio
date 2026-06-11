@@ -104,13 +104,13 @@ onBeforeUnmount(() => {
   padding: 0;
   border-radius: 50%;
   transition:
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    box-shadow var(--transition-smooth),
+    transform var(--transition-smooth);
 }
 
 .user-menu-trigger:hover,
 .base-button.user-menu-trigger:hover:not(:disabled) {
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+  box-shadow: 0 0 0 3px var(--color-primary-subtle);
   transform: scale(1.05);
 }
 
@@ -118,46 +118,44 @@ onBeforeUnmount(() => {
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  z-index: 9999;
+  z-index: var(--z-dropdown);
   min-width: 160px;
-  padding: 0.35rem;
+  padding: var(--space-xs);
   background: rgba(255, 255, 255, 0.96);
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   backdrop-filter: blur(12px);
-  box-shadow:
-    0 10px 24px rgba(15, 23, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: var(--shadow-float);
 }
 
 .user-menu-item,
 .base-button.user-menu-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   width: 100%;
-  padding: 0.55rem 0.75rem;
+  padding: var(--space-sm) var(--space-md);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  font-size: 0.85rem;
-  color: #1e293b;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
   cursor: pointer;
   text-align: left;
   transition:
-    background 0.18s ease,
-    color 0.18s ease;
+    background var(--transition-base),
+    color var(--transition-base);
 }
 
 .user-menu-item:hover,
 .base-button.user-menu-item:hover:not(:disabled) {
-  background: #f8fafc;
+  background: var(--color-bg-hover);
 }
 
 .user-menu-item-danger:hover,
 .base-button.user-menu-item-danger:hover:not(:disabled) {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--color-danger-light);
+  color: var(--color-danger);
 }
 
 .user-menu-item-icon {
@@ -166,7 +164,7 @@ onBeforeUnmount(() => {
 
 .user-menu-divider {
   height: 1px;
-  background: #e2e8f0;
-  margin: 0.25rem 0.5rem;
+  background: var(--color-border);
+  margin: var(--space-xs) var(--space-sm);
 }
 </style>

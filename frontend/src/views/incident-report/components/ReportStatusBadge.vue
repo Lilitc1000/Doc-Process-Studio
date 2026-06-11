@@ -22,10 +22,10 @@ const label = computed(
 .status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
   line-height: 1.5;
   white-space: nowrap;
 }
@@ -37,26 +37,26 @@ const label = computed(
 
 .status-pending {
   color: var(--color-primary);
-  background: var(--color-primary-bg, #eff6ff);
+  background: var(--color-primary-light);
 }
 
 .status-approved {
   color: var(--color-success);
-  background: var(--color-success-bg, #f0fdf4);
+  background: var(--color-success-light);
 }
 
 .status-rejected {
   color: var(--color-danger);
-  background: var(--color-danger-bg, #fef2f2);
+  background: var(--color-danger-light);
 }
 
 .status-in-progress {
   color: var(--color-warning);
-  background: var(--color-warning-bg, #fffbeb);
+  background: var(--color-warning-light);
 }
 
 .status-closed {
   color: var(--color-text-tertiary);
-  background: var(--color-bg-tertiary, #f5f5f5);
+  background: var(--color-bg-tertiary);
 }
 </style>

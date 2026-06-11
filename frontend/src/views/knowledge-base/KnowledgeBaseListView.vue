@@ -1,5 +1,5 @@
 <template>
-  <div class="kb-list-page">
+  <section class="kb-list-page">
     <div class="kb-list-header">
       <h1 class="kb-list-title">知识库</h1>
       <base-button variant="primary" @click="showCreateDialog = true">
@@ -103,7 +103,7 @@
         </div>
       </div>
     </teleport>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

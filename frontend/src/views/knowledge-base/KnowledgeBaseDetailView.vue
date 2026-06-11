@@ -1,12 +1,16 @@
 <template>
-  <div class="kb-detail-page">
+  <section class="kb-detail-page">
     <div class="kb-detail-header">
       <base-button variant="ghost" @click="onBack">← 返回</base-button>
       <h1 class="kb-detail-title">
         {{ store.currentProject?.name || '加载中...' }}
       </h1>
       <div class="kb-detail-actions">
-        <base-button variant="primary" :disabled="isUploading" @click="onUpload">
+        <base-button
+          variant="primary"
+          :disabled="isUploading"
+          @click="onUpload"
+        >
           {{ isUploading ? '上传中...' : '上传文档' }}
         </base-button>
       </div>
@@ -109,7 +113,7 @@
         </div>
       </div>
     </teleport>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">

@@ -1,5 +1,5 @@
 <template>
-  <div class="kb-tree-node" :style="{ paddingLeft: (depth ?? 0) * 20 + 'px' }">
+  <div class="kb-tree-node" :style="{ paddingLeft: `calc(${depth ?? 0} * var(--space-xl))` }">
     <!-- Folder -->
     <div
       v-if="node.type === 'folder'"

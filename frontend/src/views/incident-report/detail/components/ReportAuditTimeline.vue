@@ -62,13 +62,13 @@ const statusLabel = (status: string) =>
 
 <style scoped>
 .report-audit-timeline {
-  margin-top: 16px;
+  margin-top: var(--space-lg);
 }
 
 .report-audit-timeline h3 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--space-md);
   color: var(--color-text-primary);
 }
 
@@ -80,16 +80,16 @@ const statusLabel = (status: string) =>
 
 .timeline-item {
   display: flex;
-  gap: 10px;
-  padding: 8px 0;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
   position: relative;
 }
 
 .timeline-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-top: 6px;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  margin-top: var(--space-xs);
   flex-shrink: 0;
   background: var(--color-text-tertiary);
 }
@@ -120,13 +120,13 @@ const statusLabel = (status: string) =>
 
 .timeline-header {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .timeline-action {
-  font-weight: 500;
+  font-weight: var(--font-medium);
   color: var(--color-text-primary);
 }
 
@@ -136,21 +136,22 @@ const statusLabel = (status: string) =>
 
 .timeline-time {
   color: var(--color-text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .timeline-comment {
-  margin-top: 4px;
-  font-size: 13px;
+  margin-top: var(--space-xs);
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   background: var(--color-bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
 }
 
 .timeline-status-change {
-  margin-top: 2px;
-  font-size: 12px;
+  margin-top: var(--space-2xs);
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary);
 }
 </style>
