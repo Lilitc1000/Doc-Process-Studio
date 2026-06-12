@@ -288,7 +288,6 @@ async def _run_tool_with_retry(
                 deps.execute_scoped_skill_tool_call,
                 request=execution_input.request,
                 states_by_skill=execution_input.states_by_skill,
-                default_skill_id=execution_input.primary_skill_id,
                 tool_call=current_tool_call,
             )
 
