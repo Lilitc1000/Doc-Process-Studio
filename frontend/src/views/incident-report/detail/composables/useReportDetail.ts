@@ -30,5 +30,13 @@ export function useReportDetail() {
     }
   };
 
-  return { report, auditLogs, loading, load };
+  const refreshLogs = async (reportId: string) => {
+    try {
+      auditLogs.value = await fetchIncidentReportAuditLogs(reportId);
+    } catch {
+      // keep existing logs on refresh failure
+    }
+  };
+
+  return { report, auditLogs, loading, load, refreshLogs };
 }

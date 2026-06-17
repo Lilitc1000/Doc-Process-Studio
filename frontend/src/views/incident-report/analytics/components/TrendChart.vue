@@ -1,26 +1,33 @@
 <template>
   <div class="trend-chart">
-    <h3>趋势图（近 7 天）</h3>
+    <h3>新建报告趋势（近 7 天）</h3>
     <div v-if="loading" class="trend-loading">加载中...</div>
     <div v-else-if="filledData.length === 0" class="trend-empty">暂无数据</div>
-    <div v-else class="trend-container">
-      <div class="trend-y-axis">
-        <span class="y-label">{{ maxCount }}</span>
-        <span class="y-label">{{ Math.round(maxCount / 2) }}</span>
-        <span class="y-label">0</span>
-      </div>
-      <div class="trend-bars">
-        <div v-for="item in filledData" :key="item.date" class="trend-bar-item">
-          <div class="trend-bar-track">
-            <div
-              class="trend-bar-fill"
-              :style="{ height: barHeight(item.count) }"
-            />
+    <div v-else>
+      <div class="trend-container">
+        <div class="trend-y-axis">
+          <span class="y-label">{{ maxCount }}</span>
+          <span v-if="midLabel !== null" class="y-label">{{ midLabel }}</span>
+          <span class="y-label">0</span>
+        </div>
+        <div class="trend-bars">
+          <div
+            v-for="item in filledData"
+            :key="item.date"
+            class="trend-bar-item"
+          >
+            <div class="trend-bar-track">
+              <div
+                class="trend-bar-fill"
+                :style="{ height: barHeight(item.count) }"
+              >
+                <span v-if="item.count > 0" class="trend-bar-value">{{
+                  item.count
+                }}</span>
+              </div>
+            </div>
+            <span class="trend-bar-label">{{ formatLabel(item.date) }}</span>
           </div>
-          <span v-if="item.count > 0" class="trend-bar-count">{{
-            item.count
-          }}</span>
-          <span class="trend-bar-label">{{ formatLabel(item.date) }}</span>
         </div>
       </div>
     </div>
@@ -41,15 +48,22 @@ const maxCount = computed(() => {
   return m || 1;
 });
 
+const midLabel = computed(() => {
+  const mid = Math.round(maxCount.value / 2);
+  if (mid === 0 || mid >= maxCount.value) return null;
+  return mid;
+});
+
 const filledData = computed(() => {
-  const result: { date: string; count: number }[] = [];
-  const dataMap = new Map(props.trendData.map((d) => [d.date, d.count]));
+  const result: IncidentAnalyticsTrend[] = [];
+  const dataMap = new Map(props.trendData.map((d) => [d.date, d]));
   const today = new Date();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().slice(0, 10);
-    result.push({ date: dateStr, count: dataMap.get(dateStr) ?? 0 });
+    const existing = dataMap.get(dateStr);
+    result.push(existing ?? { date: dateStr, count: 0 });
   }
   return result;
 });
@@ -110,6 +124,7 @@ const formatLabel = (date: string) => {
   color: var(--color-text-tertiary);
   text-align: right;
   width: var(--space-xl);
+  font-variant-numeric: tabular-nums;
 }
 
 .trend-bars {
@@ -127,33 +142,37 @@ const formatLabel = (date: string) => {
   flex-direction: column;
   align-items: center;
   height: 100%;
-  position: relative;
 }
 
 .trend-bar-track {
   flex: 1;
   width: 100%;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .trend-bar-fill {
   width: 100%;
-  max-width: 1.75rem;
+  max-width: 2rem;
+  min-height: 0;
   background: var(--color-primary);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  min-height: 0;
   transition: height var(--transition-smooth);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
 }
 
-.trend-bar-count {
+.trend-bar-value {
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   color: var(--color-text-primary);
-  margin-bottom: var(--space-2xs);
   position: absolute;
-  top: 0;
+  top: calc(-1 * var(--space-lg));
+  font-variant-numeric: tabular-nums;
 }
 
 .trend-bar-label {

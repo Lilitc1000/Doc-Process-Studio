@@ -2,6 +2,7 @@ import { ref } from 'vue';
 import {
   fetchIncidentReportDetail,
   updateIncidentReport,
+  submitIncidentReport,
 } from '../../../../api/incident-report';
 import type { IncidentReportDetailItem } from '../../../../types/incident-report/incident-report';
 import {
@@ -23,6 +24,7 @@ export function useReportEditWizard(reportId: string) {
   const currentStep = ref<EditWizardStep>(0);
   const loading = ref(true);
   const saving = ref(false);
+  const submitting = ref(false);
   const report = ref<IncidentReportDetailItem | null>(null);
 
   const {
@@ -56,6 +58,19 @@ export function useReportEditWizard(reportId: string) {
       return report.value;
     } finally {
       saving.value = false;
+    }
+  };
+
+  const submit = async (
+    payload: ReportPayload,
+  ): Promise<IncidentReportDetailItem> => {
+    submitting.value = true;
+    try {
+      report.value = await save(payload);
+      await submitIncidentReport(reportId);
+      return report.value;
+    } finally {
+      submitting.value = false;
     }
   };
 
@@ -98,6 +113,8 @@ export function useReportEditWizard(reportId: string) {
     generationError,
     load,
     save,
+    submitting,
+    submit,
     quickGenerate,
     generateSection,
     generatePreview,

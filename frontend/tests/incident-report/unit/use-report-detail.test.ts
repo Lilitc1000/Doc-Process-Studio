@@ -71,4 +71,39 @@ describe('useReportDetail', () => {
     expect(report.value?.title).toBe('测试报告');
     expect(auditLogs.value).toHaveLength(1);
   });
+
+  it('refreshLogs 刷新审核记录', async () => {
+    const mockLogs = [
+      {
+        id: 'log-1',
+        action: 'create',
+        actorId: 'usr-1',
+        actorName: null,
+        fromStatus: null,
+        toStatus: 'draft',
+        comment: null,
+        createdAt: '2026-04-20',
+      },
+      {
+        id: 'log-2',
+        action: 'submit',
+        actorId: 'usr-1',
+        actorName: null,
+        fromStatus: 'draft',
+        toStatus: 'pending',
+        comment: null,
+        createdAt: '2026-04-21',
+      },
+    ];
+
+    (
+      api.fetchIncidentReportAuditLogs as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(mockLogs);
+
+    const { auditLogs, refreshLogs } = useReportDetail();
+    await refreshLogs('rep-1');
+
+    expect(auditLogs.value).toHaveLength(2);
+    expect(api.fetchIncidentReportAuditLogs).toHaveBeenCalledWith('rep-1');
+  });
 });

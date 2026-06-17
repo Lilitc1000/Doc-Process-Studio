@@ -133,7 +133,7 @@ async def list_role_assignments_with_names() -> IncidentRoleListResponse:
 
 
 async def list_users_with_roles_response() -> IncidentUserWithRolesListResponse:
-    users = await list_non_admin_users_with_roles()
+    users = await list_all_users_with_roles()
     items = [
         IncidentUserWithRolesEntry(
             user_id=u["user_id"],
@@ -221,10 +221,10 @@ class _UserWithRoles(TypedDict):
     roles: list[str]
 
 
-async def list_non_admin_users_with_roles() -> list[_UserWithRoles]:
+async def list_all_users_with_roles() -> list[_UserWithRoles]:
     async with async_session_factory() as session:
         result = await session.execute(
-            select(User).where(User.username != "admin").order_by(User.username)
+            select(User).order_by(User.username)
         )
         users = list(result.scalars().all())
         if not users:

@@ -3,6 +3,16 @@
     <h3>状态分布</h3>
     <div class="distribution-bars">
       <div class="bar-item">
+        <span class="bar-label">草稿</span>
+        <div class="bar-track">
+          <div
+            class="bar-fill bar-draft"
+            :style="{ width: barWidth('draft') }"
+          />
+        </div>
+        <span class="bar-value">{{ barPercent('draft') }}</span>
+      </div>
+      <div class="bar-item">
         <span class="bar-label">待审核</span>
         <div class="bar-track">
           <div
@@ -10,7 +20,27 @@
             :style="{ width: barWidth('pending') }"
           />
         </div>
-        <span class="bar-value">{{ overview?.pendingCount ?? 0 }}</span>
+        <span class="bar-value">{{ barPercent('pending') }}</span>
+      </div>
+      <div class="bar-item">
+        <span class="bar-label">已驳回</span>
+        <div class="bar-track">
+          <div
+            class="bar-fill bar-rejected"
+            :style="{ width: barWidth('rejected') }"
+          />
+        </div>
+        <span class="bar-value">{{ barPercent('rejected') }}</span>
+      </div>
+      <div class="bar-item">
+        <span class="bar-label">已审核</span>
+        <div class="bar-track">
+          <div
+            class="bar-fill bar-approved"
+            :style="{ width: barWidth('approved') }"
+          />
+        </div>
+        <span class="bar-value">{{ barPercent('approved') }}</span>
       </div>
       <div class="bar-item">
         <span class="bar-label">处理中</span>
@@ -20,7 +50,7 @@
             :style="{ width: barWidth('in_progress') }"
           />
         </div>
-        <span class="bar-value">{{ overview?.inProgressCount ?? 0 }}</span>
+        <span class="bar-value">{{ barPercent('in_progress') }}</span>
       </div>
       <div class="bar-item">
         <span class="bar-label">已关闭</span>
@@ -30,7 +60,7 @@
             :style="{ width: barWidth('closed') }"
           />
         </div>
-        <span class="bar-value">{{ overview?.closedThisMonth ?? 0 }}</span>
+        <span class="bar-value">{{ barPercent('closed') }}</span>
       </div>
     </div>
   </div>
@@ -43,14 +73,28 @@ const props = defineProps<{
   overview: IncidentAnalyticsOverview | null;
 }>();
 
-const barWidth = (type: 'pending' | 'in_progress' | 'closed') => {
-  if (!props.overview) return '0%';
-  const total = props.overview.totalThisMonth || 1;
-  let count = 0;
-  if (type === 'pending') count = props.overview.pendingCount;
-  else if (type === 'in_progress') count = props.overview.inProgressCount;
-  else count = props.overview.closedThisMonth;
-  return `${Math.round((count / total) * 100)}%`;
+const getCount = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_progress' | 'closed') => {
+  if (!props.overview) return 0;
+  if (type === 'draft') return props.overview.draftCount;
+  if (type === 'pending') return props.overview.pendingCount;
+  if (type === 'rejected') return props.overview.rejectedCount;
+  if (type === 'approved') return props.overview.approvedCount;
+  if (type === 'in_progress') return props.overview.inProgressCount;
+  return props.overview.closedCount;
+};
+
+const getPercent = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_progress' | 'closed') => {
+  if (!props.overview) return 0;
+  const total = props.overview.totalCount || 1;
+  return Math.round((getCount(type) / total) * 100);
+};
+
+const barWidth = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_progress' | 'closed') => {
+  return `${getPercent(type)}%`;
+};
+
+const barPercent = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_progress' | 'closed') => {
+  return `${getPercent(type)}%`;
 };
 </script>
 
@@ -105,20 +149,27 @@ const barWidth = (type: 'pending' | 'in_progress' | 'closed') => {
   min-width: 0;
 }
 
+.bar-draft {
+  background: var(--color-text-tertiary);
+}
 .bar-pending {
   background: var(--color-primary);
 }
-
+.bar-rejected {
+  background: var(--color-danger);
+}
+.bar-approved {
+  background: #7c3aed;
+}
 .bar-progress {
   background: var(--color-warning);
 }
-
 .bar-closed {
   background: var(--color-success);
 }
 
 .bar-value {
-  width: 2.25rem;
+  width: 3rem;
   text-align: right;
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);

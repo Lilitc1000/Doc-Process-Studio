@@ -98,15 +98,6 @@
     flex-direction: column;
   }
 
-  .incident-report-audit-view {
-    padding: var(--space-md);
-  }
-
-  .audit-meta {
-    flex-direction: column;
-    gap: var(--space-xs);
-  }
-
   .incident-report-analytics-view {
     padding: var(--space-md);
   }

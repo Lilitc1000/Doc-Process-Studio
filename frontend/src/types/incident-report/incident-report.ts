@@ -87,10 +87,13 @@ export interface IncidentCommentEntry {
 }
 
 export interface IncidentAnalyticsOverview {
-  totalThisMonth: number;
+  totalCount: number;
+  draftCount: number;
   pendingCount: number;
+  rejectedCount: number;
+  approvedCount: number;
   inProgressCount: number;
-  closedThisMonth: number;
+  closedCount: number;
   avgResolutionHours: number | null;
 }
 

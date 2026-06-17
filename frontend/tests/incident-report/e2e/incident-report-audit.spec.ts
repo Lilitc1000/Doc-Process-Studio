@@ -26,10 +26,10 @@ test.describe('事故报告审核流程', () => {
     await cleanupWorkerData(request, workerPrefix);
   });
 
-  test('从详情页进入审核页', async ({ page, request }) => {
+  test('从详情页点击审核按钮弹出审核对话框', async ({ page, request }) => {
     const token = await loginViaApi(request);
     const report = await createIncidentReportViaApi(request, token!, {
-      title: `${workerPrefix}进入审核页测试`,
+      title: `${workerPrefix}审核弹窗测试`,
     });
     expect(report).not.toBeNull();
 
@@ -51,17 +51,20 @@ test.describe('事故报告审核流程', () => {
       });
       await expect(auditBtn).toBeVisible();
       await auditBtn.click();
-      await expect(page).toHaveURL(/\/incident-report\/[^/]+\/audit/);
-      await expect(page.locator('.incident-report-audit-view')).toBeVisible();
+
+      await expect(page.locator('.audit-dialog')).toBeVisible();
+      await expect(
+        page.locator('.audit-dialog .form-label', { hasText: '审核意见' }),
+      ).toBeVisible();
     } finally {
       await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 
-  test('审核页显示审核操作面板', async ({ page, request }) => {
+  test('审核对话框包含驳回和通过按钮', async ({ page, request }) => {
     const token = await loginViaApi(request);
     const report = await createIncidentReportViaApi(request, token!, {
-      title: `${workerPrefix}审核操作面板测试`,
+      title: `${workerPrefix}审核按钮测试`,
       severity: 'P1',
     });
     expect(report).not.toBeNull();
@@ -69,39 +72,53 @@ test.describe('事故报告审核流程', () => {
     await submitIncidentReportViaApi(request, token!, report!.id);
 
     try {
-      await page.goto(`/incident-report/${report!.id}/audit`);
-      await expect(page.locator('.incident-report-audit-view')).toBeVisible({
+      await page.goto(`/incident-report/${report!.id}`);
+      await expect(page.locator('.incident-report-detail-view')).toBeVisible({
         timeout: 10_000,
       });
 
-      const auditPanel = page.locator('.audit-action-panel');
-      if (await auditPanel.isVisible()) {
-        await expect(auditPanel.locator('h3')).toContainText('审核操作');
-      }
+      const auditBtn = page.locator('.detail-header-right button', {
+        hasText: '审核',
+      });
+      await auditBtn.click();
+      await expect(page.locator('.audit-dialog')).toBeVisible();
+
+      await expect(
+        page.locator('.audit-dialog-footer button', { hasText: '驳回' }),
+      ).toBeVisible();
+      await expect(
+        page.locator('.audit-dialog-footer button', { hasText: '通过' }),
+      ).toBeVisible();
     } finally {
       await deleteIncidentReportViaApi(request, token!, report!.id);
     }
   });
 
-  test('审核页显示返回详情按钮', async ({ page, request }) => {
+  test('点击遮罩层关闭审核对话框', async ({ page, request }) => {
     const token = await loginViaApi(request);
     const report = await createIncidentReportViaApi(request, token!, {
-      title: `${workerPrefix}审核返回按钮测试`,
+      title: `${workerPrefix}审核关闭测试`,
     });
     expect(report).not.toBeNull();
 
     await submitIncidentReportViaApi(request, token!, report!.id);
 
     try {
-      await page.goto(`/incident-report/${report!.id}/audit`);
-      const backBtn = page.locator('button', { hasText: '返回' });
-      if (await backBtn.isVisible()) {
-        await backBtn.click();
-        await expect(page).toHaveURL(/\/incident-report\/[^/]+$/);
-        await expect(page.locator('.incident-report-detail-view')).toBeVisible({
-          timeout: 10_000,
-        });
-      }
+      await page.goto(`/incident-report/${report!.id}`);
+      await expect(page.locator('.incident-report-detail-view')).toBeVisible({
+        timeout: 10_000,
+      });
+
+      const auditBtn = page.locator('.detail-header-right button', {
+        hasText: '审核',
+      });
+      await auditBtn.click();
+      await expect(page.locator('.audit-dialog')).toBeVisible();
+
+      await page
+        .locator('.audit-overlay')
+        .click({ position: { x: 10, y: 10 } });
+      await expect(page.locator('.audit-dialog')).not.toBeVisible();
     } finally {
       await deleteIncidentReportViaApi(request, token!, report!.id);
     }

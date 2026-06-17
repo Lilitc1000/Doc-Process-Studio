@@ -115,7 +115,9 @@ const loadUsers = async () => {
   loading.value = true;
   try {
     const response = await fetchUsersWithRoles();
-    users.value = response.items ?? [];
+    users.value = (response.items ?? []).filter(
+      (u) => !u.roles.includes('admin'),
+    );
   } finally {
     loading.value = false;
   }

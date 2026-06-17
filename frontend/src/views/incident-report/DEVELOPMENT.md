@@ -35,13 +35,6 @@ frontend/src/views/incident-report/
 │   ├── IncidentReportEditView.vue
 │   └── composables/
 │       └── useReportEditWizard.ts
-├── audit/                         # 审核报告页
-│   ├── IncidentReportAuditView.vue
-│   ├── composables/
-│   │   └── useReportAudit.ts
-│   ├── components/
-│   │   └── AuditActionPanel.vue
-│   └── styles/
 ├── analytics/                     # 数据分析页
 │   ├── IncidentReportAnalyticsView.vue
 │   ├── composables/
@@ -108,9 +101,22 @@ frontend/src/views/incident-report/
 | `/incident-report/roles`     | RoleManagementView          | 角色权限管理 |
 | `/incident-report/:id`       | IncidentReportDetailView    | 报告详情     |
 | `/incident-report/:id/edit`  | IncidentReportEditView      | 编辑报告     |
-| `/incident-report/:id/audit` | IncidentReportAuditView     | 审核报告     |
 
 路由守卫：旧 32+ 字符 hex session ID 自动重定向到列表页。
+
+审核功能在报告详情页通过弹窗实现，点击"审核"按钮弹出审核对话框（含审核意见输入和通过/驳回操作），审核后自动刷新页面状态。
+
+详情页操作按钮根据报告状态和用户权限动态显示：
+
+- **提交审核**：`draft`/`rejected` 状态 + `report:submit` 权限，弹出 `BaseConfirmDialog` 确认
+- **审核**：`pending` 状态 + `report:audit` 权限，弹出审核对话框（含 `BaseTextarea` + 通过/驳回），二次确认使用 `BaseConfirmDialog`
+- **分配处理人**：`approved`/`in_progress` 状态 + `report:assign` 权限，弹出分配对话框（含 `BaseDropdown` 选择处理人），二次确认使用 `BaseConfirmDialog`
+- **关闭**：`in_progress` 状态 + `report:close_assigned` 权限，弹出 `BaseConfirmDialog` 确认
+- **重新打开**：`closed` 状态 + `report:reopen` 权限，弹出 `BaseConfirmDialog` 确认
+
+所有操作完成后自动刷新审核记录（通过 `refreshLogs` 方法），无需手动刷新页面。
+
+编辑报告页面最后一步同时提供"保存"和"提交审核"按钮，提交审核会先保存再调用提交接口。
 
 ## API 依赖
 
@@ -134,11 +140,11 @@ frontend/src/views/incident-report/
 | `/incident-report/reports/{id}/preview`               | POST            | 生成 PDF/DOCX 预览     |
 | `/incident-report/roles/me`                           | GET             | 当前用户角色和权限     |
 | `/incident-report/roles`                              | GET/POST/DELETE | 角色管理               |
-| `/incident-report/users-with-roles`                   | GET             | 非admin用户及角色列表  |
+| `/incident-report/users-with-roles`                   | GET             | 全部用户及角色列表     |
 | `/incident-report/role-definitions`                   | GET             | 角色定义列表（含权限） |
 | `/incident-report/permissions`                        | GET             | 权限定义列表           |
-| `/incident-report/analytics/overview`                 | GET             | 月度概览               |
-| `/incident-report/analytics/trend`                    | GET             | 趋势数据               |
+| `/incident-report/analytics/overview`                 | GET             | 全量概览               |
+| `/incident-report/analytics/trend`                    | GET             | 新建报告趋势           |
 
 ## 创建页 5 步向导
 

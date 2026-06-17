@@ -21,16 +21,19 @@ async def _check_analytics_permission(user_id: str) -> None:
 
 async def get_analytics_overview(user_id: str) -> IncidentAnalyticsOverview:
     await _check_analytics_permission(user_id)
-    now = utcnow()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     async with async_session_factory() as session:
-        total_this_month_result = await session.execute(
+        total_count_result = await session.execute(
+            select(func.count(IncidentReportORM.id)),
+        )
+        total_count = total_count_result.scalar_one()
+
+        draft_result = await session.execute(
             select(func.count(IncidentReportORM.id)).where(
-                IncidentReportORM.created_at >= month_start,
+                IncidentReportORM.status == "draft",
             ),
         )
-        total_this_month = total_this_month_result.scalar_one()
+        draft_count = draft_result.scalar_one()
 
         pending_result = await session.execute(
             select(func.count(IncidentReportORM.id)).where(
@@ -39,6 +42,20 @@ async def get_analytics_overview(user_id: str) -> IncidentAnalyticsOverview:
         )
         pending_count = pending_result.scalar_one()
 
+        rejected_result = await session.execute(
+            select(func.count(IncidentReportORM.id)).where(
+                IncidentReportORM.status == "rejected",
+            ),
+        )
+        rejected_count = rejected_result.scalar_one()
+
+        approved_result = await session.execute(
+            select(func.count(IncidentReportORM.id)).where(
+                IncidentReportORM.status == "approved",
+            ),
+        )
+        approved_count = approved_result.scalar_one()
+
         in_progress_result = await session.execute(
             select(func.count(IncidentReportORM.id)).where(
                 IncidentReportORM.status == "in_progress",
@@ -46,13 +63,12 @@ async def get_analytics_overview(user_id: str) -> IncidentAnalyticsOverview:
         )
         in_progress_count = in_progress_result.scalar_one()
 
-        closed_this_month_result = await session.execute(
+        closed_count_result = await session.execute(
             select(func.count(IncidentReportORM.id)).where(
                 IncidentReportORM.status == "closed",
-                IncidentReportORM.closed_at >= month_start,
             ),
         )
-        closed_this_month = closed_this_month_result.scalar_one()
+        closed_count = closed_count_result.scalar_one()
 
         avg_resolution_result = await session.execute(
             select(
@@ -61,7 +77,6 @@ async def get_analytics_overview(user_id: str) -> IncidentAnalyticsOverview:
                 )
             ).where(
                 IncidentReportORM.status == "closed",
-                IncidentReportORM.closed_at >= month_start,
                 IncidentReportORM.created_at.isnot(None),
                 IncidentReportORM.closed_at.isnot(None),
             ),
@@ -69,10 +84,13 @@ async def get_analytics_overview(user_id: str) -> IncidentAnalyticsOverview:
         avg_resolution_hours = avg_resolution_result.scalar_one_or_none()
 
     return IncidentAnalyticsOverview(
-        total_this_month=total_this_month,
+        total_count=total_count,
+        draft_count=draft_count,
         pending_count=pending_count,
+        rejected_count=rejected_count,
+        approved_count=approved_count,
         in_progress_count=in_progress_count,
-        closed_this_month=closed_this_month,
+        closed_count=closed_count,
         avg_resolution_hours=round(avg_resolution_hours, 1) if avg_resolution_hours else None,
     )
 
@@ -101,7 +119,7 @@ async def get_analytics_trend(user_id: str, days: int = 30) -> list[IncidentAnal
     return [
         IncidentAnalyticsTrend(
             date=row.day.strftime("%Y-%m-%d") if row.day else "",
-            count=int(getattr(row, "count", 0)),
+            count=int(row.count),
         )
         for row in rows
     ]

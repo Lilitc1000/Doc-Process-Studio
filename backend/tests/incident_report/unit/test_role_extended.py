@@ -11,7 +11,7 @@ from doc_process_studio.incident_report.service.role import (
     has_incident_role,
     has_permission,
     list_all_role_assignments,
-    list_non_admin_users_with_roles,
+    list_all_users_with_roles,
     require_incident_role,
     revoke_incident_role,
 )
@@ -279,7 +279,7 @@ def test_list_all_role_assignments(mock_session):
     assert len(result) == 2
 
 
-def test_list_non_admin_users_with_roles(mock_session):
+def test_list_all_users_with_roles(mock_session):
     from doc_process_studio.auth.models.user import User
     from doc_process_studio.incident_report.models.incident_report_role import IncidentReportUserRole
 
@@ -313,7 +313,7 @@ def test_list_non_admin_users_with_roles(mock_session):
     ) as mock_factory:
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
-        result = asyncio.run(list_non_admin_users_with_roles())
+        result = asyncio.run(list_all_users_with_roles())
 
     assert len(result) == 2
     assert result[0]["user_id"] == "usr_001"
@@ -324,7 +324,7 @@ def test_list_non_admin_users_with_roles(mock_session):
     assert result[1]["roles"] == ["viewer"]
 
 
-def test_list_non_admin_users_with_roles_empty(mock_session):
+def test_list_all_users_with_roles_empty(mock_session):
     users_result = MagicMock()
     users_result.scalars.return_value.all.return_value = []
     mock_session.execute = AsyncMock(return_value=users_result)
@@ -334,12 +334,12 @@ def test_list_non_admin_users_with_roles_empty(mock_session):
     ) as mock_factory:
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
-        result = asyncio.run(list_non_admin_users_with_roles())
+        result = asyncio.run(list_all_users_with_roles())
 
     assert result == []
 
 
-def test_list_non_admin_users_with_roles_no_roles(mock_session):
+def test_list_all_users_with_roles_no_roles(mock_session):
     from doc_process_studio.auth.models.user import User
 
     user1 = MagicMock(spec=User)
@@ -359,7 +359,7 @@ def test_list_non_admin_users_with_roles_no_roles(mock_session):
     ) as mock_factory:
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
-        result = asyncio.run(list_non_admin_users_with_roles())
+        result = asyncio.run(list_all_users_with_roles())
 
     assert len(result) == 1
     assert result[0]["user_id"] == "usr_001"

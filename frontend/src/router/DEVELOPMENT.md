@@ -23,7 +23,6 @@ frontend/src/router/
 | `/incident-report/roles`     | `RoleManagementView.vue`          | 角色权限管理   | 是       |
 | `/incident-report/:id`       | `IncidentReportDetailView.vue`    | 报告详情       | 是       |
 | `/incident-report/:id/edit`  | `IncidentReportEditView.vue`      | 编辑报告       | 是       |
-| `/incident-report/:id/audit` | `IncidentReportAuditView.vue`     | 审核报告       | 是       |
 | `/settings`                  | `SettingsView.vue`                | 设置页面       | 是       |
 | `/knowledge-base`            | `KnowledgeBaseListView.vue`       | 知识库项目列表 | 是       |
 | `/knowledge-base/:id`        | `KnowledgeBaseDetailView.vue`     | 知识库项目详情 | 是       |

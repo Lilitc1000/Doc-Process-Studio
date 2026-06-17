@@ -811,6 +811,27 @@
             </svg>
             {{ saving ? '保存中...' : '保存' }}
           </base-button>
+          <base-button
+            v-if="currentStep === EDIT_WIZARD_STEPS.length - 1"
+            variant="primary"
+            class="wizard-btn-submit"
+            :disabled="!formData.title.trim() || submitting"
+            @click="handleSubmit"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 10.5L8 14.5L16 5.5" />
+            </svg>
+            {{ submitting ? '提交中...' : '提交审核' }}
+          </base-button>
         </div>
       </div>
 
@@ -866,6 +887,7 @@ const {
   currentStep,
   loading,
   saving,
+  submitting,
   generating,
   previewing,
   report,
@@ -873,6 +895,7 @@ const {
   generationError,
   load,
   save,
+  submit,
   quickGenerate,
   generateSection,
   generatePreview,
@@ -1020,6 +1043,27 @@ const handleSave = async () => {
     router.push('/incident-report');
   } finally {
     // saving state managed by composable
+  }
+};
+
+const handleSubmit = async () => {
+  if (!formData.value.title.trim()) return;
+  try {
+    await submit(buildFormPayload());
+    saveToastTitle.value = '提交成功';
+    saveToastMessage.value = '报告已提交审核';
+    showSaveToast.value = true;
+    setTimeout(() => {
+      showSaveToast.value = false;
+    }, 3000);
+    router.push('/incident-report');
+  } catch {
+    saveToastTitle.value = '提交失败';
+    saveToastMessage.value = '请稍后重试';
+    showSaveToast.value = true;
+    setTimeout(() => {
+      showSaveToast.value = false;
+    }, 3000);
   }
 };
 

@@ -1,14 +1,32 @@
 <template>
   <div class="stats-cards">
     <div class="stat-card">
-      <div class="stat-value">{{ overview?.totalThisMonth ?? 0 }}</div>
-      <div class="stat-label">本月报告总数</div>
+      <div class="stat-value">{{ overview?.totalCount ?? 0 }}</div>
+      <div class="stat-label">报告总数</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-draft">
+        {{ overview?.draftCount ?? 0 }}
+      </div>
+      <div class="stat-label">草稿</div>
     </div>
     <div class="stat-card">
       <div class="stat-value stat-pending">
         {{ overview?.pendingCount ?? 0 }}
       </div>
       <div class="stat-label">待审核</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-rejected">
+        {{ overview?.rejectedCount ?? 0 }}
+      </div>
+      <div class="stat-label">已驳回</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value stat-approved">
+        {{ overview?.approvedCount ?? 0 }}
+      </div>
+      <div class="stat-label">已审核</div>
     </div>
     <div class="stat-card">
       <div class="stat-value stat-progress">
@@ -18,7 +36,7 @@
     </div>
     <div class="stat-card">
       <div class="stat-value stat-closed">
-        {{ overview?.closedThisMonth ?? 0 }}
+        {{ overview?.closedCount ?? 0 }}
       </div>
       <div class="stat-label">已关闭</div>
     </div>
@@ -48,7 +66,7 @@ defineProps<{
 
 .stat-card {
   flex: 1;
-  min-width: 140px;
+  min-width: 120px;
   padding: var(--space-xl);
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--color-border);
@@ -75,8 +93,17 @@ defineProps<{
   font-variant-numeric: tabular-nums;
 }
 
+.stat-draft {
+  color: var(--color-text-tertiary);
+}
 .stat-pending {
   color: var(--color-primary);
+}
+.stat-rejected {
+  color: var(--color-danger);
+}
+.stat-approved {
+  color: #7c3aed;
 }
 .stat-progress {
   color: var(--color-warning);

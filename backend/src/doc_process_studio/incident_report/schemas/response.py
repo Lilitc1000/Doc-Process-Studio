@@ -98,10 +98,13 @@ class IncidentCommentEntry(BaseModel):
 
 
 class IncidentAnalyticsOverview(BaseModel):
-    total_this_month: int = Field(...)
+    total_count: int = Field(...)
+    draft_count: int = Field(default=0)
     pending_count: int = Field(...)
+    rejected_count: int = Field(default=0)
+    approved_count: int = Field(default=0)
     in_progress_count: int = Field(...)
-    closed_this_month: int = Field(...)
+    closed_count: int = Field(...)
     avg_resolution_hours: float | None = Field(default=None)
 
 

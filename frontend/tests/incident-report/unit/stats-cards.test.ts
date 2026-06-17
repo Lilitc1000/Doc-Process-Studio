@@ -11,10 +11,13 @@ describe('StatsCards', () => {
 
   it('渲染概览数据', () => {
     const overview: IncidentAnalyticsOverview = {
-      totalThisMonth: 10,
+      totalCount: 10,
+      draftCount: 1,
       pendingCount: 3,
+      rejectedCount: 0,
+      approvedCount: 1,
       inProgressCount: 2,
-      closedThisMonth: 5,
+      closedCount: 5,
       avgResolutionHours: 24.5,
     };
 
