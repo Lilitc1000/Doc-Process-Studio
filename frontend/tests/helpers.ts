@@ -6,6 +6,7 @@ export function getWorkerPrefix(workerIndex: number): string {
 }
 
 const PREFERRED_MODEL_PATTERNS = [
+  /^gemma4:e4b$/,
   /^qwen3:8b$/,
   /^qwen3\.5:9b$/,
   /^mistral:7b$/,
@@ -33,7 +34,7 @@ export function pickE2EModel(models: { name: string }[]): string {
   const chatModels = models.filter(
     (m) => !EXCLUDED_MODEL_PATTERNS.some((p) => p.test(m.name)),
   );
-  if (chatModels.length === 0) return 'qwen3:8b';
+  if (chatModels.length === 0) return 'gemma4:e4b';
 
   for (const pattern of PREFERRED_MODEL_PATTERNS) {
     const found = chatModels.find((m) => pattern.test(m.name));
@@ -65,7 +66,7 @@ export async function getE2EModel(
   } catch {
     // fallback to default
   }
-  return 'qwen3:8b';
+  return 'gemma4:e4b';
 }
 
 export async function loginAsAdmin(page: Page) {

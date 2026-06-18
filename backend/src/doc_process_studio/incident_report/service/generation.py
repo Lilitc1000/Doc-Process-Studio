@@ -597,7 +597,7 @@ async def quick_generate_report_body(
         if not can_edit:
             raise PermissionDenied("无权对此报告进行生成操作")
     snapshot = _build_snapshot_from_form_data(record.form_data)
-    effective_model = model or "qwen3:8b"
+    effective_model = model or "gemma4:e4b"
     prompt, context_json = _build_quick_generation_request(snapshot)
     return await _run_body_generation_with_trace(
         report_id=report_id,
@@ -635,7 +635,7 @@ async def generate_report_body_section(
         if not can_edit:
             raise PermissionDenied("无权对此报告进行生成操作")
     snapshot = _build_snapshot_from_form_data(record.form_data)
-    effective_model = model or "qwen3:8b"
+    effective_model = model or "gemma4:e4b"
     prompt, context_json = _build_section_generation_prompt(
         snapshot,
         section_id=section_id,

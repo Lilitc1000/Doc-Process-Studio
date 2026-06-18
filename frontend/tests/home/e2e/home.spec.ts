@@ -14,12 +14,13 @@ test.describe('首页', () => {
     await page.goto('/');
 
     await expect(page.locator('.home-title')).toHaveText('文档处理平台');
-    await expect(page.locator('.home-card')).toHaveCount(3);
+    await expect(page.locator('.home-card')).toHaveCount(4);
 
     const cardLabels = page.locator('.home-card-label');
     await expect(cardLabels.nth(0)).toHaveText('对话');
     await expect(cardLabels.nth(1)).toHaveText('事故报告');
-    await expect(cardLabels.nth(2)).toHaveText('设置');
+    await expect(cardLabels.nth(2)).toHaveText('知识库');
+    await expect(cardLabels.nth(3)).toHaveText('设置');
   });
 
   test('首页右上角显示用户头像', async ({ page }) => {

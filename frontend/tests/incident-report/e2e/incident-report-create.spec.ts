@@ -250,7 +250,7 @@ test.describe.serial('事故报告创建 - 真实 AI 生成（Ollama）', () => 
     if (token) {
       return getE2EModel(request, token);
     }
-    return 'qwen3:8b';
+    return 'gemma4:e4b';
   }
 
   async function setupModelAndNavigate(

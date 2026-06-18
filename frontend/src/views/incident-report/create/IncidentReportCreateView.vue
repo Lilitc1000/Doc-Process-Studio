@@ -1141,6 +1141,8 @@ const handleSectionGenerate = async (sectionId: string) => {
     generating.value = true;
     await saveAsDraft(buildFormPayload());
     const result = await generateSection(sectionId, {
+      model: appStore.selectedModel,
+      rerankerModel: appStore.selectedRerankerModel,
       signal: abortController.signal,
     });
     applyGenerationResult(result, formAnswers.value);
@@ -1160,6 +1162,8 @@ const handleTimelineItemGenerate = async (index: number) => {
     await saveAsDraft(buildFormPayload());
     const result = await generateSection('timeline_item', {
       timelineIndex: index,
+      model: appStore.selectedModel,
+      rerankerModel: appStore.selectedRerankerModel,
       signal: abortController.signal,
     });
     applyGenerationResult(result, formAnswers.value);
