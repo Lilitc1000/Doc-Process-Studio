@@ -73,29 +73,47 @@ backend/src/doc_process_studio/
 
 各目录的详细说明见下方「目录开发文档」。
 
-## 业务域规则
+### DDD 分层架构
 
-每个业务域内部强制包含 4 个子文件夹：
+所有业务域（auth、chat、incident_report、knowledge_base、skill、system）均采用 DDD 分层架构，在 4 子文件夹基础上新增 `domain/`、`application/`、`infrastructure/` 三层：
 
 | 子文件夹 | 职责 | 约束 |
 |---------|------|------|
-| `router/` | API 路由 | 禁止写业务逻辑，只处理 HTTP 入参/出参/状态码 |
-| `service/` | 业务逻辑 | 禁止操作 HTTP，只负责业务编排 |
+| `domain/` | 领域层：领域异常（复杂域可含聚合根、值对象、领域事件） | 不依赖任何框架和其他层 |
+| `application/` | 应用层：用例编排、端口定义 | 依赖 domain + 端口抽象，不依赖 infrastructure 实现 |
+| `infrastructure/` | 基础设施层：端口实现（仓储、外部服务适配器）、依赖装配 | 实现 application 端口，依赖 ORM 和外部服务 |
+| `router/` | API 路由 | 通过 `Depends` 注入 application 服务，仅做参数解析与异常映射 |
+| `service/` | 保留的工具层 | 纯函数工具，被 infrastructure 委托，也可被跨域直接调用 |
 | `models/` | ORM / 数据模型 | 禁止引入 Pydantic |
-| `schemas/` | Pydantic 模型 | 入参 `request.py`、出参 `response.py`、共享基类 `common.py` |
+| `schemas/` | Pydantic 模型 | HTTP DTO |
+
+各域分层深度按业务复杂度调整：incident_report 含完整聚合根与领域事件；auth/system/chat/knowledge_base/skill 采用轻量分层（domain 仅含领域异常，application 定义端口+用例服务，infrastructure 委托 service/ 工具层）。
 
 ### 跨层依赖方向
 
+DDD 业务域：
 ```
-router → service → models
+router → application → domain
 router → schemas
-service → models
+infrastructure → application（实现端口） → domain
+infrastructure → models
+infrastructure → service（委托工具函数）
 ```
 
 禁止反向依赖：
+- 不要让 `domain` 依赖任何其他层
+- 不要让 `application` 依赖 `infrastructure` 具体实现（只依赖端口）
 - 不要让 `models` 依赖 `services`
 - 不要让 `router` 直接写 Redis 或 Ollama 调用
 - 不要在 `models` 里引入 Pydantic
+
+### 依赖注入
+
+应用服务通过 `infrastructure/dependencies.py` 装配，使用 `@lru_cache(maxsize=1)` 单例。router 通过 `Depends(get_xxx_service)` 注入。测试时通过 `app.dependency_overrides[get_xxx_service]` 替换为桩服务。
+
+### 异常映射
+
+router 将领域异常映射为 HTTP 状态码（如 `NotFoundError`→404、`AccessDeniedError`→403、`ExpiredError`→410），不向客户端暴露内部异常。
 
 ### 单文件拆分
 

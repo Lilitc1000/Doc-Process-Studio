@@ -1,6 +1,7 @@
 from typing import Any
 
 from ...schemas.request import ChatMessageInput, ChatStreamRequest
+from ....skill.schemas import SkillInterfaceConfig
 from ....skill.service.registry import (
     SKILLS_DIR,
     get_skill_interface,
@@ -20,9 +21,8 @@ def extract_kb_project_name(skill_id: str) -> str:
     return ""
 
 
-def build_kb_skill_interface(project_name: str):
+def build_kb_skill_interface(project_name: str) -> SkillInterfaceConfig:
     from ....knowledge_base.service.kb_skill import KNOWLEDGE_BASE_RAG_PROMPT
-    from ....skill.schemas import SkillInterfaceConfig
     prompt = KNOWLEDGE_BASE_RAG_PROMPT.format(project_name=project_name)
     return SkillInterfaceConfig(
         id=f"kb:{project_name}",

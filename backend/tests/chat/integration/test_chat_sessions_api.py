@@ -3,14 +3,15 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-import doc_process_studio.chat.router.sessions as chat_sessions_router_module
-from doc_process_studio.chat.schemas.session import (
-    ChatSessionSnapshot,
-    ChatSessionSummary,
-)
+from doc_process_studio.chat.application.session_service import SessionService
+from doc_process_studio.chat.infrastructure.dependencies import get_session_service
 from doc_process_studio.chat.schemas.response import (
     ChatSessionDetail,
     ChatSessionListResponse,
+)
+from doc_process_studio.chat.schemas.session import (
+    ChatSessionSnapshot,
+    ChatSessionSummary,
 )
 
 
@@ -35,17 +36,45 @@ def _build_snapshot() -> ChatSessionSnapshot:
     )
 
 
-def test_api_chat_sessions_list_returns_summaries(monkeypatch, auth_headers) -> None:
-    async def fake_list_chat_sessions(user_id: str) -> ChatSessionListResponse:
+class _FakeSessionService(SessionService):
+    """测试用 SessionService 桩，绕过真实端口依赖。"""
+
+    def __init__(self) -> None:  # noqa: D401 - 测试桩无需端口
+        pass
+
+    async def list_sessions(self, user_id: str) -> ChatSessionListResponse:  # type: ignore[override]
         return ChatSessionListResponse(
             sessions=[_build_summary("conversation-1", "第一条会话")]
         )
 
-    monkeypatch.setattr(
-        chat_sessions_router_module,
-        "list_chat_sessions",
-        fake_list_chat_sessions,
+    async def get_session(self, session_id: str, user_id: str) -> ChatSessionDetail:  # type: ignore[override]
+        assert session_id == "conversation-1"
+        summary = _build_summary(session_id, "第一条会话")
+        return ChatSessionDetail(
+            **summary.model_dump(),
+            snapshot=_build_snapshot(),
+        )
+
+    async def save_session(self, *, session_id, user_id, title, title_source_messages, snapshot) -> ChatSessionSummary:  # type: ignore[override]
+        assert session_id == "conversation-1"
+        assert title_source_messages == ["你好", "请总结文档"]
+        return _build_summary("conversation-1", "文档总结")
+
+    async def delete_session(self, session_id: str, user_id: str) -> bool:  # type: ignore[override]
+        assert session_id == "conversation-1"
+        return True
+
+
+def _install_fake_service(monkeypatch, fake: _FakeSessionService) -> None:
+    monkeypatch.setitem(
+        main_module.app.dependency_overrides,
+        get_session_service,
+        lambda: fake,
     )
+
+
+def test_api_chat_sessions_list_returns_summaries(monkeypatch, auth_headers) -> None:
+    _install_fake_service(monkeypatch, _FakeSessionService())
 
     client = TestClient(main_module.app)
     response = client.get("/api/chat-sessions", headers=auth_headers)
@@ -55,27 +84,7 @@ def test_api_chat_sessions_list_returns_summaries(monkeypatch, auth_headers) -> 
 
 
 def test_api_chat_sessions_get_returns_detail(monkeypatch, auth_headers) -> None:
-    async def fake_get_chat_session(session_id: str) -> ChatSessionDetail:
-        assert session_id == "conversation-1"
-        summary = _build_summary(session_id, "第一条会话")
-        return ChatSessionDetail(
-            **summary.model_dump(),
-            snapshot=_build_snapshot(),
-        )
-
-    async def fake_check_chat_session_access(session_id: str, user_id: str) -> bool:
-        return True
-
-    monkeypatch.setattr(
-        chat_sessions_router_module,
-        "get_chat_session",
-        fake_get_chat_session,
-    )
-    monkeypatch.setattr(
-        chat_sessions_router_module,
-        "check_chat_session_access",
-        fake_check_chat_session_access,
-    )
+    _install_fake_service(monkeypatch, _FakeSessionService())
 
     client = TestClient(main_module.app)
     response = client.get("/api/chat-sessions/conversation-1", headers=auth_headers)
@@ -85,16 +94,7 @@ def test_api_chat_sessions_get_returns_detail(monkeypatch, auth_headers) -> None
 
 
 def test_api_chat_sessions_save_upserts_snapshot(monkeypatch, auth_headers) -> None:
-    async def fake_upsert_chat_session(**kwargs) -> ChatSessionSummary:
-        assert kwargs["session_id"] == "conversation-1"
-        assert kwargs["title_source_messages"] == ["你好", "请总结文档"]
-        return _build_summary("conversation-1", "文档总结")
-
-    monkeypatch.setattr(
-        chat_sessions_router_module,
-        "upsert_chat_session",
-        fake_upsert_chat_session,
-    )
+    _install_fake_service(monkeypatch, _FakeSessionService())
 
     client = TestClient(main_module.app)
     response = client.put(
@@ -112,32 +112,7 @@ def test_api_chat_sessions_save_upserts_snapshot(monkeypatch, auth_headers) -> N
 
 
 def test_api_chat_sessions_delete_clears_state(monkeypatch, auth_headers) -> None:
-    async def fake_delete_chat_session(session_id: str) -> bool:
-        assert session_id == "conversation-1"
-        return True
-
-    async def fake_clear_conversation_state(conversation_id: str) -> bool:
-        assert conversation_id == "conversation-1"
-        return True
-
-    async def fake_check_chat_session_access(session_id: str, user_id: str) -> bool:
-        return True
-
-    monkeypatch.setattr(
-        chat_sessions_router_module,
-        "delete_chat_session",
-        fake_delete_chat_session,
-    )
-    monkeypatch.setattr(
-        chat_sessions_router_module,
-        "clear_conversation_state",
-        fake_clear_conversation_state,
-    )
-    monkeypatch.setattr(
-        chat_sessions_router_module,
-        "check_chat_session_access",
-        fake_check_chat_session_access,
-    )
+    _install_fake_service(monkeypatch, _FakeSessionService())
 
     client = TestClient(main_module.app)
     response = client.delete("/api/chat-sessions/conversation-1", headers=auth_headers)

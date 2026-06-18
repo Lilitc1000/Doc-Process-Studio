@@ -8,7 +8,7 @@ from .core.logging_config import setup_logging
 from .core.database import Base, engine
 from .core.model_context import warmup_model_context_cache
 from .auth.router.auth import router as auth_router
-from .auth.service.auth import ensure_admin_user
+from .auth.infrastructure.dependencies import get_auth_service
 from .chat.service.attachments import cleanup_expired_attachments
 from .chat.router.stream import router as chat_stream_router
 from .chat.router.sessions import router as chat_sessions_router
@@ -16,7 +16,7 @@ from .chat.router.attachments import router as chat_attachments_router
 from .incident_report.router.reports import router as incident_report_reports_router
 from .incident_report.router.roles import router as incident_report_roles_router
 from .incident_report.router.analytics import router as incident_report_analytics_router
-from .incident_report.service.role import ensure_incident_report_admin, seed_rbac_data
+from .incident_report.infrastructure.dependencies import get_role_repository
 from .skill.router.routes import router as skill_routes_router
 from .system.router.health import router as health_router
 from .system.router.models import router as models_router
@@ -31,9 +31,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    await ensure_admin_user()
-    await seed_rbac_data()
-    await ensure_incident_report_admin()
+    await get_auth_service().ensure_admin_user(
+        admin_username=settings.admin_username,
+        admin_password=settings.admin_password,
+    )
+    role_repo = get_role_repository()
+    await role_repo.seed_rbac_data()
+    await role_repo.ensure_admin_role()
     cleanup_expired_attachments()
     await warmup_model_context_cache()
 

@@ -1,44 +1,42 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..schemas.session import ChatSessionSummary
+from ..application.session_service import SessionService
+from ..domain.errors import ChatError, SessionAccessDeniedError, SessionNotFoundError
 from ..schemas.request import ChatSessionTitleUpdateRequest, ChatSessionUpsertRequest
 from ..schemas.response import ChatSessionDetail, ChatSessionListResponse
-from ..service.sessions import (
-    check_chat_session_access,
-    delete_chat_session,
-    get_chat_session,
-    list_chat_sessions,
-    upsert_chat_session,
-    update_chat_session_title,
-)
+from ..schemas.session import ChatSessionSummary
+from ..infrastructure.dependencies import get_session_service
 from ...core.security import get_current_user_id
-from ...chat.service.db_session_store import (
-    delete_chat_sessions_by_title_prefix,
-    delete_chat_sessions_by_user,
-)
-from ...skill.service.conversation_store import clear_conversation_state
 
 router = APIRouter(prefix="/api/chat-sessions", tags=["chat-sessions"])
+
+
+def _handle_session_error(exc: ChatError) -> HTTPException:
+    if isinstance(exc, SessionAccessDeniedError):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, SessionNotFoundError):
+        return HTTPException(status_code=404, detail="未找到对应历史会话。")
+    return HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("", response_model=ChatSessionListResponse)
 async def list_sessions(
     user_id: str = Depends(get_current_user_id),
+    service: SessionService = Depends(get_session_service),
 ) -> ChatSessionListResponse:
-    return await list_chat_sessions(user_id)
+    return await service.list_sessions(user_id)
 
 
 @router.get("/{session_id}", response_model=ChatSessionDetail)
 async def get_session(
     session_id: str,
     user_id: str = Depends(get_current_user_id),
+    service: SessionService = Depends(get_session_service),
 ) -> ChatSessionDetail:
-    if not await check_chat_session_access(session_id, user_id):
-        raise HTTPException(status_code=403, detail="无权访问该会话。")
-    session = await get_chat_session(session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="未找到对应历史会话。")
-    return session
+    try:
+        return await service.get_session(session_id, user_id)
+    except ChatError as exc:
+        raise _handle_session_error(exc) from exc
 
 
 @router.put("/{session_id}", response_model=ChatSessionSummary)
@@ -46,8 +44,9 @@ async def save_session(
     session_id: str,
     payload: ChatSessionUpsertRequest,
     user_id: str = Depends(get_current_user_id),
+    service: SessionService = Depends(get_session_service),
 ) -> ChatSessionSummary:
-    return await upsert_chat_session(
+    return await service.save_session(
         session_id=session_id,
         user_id=user_id,
         title=payload.title,
@@ -61,21 +60,21 @@ async def rename_session(
     session_id: str,
     payload: ChatSessionTitleUpdateRequest,
     user_id: str = Depends(get_current_user_id),
+    service: SessionService = Depends(get_session_service),
 ) -> ChatSessionSummary:
-    if not await check_chat_session_access(session_id, user_id):
-        raise HTTPException(status_code=403, detail="无权访问该会话。")
-    session = await update_chat_session_title(session_id, payload.title)
-    if session is None:
-        raise HTTPException(status_code=404, detail="未找到对应历史会话。")
-    return session
+    try:
+        return await service.rename_session(session_id, user_id, payload.title)
+    except ChatError as exc:
+        raise _handle_session_error(exc) from exc
 
 
 @router.delete("/by-title-prefix/{prefix}")
 async def delete_sessions_by_title_prefix(
     prefix: str,
     user_id: str = Depends(get_current_user_id),
+    service: SessionService = Depends(get_session_service),
 ) -> dict[str, int]:
-    count = await delete_chat_sessions_by_title_prefix(user_id, prefix)
+    count = await service.delete_sessions_by_title_prefix(user_id, prefix)
     return {"deleted": count}
 
 
@@ -83,10 +82,12 @@ async def delete_sessions_by_title_prefix(
 async def delete_sessions_by_user(
     target_user_id: str,
     user_id: str = Depends(get_current_user_id),
+    service: SessionService = Depends(get_session_service),
 ) -> dict[str, int]:
-    if target_user_id != user_id:
-        raise HTTPException(status_code=403, detail="无权删除其他用户的会话。")
-    count = await delete_chat_sessions_by_user(target_user_id)
+    try:
+        count = await service.delete_sessions_by_user(target_user_id, user_id)
+    except ChatError as exc:
+        raise _handle_session_error(exc) from exc
     return {"deleted": count}
 
 
@@ -94,9 +95,10 @@ async def delete_sessions_by_user(
 async def remove_session(
     session_id: str,
     user_id: str = Depends(get_current_user_id),
+    service: SessionService = Depends(get_session_service),
 ) -> dict[str, bool]:
-    if not await check_chat_session_access(session_id, user_id):
-        raise HTTPException(status_code=403, detail="无权访问该会话。")
-    deleted = await delete_chat_session(session_id)
-    await clear_conversation_state(session_id)
+    try:
+        deleted = await service.delete_session(session_id, user_id)
+    except ChatError as exc:
+        raise _handle_session_error(exc) from exc
     return {"deleted": deleted}

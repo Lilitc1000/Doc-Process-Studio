@@ -4,6 +4,18 @@ from collections import deque
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
+from ...core.config import settings
+from ...core.security import get_current_user_id
+from ..application.auth_service import AuthService
+from ..domain.errors import (
+    AuthError,
+    IncorrectPasswordError,
+    InvalidCredentialsError,
+    InvalidTokenError,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+)
+from ..infrastructure.dependencies import get_auth_service
 from ..schemas.request import (
     ChangePasswordRequest,
     LogoutRequest,
@@ -18,20 +30,6 @@ from ..schemas.response import (
     UpdateProfileResponse,
     UserInfoResponse,
 )
-from ..service.auth import (
-    authenticate_user,
-    change_user_password,
-    delete_user,
-    delete_users_by_prefix,
-    ensure_admin_user,
-    get_current_user_info,
-    logout_user,
-    refresh_access_token,
-    register_user,
-    update_user_profile,
-)
-from ...core.config import settings
-from ...core.security import get_current_user_id
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -65,82 +63,106 @@ def _check_auth_rate_limit(client_key: str) -> None:
     window.append(now)
 
 
+def _handle_auth_error(exc: AuthError) -> HTTPException:
+    if isinstance(exc, UserAlreadyExistsError):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, (InvalidCredentialsError, InvalidTokenError)):
+        return HTTPException(status_code=401, detail=str(exc))
+    if isinstance(exc, IncorrectPasswordError):
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, UserNotFoundError):
+        return HTTPException(status_code=404, detail=str(exc))
+    return HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/register", response_model=RegisterResponse, status_code=201)
-async def register(payload: RegisterRequest, request: Request) -> RegisterResponse:
+async def register(
+    payload: RegisterRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+) -> RegisterResponse:
     _check_auth_rate_limit(request.client.host if request.client else "unknown")
     try:
-        return await register_user(payload.username, payload.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return await service.register(username=payload.username, password=payload.password)
+    except AuthError as exc:
+        raise _handle_auth_error(exc) from exc
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
+    service: AuthService = Depends(get_auth_service),
 ) -> TokenResponse:
     _check_auth_rate_limit(request.client.host if request.client else "unknown")
     try:
-        return await authenticate_user(form.username, form.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        return await service.authenticate(username=form.username, password=form.password)
+    except AuthError as exc:
+        raise _handle_auth_error(exc) from exc
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(payload: RefreshTokenRequest) -> TokenResponse:
+async def refresh_token(
+    payload: RefreshTokenRequest,
+    service: AuthService = Depends(get_auth_service),
+) -> TokenResponse:
     try:
-        return await refresh_access_token(payload.refresh_token)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        return await service.refresh_token(payload.refresh_token)
+    except AuthError as exc:
+        raise _handle_auth_error(exc) from exc
 
 
 @router.get("/me", response_model=UserInfoResponse)
-async def get_me(user_id: str = Depends(get_current_user_id)) -> UserInfoResponse:
+async def get_me(
+    user_id: str = Depends(get_current_user_id),
+    service: AuthService = Depends(get_auth_service),
+) -> UserInfoResponse:
     try:
-        return await get_current_user_info(user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        return await service.get_current_user_info(user_id)
+    except AuthError as exc:
+        raise _handle_auth_error(exc) from exc
 
 
 @router.put("/me", response_model=UpdateProfileResponse)
 async def update_me(
     payload: UpdateProfileRequest,
     user_id: str = Depends(get_current_user_id),
+    service: AuthService = Depends(get_auth_service),
 ) -> UpdateProfileResponse:
     try:
-        return await update_user_profile(
-            user_id=user_id,
+        return await service.update_profile(
+            user_id,
             username=payload.username,
             avatar_color=payload.avatar_color,
         )
-    except ValueError as exc:
-        if "already exists" in str(exc):
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AuthError as exc:
+        raise _handle_auth_error(exc) from exc
 
 
 @router.put("/password", response_model=MessageResponse)
 async def change_password(
     payload: ChangePasswordRequest,
     user_id: str = Depends(get_current_user_id),
+    service: AuthService = Depends(get_auth_service),
 ) -> MessageResponse:
     try:
-        await change_user_password(
-            user_id=user_id,
+        await service.change_password(
+            user_id,
             current_password=payload.current_password,
             new_password=payload.new_password,
         )
         return MessageResponse(message="Password updated successfully")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AuthError as exc:
+        raise _handle_auth_error(exc) from exc
 
 
 @router.post("/logout", response_model=MessageResponse)
 async def logout(
     payload: LogoutRequest,
     user_id: str = Depends(get_current_user_id),
+    service: AuthService = Depends(get_auth_service),
 ) -> MessageResponse:
-    await logout_user(access_token_sub=user_id, refresh_token=payload.refresh_token)
+    await service.logout(refresh_token=payload.refresh_token)
     return MessageResponse(message="Logged out successfully")
 
 
@@ -148,6 +170,7 @@ async def logout(
 async def delete_account(
     user_id: str,
     current_user_id: str = Depends(get_current_user_id),
+    service: AuthService = Depends(get_auth_service),
 ) -> MessageResponse:
     if user_id != current_user_id:
         raise HTTPException(
@@ -155,17 +178,20 @@ async def delete_account(
             detail="You can only delete your own account",
         )
     try:
-        await delete_user(user_id)
+        await service.delete_user(user_id)
         return MessageResponse(message="User deleted successfully")
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AuthError as exc:
+        raise _handle_auth_error(exc) from exc
 
 
 if settings.env == "dev":
 
     @router.delete("/users/by-prefix/{prefix}", response_model=MessageResponse)
-    async def delete_users_by_username_prefix(prefix: str) -> MessageResponse:
-        count = await delete_users_by_prefix(prefix)
+    async def delete_users_by_username_prefix(
+        prefix: str,
+        service: AuthService = Depends(get_auth_service),
+    ) -> MessageResponse:
+        count = await service.delete_users_by_prefix(prefix)
         return MessageResponse(message=f"Deleted {count} user(s) with prefix '{prefix}'")
 
     @router.post("/rate-limit-whitelist", response_model=MessageResponse)
@@ -175,6 +201,11 @@ if settings.env == "dev":
         return MessageResponse(message=f"Added {client_host} to rate limit whitelist")
 
     @router.post("/ensure-admin", response_model=MessageResponse)
-    async def ensure_admin() -> MessageResponse:
-        await ensure_admin_user()
+    async def ensure_admin(
+        service: AuthService = Depends(get_auth_service),
+    ) -> MessageResponse:
+        await service.ensure_admin_user(
+            admin_username=settings.admin_username,
+            admin_password=settings.admin_password,
+        )
         return MessageResponse(message="Admin user ensured")

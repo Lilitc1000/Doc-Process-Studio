@@ -161,25 +161,25 @@ def test_detect_file_type_xls_alias() -> None:
 
 
 def test_is_kb_skill_id() -> None:
-    from doc_process_studio.chat.service.stream import _is_kb_skill_id
+    from doc_process_studio.chat.service.streaming.context import is_kb_skill_id
 
-    assert _is_kb_skill_id("kb:MyProject") is True
-    assert _is_kb_skill_id("document-assistant") is False
-    assert _is_kb_skill_id("kb:") is True
+    assert is_kb_skill_id("kb:MyProject") is True
+    assert is_kb_skill_id("document-assistant") is False
+    assert is_kb_skill_id("kb:") is True
 
 
 def test_extract_kb_project_name() -> None:
-    from doc_process_studio.chat.service.stream import _extract_kb_project_name
+    from doc_process_studio.chat.service.streaming.context import extract_kb_project_name
 
-    assert _extract_kb_project_name("kb:MyProject") == "MyProject"
-    assert _extract_kb_project_name("kb:") == ""
-    assert _extract_kb_project_name("other-skill") == ""
+    assert extract_kb_project_name("kb:MyProject") == "MyProject"
+    assert extract_kb_project_name("kb:") == ""
+    assert extract_kb_project_name("other-skill") == ""
 
 
 def test_build_kb_skill_interface() -> None:
-    from doc_process_studio.chat.service.stream import _build_kb_skill_interface
+    from doc_process_studio.chat.service.streaming.context import build_kb_skill_interface
 
-    interface = _build_kb_skill_interface("TestProject")
+    interface = build_kb_skill_interface("TestProject")
     assert interface.id == "kb:TestProject"
     assert "TestProject" in interface.display_name
     assert interface.skill_type == "chat"

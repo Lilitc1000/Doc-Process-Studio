@@ -215,7 +215,7 @@ async def preview_report_attachment(
         raise ValueError(f"Report {report_id} does not exist.")
 
     if user_id:
-        from .role import has_permission
+        from ..infrastructure.permission_helper import has_permission
 
         can_view = (
             record.reporter_id == user_id

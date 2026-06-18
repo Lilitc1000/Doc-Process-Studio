@@ -26,15 +26,11 @@ backend/tests/
 ├── incident_report/            # 事故报告域
 │   ├── conftest.py             # 域级 fixture（isolated FastAPI app + TestClient）
 │   ├── unit/
-│   │   ├── test_report_service.py          # 报告业务逻辑（状态流转）
+│   │   ├── test_report_aggregate.py        # 报告聚合根（状态流转 + 权限 + 事件）
 │   │   ├── test_report_store.py            # ORM→Schema 映射 + _CLEAR_SENTINEL
 │   │   ├── test_report_store_extended.py   # DB 操作（create/load/update/delete/list/comment）
-│   │   ├── test_report_extended.py         # 报告 CRUD + 状态流转 + 权限
 │   │   ├── test_report_data.py             # 表单数据读写工具函数
 │   │   ├── test_role_service.py            # 角色管理（基础）
-│   │   ├── test_role_extended.py           # 角色管理（完整 DB mock）
-│   │   ├── test_audit_log.py               # 审计日志
-│   │   ├── test_form_validation.py         # 表单校验
 │   │   ├── test_form_schema.py             # 表单 Schema 结构
 │   │   ├── test_generation.py              # 正文生成（prompt 构建 + payload 应用）
 │   │   ├── test_generation_extended.py     # 正文生成（reference/report_data 直通）

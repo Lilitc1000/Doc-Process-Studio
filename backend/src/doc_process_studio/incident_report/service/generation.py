@@ -583,7 +583,7 @@ async def quick_generate_report_body(
     model: str | None = None,
     reranker_model: str | None = None,
 ) -> IncidentBodyGenerateResponse:
-    from .role import has_permission
+    from ..infrastructure.permission_helper import has_permission
 
     record = await load_report_orm(report_id)
     if record is None:
@@ -621,7 +621,7 @@ async def generate_report_body_section(
     model: str | None = None,
     reranker_model: str | None = None,
 ) -> IncidentBodyGenerateResponse:
-    from .role import has_permission
+    from ..infrastructure.permission_helper import has_permission
 
     record = await load_report_orm(report_id)
     if record is None:

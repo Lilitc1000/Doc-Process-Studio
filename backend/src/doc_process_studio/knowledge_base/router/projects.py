@@ -1,9 +1,18 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.config import settings
 from ...core.database import get_db
 from ...core.security import get_current_user_id
+from ..application.kb_service import KnowledgeBaseService
+from ..domain.errors import (
+    DocumentNotFoundError,
+    FileTooLargeError,
+    FolderNotFoundError,
+    KnowledgeBaseError,
+    ProjectNotFoundError,
+    UnsupportedFileTypeError,
+)
+from ..infrastructure.dependencies import get_kb_service
 from ..schemas import (
     KBDocumentResponse,
     KBFolderCreateRequest,
@@ -16,33 +25,27 @@ from ..schemas import (
     KBProjectResponse,
     KBTreeResponse,
 )
-from ..service import (
-    build_tree,
-    create_folder,
-    create_project,
-    delete_document,
-    delete_folder,
-    delete_project,
-    get_project,
-    index_document,
-    list_projects,
-    rename_folder,
-    rename_project,
-    update_project_stats,
-    upload_document,
-)
-from ..service.qdrant_service import delete_project_vectors
 
 router = APIRouter(prefix="/api/knowledge-base", tags=["knowledge-base"])
+
+
+def _handle_kb_error(exc: KnowledgeBaseError) -> HTTPException:
+    if isinstance(exc, (ProjectNotFoundError, FolderNotFoundError, DocumentNotFoundError)):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, FileTooLargeError):
+        return HTTPException(status_code=413, detail=str(exc))
+    if isinstance(exc, UnsupportedFileTypeError):
+        return HTTPException(status_code=400, detail=str(exc))
+    return HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/projects", response_model=KBProjectListResponse)
 async def list_kb_projects(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectListResponse:
-    projects = await list_projects(db)
-    return KBProjectListResponse(projects=projects)
+    return await service.list_projects(db)
 
 
 @router.post("/projects", response_model=KBProjectResponse, status_code=201)
@@ -50,8 +53,9 @@ async def create_kb_project(
     body: KBProjectCreateRequest,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectResponse:
-    project = await create_project(db, body.name, body.description)
+    project = await service.create_project(db, body.name, body.description)
     await db.commit()
     return project
 
@@ -61,11 +65,12 @@ async def get_kb_project(
     project_id: str,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectResponse:
-    project = await get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    try:
+        return await service.get_project(db, project_id)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
 
 
 @router.put("/projects/{project_id}/rename", response_model=KBProjectResponse)
@@ -74,10 +79,12 @@ async def rename_kb_project(
     body: KBProjectRenameRequest,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectResponse:
-    project = await rename_project(db, project_id, body.name)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        project = await service.rename_project(db, project_id, body.name)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
     await db.commit()
     return project
 
@@ -87,12 +94,12 @@ async def delete_kb_project(
     project_id: str,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> None:
-    project = await get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    delete_project_vectors(project.name)
-    await delete_project(db, project_id)
+    try:
+        await service.delete_project(db, project_id)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
     await db.commit()
 
 
@@ -102,11 +109,12 @@ async def create_kb_folder(
     body: KBFolderCreateRequest,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBFolderResponse:
-    folder = await create_folder(db, project_id, body.name, body.parent_id)
-    if not folder:
-        raise HTTPException(status_code=404, detail="Project or parent folder not found")
-    await update_project_stats(db, project_id)
+    try:
+        folder = await service.create_folder(db, project_id, body.name, body.parent_id)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
     await db.commit()
     return folder
 
@@ -117,10 +125,12 @@ async def rename_kb_folder(
     body: KBFolderRenameRequest,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBFolderResponse:
-    folder = await rename_folder(db, folder_id, body.name)
-    if not folder:
-        raise HTTPException(status_code=404, detail="Folder not found")
+    try:
+        folder = await service.rename_folder(db, folder_id, body.name)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
     await db.commit()
     return folder
 
@@ -130,10 +140,12 @@ async def delete_kb_folder(
     folder_id: str,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> None:
-    success = await delete_folder(db, folder_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Folder not found")
+    try:
+        await service.delete_folder(db, folder_id)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
     await db.commit()
 
 
@@ -142,16 +154,12 @@ async def get_kb_tree(
     project_id: str,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBTreeResponse:
-    project = await get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    tree = await build_tree(db, project_id)
-    return KBTreeResponse(
-        project_id=project.id,
-        project_name=project.name,
-        tree=tree,
-    )
+    try:
+        return await service.build_tree(db, project_id)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
 
 
 @router.post("/projects/{project_id}/documents/upload", response_model=KBDocumentResponse, status_code=201)
@@ -161,24 +169,19 @@ async def upload_kb_document(
     folder_id: str | None = Form(None),
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBDocumentResponse:
     content = await file.read()
-    if len(content) > settings.kb_max_upload_size_bytes:
-        raise HTTPException(status_code=413, detail="File size exceeds 100MB limit")
-
-    doc = await upload_document(db, project_id, folder_id, file.filename or "unknown", content)
-    if not doc:
-        raise HTTPException(status_code=400, detail="Unsupported file format or project not found")
-
-    # 上传后立即索引文档（解析 → 分块 → 向量化 → 写入 Qdrant）
-    # archive 类型的文档在 _handle_archive_upload 中已对子文档逐一索引
-    project = await get_project(db, project_id)
-    if project and not doc.is_indexed and doc.file_type != "archive":
-        chunk_count = await index_document(db, doc.id, project.name, content)
-        doc.is_indexed = True
-        doc.chunk_count = chunk_count
-
-    await update_project_stats(db, project_id)
+    try:
+        doc = await service.upload_document(
+            db,
+            project_id,
+            folder_id,
+            file.filename or "unknown",
+            content,
+        )
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
     await db.commit()
     return doc
 
@@ -188,10 +191,12 @@ async def delete_kb_document(
     document_id: str,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> None:
-    success = await delete_document(db, document_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        await service.delete_document(db, document_id)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
     await db.commit()
 
 
@@ -199,7 +204,6 @@ async def delete_kb_document(
 async def list_kb_projects_simple(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectListSimpleResponse:
-    from ..service import list_simple_projects
-    projects = await list_simple_projects(db)
-    return KBProjectListSimpleResponse(projects=projects)
+    return await service.list_simple_projects(db)

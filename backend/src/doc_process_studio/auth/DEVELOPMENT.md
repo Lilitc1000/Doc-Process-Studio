@@ -6,18 +6,38 @@ Auth 域负责用户认证与账号管理，包括注册、登录、令牌刷新
 
 ## 目录结构
 
+Auth 域采用 DDD 分层架构，分为 domain / application / infrastructure / router / models / schemas 六层。
+
 ```text
 backend/src/doc_process_studio/auth/
+├── domain/                       # 领域层：领域异常
+│   └── errors.py                 # AuthError 及子类（UserAlreadyExistsError/InvalidCredentialsError/...）
+├── application/                  # 应用层：用例编排 + 端口
+│   ├── ports.py                  # UserRepository / TokenBlacklist 端口
+│   └── auth_service.py           # AuthService（注册/登录/令牌/资料/密码/登出/删除/管理员初始化）
+├── infrastructure/               # 基础设施层：端口实现 + 依赖装配
+│   ├── user_repository.py        # SqlUserRepository
+│   ├── token_blacklist.py        # RedisTokenBlacklist
+│   └── dependencies.py           # FastAPI 依赖装配（get_auth_service 工厂）
 ├── router/
-│   └── auth.py             # 认证 API 端点（速率限制逻辑、dev 环境测试端点）
-├── service/
-│   └── auth.py             # 认证业务逻辑（注册、登录、令牌、密码、删除）
+│   └── auth.py                   # 认证 API 端点（速率限制、异常映射）
 ├── models/
-│   └── user.py             # SQLAlchemy ORM 模型（User）
+│   └── user.py                   # SQLAlchemy ORM 模型（User）
 └── schemas/
-    ├── request.py          # 入参 Pydantic 模型
-    └── response.py         # 出参 Pydantic 模型
+    ├── request.py                # 入参 Pydantic 模型
+    └── response.py               # 出参 Pydantic 模型
 ```
+
+### 分层依赖规则
+
+- **domain** 不依赖任何其他层，只包含领域异常定义
+- **application** 依赖 domain + 端口抽象，不依赖 infrastructure 实现
+- **infrastructure** 实现 application 端口，依赖 ORM 和 Redis
+- **router** 通过 `Depends(get_auth_service)` 注入应用服务
+
+### 依赖注入
+
+所有应用服务通过 `infrastructure/dependencies.py` 装配，使用 `@lru_cache(maxsize=1)` 单例。测试时通过 `app.dependency_overrides[get_auth_service]` 替换为 mock。
 
 ## API 端点
 
@@ -75,12 +95,15 @@ backend/src/doc_process_studio/auth/
 
 - **bcrypt 直接使用**：已移除 `passlib` 依赖，直接使用 `bcrypt` 库进行密码哈希和验证。`bcrypt>=4.0.1,<5.0.0`，与旧版 passlib 生成的哈希向后兼容
 - **登录接口格式**：`/api/auth/login` 使用 `OAuth2PasswordRequestForm`，请求体必须是 `application/x-www-form-urlencoded`，不是 JSON
-- **JWT 令牌管理**：access_token 有效期 15 分钟，refresh_token 有效期 7 天；登出时 refresh_token 的 jti 写入 Redis 黑名单
+- **JWT 令牌管理**：access_token 有效期 15 分钟，refresh_token 有效期 7 天；登出时 refresh_token 的 jti 写入 Redis 黑名单（通过 `TokenBlacklist` 端口）
 - **速率限制**：注册和登录接口共享内存级速率限制（5 次/60 秒/客户端 IP），白名单 IP 不受限制
 - **删除用户**：`DELETE /users/{user_id}` 仅允许删除自己的账号（token 中的 user_id 必须与路径参数一致）
 - **测试专用端点**：`DELETE /users/by-prefix/{prefix}`、`POST /rate-limit-whitelist`、`POST /ensure-admin` 仅在 `settings.env == "dev"` 时注册，生产环境不可访问
 - **E2E 测试数据标识**：测试创建的用户名统一使用 `e2e_w{n}_` 前缀（Worker 隔离），清理时调用 `DELETE /users/by-prefix/{prefix}` 批量删除
-- **不要在 `router/` 中写业务逻辑**，所有编排逻辑放 `service/`
+- **分层规范**：不要在 `router/` 中写业务逻辑，所有编排逻辑放 `application/auth_service.py`；领域异常定义在 `domain/errors.py`
 - **不要在 `models/` 中引入 Pydantic**
 - **ORM 模型归属**：每个业务域的 ORM 模型放在自己的 `models/` 目录下，`Base` 定义在 `core/database.py`
 - **共享认证依赖**：`get_current_user_id` 定义在 `core/security.py`，其他域 router 通过 `from ...core.security import get_current_user_id` 引用
+- **跨域用户名解析**：其他域通过 `auth.infrastructure.user_repository.SqlUserRepository.resolve_usernames()` 解析用户 ID → 用户名
+- **异常映射**：`router/auth.py` 的 `_handle_auth_error` 将 `AuthError` 子类映射为 HTTP 状态码（409/401/400/404）
+- **测试规范**：集成测试通过 `app.dependency_overrides[get_auth_service]` 注入 `FakeAuthService`，不 patch 模块路径

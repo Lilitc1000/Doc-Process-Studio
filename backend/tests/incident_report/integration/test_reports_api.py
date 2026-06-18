@@ -1,9 +1,14 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from doc_process_studio.core.security import create_access_token
+from doc_process_studio.incident_report.domain.errors import PermissionDeniedError
+from doc_process_studio.incident_report.infrastructure.dependencies import (
+    get_report_application_service,
+    get_role_service,
+)
 from doc_process_studio.incident_report.router.reports import router as reports_router
 from doc_process_studio.incident_report.router.roles import router as roles_router
 from doc_process_studio.incident_report.schemas.response import (
@@ -45,40 +50,39 @@ def _mock_report(**overrides) -> IncidentReportDetail:
     return IncidentReportDetail(**defaults)
 
 
+def _override_service(app: FastAPI, service: AsyncMock) -> None:
+    """用 FastAPI 官方 dependency_overrides 覆盖 application service 依赖。"""
+    app.dependency_overrides[get_report_application_service] = lambda: service
+
+
 def test_list_reports_returns_structure():
     app = _create_test_app()
 
-    async def _fake_list(**kwargs):
-        return IncidentReportListResponse(total=0, items=[])
+    fake_service = AsyncMock()
+    fake_service.list.return_value = IncidentReportListResponse(total=0, items=[])
+    _override_service(app, fake_service)
 
-    with patch(
-        "doc_process_studio.incident_report.router.reports.list_incident_reports",
-        _fake_list,
-    ):
-        client = TestClient(app)
-        resp = client.get("/api/incident-report/reports", headers=_auth_headers())
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "total" in data
-        assert "items" in data
+    client = TestClient(app)
+    resp = client.get("/api/incident-report/reports", headers=_auth_headers())
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total" in data
+    assert "items" in data
 
 
 def test_get_report_detail_not_found():
     app = _create_test_app()
 
-    async def _fake_get(report_id, **kwargs):
-        return None
+    fake_service = AsyncMock()
+    fake_service.get.return_value = None
+    _override_service(app, fake_service)
 
-    with patch(
-        "doc_process_studio.incident_report.router.reports.get_report",
-        _fake_get,
-    ):
-        client = TestClient(app)
-        resp = client.get(
-            "/api/incident-report/reports/nonexistent-id",
-            headers=_auth_headers(),
-        )
-        assert resp.status_code == 404
+    client = TestClient(app)
+    resp = client.get(
+        "/api/incident-report/reports/nonexistent-id",
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 404
 
 
 def test_submit_report_requires_auth():
@@ -91,65 +95,55 @@ def test_submit_report_requires_auth():
 def test_get_my_roles():
     app = _create_test_app()
 
-    async def _fake_get_roles(user_id):
-        return {"reporter"}
+    from doc_process_studio.incident_report.schemas.response import (
+        IncidentUserPermissionsResponse,
+    )
 
-    with patch(
-        "doc_process_studio.incident_report.router.roles.get_user_incident_roles",
-        _fake_get_roles,
-    ):
-        client = TestClient(app)
-        resp = client.get("/api/incident-report/roles/me", headers=_auth_headers())
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "roles" in data
+    fake_role_service = AsyncMock()
+    fake_role_service.get_my_permissions.return_value = IncidentUserPermissionsResponse(
+        user_id="usr_test",
+        roles=["reporter"],
+        permissions=["report:view"],
+    )
+    app.dependency_overrides[get_role_service] = lambda: fake_role_service
+
+    client = TestClient(app)
+    resp = client.get("/api/incident-report/roles/me", headers=_auth_headers())
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "roles" in data
 
 
 def test_create_report_success():
     app = _create_test_app()
 
-    async def _fake_has_permission(user_id, permission):
-        return True
+    fake_service = AsyncMock()
+    fake_service.create.return_value = _mock_report()
+    _override_service(app, fake_service)
 
-    async def _fake_create(**kwargs):
-        return _mock_report()
-
-    with patch(
-        "doc_process_studio.incident_report.service.report.has_permission",
-        _fake_has_permission,
-    ), patch(
-        "doc_process_studio.incident_report.router.reports.create_report",
-        _fake_create,
-    ):
-        client = TestClient(app)
-        resp = client.post(
-            "/api/incident-report/reports",
-            json={"title": "测试报告", "form_data": {}},
-            headers=_auth_headers(),
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["title"] == "测试报告"
-        assert data["status"] == "draft"
+    client = TestClient(app)
+    resp = client.post(
+        "/api/incident-report/reports",
+        json={"title": "测试报告", "form_data": {}},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["title"] == "测试报告"
+    assert data["status"] == "draft"
 
 
 def test_approve_report_requires_verifier_role():
     app = _create_test_app()
 
-    async def _fake_has_permission(user_id, permission):
-        return permission != "report:audit"
+    fake_service = AsyncMock()
+    fake_service.approve.side_effect = PermissionDeniedError("需要审核人权限")
+    _override_service(app, fake_service)
 
-    async def _fake_load(report_id):
-        return None
-
-    with patch(
-        "doc_process_studio.incident_report.service.report.has_permission",
-        _fake_has_permission,
-    ):
-        client = TestClient(app)
-        resp = client.post(
-            "/api/incident-report/reports/test-id/approve",
-            json={"comment": "通过"},
-            headers=_auth_headers(),
-        )
-        assert resp.status_code == 403
+    client = TestClient(app)
+    resp = client.post(
+        "/api/incident-report/reports/test-id/approve",
+        json={"comment": "通过"},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 403

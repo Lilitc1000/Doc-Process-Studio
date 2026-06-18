@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-import doc_process_studio.skill.router.routes as skills_router_module
+from doc_process_studio.skill.application.skill_service import SkillService
+from doc_process_studio.skill.infrastructure.dependencies import get_skill_service
+from doc_process_studio.skill.schemas.catalog import SkillInterfaceConfig
 from doc_process_studio.skill.schemas.runtime import (
     SkillContextChunk,
     SkillConversationState,
@@ -12,7 +14,60 @@ from doc_process_studio.skill.service.context_packer import (
 )
 
 
-def test_api_skill_context_search_returns_chunks(auth_headers) -> None:
+def _build_fake_skill_service(
+    *,
+    chunks: list[SkillContextChunk] | None = None,
+    refresh_result: tuple[bool, int] | None = None,
+    delete_result: tuple[bool, int] | None = None,
+) -> SkillService:
+    fake = SkillService.__new__(SkillService)
+
+    def _list_skills() -> list[SkillInterfaceConfig]:
+        return []
+
+    async def _search_context(skill_id: str, query: str) -> list[SkillContextChunk]:
+        return chunks or []
+
+    async def _refresh(conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
+        assert conversation_id == "conversation-1"
+        assert tenant_id == "default"
+        return refresh_result or (True, 3600)
+
+    async def _delete(conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
+        assert conversation_id == "conversation-1"
+        assert tenant_id == "default"
+        return delete_result or (True, -2)
+
+    fake.list_skills = _list_skills  # type: ignore[assignment]
+    fake.search_context = _search_context  # type: ignore[assignment]
+    fake.refresh_conversation_cache = _refresh  # type: ignore[assignment]
+    fake.delete_conversation_cache = _delete  # type: ignore[assignment]
+    return fake
+
+
+def _install_fake_service(monkeypatch, fake: SkillService) -> None:
+    monkeypatch.setitem(
+        main_module.app.dependency_overrides,
+        get_skill_service,
+        lambda: fake,
+    )
+
+
+def test_api_skill_context_search_returns_chunks(monkeypatch, auth_headers) -> None:
+    fake = _build_fake_skill_service(
+        chunks=[
+            SkillContextChunk(
+                id="chunk-1",
+                skill_id="document-assistant",
+                source_path="SKILL.md",
+                title="文档摘要",
+                preview="文档摘要预览",
+                content="文档摘要内容",
+            )
+        ]
+    )
+    _install_fake_service(monkeypatch, fake)
+
     client = TestClient(main_module.app)
     response = client.get(
         "/api/skills/document-assistant/context/search",
@@ -27,10 +82,12 @@ def test_api_skill_context_search_returns_chunks(auth_headers) -> None:
 
 
 def test_api_skill_cache_status_reports_redis_ping(monkeypatch, auth_headers) -> None:
+    import doc_process_studio.skill.router.routes as routes_module
+
     async def fake_ping_redis() -> bool:
         return True
 
-    monkeypatch.setattr(skills_router_module, "ping_redis", fake_ping_redis)
+    monkeypatch.setattr(routes_module, "ping_redis", fake_ping_redis)
 
     client = TestClient(main_module.app)
     response = client.get("/api/skills/cache/status", headers=auth_headers)
@@ -43,22 +100,14 @@ def test_api_skill_cache_status_reports_redis_ping(monkeypatch, auth_headers) ->
 
 
 def test_api_skill_cache_refresh_reports_ttl(monkeypatch, auth_headers) -> None:
-    async def fake_refresh_conversation_state_ttl(
-        conversation_id: str,
-        tenant_id: str = "default",
-    ) -> tuple[bool, int]:
-        assert conversation_id == "conversation-1"
-        assert tenant_id == "default"
-        return True, 3600
-
-    monkeypatch.setattr(
-        skills_router_module,
-        "refresh_conversation_state_ttl",
-        fake_refresh_conversation_state_ttl,
-    )
+    fake = _build_fake_skill_service(refresh_result=(True, 3600))
+    _install_fake_service(monkeypatch, fake)
 
     client = TestClient(main_module.app)
-    response = client.post("/api/skills/cache/conversations/conversation-1/refresh", headers=auth_headers)
+    response = client.post(
+        "/api/skills/cache/conversations/conversation-1/refresh",
+        headers=auth_headers,
+    )
 
     assert response.status_code == 200
     assert response.json() == {
@@ -70,35 +119,14 @@ def test_api_skill_cache_refresh_reports_ttl(monkeypatch, auth_headers) -> None:
 
 
 def test_api_skill_cache_delete_clears_state(monkeypatch, auth_headers) -> None:
-    async def fake_clear_conversation_state(
-        conversation_id: str,
-        tenant_id: str = "default",
-    ) -> bool:
-        assert conversation_id == "conversation-1"
-        assert tenant_id == "default"
-        return True
-
-    async def fake_get_conversation_state_ttl_seconds(
-        conversation_id: str,
-        tenant_id: str = "default",
-    ) -> int:
-        assert conversation_id == "conversation-1"
-        assert tenant_id == "default"
-        return -2
-
-    monkeypatch.setattr(
-        skills_router_module,
-        "clear_conversation_state",
-        fake_clear_conversation_state,
-    )
-    monkeypatch.setattr(
-        skills_router_module,
-        "get_conversation_state_ttl_seconds",
-        fake_get_conversation_state_ttl_seconds,
-    )
+    fake = _build_fake_skill_service(delete_result=(True, -2))
+    _install_fake_service(monkeypatch, fake)
 
     client = TestClient(main_module.app)
-    response = client.delete("/api/skills/cache/conversations/conversation-1", headers=auth_headers)
+    response = client.delete(
+        "/api/skills/cache/conversations/conversation-1",
+        headers=auth_headers,
+    )
 
     assert response.status_code == 200
     assert response.json() == {

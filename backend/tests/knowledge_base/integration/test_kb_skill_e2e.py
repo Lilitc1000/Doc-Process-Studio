@@ -8,8 +8,6 @@
 import asyncio
 import json
 
-import pytest
-
 from doc_process_studio.chat.schemas.request import ChatStreamRequest, ChatMessageInput
 from doc_process_studio.chat.service.stream import stream_remote_chat_completion
 from doc_process_studio.skill.service.context import load_skill_context_chunks

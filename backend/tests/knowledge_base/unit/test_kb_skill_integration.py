@@ -80,8 +80,8 @@ def test_build_skills_catalog_lines_mixed_skills() -> None:
 
     lines = _build_skills_catalog_lines(["document-assistant", "kb:TestProject"])
     assert len(lines) == 2
-    doc_line = [l for l in lines if "document-assistant" in l][0]
-    kb_line = [l for l in lines if "kb:TestProject" in l][0]
+    doc_line = [line for line in lines if "document-assistant" in line][0]
+    kb_line = [line for line in lines if "kb:TestProject" in line][0]
     assert "SKILL.md" in doc_line
     assert "知识库 RAG" in kb_line
 
@@ -171,24 +171,24 @@ def test_build_direct_skill_plan_mixed_skills() -> None:
 
 
 def test_context_is_kb_skill_id() -> None:
-    from doc_process_studio.chat.service.streaming.context import _is_kb_skill_id
+    from doc_process_studio.chat.service.streaming.context import is_kb_skill_id
 
-    assert _is_kb_skill_id("kb:TestProject") is True
-    assert _is_kb_skill_id("document-assistant") is False
+    assert is_kb_skill_id("kb:TestProject") is True
+    assert is_kb_skill_id("document-assistant") is False
 
 
 def test_context_extract_kb_project_name() -> None:
-    from doc_process_studio.chat.service.streaming.context import _extract_kb_project_name
+    from doc_process_studio.chat.service.streaming.context import extract_kb_project_name
 
-    assert _extract_kb_project_name("kb:出租车平台") == "出租车平台"
-    assert _extract_kb_project_name("kb:") == ""
-    assert _extract_kb_project_name("other") == ""
+    assert extract_kb_project_name("kb:出租车平台") == "出租车平台"
+    assert extract_kb_project_name("kb:") == ""
+    assert extract_kb_project_name("other") == ""
 
 
 def test_context_build_kb_skill_interface() -> None:
-    from doc_process_studio.chat.service.streaming.context import _build_kb_skill_interface
+    from doc_process_studio.chat.service.streaming.context import build_kb_skill_interface
 
-    interface = _build_kb_skill_interface("出租车平台")
+    interface = build_kb_skill_interface("出租车平台")
     assert interface.id == "kb:出租车平台"
     assert "出租车平台" in interface.display_name
     assert interface.skill_type == "chat"

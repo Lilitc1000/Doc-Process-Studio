@@ -1,8 +1,11 @@
+from typing import Any
+
+import pytest
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-import doc_process_studio.system.router.models as models_router_module
 from doc_process_studio.core.ollama import extract_model_names
+from doc_process_studio.system.infrastructure.dependencies import get_model_query_service
 
 
 def test_extract_model_names_supports_multiple_payload_shapes() -> None:
@@ -22,15 +25,28 @@ def test_extract_model_names_supports_multiple_payload_shapes() -> None:
     ]
 
 
-def test_api_models_returns_remote_model_names(monkeypatch, auth_headers) -> None:
-    async def fake_fetch_remote_model_names() -> list[str]:
-        return ["qwen2.5:7b", "deepseek-r1:14b"]
+class FakeModelQueryService:
+    """测试用 ModelQueryService 替身。"""
 
-    monkeypatch.setattr(
-        models_router_module,
-        "fetch_remote_model_names",
-        fake_fetch_remote_model_names,
-    )
+    def __init__(self) -> None:
+        self.models: list[str] = []
+        self.calls: dict[str, list[Any]] = {}
+
+    async def list_remote_models(self) -> list[str]:
+        self.calls.setdefault("list_remote_models", []).append(())
+        return self.models
+
+
+@pytest.fixture()
+def fake_model_service():
+    service = FakeModelQueryService()
+    main_module.app.dependency_overrides[get_model_query_service] = lambda: service
+    yield service
+    main_module.app.dependency_overrides.pop(get_model_query_service, None)
+
+
+def test_api_models_returns_remote_model_names(fake_model_service: FakeModelQueryService, auth_headers) -> None:
+    fake_model_service.models = ["qwen2.5:7b", "deepseek-r1:14b"]
 
     client = TestClient(main_module.app)
     response = client.get("/api/models", headers=auth_headers)
@@ -42,3 +58,4 @@ def test_api_models_returns_remote_model_names(monkeypatch, auth_headers) -> Non
             {"name": "deepseek-r1:14b"},
         ]
     }
+    assert fake_model_service.calls.get("list_remote_models") == [()]

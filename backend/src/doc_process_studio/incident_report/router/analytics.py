@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 
 from ...core.security import get_current_user_id
+from ..application.analytics_service import AnalyticsService
+from ..domain.errors import DomainError
+from ..infrastructure.dependencies import get_analytics_service
 from ..schemas.response import IncidentAnalyticsOverview, IncidentAnalyticsTrend
-from ..service.analytics import get_analytics_overview as _get_overview
-from ..service.analytics import get_analytics_trend as _get_trend
 
 router = APIRouter(prefix="/api/incident-report/analytics", tags=["incident-report-analytics"])
 
@@ -11,13 +12,27 @@ router = APIRouter(prefix="/api/incident-report/analytics", tags=["incident-repo
 @router.get("/overview", response_model=IncidentAnalyticsOverview)
 async def get_analytics_overview(
     user_id: str = Depends(get_current_user_id),
+    service: AnalyticsService = Depends(get_analytics_service),
 ) -> IncidentAnalyticsOverview:
-    return await _get_overview(user_id=user_id)
+    try:
+        result: IncidentAnalyticsOverview = await service.get_overview(user_id=user_id)
+        return result
+    except DomainError as exc:
+        from .reports import _handle_domain_error
+
+        raise _handle_domain_error(exc) from exc
 
 
 @router.get("/trend", response_model=list[IncidentAnalyticsTrend])
 async def get_analytics_trend(
     days: int = Query(default=30, ge=1, le=365),
     user_id: str = Depends(get_current_user_id),
+    service: AnalyticsService = Depends(get_analytics_service),
 ) -> list[IncidentAnalyticsTrend]:
-    return await _get_trend(user_id=user_id, days=days)
+    try:
+        result: list[IncidentAnalyticsTrend] = await service.get_trend(user_id=user_id, days=days)
+        return result
+    except DomainError as exc:
+        from .reports import _handle_domain_error
+
+        raise _handle_domain_error(exc) from exc

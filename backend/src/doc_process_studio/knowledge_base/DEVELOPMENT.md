@@ -6,9 +6,21 @@
 
 ## 目录结构
 
+KnowledgeBase 域采用 DDD 分层架构。CRUD/上传/索引/树构建等用例走 domain/application/infrastructure 分层；解析/分块/向量化等纯函数工具保留在 service/ 供 infrastructure 委托和跨域调用。
+
 ```text
 knowledge_base/
 ├── __init__.py
+├── domain/                      # 领域层：领域异常
+│   └── errors.py                # KnowledgeBaseError / ProjectNotFoundError / FolderNotFoundError / ...
+├── application/                 # 应用层：用例编排 + 端口
+│   ├── ports.py                 # KnowledgeBaseRepository / VectorStore / EmbeddingService 端口
+│   └── kb_service.py            # KnowledgeBaseService（项目/文件夹/文档 CRUD、树、上传索引）
+├── infrastructure/              # 基础设施层：端口实现 + 依赖装配
+│   ├── kb_repository.py         # SqlKnowledgeBaseRepository
+│   ├── vector_store.py          # QdrantVectorStore
+│   ├── embedding_service.py     # OllamaEmbeddingService
+│   └── dependencies.py          # FastAPI 依赖装配（get_kb_service 工厂）
 ├── models/
 │   ├── __init__.py
 │   └── knowledge_base_orm.py    # KBProject, KBFolder, KBDocument ORM 模型
@@ -19,13 +31,12 @@ knowledge_base/
 │   └── response.py              # 响应 Pydantic 模型
 ├── router/
 │   ├── __init__.py
-│   └── projects.py              # API 路由（项目/文件夹/文档/更新）
-└── service/
+│   └── projects.py              # API 路由（依赖注入 KnowledgeBaseService）
+└── service/                     # 纯函数工具层（被 infrastructure 委托 + 跨域调用）
     ├── __init__.py
     ├── documents.py             # 文档上传、解析、索引编排
     ├── folders.py               # 文件夹 CRUD 与树形结构构建
     ├── projects.py              # 项目 CRUD
-    ├── kb_update.py             # 增量更新知识库（向量化 + 入库）
     ├── kb_skill.py              # 知识库虚拟 Skill 提示词与工具定义
     ├── chunker.py               # 文本分块器
     ├── embedding.py             # Ollama 文本向量化
@@ -37,6 +48,22 @@ knowledge_base/
         ├── xlsx_parser.py       # Excel 解析
         └── archive.py           # 压缩包解析（ZIP/RAR/7z）
 ```
+
+### 分层依赖规则
+
+- **domain** 不依赖任何其他层，只包含领域异常定义
+- **application** 依赖 domain + 端口抽象，不依赖 infrastructure 实现
+- **infrastructure** 实现 application 端口，委托 service/ 纯函数和 core/qdrant
+- **router** 通过 `Depends(get_kb_service)` 注入应用服务，事务边界由 router 调用 `db.commit()`
+- **service/** 是纯函数工具层，被 infrastructure 委托，也被 chat/skill 跨域直接调用（embedding/qdrant_service/kb_skill）
+
+### 依赖注入
+
+应用服务通过 `infrastructure/dependencies.py` 装配，使用 `@lru_cache(maxsize=1)` 单例。测试时通过 `app.dependency_overrides[get_kb_service]` 替换为 mock。
+
+### 事务边界
+
+仓储方法仅 `flush` 不 `commit`，由 router 在用例返回后调用 `db.commit()` 提交。删除项目时由应用服务先清理 Qdrant 向量再删除 ORM 记录。
 
 ## 核心模型
 

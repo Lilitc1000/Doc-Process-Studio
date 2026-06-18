@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ...core.database import async_session_factory
 from ...shared.dtutils import to_utc8
-from ...auth.service.auth import resolve_usernames
+from ...auth.infrastructure.user_repository import SqlUserRepository
 from ..models.incident_report_orm import IncidentComment, IncidentReport as IncidentReportORM
 from ..schemas.response import IncidentReportDetail, IncidentReportSummary
 from ..schemas.common import IncidentReportStatus, IncidentSeverity
@@ -221,7 +221,7 @@ async def _resolve_usernames_safe(user_ids: set[str]) -> dict[str, str]:
     if not user_ids:
         return {}
     try:
-        return await resolve_usernames(user_ids)
+        return await SqlUserRepository().resolve_usernames(user_ids)
     except Exception:
         logger.warning("Failed to resolve usernames for ids: %s", user_ids, exc_info=True)
         return {}
