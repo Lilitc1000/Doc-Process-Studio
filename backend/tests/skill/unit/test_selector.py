@@ -1,4 +1,3 @@
-import asyncio
 from datetime import UTC, datetime
 
 from doc_process_studio.chat.schemas.request import ChatMessageInput
@@ -42,7 +41,7 @@ def test_build_selector_skill_interfaces_dedupes_and_fallbacks() -> None:
     assert interfaces[1].default_prompt == "impact ref"
 
 
-def test_select_skills_with_planner_uses_defaults_and_normalization(monkeypatch, build_skill) -> None:
+async def test_select_skills_with_planner_uses_defaults_and_normalization(monkeypatch, build_skill) -> None:
     captured: dict[str, object] = {}
 
     async def fake_plan_skill_activation(**kwargs):
@@ -66,18 +65,16 @@ def test_select_skills_with_planner_uses_defaults_and_normalization(monkeypatch,
         fake_plan_skill_activation,
     )
 
-    decision = asyncio.run(
-        select_skills_with_planner(
-            model="qwen3-coder-next:latest",
-            messages=[ChatMessageInput(role="user", content="测试选择器")],
-            available_skills=[build_skill(skill_id="document-assistant")],
-            explicit_skill_ids=["document-assistant", " document-assistant ", ""],
-            missing_explicit_skill_ids=["unknown-skill", "unknown-skill"],
-            system_skill_id="document-assistant",
-            max_implicit_skills=0,
-            top_k_candidates=None,
-            min_confidence=1.2,
-        )
+    decision = await select_skills_with_planner(
+        model="qwen3-coder-next:latest",
+        messages=[ChatMessageInput(role="user", content="测试选择器")],
+        available_skills=[build_skill(skill_id="document-assistant")],
+        explicit_skill_ids=["document-assistant", " document-assistant ", ""],
+        missing_explicit_skill_ids=["unknown-skill", "unknown-skill"],
+        system_skill_id="document-assistant",
+        max_implicit_skills=0,
+        top_k_candidates=None,
+        min_confidence=1.2,
     )
 
     assert captured["explicit_skill_ids"] == ["document-assistant"]
@@ -89,7 +86,7 @@ def test_select_skills_with_planner_uses_defaults_and_normalization(monkeypatch,
     assert decision.required_skill_ids == ["document-assistant"]
 
 
-def test_select_for_chat_skills_uses_chat_template_defaults(monkeypatch, build_skill) -> None:
+async def test_select_for_chat_skills_uses_chat_template_defaults(monkeypatch, build_skill) -> None:
     captured: dict[str, object] = {}
 
     async def fake_select_skills_with_planner(**kwargs):
@@ -113,15 +110,13 @@ def test_select_for_chat_skills_uses_chat_template_defaults(monkeypatch, build_s
         fake_select_skills_with_planner,
     )
 
-    decision = asyncio.run(
-        select_for_chat_skills(
-            model="qwen3-coder-next:latest",
-            messages=[ChatMessageInput(role="user", content="测试 chat 模板")],
-            available_skills=[build_skill(skill_id="document-assistant")],
-            explicit_skill_ids=["document-assistant"],
-            missing_explicit_skill_ids=["missing-skill"],
-            system_skill_id="document-assistant",
-        )
+    decision = await select_for_chat_skills(
+        model="qwen3-coder-next:latest",
+        messages=[ChatMessageInput(role="user", content="测试 chat 模板")],
+        available_skills=[build_skill(skill_id="document-assistant")],
+        explicit_skill_ids=["document-assistant"],
+        missing_explicit_skill_ids=["missing-skill"],
+        system_skill_id="document-assistant",
     )
 
     assert captured["max_implicit_skills"] == settings.skill_planner_max_implicit_skills
@@ -130,7 +125,7 @@ def test_select_for_chat_skills_uses_chat_template_defaults(monkeypatch, build_s
     assert decision.primary_skill_id == "document-assistant"
 
 
-def test_select_for_workspace_reference_uses_reference_template_defaults(monkeypatch, build_skill) -> None:
+async def test_select_for_workspace_reference_uses_reference_template_defaults(monkeypatch, build_skill) -> None:
     captured: dict[str, object] = {}
 
     async def fake_select_skills_with_planner(**kwargs):
@@ -154,19 +149,17 @@ def test_select_for_workspace_reference_uses_reference_template_defaults(monkeyp
         fake_select_skills_with_planner,
     )
 
-    decision = asyncio.run(
-        select_for_workspace_reference(
-            model="qwen3-coder-next:latest",
-            messages=[ChatMessageInput(role="user", content="测试 workspace 模板")],
-            available_skills=[
-                build_skill(skill_id="body-sections/common.md"),
-                build_skill(skill_id="body-sections/impact.md"),
-                build_skill(skill_id="body-sections/timeline.md"),
-            ],
-            explicit_skill_ids=["body-sections/common.md"],
-            system_skill_id="__incident_reference_system__",
-            reference_select_limit=4,
-        )
+    decision = await select_for_workspace_reference(
+        model="qwen3-coder-next:latest",
+        messages=[ChatMessageInput(role="user", content="测试 workspace 模板")],
+        available_skills=[
+            build_skill(skill_id="body-sections/common.md"),
+            build_skill(skill_id="body-sections/impact.md"),
+            build_skill(skill_id="body-sections/timeline.md"),
+        ],
+        explicit_skill_ids=["body-sections/common.md"],
+        system_skill_id="__incident_reference_system__",
+        reference_select_limit=4,
     )
 
     assert captured["missing_explicit_skill_ids"] == []

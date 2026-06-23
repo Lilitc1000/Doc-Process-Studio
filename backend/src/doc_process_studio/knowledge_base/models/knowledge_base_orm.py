@@ -14,9 +14,7 @@ def _generate_uuid() -> str:
 
 class KBProject(Base):
     __tablename__ = "kb_projects"
-    __table_args__ = (
-        Index("idx_kb_projects_name", "name", unique=True),
-    )
+    __table_args__ = (Index("idx_kb_projects_name", "name", unique=True),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_generate_uuid)
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
@@ -26,7 +24,9 @@ class KBProject(Base):
     is_updating: Mapped[bool] = mapped_column(Boolean, default=False)
     last_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class KBFolder(Base):
@@ -38,16 +38,22 @@ class KBFolder(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_generate_uuid)
     project_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("kb_projects.id", ondelete="CASCADE"), nullable=False,
+        String(64),
+        ForeignKey("kb_projects.id", ondelete="CASCADE"),
+        nullable=False,
     )
     parent_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("kb_folders.id", ondelete="CASCADE"), nullable=True,
+        String(64),
+        ForeignKey("kb_folders.id", ondelete="CASCADE"),
+        nullable=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     path: Mapped[str] = mapped_column(String(1024), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class KBDocument(Base):
@@ -60,10 +66,14 @@ class KBDocument(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_generate_uuid)
     project_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("kb_projects.id", ondelete="CASCADE"), nullable=False,
+        String(64),
+        ForeignKey("kb_projects.id", ondelete="CASCADE"),
+        nullable=False,
     )
     folder_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("kb_folders.id", ondelete="SET NULL"), nullable=True,
+        String(64),
+        ForeignKey("kb_folders.id", ondelete="SET NULL"),
+        nullable=True,
     )
     file_name: Mapped[str] = mapped_column(String(512), nullable=False)
     file_type: Mapped[str] = mapped_column(String(32), nullable=False)

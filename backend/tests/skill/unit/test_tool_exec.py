@@ -1,10 +1,9 @@
-
 from doc_process_studio.skill.service.tool_loop.tool_exec import (
+    _apply_json_file_text_normalizer,
+    _format_declared_tool_default_name,
     _normalize_json_like_punctuation,
     _normalize_text_to_chaptered_document,
     _strip_wrapped_code_fence,
-    _apply_json_file_text_normalizer,
-    _format_declared_tool_default_name,
     _try_parse_json_like_value,
 )
 
@@ -14,7 +13,7 @@ def test_strip_wrapped_code_fence_json():
 
 
 def test_strip_wrapped_code_fence_yaml():
-    assert _strip_wrapped_code_fence('```yaml\nkey: val\n```') == 'key: val'
+    assert _strip_wrapped_code_fence("```yaml\nkey: val\n```") == "key: val"
 
 
 def test_strip_wrapped_code_fence_no_fence():
@@ -22,7 +21,7 @@ def test_strip_wrapped_code_fence_no_fence():
 
 
 def test_strip_wrapped_code_fence_incomplete():
-    assert _strip_wrapped_code_fence('```\nonly one') == '```\nonly one'
+    assert _strip_wrapped_code_fence("```\nonly one") == "```\nonly one"
 
 
 def test_normalize_text_to_chaptered_document_empty():
@@ -52,9 +51,7 @@ def test_normalize_text_to_chaptered_document_nested():
 
 
 def test_apply_json_file_text_normalizer_none():
-    assert _apply_json_file_text_normalizer(
-        argument_name="test", normalized_text="text", text_normalizer=None
-    ) is None
+    assert _apply_json_file_text_normalizer(argument_name="test", normalized_text="text", text_normalizer=None) is None
 
 
 def test_apply_json_file_text_normalizer_chaptered():
@@ -104,16 +101,19 @@ def test_try_parse_json_like_value_double_encoded():
 
 def test_format_declared_tool_default_name():
     from doc_process_studio.skill.schemas.catalog import SkillToolConfig
-    tool = SkillToolConfig.model_validate({
-        "name": "my_tool",
-        "description": "test",
-        "kind": "script",
-        "path": "scripts/test.py",
-        "parameters": {"type": "object", "properties": {}},
-        "execution": {
-            "runtime": "python",
-            "arg_bindings": {},
-        },
-    })
+
+    tool = SkillToolConfig.model_validate(
+        {
+            "name": "my_tool",
+            "description": "test",
+            "kind": "script",
+            "path": "scripts/test.py",
+            "parameters": {"type": "object", "properties": {}},
+            "execution": {
+                "runtime": "python",
+                "arg_bindings": {},
+            },
+        }
+    )
     result = _format_declared_tool_default_name(tool, {"key": "value"})
     assert "my_tool" in result

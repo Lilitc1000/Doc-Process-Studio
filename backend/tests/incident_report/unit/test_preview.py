@@ -1,3 +1,4 @@
+from doc_process_studio.incident_report.schemas.response import IncidentReportPreviewResponse
 from doc_process_studio.incident_report.service.preview import (
     build_initial_output_name,
     build_preview_output_name,
@@ -5,7 +6,6 @@ from doc_process_studio.incident_report.service.preview import (
     preview_cache_get,
     preview_cache_set,
 )
-from doc_process_studio.incident_report.schemas.response import IncidentReportPreviewResponse
 
 
 def test_is_docx_attachment_true():
@@ -56,6 +56,7 @@ def test_build_preview_output_name():
 
 def test_preview_cache_set_and_get():
     import doc_process_studio.incident_report.service.preview as preview_module
+
     preview_module._PREVIEW_RESULT_CACHE.clear()
     payload = IncidentReportPreviewResponse(
         source="draft",
@@ -70,6 +71,7 @@ def test_preview_cache_set_and_get():
 
 def test_preview_cache_get_missing():
     import doc_process_studio.incident_report.service.preview as preview_module
+
     preview_module._PREVIEW_RESULT_CACHE.clear()
     result = preview_cache_get("nonexistent")
     assert result is None
@@ -77,6 +79,7 @@ def test_preview_cache_get_missing():
 
 def test_preview_cache_eviction():
     import doc_process_studio.incident_report.service.preview as preview_module
+
     preview_module._PREVIEW_RESULT_CACHE.clear()
     for i in range(15):
         payload = IncidentReportPreviewResponse(

@@ -3,7 +3,8 @@
 实现 VectorStore 端口，委托 service/qdrant_service.py 的纯函数。
 """
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from ..application.ports import VectorStore
 from ..schemas.common import KBChunkPayload

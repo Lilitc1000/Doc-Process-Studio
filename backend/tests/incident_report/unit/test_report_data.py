@@ -1,4 +1,4 @@
-
+from doc_process_studio.incident_report.schemas.common import IncidentFormAnswer, IncidentFormSnapshot
 from doc_process_studio.incident_report.service.report_data import (
     answer_text,
     answer_value,
@@ -7,7 +7,6 @@ from doc_process_studio.incident_report.service.report_data import (
     set_answer,
     set_answer_if_non_empty,
 )
-from doc_process_studio.incident_report.schemas.common import IncidentFormAnswer, IncidentFormSnapshot
 
 
 def _make_snapshot(**overrides) -> IncidentFormSnapshot:

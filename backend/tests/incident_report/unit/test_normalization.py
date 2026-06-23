@@ -9,8 +9,8 @@ from doc_process_studio.incident_report.service.normalization import (
     normalize_severity_option,
     normalize_status_option,
     normalize_text,
-    normalize_timeline_items,
     normalize_time_text,
+    normalize_timeline_items,
     parse_date_time,
     safe_json_list,
     severity_option_to_text,
@@ -264,7 +264,7 @@ def test_safe_json_list_list_input():
 
 
 def test_safe_json_list_json_string():
-    assert safe_json_list('[1, 2, 3]') == [1, 2, 3]
+    assert safe_json_list("[1, 2, 3]") == [1, 2, 3]
 
 
 def test_safe_json_list_dict_with_items():

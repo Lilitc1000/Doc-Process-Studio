@@ -1,3 +1,4 @@
+from doc_process_studio.skill.schemas.runtime import SkillContextChunk
 from doc_process_studio.skill.service.context import (
     _build_chunk_embedding_fingerprint,
     _cosine_similarity,
@@ -7,7 +8,6 @@ from doc_process_studio.skill.service.context import (
     _parse_rerank_json_object,
     _rank_to_reciprocal_score,
 )
-from doc_process_studio.skill.schemas.runtime import SkillContextChunk
 
 
 def test_normalize_whitespace():
@@ -77,12 +77,20 @@ def test_extract_embeddings_from_embed_payload_invalid():
 def test_build_chunk_embedding_fingerprint():
     chunks = [
         SkillContextChunk(
-            id="c1", skill_id="s1", source_path="ref.md",
-            title="T1", preview="p1", content="content1",
+            id="c1",
+            skill_id="s1",
+            source_path="ref.md",
+            title="T1",
+            preview="p1",
+            content="content1",
         ),
         SkillContextChunk(
-            id="c2", skill_id="s1", source_path="ref.md",
-            title="T2", preview="p2", content="content2",
+            id="c2",
+            skill_id="s1",
+            source_path="ref.md",
+            title="T2",
+            preview="p2",
+            content="content2",
         ),
     ]
     fp1 = _build_chunk_embedding_fingerprint(chunks)
@@ -93,14 +101,22 @@ def test_build_chunk_embedding_fingerprint():
 def test_build_chunk_embedding_fingerprint_different():
     chunks1 = [
         SkillContextChunk(
-            id="c1", skill_id="s1", source_path="ref.md",
-            title="T1", preview="p1", content="content1",
+            id="c1",
+            skill_id="s1",
+            source_path="ref.md",
+            title="T1",
+            preview="p1",
+            content="content1",
         ),
     ]
     chunks2 = [
         SkillContextChunk(
-            id="c2", skill_id="s1", source_path="ref.md",
-            title="T2", preview="p2", content="content2",
+            id="c2",
+            skill_id="s1",
+            source_path="ref.md",
+            title="T2",
+            preview="p2",
+            content="content2",
         ),
     ]
     fp1 = _build_chunk_embedding_fingerprint(chunks1)

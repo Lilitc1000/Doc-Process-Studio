@@ -1,9 +1,10 @@
+from pathlib import Path
+
 from doc_process_studio.incident_report.service.reference import (
     _extract_reference_summary,
     _select_references_by_heuristic,
     load_text_file,
 )
-from pathlib import Path
 
 
 def test_extract_reference_summary_basic():

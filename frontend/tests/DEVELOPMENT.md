@@ -75,9 +75,11 @@ frontend/tests/
 │       ├── use-copy-toast.test.ts       # 复制提示 composable
 │       └── use-catalog-loader.test.ts   # 目录加载 composable
 ├── knowledge-base/             # 知识库域
-│   └── unit/
-│       ├── knowledge-base-types.test.ts  # 类型定义测试（KBProject/KBFolder/KBDocument/KBTreeNode）
-│       └── knowledge-base-store.test.ts  # Store 测试（项目 CRUD/树形加载/更新状态）
+│   ├── unit/
+│   │   ├── knowledge-base-types.test.ts  # 类型定义测试（KBProject/KBFolder/KBDocument/KBTreeNode）
+│   │   └── knowledge-base-store.test.ts  # Store 测试（项目 CRUD/树形加载/更新状态）
+│   └── e2e/
+│       └── knowledge-base.spec.ts        # 知识库页面 UI/项目 CRUD/kb: skill 对话端到端测试
 └── app/                        # 全局/跨域
     └── e2e/
         └── navigation.spec.ts
@@ -619,6 +621,7 @@ test.describe('功能名称', () => {
 - [ ] E2E 测试文件名以 `.spec.ts` 结尾
 - [ ] 导入路径使用 `../../../src/...`（从 `<domain>/<type>/` 到 `src/`）
 - [ ] E2E 辅助函数从 `../../helpers` 导入
+- [ ] 无 eslint 警告或错误（运行 `npx eslint <file>` 检查，`npm run lint` 的 `--fix` 无法自动修复 `no-unused-vars` 等逻辑类问题）
 
 ### 单元测试
 

@@ -11,8 +11,8 @@ from sqlalchemy.engine import CursorResult
 
 from ...core.database import async_session_factory
 from ...core.security import generate_user_id
-from ..models.user import User
 from ..application.ports import UserRepository
+from ..models.user import User
 
 
 class SqlUserRepository(UserRepository):
@@ -119,17 +119,15 @@ class SqlUserRepository(UserRepository):
             return True
 
     async def delete_by_username_prefix(self, prefix: str) -> int:
+        from ...incident_report.models.audit_log import IncidentAuditLog
         from ...incident_report.models.incident_report_orm import (
             IncidentComment,
             IncidentReport,
         )
-        from ...incident_report.models.audit_log import IncidentAuditLog
         from ...incident_report.models.incident_report_role import IncidentReportUserRole
 
         async with async_session_factory() as session:
-            user_ids_result = await session.execute(
-                select(User.user_id).where(User.username.like(f"{prefix}%"))
-            )
+            user_ids_result = await session.execute(select(User.user_id).where(User.username.like(f"{prefix}%")))
             user_ids = [row[0] for row in user_ids_result.all()]
 
             if not user_ids:
@@ -141,32 +139,16 @@ class SqlUserRepository(UserRepository):
             report_ids = [row[0] for row in report_ids_result.all()]
 
             if report_ids:
-                await session.execute(
-                    delete(IncidentComment).where(IncidentComment.report_id.in_(report_ids))
-                )
-                await session.execute(
-                    delete(IncidentAuditLog).where(IncidentAuditLog.report_id.in_(report_ids))
-                )
-                await session.execute(
-                    delete(IncidentReport).where(IncidentReport.id.in_(report_ids))
-                )
+                await session.execute(delete(IncidentComment).where(IncidentComment.report_id.in_(report_ids)))
+                await session.execute(delete(IncidentAuditLog).where(IncidentAuditLog.report_id.in_(report_ids)))
+                await session.execute(delete(IncidentReport).where(IncidentReport.id.in_(report_ids)))
 
-            await session.execute(
-                delete(IncidentComment).where(IncidentComment.author_id.in_(user_ids))
-            )
-            await session.execute(
-                delete(IncidentAuditLog).where(IncidentAuditLog.actor_id.in_(user_ids))
-            )
-            await session.execute(
-                delete(IncidentReportUserRole).where(IncidentReportUserRole.user_id.in_(user_ids))
-            )
-            await session.execute(
-                delete(IncidentReport).where(IncidentReport.reporter_id.in_(user_ids))
-            )
+            await session.execute(delete(IncidentComment).where(IncidentComment.author_id.in_(user_ids)))
+            await session.execute(delete(IncidentAuditLog).where(IncidentAuditLog.actor_id.in_(user_ids)))
+            await session.execute(delete(IncidentReportUserRole).where(IncidentReportUserRole.user_id.in_(user_ids)))
+            await session.execute(delete(IncidentReport).where(IncidentReport.reporter_id.in_(user_ids)))
 
-            result = await session.execute(
-                delete(User).where(User.username.like(f"{prefix}%"))
-            )
+            result = await session.execute(delete(User).where(User.username.like(f"{prefix}%")))
             await session.commit()
             count: int = cast(CursorResult, result).rowcount
             return count
@@ -180,9 +162,7 @@ class SqlUserRepository(UserRepository):
         if not user_ids:
             return {}
         async with async_session_factory() as session:
-            result = await session.execute(
-                select(User.user_id, User.username).where(User.user_id.in_(user_ids))
-            )
+            result = await session.execute(select(User.user_id, User.username).where(User.user_id.in_(user_ids)))
             return {row[0]: row[1] for row in result.all()}
 
     async def assign_all_roles_to_admin(self, user_id: str) -> None:

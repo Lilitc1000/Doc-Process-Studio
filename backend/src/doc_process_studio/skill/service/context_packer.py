@@ -2,13 +2,13 @@ import logging
 
 import httpx
 
-from ..schemas.runtime import SkillContextChunk, SkillConversationState
 from ...core.config import settings
 from ...core.ollama import (
     OllamaNotConfiguredError,
     extract_first_message_content,
     post_chat_completion,
 )
+from ..schemas.runtime import SkillContextChunk, SkillConversationState
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +84,7 @@ async def ensure_hierarchical_memory(
         state.compacted_chunk_ids = []
         return
 
-    if (
-        not force
-        and state.compacted_chunk_ids == next_compacted_chunk_ids
-        and state.short_term_memory.strip()
-    ):
+    if not force and state.compacted_chunk_ids == next_compacted_chunk_ids and state.short_term_memory.strip():
         return
 
     short_term_prompt = "\n\n---\n\n".join(
@@ -127,9 +123,7 @@ async def ensure_hierarchical_memory(
     episodic_memory = await _request_summary(
         model=model,
         system_prompt=(
-            "你是情节记忆压缩器。"
-            "请把历史摘要与新摘要融合为可跨轮复用的情节记忆。"
-            "保留关键过程、约束、决策与已完成信息。"
+            "你是情节记忆压缩器。请把历史摘要与新摘要融合为可跨轮复用的情节记忆。保留关键过程、约束、决策与已完成信息。"
         ),
         user_prompt=episodic_source,
         max_characters=settings.skill_memory_episodic_max_characters,
@@ -197,9 +191,7 @@ def build_skill_context_budget_text(
         total_length += len(section)
 
     compacted_chunk_id_set = set(state.compacted_chunk_ids)
-    chunks_for_full_injection = [
-        chunk for chunk in loaded_chunks if chunk.id not in compacted_chunk_id_set
-    ]
+    chunks_for_full_injection = [chunk for chunk in loaded_chunks if chunk.id not in compacted_chunk_id_set]
 
     for chunk in chunks_for_full_injection:
         next_section = "\n".join(
@@ -220,7 +212,5 @@ def build_skill_context_budget_text(
 
     return (
         "以下是当前已经加载到会话内的技能上下文（含层级记忆与正文片段）。"
-        "请优先复用这些信息作答：\n\n"
-        + "\n\n---\n\n".join(sections)
+        "请优先复用这些信息作答：\n\n" + "\n\n---\n\n".join(sections)
     )
-

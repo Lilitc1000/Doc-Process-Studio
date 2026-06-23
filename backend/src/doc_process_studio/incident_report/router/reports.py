@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...core.security import get_current_user_id
 from ..application.audit_query_service import AuditQueryService
-from ..application.comment_service import CommentService
 from ..application.commands import (
     ApproveReportCommand,
     AssignHandlerCommand,
@@ -17,6 +16,7 @@ from ..application.commands import (
     SubmitReportCommand,
     UpdateReportCommand,
 )
+from ..application.comment_service import CommentService
 from ..application.generation_service import GenerationService
 from ..application.preview_service import PreviewService
 from ..application.report_service import ReportApplicationService
@@ -42,8 +42,8 @@ from ..schemas.request import (
     IncidentReportCloseRequest,
     IncidentReportCreateRequest,
     IncidentReportPreviewRequest,
-    IncidentReportReopenRequest,
     IncidentReportRejectRequest,
+    IncidentReportReopenRequest,
     IncidentReportSubmitRequest,
     IncidentReportUpdateRequest,
 )
@@ -156,9 +156,7 @@ async def update_existing_report(
 ) -> IncidentReportDetail:
     fields = {k: v for k, v in payload.model_dump().items() if v is not None}
     try:
-        result = await service.update(
-            UpdateReportCommand(report_id=report_id, actor_id=user_id, fields=fields)
-        )
+        result = await service.update(UpdateReportCommand(report_id=report_id, actor_id=user_id, fields=fields))
     except (ValueError, DomainError) as exc:
         raise _handle_service_error(exc) from exc
     if result is None:
@@ -173,9 +171,7 @@ async def delete_report_by_id(
     service: ReportApplicationService = Depends(get_report_application_service),
 ) -> dict[str, bool]:
     try:
-        deleted = await service.delete(
-            DeleteReportCommand(report_id=report_id, actor_id=user_id)
-        )
+        deleted = await service.delete(DeleteReportCommand(report_id=report_id, actor_id=user_id))
     except (ValueError, DomainError) as exc:
         raise _handle_service_error(exc) from exc
     return {"deleted": deleted}
@@ -190,9 +186,7 @@ async def submit_report_for_review(
 ) -> IncidentReportDetail:
     comment = payload.comment if payload else None
     try:
-        result = await service.submit(
-            SubmitReportCommand(report_id=report_id, actor_id=user_id, comment=comment)
-        )
+        result = await service.submit(SubmitReportCommand(report_id=report_id, actor_id=user_id, comment=comment))
     except (ValueError, DomainError) as exc:
         raise _handle_service_error(exc) from exc
     if result is None:
@@ -245,9 +239,7 @@ async def assign_report_handler(
 ) -> IncidentReportDetail:
     try:
         result = await service.assign_handler(
-            AssignHandlerCommand(
-                report_id=report_id, actor_id=user_id, assignee_id=payload.assignee_id
-            )
+            AssignHandlerCommand(report_id=report_id, actor_id=user_id, assignee_id=payload.assignee_id)
         )
     except (ValueError, DomainError) as exc:
         raise _handle_service_error(exc) from exc
@@ -265,9 +257,7 @@ async def close_report_by_handler(
 ) -> IncidentReportDetail:
     comment = payload.comment if payload else None
     try:
-        result = await service.close(
-            CloseReportCommand(report_id=report_id, actor_id=user_id, comment=comment)
-        )
+        result = await service.close(CloseReportCommand(report_id=report_id, actor_id=user_id, comment=comment))
     except (ValueError, DomainError) as exc:
         raise _handle_service_error(exc) from exc
     if result is None:
@@ -284,9 +274,7 @@ async def reopen_closed_report(
 ) -> IncidentReportDetail:
     comment = payload.comment if payload else None
     try:
-        result = await service.reopen(
-            ReopenReportCommand(report_id=report_id, actor_id=user_id, comment=comment)
-        )
+        result = await service.reopen(ReopenReportCommand(report_id=report_id, actor_id=user_id, comment=comment))
     except (ValueError, DomainError) as exc:
         raise _handle_service_error(exc) from exc
     if result is None:

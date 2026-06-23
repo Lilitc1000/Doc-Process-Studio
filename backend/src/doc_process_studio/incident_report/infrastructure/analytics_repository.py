@@ -68,9 +68,7 @@ class SqlAnalyticsRepository(AnalyticsRepository):
 
             avg_resolution_result = await session.execute(
                 select(
-                    func.avg(
-                        func.extract("epoch", IncidentReportORM.closed_at - IncidentReportORM.created_at) / 3600
-                    )
+                    func.avg(func.extract("epoch", IncidentReportORM.closed_at - IncidentReportORM.created_at) / 3600)
                 ).where(
                     IncidentReportORM.status == "closed",
                     IncidentReportORM.created_at.isnot(None),

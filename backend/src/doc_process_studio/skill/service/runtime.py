@@ -1,7 +1,7 @@
 import logging
 
-from ..schemas.runtime import SkillContextChunk, SkillConversationState
 from ...core.config import settings
+from ..schemas.runtime import SkillContextChunk, SkillConversationState
 from .context import get_skill_context_chunks_by_ids
 from .context_packer import (
     build_skill_context_budget_text,
@@ -43,10 +43,7 @@ async def sync_skill_context_state(
             if force_compact and len(kept_chunks) >= 1:
                 compacted_chunks.append(chunk)
                 continue
-            if (
-                kept_chunks
-                and current_length + len(next_section) > settings.skill_context_max_characters
-            ):
+            if kept_chunks and current_length + len(next_section) > settings.skill_context_max_characters:
                 compacted_chunks.append(chunk)
                 continue
 

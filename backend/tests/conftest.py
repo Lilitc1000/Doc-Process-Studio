@@ -14,16 +14,12 @@ def _reset_cache_client():
 
 
 @pytest.fixture(autouse=True)
-def _dispose_async_engine():
+async def _dispose_async_engine():
     yield
     from doc_process_studio.core.database import engine
 
     try:
-        import asyncio
-
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(engine.dispose())
-        loop.close()
+        await engine.dispose()
     except Exception:
         pass
 

@@ -10,7 +10,6 @@
 
 import pytest
 
-
 # ── get_skill_interface 对 kb: skill 应抛出 ValueError ──
 
 
@@ -121,8 +120,8 @@ def test_build_skill_tools_for_skills_multiple_kb() -> None:
 
 
 def test_build_direct_skill_plan_with_kb_skill() -> None:
+    from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
     from doc_process_studio.chat.service.stream import _build_direct_skill_plan
-    from doc_process_studio.chat.schemas.request import ChatStreamRequest, ChatMessageInput
 
     request = ChatStreamRequest(
         user_message_id="msg-001",
@@ -137,8 +136,8 @@ def test_build_direct_skill_plan_with_kb_skill() -> None:
 
 
 def test_build_direct_skill_plan_kb_skill_not_in_missing() -> None:
+    from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
     from doc_process_studio.chat.service.stream import _build_direct_skill_plan
-    from doc_process_studio.chat.schemas.request import ChatStreamRequest, ChatMessageInput
 
     request = ChatStreamRequest(
         user_message_id="msg-001",
@@ -152,8 +151,8 @@ def test_build_direct_skill_plan_kb_skill_not_in_missing() -> None:
 
 
 def test_build_direct_skill_plan_mixed_skills() -> None:
+    from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
     from doc_process_studio.chat.service.stream import _build_direct_skill_plan
-    from doc_process_studio.chat.schemas.request import ChatStreamRequest, ChatMessageInput
 
     request = ChatStreamRequest(
         user_message_id="msg-001",

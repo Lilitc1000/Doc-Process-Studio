@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
+from ...core.security import get_current_user_id
 from ..application.attachment_service import AttachmentService
 from ..domain.errors import AttachmentExpiredError, AttachmentNotFoundError, ChatError
 from ..infrastructure.dependencies import get_attachment_service
-from ...core.security import get_current_user_id
 
 router = APIRouter(prefix="/api", tags=["attachments"])
 

@@ -164,9 +164,7 @@ class Report:
         assignee_display 由应用层解析用户名后传入。
         """
         if self.status not in ASSIGNABLE_STATUSES:
-            raise InvalidTransitionError(
-                self.status.value, "assign", "仅 approved/in_progress 状态可分配"
-            )
+            raise InvalidTransitionError(self.status.value, "assign", "仅 approved/in_progress 状态可分配")
         prev = self.status
         # approved 状态分配处理人时推进到 in_progress（原业务逻辑）
         if self.status == ReportStatus.APPROVED:
@@ -213,9 +211,7 @@ class Report:
         跳过 None 值，不写审计日志。
         """
         if self.status not in EDITABLE_STATUSES:
-            raise InvalidTransitionError(
-                self.status.value, "edit", "仅 draft/rejected 状态可编辑"
-            )
+            raise InvalidTransitionError(self.status.value, "edit", "仅 draft/rejected 状态可编辑")
         for key, value in fields.items():
             if not hasattr(self, key):
                 continue
@@ -236,9 +232,7 @@ class Report:
             return True
         if self.reporter_id == user_id and Permission.REPORT_EDIT_OWN in permissions:
             return True
-        if self.assignee_id == user_id and Permission.REPORT_EDIT_ASSIGNED in permissions:
-            return True
-        return False
+        return self.assignee_id == user_id and Permission.REPORT_EDIT_ASSIGNED in permissions
 
     def is_visible_to(self, user_id: str, permissions: set[Permission]) -> bool:
         """判断用户是否有权查看此报告。

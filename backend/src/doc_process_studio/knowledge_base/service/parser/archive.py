@@ -67,12 +67,14 @@ def _extract_zip(file_bytes: bytes, archive_name: str) -> list[ExtractedFile]:
                     data = zf.read(info.filename)
                     if data:
                         clean_name = Path(info.filename).name
-                        results.append(ExtractedFile(
-                            relative_path=info.filename,
-                            file_name=clean_name,
-                            file_bytes=data,
-                            file_type=file_type,
-                        ))
+                        results.append(
+                            ExtractedFile(
+                                relative_path=info.filename,
+                                file_name=clean_name,
+                                file_bytes=data,
+                                file_type=file_type,
+                            )
+                        )
                 except Exception:
                     logger.warning("Failed to read %s from zip", info.filename, exc_info=True)
     except Exception:
@@ -84,6 +86,7 @@ def _extract_rar(file_bytes: bytes, archive_name: str) -> list[ExtractedFile]:
     results: list[ExtractedFile] = []
     try:
         import rarfile  # type: ignore[import-untyped]
+
         tmp_dir = tempfile.mkdtemp()
         tmp_archive = os.path.join(tmp_dir, archive_name)
         with open(tmp_archive, "wb") as f:
@@ -100,12 +103,14 @@ def _extract_rar(file_bytes: bytes, archive_name: str) -> list[ExtractedFile]:
                         data = rf.read(info.filename)
                         if data:
                             clean_name = Path(info.filename).name
-                            results.append(ExtractedFile(
-                                relative_path=info.filename,
-                                file_name=clean_name,
-                                file_bytes=data,
-                                file_type=file_type,
-                            ))
+                            results.append(
+                                ExtractedFile(
+                                    relative_path=info.filename,
+                                    file_name=clean_name,
+                                    file_bytes=data,
+                                    file_type=file_type,
+                                )
+                            )
                     except Exception:
                         logger.warning("Failed to read %s from rar", info.filename, exc_info=True)
         finally:
@@ -121,6 +126,7 @@ def _extract_7z(file_bytes: bytes, archive_name: str) -> list[ExtractedFile]:
     results: list[ExtractedFile] = []
     try:
         import py7zr  # type: ignore[import-untyped]
+
         tmp_dir = tempfile.mkdtemp()
         tmp_archive = os.path.join(tmp_dir, archive_name)
         with open(tmp_archive, "wb") as f:
@@ -135,12 +141,14 @@ def _extract_7z(file_bytes: bytes, archive_name: str) -> list[ExtractedFile]:
                         data = bio.read()
                         if data:
                             clean_name = Path(name).name
-                            results.append(ExtractedFile(
-                                relative_path=name,
-                                file_name=clean_name,
-                                file_bytes=data,
-                                file_type=file_type,
-                            ))
+                            results.append(
+                                ExtractedFile(
+                                    relative_path=name,
+                                    file_name=clean_name,
+                                    file_bytes=data,
+                                    file_type=file_type,
+                                )
+                            )
                     except Exception:
                         logger.warning("Failed to read %s from 7z", name, exc_info=True)
         finally:

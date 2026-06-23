@@ -1,7 +1,7 @@
 from doc_process_studio.skill.service.registry import (
+    _read_skill_markdown_metadata,
     _read_yaml_interface_block,
     _strip_wrapped_text,
-    _read_skill_markdown_metadata,
     get_skill_interface,
     list_skill_interfaces,
 )
@@ -25,12 +25,7 @@ def test_strip_wrapped_text_mismatched():
 
 def test_read_yaml_interface_block(tmp_path):
     config = tmp_path / "config.yaml"
-    config.write_text(
-        "interface:\n"
-        "  display_name: 测试技能\n"
-        "  skill_type: chat\n"
-        "  default_prompt: 你是助手\n"
-    )
+    config.write_text("interface:\n  display_name: 测试技能\n  skill_type: chat\n  default_prompt: 你是助手\n")
     result = _read_yaml_interface_block(config)
     assert result["display_name"] == "测试技能"
     assert result["skill_type"] == "chat"
@@ -48,13 +43,7 @@ def test_read_skill_markdown_metadata(tmp_path):
     skill_dir = tmp_path / "test-skill"
     skill_dir.mkdir()
     md = skill_dir / "SKILL.md"
-    md.write_text(
-        "---\n"
-        "name: 测试技能\n"
-        "skill_type: chat\n"
-        "---\n"
-        "# 内容\n"
-    )
+    md.write_text("---\nname: 测试技能\nskill_type: chat\n---\n# 内容\n")
     result = _read_skill_markdown_metadata(skill_dir)
     assert result["name"] == "测试技能"
     assert result["skill_type"] == "chat"

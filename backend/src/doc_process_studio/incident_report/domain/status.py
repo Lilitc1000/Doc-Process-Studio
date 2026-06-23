@@ -3,10 +3,10 @@
 本模块是状态转换规则的唯一事实源，所有状态校验都查询 TRANSITIONS。
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ReportStatus(str, Enum):
+class ReportStatus(StrEnum):
     """事故报告状态。"""
 
     DRAFT = "draft"
@@ -17,7 +17,7 @@ class ReportStatus(str, Enum):
     CLOSED = "closed"
 
 
-class ReportAction(str, Enum):
+class ReportAction(StrEnum):
     """事故报告领域动作。"""
 
     CREATE = "create"
@@ -49,13 +49,17 @@ def can_transition(current: ReportStatus, target: ReportStatus) -> bool:
 
 
 # 允许编辑的状态集合（update_report 的状态校验用此表）
-EDITABLE_STATUSES: frozenset[ReportStatus] = frozenset({
-    ReportStatus.DRAFT,
-    ReportStatus.REJECTED,
-})
+EDITABLE_STATUSES: frozenset[ReportStatus] = frozenset(
+    {
+        ReportStatus.DRAFT,
+        ReportStatus.REJECTED,
+    }
+)
 
 # 允许分配处理人的状态集合（assign_handler 的状态校验用此表）
-ASSIGNABLE_STATUSES: frozenset[ReportStatus] = frozenset({
-    ReportStatus.APPROVED,
-    ReportStatus.IN_PROGRESS,
-})
+ASSIGNABLE_STATUSES: frozenset[ReportStatus] = frozenset(
+    {
+        ReportStatus.APPROVED,
+        ReportStatus.IN_PROGRESS,
+    }
+)

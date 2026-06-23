@@ -2,18 +2,19 @@ import logging
 
 import httpx
 
-from ..schemas.session import (
-    ChatSessionSnapshot,
-    ChatSessionSummary,
-)
+from ...core.config import settings
+from ...core.ollama import extract_first_message_content, post_chat_completion
+from ...shared.dtutils import to_utc8, utcnow
+from ...system.service.trace_store import delete_agent_traces_for_conversation
+from ..schemas.request import ChatMessageInput
 from ..schemas.response import (
     ChatSessionDetail,
     ChatSessionListResponse,
 )
-from ..schemas.request import ChatMessageInput
-from ...core.config import settings
-from ...system.service.trace_store import delete_agent_traces_for_conversation
-from ...core.ollama import extract_first_message_content, post_chat_completion
+from ..schemas.session import (
+    ChatSessionSnapshot,
+    ChatSessionSummary,
+)
 from .attachments import delete_attachments_for_conversation
 from .db_session_store import (
     delete_chat_session_records,
@@ -25,7 +26,6 @@ from .db_session_store import (
     save_chat_session_summary_with_user_id,
     touch_chat_session_updated_at,
 )
-from ...shared.dtutils import to_utc8, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +61,7 @@ async def generate_session_title(
     user_prompt = "\n\n".join(
         [
             "请基于下面这些对话片段生成标题：",
-            "\n".join(
-                f"- {message.strip()}"
-                for message in title_source_messages
-                if message.strip()
-            ),
+            "\n".join(f"- {message.strip()}" for message in title_source_messages if message.strip()),
         ]
     )
 
@@ -81,9 +77,7 @@ async def generate_session_title(
         logger.warning("生成会话标题失败，使用本地回退: session_id=%s", "N/A")
         return fallback_title
 
-    content = _normalize_title_candidate(
-        extract_first_message_content(response_payload)
-    )
+    content = _normalize_title_candidate(extract_first_message_content(response_payload))
     return content or fallback_title
 
 
@@ -139,9 +133,7 @@ async def upsert_chat_session(
         created_at=created_at,
         updated_at=to_utc8(now),
         selected_model=snapshot.selected_model,
-        selected_reranker_model=(
-            snapshot.selected_reranker_model or snapshot.selected_model
-        ),
+        selected_reranker_model=(snapshot.selected_reranker_model or snapshot.selected_model),
     )
 
     await save_chat_session_summary_with_user_id(summary, user_id)
@@ -176,9 +168,7 @@ async def update_chat_session_title(
 async def delete_chat_session(session_id: str) -> bool:
     deleted_session = await delete_chat_session_records(session_id)
     deleted_attachments = delete_attachments_for_conversation(session_id)
-    deleted_traces = await delete_agent_traces_for_conversation(
-        conversation_id=session_id
-    )
+    deleted_traces = await delete_agent_traces_for_conversation(conversation_id=session_id)
     logger.info("删除会话: session_id=%s", session_id)
     return bool(deleted_session or deleted_attachments > 0 or deleted_traces > 0)
 

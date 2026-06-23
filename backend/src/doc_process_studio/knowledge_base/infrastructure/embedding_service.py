@@ -3,7 +3,7 @@
 实现 EmbeddingService 端口，委托 service/embedding.py 的纯函数。
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from ..application.ports import EmbeddingService
 from ..service.embedding import embed_texts as _embed_texts

@@ -2,10 +2,10 @@ import json
 from collections.abc import Awaitable
 from typing import Any, cast
 
-from ...core.config import settings
-from ...shared.dtutils import utcnow_iso
-from ...core.request_guard import normalize_tenant_id
 from ...core.cache import build_cache_key, get_json, get_redis_client, set_json
+from ...core.config import settings
+from ...core.request_guard import normalize_tenant_id
+from ...shared.dtutils import utcnow_iso
 
 
 def build_agent_trace_key(*, tenant_id: str, trace_id: str) -> str:
@@ -59,17 +59,18 @@ async def save_agent_trace(
         payload,
         ttl_seconds=ttl_seconds,
     )
-    index_key = build_agent_trace_conversation_index_key(
-        conversation_id=normalized_conversation_id
-    )
+    index_key = build_agent_trace_conversation_index_key(conversation_id=normalized_conversation_id)
     redis_client = get_redis_client()
-    await cast(Awaitable[int], redis_client.sadd(
-        index_key,
-        _encode_trace_index_member(
-            tenant_id=normalized_tenant_id,
-            trace_id=normalized_trace_id,
+    await cast(
+        Awaitable[int],
+        redis_client.sadd(
+            index_key,
+            _encode_trace_index_member(
+                tenant_id=normalized_tenant_id,
+                trace_id=normalized_trace_id,
+            ),
         ),
-    ))
+    )
     if ttl_seconds is not None:
         await cast(Awaitable[bool], redis_client.expire(index_key, ttl_seconds))
 
@@ -94,9 +95,7 @@ async def delete_agent_traces_for_conversation(
         return 0
 
     redis_client = get_redis_client()
-    index_key = build_agent_trace_conversation_index_key(
-        conversation_id=normalized_conversation_id
-    )
+    index_key = build_agent_trace_conversation_index_key(conversation_id=normalized_conversation_id)
     indexed_members: set[str] = set(await cast(Awaitable[set[str]], redis_client.smembers(index_key)))
     trace_keys_to_delete: set[str] = set()
 
@@ -105,9 +104,7 @@ async def delete_agent_traces_for_conversation(
         if decoded is None:
             continue
         tenant_id, trace_id = decoded
-        trace_keys_to_delete.add(
-            build_agent_trace_key(tenant_id=tenant_id, trace_id=trace_id)
-        )
+        trace_keys_to_delete.add(build_agent_trace_key(tenant_id=tenant_id, trace_id=trace_id))
 
     deleted_trace_count: int = 0
     if trace_keys_to_delete:

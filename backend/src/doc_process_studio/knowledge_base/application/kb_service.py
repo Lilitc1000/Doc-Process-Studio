@@ -42,9 +42,7 @@ class KnowledgeBaseService:
         projects = await self._repo.list_projects(db)
         return KBProjectListResponse(projects=projects)
 
-    async def create_project(
-        self, db: AsyncSession, name: str, description: str = ""
-    ) -> KBProjectResponse:
+    async def create_project(self, db: AsyncSession, name: str, description: str = "") -> KBProjectResponse:
         return await self._repo.create_project(db, name, description)
 
     async def get_project(self, db: AsyncSession, project_id: str) -> KBProjectResponse:
@@ -53,9 +51,7 @@ class KnowledgeBaseService:
             raise ProjectNotFoundError("Project not found")
         return project
 
-    async def rename_project(
-        self, db: AsyncSession, project_id: str, new_name: str
-    ) -> KBProjectResponse:
+    async def rename_project(self, db: AsyncSession, project_id: str, new_name: str) -> KBProjectResponse:
         project = await self._repo.rename_project(db, project_id, new_name)
         if project is None:
             raise ProjectNotFoundError("Project not found")
@@ -86,9 +82,7 @@ class KnowledgeBaseService:
         await self._repo.update_project_stats(db, project_id)
         return folder
 
-    async def rename_folder(
-        self, db: AsyncSession, folder_id: str, new_name: str
-    ) -> KBFolderResponse:
+    async def rename_folder(self, db: AsyncSession, folder_id: str, new_name: str) -> KBFolderResponse:
         folder = await self._repo.rename_folder(db, folder_id, new_name)
         if folder is None:
             raise FolderNotFoundError("Folder not found")

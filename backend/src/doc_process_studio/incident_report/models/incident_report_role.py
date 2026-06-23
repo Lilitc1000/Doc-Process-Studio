@@ -21,13 +21,13 @@ class IncidentReportRoleDefinition(Base):
 
 class IncidentReportUserRole(Base):
     __tablename__ = "incident_report_user_roles"
-    __table_args__ = (
-        UniqueConstraint("user_id", "role_key", name="uq_user_role"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "role_key", name="uq_user_role"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.user_id"), nullable=False)
-    role_key: Mapped[str] = mapped_column(String(20), ForeignKey("incident_report_role_definitions.role_key"), nullable=False)
+    role_key: Mapped[str] = mapped_column(
+        String(20), ForeignKey("incident_report_role_definitions.role_key"), nullable=False
+    )
     assigned_by: Mapped[str | None] = mapped_column(String(32), ForeignKey("users.user_id"), nullable=True)
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -47,12 +47,14 @@ class IncidentReportPermission(Base):
 
 class IncidentReportRolePermission(Base):
     __tablename__ = "incident_report_role_permissions"
-    __table_args__ = (
-        PrimaryKeyConstraint("role_key", "permission_key"),
-    )
+    __table_args__ = (PrimaryKeyConstraint("role_key", "permission_key"),)
 
-    role_key: Mapped[str] = mapped_column(String(20), ForeignKey("incident_report_role_definitions.role_key"), nullable=False)
-    permission_key: Mapped[str] = mapped_column(String(50), ForeignKey("incident_report_permissions.permission_key"), nullable=False)
+    role_key: Mapped[str] = mapped_column(
+        String(20), ForeignKey("incident_report_role_definitions.role_key"), nullable=False
+    )
+    permission_key: Mapped[str] = mapped_column(
+        String(50), ForeignKey("incident_report_permissions.permission_key"), nullable=False
+    )
 
     role_definition: Mapped["IncidentReportRoleDefinition"] = relationship(back_populates="role_permissions")
     permission: Mapped["IncidentReportPermission"] = relationship(back_populates="role_permissions")

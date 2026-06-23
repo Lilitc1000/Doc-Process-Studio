@@ -35,7 +35,7 @@ def test_valid_roles():
 
 
 def test_incident_valid_roles_sorted():
-    assert INCIDENT_VALID_ROLES == sorted(VALID_ROLES)
+    assert sorted(VALID_ROLES) == INCIDENT_VALID_ROLES
 
 
 def test_status_transitions_draft():

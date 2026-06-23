@@ -1,13 +1,14 @@
 import json
 import logging
 import re
-from typing import Any, Iterable, Literal, Sequence
+from collections.abc import Iterable, Sequence
+from typing import Any, Literal
 
-from ..schemas.catalog import SkillInterfaceConfig
-from ..schemas.runtime import SkillPlanDecision, SkillPlannerCandidate
+from ...core.ollama import extract_first_message_content, post_chat_completion
 from ...shared.dtutils import to_utc8, utcnow
 from ...shared.text_utils import parse_json_object
-from ...core.ollama import extract_first_message_content, post_chat_completion
+from ..schemas.catalog import SkillInterfaceConfig
+from ..schemas.runtime import SkillPlanDecision, SkillPlannerCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -35,22 +36,14 @@ def _tokenize_text(text: str) -> set[str]:
     normalized = text.lower().strip()
     if not normalized:
         return set()
-    return {
-        token.strip()
-        for token in _TOKEN_PATTERN.findall(normalized)
-        if len(token.strip()) >= 2
-    }
+    return {token.strip() for token in _TOKEN_PATTERN.findall(normalized) if len(token.strip()) >= 2}
 
 
 def _split_keywords(text: str) -> set[str]:
     normalized = text.lower().strip()
     if not normalized:
         return set()
-    return {
-        token.strip()
-        for token in _SPLIT_PATTERN.split(normalized)
-        if len(token.strip()) >= 2
-    }
+    return {token.strip() for token in _SPLIT_PATTERN.split(normalized) if len(token.strip()) >= 2}
 
 
 def _build_cjk_ngrams(text: str) -> set[str]:
@@ -151,11 +144,7 @@ def build_implicit_skill_candidates(
         return []
 
     threshold = 12 if explicit_set else 8
-    candidates = [
-        skill_id
-        for score, skill_id in scored_skills
-        if score >= threshold
-    ]
+    candidates = [skill_id for score, skill_id in scored_skills if score >= threshold]
     ranked_candidates: list[tuple[str, float]] = []
     for score, skill_id in scored_skills:
         if skill_id in candidates:
@@ -233,11 +222,7 @@ async def _rerank_implicit_skills_with_model(
     max_implicit_skills: int,
 ) -> tuple[list[str], float | None, dict[str, str]] | None:
     """第二层：模型重排。失败时返回 None，由上层回退到词法结果。"""
-    system_prompt = (
-        "你是技能规划器。"
-        "你只能在候选技能中挑选隐式技能。"
-        "输出必须是 JSON 对象，不要输出其它文字。"
-    )
+    system_prompt = "你是技能规划器。你只能在候选技能中挑选隐式技能。输出必须是 JSON 对象，不要输出其它文字。"
     user_prompt = _build_rerank_prompt_payload(
         user_query=user_query,
         explicit_skill_ids=explicit_skill_ids,
@@ -337,8 +322,7 @@ def _resolve_optional_skills(
         if confidence is not None and confidence < min_confidence:
             optional_skill_ids = []
             reasons["planner"] = (
-                f"模型重排置信度 {confidence:.2f} 低于阈值 {min_confidence:.2f}，"
-                "已禁用隐式技能自动追加。"
+                f"模型重排置信度 {confidence:.2f} 低于阈值 {min_confidence:.2f}，已禁用隐式技能自动追加。"
             )
 
         if not optional_skill_ids:
@@ -425,9 +409,7 @@ async def plan_skill_activation(
         system_skill_id=system_skill_id,
         top_k=top_k_candidates,
     )
-    lexical_fallback_skill_ids = [
-        skill_id for skill_id, _score in lexical_candidates
-    ][:max_implicit_skills]
+    lexical_fallback_skill_ids = [skill_id for skill_id, _score in lexical_candidates][:max_implicit_skills]
 
     candidate_map = {skill.id: skill for skill in available_skills}
     rerank_payload_candidates: list[dict[str, Any]] = []

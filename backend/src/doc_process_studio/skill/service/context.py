@@ -11,13 +11,13 @@ from typing import Any
 
 import httpx
 
-from ..schemas.runtime import SkillContextChunk
 from ...core.config import settings
-from ...shared.dtutils import utcnow
 from ...core.ollama import (
     build_timeout,
     get_ollama_base_url,
 )
+from ...shared.dtutils import utcnow
+from ..schemas.runtime import SkillContextChunk
 from .registry import SKILLS_DIR, get_skill_interface
 
 logger = logging.getLogger(__name__)
@@ -204,14 +204,10 @@ def _build_lexical_index(skill_id: str) -> _LexicalIndex:
                 length=max(1, len(tokens)),
             )
         )
-        for token in tf.keys():
+        for token in tf:
             df[token] = df.get(token, 0) + 1
 
-    avg_doc_length = (
-        sum(doc.length for doc in docs) / len(docs)
-        if docs
-        else 1.0
-    )
+    avg_doc_length = sum(doc.length for doc in docs) / len(docs) if docs else 1.0
     return _LexicalIndex(docs=docs, df=df, avg_doc_length=max(avg_doc_length, 1.0))
 
 
@@ -444,11 +440,7 @@ async def _rerank_chunks_with_model(
         return None
 
     chat_url = f"{base_url}/api/chat"
-    system_prompt = (
-        "你是检索重排序器。"
-        "请根据用户问题对候选片段按相关性打分。"
-        "只输出 JSON 对象，不要附加说明文字。"
-    )
+    system_prompt = "你是检索重排序器。请根据用户问题对候选片段按相关性打分。只输出 JSON 对象，不要附加说明文字。"
     candidate_lines = []
     for chunk in candidates:
         candidate_lines.append(
@@ -464,11 +456,7 @@ async def _rerank_chunks_with_model(
         {
             "query": query,
             "candidates": candidate_lines,
-            "output_schema": {
-                "ranked": [
-                    {"id": "chunk-id", "relevance": 0.0}
-                ]
-            },
+            "output_schema": {"ranked": [{"id": "chunk-id", "relevance": 0.0}]},
         },
         ensure_ascii=False,
     )
@@ -560,9 +548,7 @@ async def search_skill_context_chunks(
         )
         if score > 0:
             lexical_scored.append((score, chunk))
-    lexical_scored.sort(
-        key=lambda item: (-item[0], item[1].source_path, item[1].title, item[1].id)
-    )
+    lexical_scored.sort(key=lambda item: (-item[0], item[1].source_path, item[1].title, item[1].id))
 
     lexical_limit = max(4, settings.skill_retrieval_lexical_candidate_limit)
     lexical_candidates = lexical_scored[:lexical_limit]
@@ -587,12 +573,8 @@ async def search_skill_context_chunks(
                 similarity = _cosine_similarity(query_vector, chunk_vector)
                 if similarity > 0:
                     semantic_candidates.append((similarity, chunk))
-            semantic_candidates.sort(
-                key=lambda item: (-item[0], item[1].source_path, item[1].title, item[1].id)
-            )
-            semantic_candidates = semantic_candidates[
-                : max(4, settings.skill_retrieval_semantic_candidate_limit)
-            ]
+            semantic_candidates.sort(key=lambda item: (-item[0], item[1].source_path, item[1].title, item[1].id))
+            semantic_candidates = semantic_candidates[: max(4, settings.skill_retrieval_semantic_candidate_limit)]
 
     merged_scores: dict[str, float] = {}
     chunk_map = {chunk.id: chunk for chunk in filtered_chunks}
@@ -613,11 +595,9 @@ async def search_skill_context_chunks(
     if not candidate_ids:
         candidate_ids = [chunk.id for _score, chunk in lexical_candidates]
 
-    rerank_candidates = [
-        chunk_map[chunk_id]
-        for chunk_id in candidate_ids
-        if chunk_id in chunk_map
-    ][: max(4, settings.skill_retrieval_rerank_candidate_limit)]
+    rerank_candidates = [chunk_map[chunk_id] for chunk_id in candidate_ids if chunk_id in chunk_map][
+        : max(4, settings.skill_retrieval_rerank_candidate_limit)
+    ]
 
     final_ranked_chunks = rerank_candidates
     if settings.skill_retrieval_rerank_enabled and rerank_candidates:

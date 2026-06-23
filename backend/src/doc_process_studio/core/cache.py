@@ -2,8 +2,8 @@ import json
 from collections.abc import Awaitable
 from typing import Any, cast
 
-from .config import settings
 from .cache_client import get_redis_client
+from .config import settings
 
 
 def build_cache_key(*parts: str) -> str:
@@ -48,9 +48,11 @@ async def get_ttl_seconds(key: str) -> int:
 
 async def refresh_ttl(key: str, ttl_seconds: int | None = None) -> bool:
     return bool(
-        await cast(Awaitable[bool], get_redis_client().expire(
-            key,
-            ttl_seconds or settings.redis_ttl_seconds,
-        )),
+        await cast(
+            Awaitable[bool],
+            get_redis_client().expire(
+                key,
+                ttl_seconds or settings.redis_ttl_seconds,
+            ),
+        ),
     )
-

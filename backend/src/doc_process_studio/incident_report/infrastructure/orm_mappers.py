@@ -4,17 +4,17 @@
 严格保持字段一一对应，不改变任何业务语义。
 """
 
+from typing import cast
 
 from ...shared.dtutils import to_utc8
 from ..domain.report import Report
 from ..domain.status import ReportStatus
 from ..models.incident_report_orm import IncidentReport as IncidentReportORM
+from ..schemas.common import IncidentReportStatus, IncidentSeverity
 from ..schemas.response import (
     IncidentReportDetail,
     IncidentReportSummary,
 )
-from ..schemas.common import IncidentReportStatus, IncidentSeverity
-from typing import cast
 
 
 def orm_to_report(orm: IncidentReportORM) -> Report:

@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from doc_process_studio.incident_report.schemas.response import IncidentReportPreviewResponse
 from doc_process_studio.incident_report.service.preview import (
     _build_output_name,
     _stable_payload_hash,
@@ -13,7 +14,6 @@ from doc_process_studio.incident_report.service.preview import (
     preview_template_token,
     render_docx_bytes_from_report_data,
 )
-from doc_process_studio.incident_report.schemas.response import IncidentReportPreviewResponse
 
 
 def test_is_docx_attachment_with_no_name():
@@ -45,6 +45,7 @@ def test_build_output_name_empty_title():
 
 def test_preview_template_token_with_missing_file():
     import doc_process_studio.incident_report.service.preview as preview_module
+
     original_path = preview_module.INCIDENT_REPORT_SCRIPT_PATH
     fake_path = MagicMock()
     fake_path.stat.side_effect = FileNotFoundError("not found")
@@ -58,6 +59,7 @@ def test_preview_template_token_with_missing_file():
 
 def test_preview_template_token_with_existing_file():
     import doc_process_studio.incident_report.service.preview as preview_module
+
     original_path = preview_module.INCIDENT_REPORT_SCRIPT_PATH
     fake_path = MagicMock()
     fake_path.stat.return_value.st_mtime_ns = 1234567890
@@ -70,27 +72,30 @@ def test_preview_template_token_with_existing_file():
 
 
 def test_convert_docx_bytes_to_pdf_bytes_no_libreoffice():
-    with patch("shutil.which", return_value=None):
-        with pytest.raises(RuntimeError, match="LibreOffice"):
-            convert_docx_bytes_to_pdf_bytes(b"fake docx")
+    with patch("shutil.which", return_value=None), pytest.raises(RuntimeError, match="LibreOffice"):
+        convert_docx_bytes_to_pdf_bytes(b"fake docx")
 
 
 def test_load_docx_bytes_from_attachment_expired():
-    with patch(
-        "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
-        return_value=(MagicMock(), MagicMock(), True),
+    with (
+        patch(
+            "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
+            return_value=(MagicMock(), MagicMock(), True),
+        ),
+        pytest.raises(RuntimeError, match="expired"),
     ):
-        with pytest.raises(RuntimeError, match="expired"):
-            load_docx_bytes_from_attachment("att-1")
+        load_docx_bytes_from_attachment("att-1")
 
 
 def test_load_docx_bytes_from_attachment_not_found():
-    with patch(
-        "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
-        return_value=(None, None, False),
+    with (
+        patch(
+            "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
+            return_value=(None, None, False),
+        ),
+        pytest.raises(RuntimeError, match="No previewable"),
     ):
-        with pytest.raises(RuntimeError, match="No previewable"):
-            load_docx_bytes_from_attachment("att-1")
+        load_docx_bytes_from_attachment("att-1")
 
 
 def test_load_docx_bytes_from_attachment_not_docx():
@@ -99,16 +104,19 @@ def test_load_docx_bytes_from_attachment_not_docx():
     fake_metadata.mime_type = "application/pdf"
     fake_path = MagicMock()
 
-    with patch(
-        "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
-        return_value=(fake_metadata, fake_path, False),
+    with (
+        patch(
+            "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
+            return_value=(fake_metadata, fake_path, False),
+        ),
+        pytest.raises(RuntimeError, match="DOCX"),
     ):
-        with pytest.raises(RuntimeError, match="DOCX"):
-            load_docx_bytes_from_attachment("att-1")
+        load_docx_bytes_from_attachment("att-1")
 
 
 def test_preview_cache_returns_deep_copy():
     import doc_process_studio.incident_report.service.preview as preview_module
+
     preview_module._PREVIEW_RESULT_CACHE.clear()
     payload = IncidentReportPreviewResponse(source="draft", label="test")
     preview_cache_set(cache_key="deep-copy-test", payload=payload)

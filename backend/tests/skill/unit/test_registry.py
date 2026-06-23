@@ -5,8 +5,8 @@ from doc_process_studio.skill.schemas.catalog import SkillToolConfig
 from doc_process_studio.skill.schemas.interaction import SkillInteractionConfig
 from doc_process_studio.skill.service.registry import (
     SKILLS_DIR,
-    get_skill_interface,
     get_skill_interaction_config,
+    get_skill_interface,
     list_skill_interfaces,
 )
 

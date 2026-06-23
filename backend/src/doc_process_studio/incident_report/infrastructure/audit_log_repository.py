@@ -18,9 +18,11 @@ class SqlAuditLogRepository(AuditLogRepository):
     async def list_by_report(self, report_id: str) -> list[IncidentAuditLogEntry]:
         async with async_session_factory() as session:
             result = await session.execute(
-                select(IncidentAuditLog).where(
+                select(IncidentAuditLog)
+                .where(
                     IncidentAuditLog.report_id == report_id,
-                ).order_by(IncidentAuditLog.created_at.asc()),
+                )
+                .order_by(IncidentAuditLog.created_at.asc()),
             )
             records = list(result.scalars().all())
             return [_orm_to_entry(r) for r in records]

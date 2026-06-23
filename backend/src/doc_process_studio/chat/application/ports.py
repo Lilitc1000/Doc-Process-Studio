@@ -35,9 +35,7 @@ class SessionRepository(ABC):
     ) -> ChatSessionSummary: ...
 
     @abstractmethod
-    async def update_title(
-        self, session_id: str, title: str
-    ) -> ChatSessionSummary | None: ...
+    async def update_title(self, session_id: str, title: str) -> ChatSessionSummary | None: ...
 
     @abstractmethod
     async def delete_session(self, session_id: str) -> bool: ...
@@ -70,9 +68,7 @@ class AttachmentStore(ABC):
     """
 
     @abstractmethod
-    def resolve_path(
-        self, attachment_id: str
-    ) -> tuple[ChatAttachmentMetadata | None, Path | None, bool]: ...
+    def resolve_path(self, attachment_id: str) -> tuple[ChatAttachmentMetadata | None, Path | None, bool]: ...
 
     @abstractmethod
     def save_uploaded(

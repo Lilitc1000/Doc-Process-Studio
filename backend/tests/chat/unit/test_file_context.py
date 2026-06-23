@@ -13,7 +13,7 @@ from doc_process_studio.chat.service.file_context import (
 
 
 def test_decode_file_bytes_supports_utf8_text() -> None:
-    assert decode_file_bytes("你好，文档".encode("utf-8")) == "你好，文档"
+    assert decode_file_bytes("你好，文档".encode()) == "你好，文档"
 
 
 def test_extract_docx_text_reads_paragraphs() -> None:

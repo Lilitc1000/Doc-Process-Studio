@@ -13,9 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from ...chat.schemas.attachment import ChatAttachment
+from ...chat.service.attachments import resolve_attachment_path, save_generated_attachment
 from ..schemas.common import PermissionDenied
 from ..schemas.response import IncidentReportPreviewResponse
-from ...chat.service.attachments import resolve_attachment_path, save_generated_attachment
 from .constants import INCIDENT_REPORT_DOCX_MIME_TYPE, INCIDENT_REPORT_SCRIPT_PATH
 from .normalization import normalize_text
 
@@ -30,9 +30,7 @@ _incident_generator_module: Any | None = None
 def is_docx_attachment(attachment: Any) -> bool:
     attachment_name = str(getattr(attachment, "name", "")).strip().lower()
     attachment_mime = str(getattr(attachment, "mime_type", "")).strip().lower()
-    return attachment_name.endswith(".docx") and (
-        attachment_mime == INCIDENT_REPORT_DOCX_MIME_TYPE
-    )
+    return attachment_name.endswith(".docx") and (attachment_mime == INCIDENT_REPORT_DOCX_MIME_TYPE)
 
 
 def load_incident_generator_module() -> Any:
@@ -119,8 +117,7 @@ def convert_docx_bytes_to_pdf_bytes(docx_bytes: bytes) -> bytes:
         }
         process = subprocess.run(
             command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=False,
             timeout=60,
             env=env,
@@ -166,9 +163,7 @@ def preview_cache_get(cache_key: str) -> IncidentReportPreviewResponse | None:
     return cached.model_copy(deep=True)
 
 
-def preview_cache_set(
-    *, cache_key: str, payload: IncidentReportPreviewResponse
-) -> None:
+def preview_cache_set(*, cache_key: str, payload: IncidentReportPreviewResponse) -> None:
     _PREVIEW_RESULT_CACHE[cache_key] = payload.model_copy(deep=True)
     _PREVIEW_RESULT_CACHE.move_to_end(cache_key)
     while len(_PREVIEW_RESULT_CACHE) > _PREVIEW_RESULT_CACHE_MAX_ENTRIES:
@@ -206,9 +201,9 @@ async def preview_report_attachment(
     model: str | None = None,
     reranker_model: str | None = None,
 ) -> IncidentReportPreviewResponse:
-    from .report_store import load_report_orm
-    from .report_data import build_report_data_from_snapshot
     from .generation import _build_snapshot_from_form_data
+    from .report_data import build_report_data_from_snapshot
+    from .report_store import load_report_orm
 
     record = await load_report_orm(report_id)
     if record is None:

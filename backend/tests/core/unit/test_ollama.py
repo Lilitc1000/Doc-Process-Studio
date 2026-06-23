@@ -1,5 +1,3 @@
-import asyncio
-
 import httpx
 import pytest
 
@@ -125,7 +123,7 @@ def test_extract_model_names_skips_empty_names():
     assert result == ["valid"]
 
 
-def test_post_chat_completion_success(monkeypatch):
+async def test_post_chat_completion_success(monkeypatch):
     fake_response = {"message": {"content": "hi"}}
 
     async def _fake_post_chat_completion(*, model, messages, tools=None):
@@ -135,24 +133,22 @@ def test_post_chat_completion_success(monkeypatch):
         ollama_module, "post_chat_completion", _fake_post_chat_completion
     )
 
-    result = asyncio.run(
-        ollama_module.post_chat_completion(
-            model="test", messages=[{"role": "user", "content": "hi"}]
-        )
+    result = await ollama_module.post_chat_completion(
+        model="test", messages=[{"role": "user", "content": "hi"}]
     )
     assert result["message"]["content"] == "hi"
 
 
-def test_fetch_remote_model_names_raises_500_when_not_configured(monkeypatch):
+async def test_fetch_remote_model_names_raises_500_when_not_configured(monkeypatch):
     from fastapi import HTTPException
 
     monkeypatch.setattr(ollama_module.settings, "ollama_base_url", None)
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(ollama_module.fetch_remote_model_names())
+        await ollama_module.fetch_remote_model_names()
     assert exc_info.value.status_code == 500
 
 
-def test_fetch_remote_model_names_raises_502_on_http_error(monkeypatch):
+async def test_fetch_remote_model_names_raises_502_on_http_error(monkeypatch):
     from fastapi import HTTPException
 
     monkeypatch.setattr(ollama_module.settings, "ollama_base_url", "http://ollama:11434")
@@ -163,11 +159,11 @@ def test_fetch_remote_model_names_raises_502_on_http_error(monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(ollama_module.fetch_remote_model_names())
+        await ollama_module.fetch_remote_model_names()
     assert exc_info.value.status_code == 502
 
 
-def test_fetch_remote_model_names_raises_502_on_empty_models(monkeypatch):
+async def test_fetch_remote_model_names_raises_502_on_empty_models(monkeypatch):
     from fastapi import HTTPException
 
     monkeypatch.setattr(ollama_module.settings, "ollama_base_url", "http://ollama:11434")
@@ -178,5 +174,5 @@ def test_fetch_remote_model_names_raises_502_on_empty_models(monkeypatch):
     monkeypatch.setattr(ollama_module, "fetch_remote_model_names", _fake_fetch)
 
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(ollama_module.fetch_remote_model_names())
+        await ollama_module.fetch_remote_model_names()
     assert exc_info.value.status_code == 502

@@ -1,5 +1,3 @@
-import asyncio
-
 import doc_process_studio.core.cache as cache_module
 from doc_process_studio.core.cache import (
     build_cache_key,
@@ -52,66 +50,66 @@ def test_build_cache_key_strips_empty_parts():
     assert result.count(":") == 2
 
 
-def test_get_json_returns_none_for_missing_key(monkeypatch):
+async def test_get_json_returns_none_for_missing_key(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    result = asyncio.run(get_json("missing"))
+    result = await get_json("missing")
     assert result is None
 
 
-def test_get_json_parses_stored_json(monkeypatch):
+async def test_get_json_parses_stored_json(monkeypatch):
     fake = _FakeRedis()
     fake._store["key1"] = '{"name": "test"}'
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    result = asyncio.run(get_json("key1"))
+    result = await get_json("key1")
     assert result == {"name": "test"}
 
 
-def test_set_json_stores_serialized(monkeypatch):
+async def test_set_json_stores_serialized(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    asyncio.run(set_json("key1", {"a": 1}))
+    await set_json("key1", {"a": 1})
     assert fake._store["key1"] == '{"a": 1}'
 
 
-def test_set_json_with_ttl(monkeypatch):
+async def test_set_json_with_ttl(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    asyncio.run(set_json("key1", {"a": 1}, ttl_seconds=60))
+    await set_json("key1", {"a": 1}, ttl_seconds=60)
     assert "key1" in fake._store
 
 
-def test_ping_redis(monkeypatch):
+async def test_ping_redis(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    result = asyncio.run(ping_redis())
+    result = await ping_redis()
     assert result is True
 
 
-def test_delete_key(monkeypatch):
+async def test_delete_key(monkeypatch):
     fake = _FakeRedis()
     fake._store["key1"] = "val"
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    result = asyncio.run(delete_key("key1"))
+    result = await delete_key("key1")
     assert result == 1
 
 
-def test_get_ttl_seconds(monkeypatch):
+async def test_get_ttl_seconds(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    result = asyncio.run(get_ttl_seconds("key1"))
+    result = await get_ttl_seconds("key1")
     assert isinstance(result, int)
 
 
-def test_refresh_ttl(monkeypatch):
+async def test_refresh_ttl(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    result = asyncio.run(refresh_ttl("key1"))
+    result = await refresh_ttl("key1")
     assert result is True
 
 
-def test_refresh_ttl_with_custom_seconds(monkeypatch):
+async def test_refresh_ttl_with_custom_seconds(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(cache_module, "get_redis_client", lambda: fake)
-    result = asyncio.run(refresh_ttl("key1", ttl_seconds=120))
+    result = await refresh_ttl("key1", ttl_seconds=120)
     assert result is True

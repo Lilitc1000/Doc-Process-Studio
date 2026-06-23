@@ -85,7 +85,9 @@ class IncidentBodyQuickGenerateRequest(BaseModel):
 
 
 class IncidentBodySectionGenerateRequest(BaseModel):
-    section_id: str = Field(..., min_length=1, description="分段标识（description/timeline/impact/root_cause/follow_up/timeline_item）")
+    section_id: str = Field(
+        ..., min_length=1, description="分段标识（description/timeline/impact/root_cause/follow_up/timeline_item）"
+    )
     timeline_index: int | None = Field(default=None, description="时间线条目索引（仅 timeline_item 时使用）")
     model: str | None = Field(default=None, description="生成模型名称")
     reranker_model: str | None = Field(default=None, description="Reranker 模型名称")

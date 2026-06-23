@@ -1,7 +1,16 @@
-from .projects import create_project, delete_project, get_project, get_project_by_name, list_projects, list_simple_projects, rename_project, update_project_stats
-from .folders import build_tree, create_folder, delete_folder, rename_folder
 from .documents import delete_document, index_document, upload_document
 from .embedding import embed_texts
+from .folders import build_tree, create_folder, delete_folder, rename_folder
+from .projects import (
+    create_project,
+    delete_project,
+    get_project,
+    get_project_by_name,
+    list_projects,
+    list_simple_projects,
+    rename_project,
+    update_project_stats,
+)
 from .qdrant_service import search_knowledge_base
 
 __all__ = [

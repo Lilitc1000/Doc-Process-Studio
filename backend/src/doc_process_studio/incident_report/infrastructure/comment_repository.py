@@ -44,9 +44,11 @@ class SqlCommentRepository(CommentRepository):
     async def list_by_report(self, report_id: str) -> list[IncidentCommentEntry]:
         async with async_session_factory() as session:
             result = await session.execute(
-                select(IncidentComment).where(
+                select(IncidentComment)
+                .where(
                     IncidentComment.report_id == report_id,
-                ).order_by(IncidentComment.created_at.asc()),
+                )
+                .order_by(IncidentComment.created_at.asc()),
             )
             records = list(result.scalars().all())
             return [_orm_to_entry(r) for r in records]

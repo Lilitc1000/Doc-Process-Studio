@@ -11,12 +11,13 @@ from datetime import datetime
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
-from ...core.database import async_session_factory
 from ...auth.infrastructure.user_repository import SqlUserRepository
+from ...core.database import async_session_factory
 from ..application.ports import RefNoGenerator, ReportRepository, UserDirectory
 from ..domain.report import Report
 from ..models.audit_log import IncidentAuditLog
-from ..models.incident_report_orm import IncidentComment, IncidentReport as IncidentReportORM
+from ..models.incident_report_orm import IncidentComment
+from ..models.incident_report_orm import IncidentReport as IncidentReportORM
 from ..schemas.response import IncidentReportSummary
 from .orm_mappers import apply_report_to_orm, build_orm_from_report, orm_to_report, orm_to_summary
 
@@ -83,20 +84,21 @@ class SqlAlchemyReportRepository(ReportRepository):
                     await session.refresh(orm)
                     logger.info(
                         "Report created successfully: id=%s, ref_no=%s",
-                        orm.id, orm.ref_no,
+                        orm.id,
+                        orm.ref_no,
                     )
                     return orm_to_report(orm)
                 except IntegrityError:
                     await session.rollback()
                     logger.warning(
                         "IntegrityError creating report: id=%s, ref_no=%s, attempt=%d",
-                        report.id, effective_ref_no, attempt,
+                        report.id,
+                        effective_ref_no,
+                        attempt,
                     )
                     # 仅当 ref_no 是自动生成时才重试；显式指定的 ref_no 冲突直接抛错
                     effective_ref_no = await self._ref_no_gen.next()
-        raise RuntimeError(
-            f"Failed to create report after {_REF_NO_RETRY_MAX} retries: id={report.id}"
-        )
+        raise RuntimeError(f"Failed to create report after {_REF_NO_RETRY_MAX} retries: id={report.id}")
 
     async def get(self, report_id: str) -> Report | None:
         async with async_session_factory() as session:
@@ -180,12 +182,8 @@ class SqlAlchemyReportRepository(ReportRepository):
             record = await session.get(IncidentReportORM, report_id)
             if record is None:
                 return False
-            await session.execute(
-                delete(IncidentComment).where(IncidentComment.report_id == report_id)
-            )
-            await session.execute(
-                delete(IncidentAuditLog).where(IncidentAuditLog.report_id == report_id)
-            )
+            await session.execute(delete(IncidentComment).where(IncidentComment.report_id == report_id))
+            await session.execute(delete(IncidentAuditLog).where(IncidentAuditLog.report_id == report_id))
             await session.delete(record)
             await session.commit()
         return True

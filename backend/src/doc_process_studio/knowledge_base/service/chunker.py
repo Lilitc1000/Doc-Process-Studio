@@ -31,13 +31,15 @@ def chunk_text(
         return []
 
     if len(normalized) <= limit:
-        return [TextChunk(
-            content=normalized,
-            page_number=page_number,
-            section_title=section_title,
-            sheet_name=sheet_name,
-            chunk_index=0,
-        )]
+        return [
+            TextChunk(
+                content=normalized,
+                page_number=page_number,
+                section_title=section_title,
+                sheet_name=sheet_name,
+                chunk_index=0,
+            )
+        ]
 
     paragraphs = [p.strip() for p in normalized.split("\n\n")]
     chunks: list[TextChunk] = []
@@ -50,13 +52,15 @@ def chunk_text(
             continue
         projected_length = current_length + len(paragraph) + (2 if current_parts else 0)
         if current_parts and projected_length > limit:
-            chunks.append(TextChunk(
-                content="\n\n".join(current_parts),
-                page_number=page_number,
-                section_title=section_title,
-                sheet_name=sheet_name,
-                chunk_index=chunk_index,
-            ))
+            chunks.append(
+                TextChunk(
+                    content="\n\n".join(current_parts),
+                    page_number=page_number,
+                    section_title=section_title,
+                    sheet_name=sheet_name,
+                    chunk_index=chunk_index,
+                )
+            )
             chunk_index += 1
             current_parts = [paragraph]
             current_length = len(paragraph)
@@ -65,12 +69,14 @@ def chunk_text(
         current_length = projected_length
 
     if current_parts:
-        chunks.append(TextChunk(
-            content="\n\n".join(current_parts),
-            page_number=page_number,
-            section_title=section_title,
-            sheet_name=sheet_name,
-            chunk_index=chunk_index,
-        ))
+        chunks.append(
+            TextChunk(
+                content="\n\n".join(current_parts),
+                page_number=page_number,
+                section_title=section_title,
+                sheet_name=sheet_name,
+                chunk_index=chunk_index,
+            )
+        )
 
     return chunks

@@ -1,7 +1,5 @@
 import logging
 
-from ..schemas.runtime import ConversationAgentState
-from ...core.config import settings
 from ...core.cache import (
     build_cache_key,
     delete_key,
@@ -10,6 +8,8 @@ from ...core.cache import (
     refresh_ttl,
     set_json,
 )
+from ...core.config import settings
+from ..schemas.runtime import ConversationAgentState
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,7 @@ async def load_conversation_state(
     conversation_id: str,
     tenant_id: str = "default",
 ) -> ConversationAgentState | None:
-    cached_payload = await get_json(
-        build_conversation_state_key(conversation_id, tenant_id)
-    )
+    cached_payload = await get_json(build_conversation_state_key(conversation_id, tenant_id))
     if not isinstance(cached_payload, dict):
         return None
     return ConversationAgentState.model_validate(cached_payload)
@@ -65,6 +63,4 @@ async def get_conversation_state_ttl_seconds(
     conversation_id: str,
     tenant_id: str = "default",
 ) -> int:
-    return await get_ttl_seconds(
-        build_conversation_state_key(conversation_id, tenant_id)
-    )
+    return await get_ttl_seconds(build_conversation_state_key(conversation_id, tenant_id))

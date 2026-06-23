@@ -61,7 +61,7 @@ class ChatSessionUpsertRequest(BaseModel):
         default_factory=list,
         description="用于自动生成标题的消息片段",
     )
-    snapshot: "ChatSessionSnapshot" = Field(..., description="会话快照")
+    snapshot: ChatSessionSnapshot = Field(..., description="会话快照")
 
 
 class ChatSessionTitleUpdateRequest(BaseModel):

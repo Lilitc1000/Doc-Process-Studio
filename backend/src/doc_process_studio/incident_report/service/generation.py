@@ -1,23 +1,25 @@
 import json
 import logging
 import re
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
+from ...chat.service.streaming import extract_delta_text, extract_done_reason
+from ...core.config import settings
+from ...core.ollama import stream_chat_completion
+from ...shared.dtutils import utcnow
+from ...shared.text_utils import parse_json_object
+from ...system.service.error_detail import summarize_exception
+from ...system.service.trace_store import AgentTraceRecorder
 from ..schemas.common import (
     IncidentFormAnswer,
     IncidentFormSnapshot,
     PermissionDenied,
 )
 from ..schemas.response import IncidentBodyGenerateResponse
-from ...system.service.error_detail import summarize_exception
-from ...system.service.trace_store import AgentTraceRecorder
-from ...shared.dtutils import utcnow
-from ...shared.text_utils import parse_json_object
-from ...core.config import settings
-from ...core.ollama import stream_chat_completion
 from .constants import (
     BODY_AFFECTED_DATE,
     BODY_BUSINESS_IMPACT,
@@ -41,13 +43,12 @@ from .constants import (
 from .normalization import (
     compose_datetime_text,
     normalize_text,
-    normalize_timeline_items,
     normalize_time_text,
+    normalize_timeline_items,
     split_lines,
 )
 from .reference import resolve_generation_reference_context
 from .report_data import answer_text, answer_value, answer_value_from_answers, set_answer, set_answer_if_non_empty
-from ...chat.service.streaming import extract_delta_text, extract_done_reason
 from .report_store import load_report_orm, update_report_record
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ def _build_default_title(now: Any = None) -> str:
 
 def _resolve_document_assistant_prompt() -> str:
     from ...skill.service.registry import get_skill_interface
+
     try:
         return normalize_text(get_skill_interface(SYSTEM_DOCUMENT_SKILL_ID).default_prompt)
     except Exception:
@@ -137,7 +139,8 @@ def _build_quick_generation_request(
     prompt = (
         "You will perform a quick-fill to full-mode generation. "
         "Expand the quick-fill inputs into complete mode fields according to the reference documentation. "
-        "Do not fabricate facts not present in the context; use conservative but actionable expressions when information is insufficient. "
+        "Do not fabricate facts not present in the context; "
+        "use conservative but actionable expressions when information is insufficient. "
         "Output JSON only, no explanations. "
         "JSON keys must be: description, affected_date_summary, timeline, impact_scope, impact_severity, "
         "business_impact, trigger, root_cause, follow_up_actions. "
@@ -168,29 +171,36 @@ def _build_section_generation_prompt(
 
     if section_key == "description":
         return (
-            'Generate the incident description section only. Output JSON: {"body_description":"..."}. Do not modify other sections.',
+            'Generate the incident description section only. '
+            'Output JSON: {"body_description":"..."}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "timeline":
         return (
-            'Generate the timeline section only. Output JSON: {"body_timeline":[{"time":"","event":"","resolution":"","evidence":""}],'
+            'Generate the timeline section only. '
+            'Output JSON: {"body_timeline":[{"time":"","event":"","resolution":"","evidence":""}],'
             '"body_affected_date_summary":"..."}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "impact":
         return (
-            'Generate impact scope, severity, and business impact only. Output JSON: {"body_impact_scope":"...",'
-            '"body_impact_severity":"...","body_business_impact":"separated by newlines"}. Do not modify other sections.',
+            'Generate impact scope, severity, and business impact only. '
+            'Output JSON: {"body_impact_scope":"...",'
+            '"body_impact_severity":"...","body_business_impact":"separated by newlines"}. '
+            "Do not modify other sections.",
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "root_cause":
         return (
-            'Generate trigger and root cause only. Output JSON: {"body_trigger":"...","body_root_cause":"..."}. Do not modify other sections.',
+            'Generate trigger and root cause only. '
+            'Output JSON: {"body_trigger":"...","body_root_cause":"..."}. '
+            "Do not modify other sections.",
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "follow_up":
         return (
-            'Generate follow-up actions only. Output JSON: {"body_follow_up":"separated by newlines"}. Do not modify other sections.',
+            'Generate follow-up actions only. '
+            'Output JSON: {"body_follow_up":"separated by newlines"}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
     if section_key == "timeline_item":
@@ -198,7 +208,8 @@ def _build_section_generation_prompt(
         if timeline_index is None or timeline_index < 0 or timeline_index >= len(timeline):
             raise ValueError("Invalid timeline item index.")
         return (
-            'Generate the specified timeline item only. Output JSON: {"item":{"time":"","event":"","resolution":"","evidence":""}}. '
+            'Generate the specified timeline item only. '
+            'Output JSON: {"item":{"time":"","event":"","resolution":"","evidence":""}}. '
             "Do not modify other timeline items.",
             json.dumps(
                 {
@@ -238,11 +249,7 @@ def _build_body_generation_messages(
         },
         {
             "role": "user",
-            "content": (
-                f"{prompt}\n"
-                f"Reference documentation:\n{reference_context}\n"
-                f"Current context:\n{context_json}"
-            ),
+            "content": (f"{prompt}\nReference documentation:\n{reference_context}\nCurrent context:\n{context_json}"),
         },
     ]
 
@@ -278,13 +285,9 @@ def _apply_quick_generation_payload(
     )
     timeline = normalize_timeline_items(payload.get("timeline"))
     if not timeline:
-        timeline = normalize_timeline_items(
-            answer_value_from_answers(form_answers, BODY_TIMELINE)
-        )
+        timeline = normalize_timeline_items(answer_value_from_answers(form_answers, BODY_TIMELINE))
     if not timeline:
-        timeline = normalize_timeline_items(
-            answer_value_from_answers(form_answers, QUICK_TIMELINE)
-        )
+        timeline = normalize_timeline_items(answer_value_from_answers(form_answers, QUICK_TIMELINE))
     if timeline:
         set_answer(form_answers, BODY_TIMELINE, timeline)
         set_answer(form_answers, QUICK_TIMELINE, timeline)
@@ -347,9 +350,7 @@ def _apply_quick_generation_payload(
         first_time = normalize_text(timeline[0].get("time"))
         existing_fault_date = answer_value_from_answers(form_answers, MANUAL_FAULT_DATE)
         if first_time and not normalize_text(existing_fault_date):
-            matched = re.match(
-                r"^(?P<date>\d{2}/\d{2}/\d{4})\s+(?P<time>\d{2}:\d{2})$", first_time
-            )
+            matched = re.match(r"^(?P<date>\d{2}/\d{2}/\d{4})\s+(?P<time>\d{2}:\d{2})$", first_time)
             if matched:
                 set_answer(form_answers, MANUAL_FAULT_DATE, matched.group("date"))
                 set_answer(form_answers, MANUAL_FAULT_TIME, matched.group("time"))
@@ -533,10 +534,7 @@ async def _run_body_generation_with_trace(
     next_snapshot.section_trace_ids = section_trace_ids
     next_snapshot.polish_error = None
 
-    form_data_for_db = {
-        key: ans.model_dump()
-        for key, ans in next_snapshot.form_answers.items()
-    }
+    form_data_for_db = {key: ans.model_dump() for key, ans in next_snapshot.form_answers.items()}
     await update_report_record(
         report_id,
         form_data=form_data_for_db,

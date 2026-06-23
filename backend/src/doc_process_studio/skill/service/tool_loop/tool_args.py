@@ -2,6 +2,7 @@ from typing import Any
 
 from .skill_files import _resolve_search_limit_bounds
 
+
 def _get_tool_name(tool_call: dict[str, Any]) -> str:
     function_payload = tool_call.get("function")
     if not isinstance(function_payload, dict):
@@ -46,22 +47,16 @@ def _validate_tool_arguments_schema(
     raw_required = parameters.get("required")
     required_keys: list[str] = []
     if isinstance(raw_required, list):
-        required_keys = [
-            str(key).strip()
-            for key in raw_required
-            if isinstance(key, str) and str(key).strip()
-        ]
+        required_keys = [str(key).strip() for key in raw_required if isinstance(key, str) and str(key).strip()]
     for required_key in required_keys:
         if required_key not in arguments:
             raise ValueError(f"工具 `{tool_name}` 缺少必填参数：{required_key}")
 
     additional_properties = parameters.get("additionalProperties", True)
     if additional_properties is False:
-        unknown_keys = [key for key in arguments.keys() if key not in properties]
+        unknown_keys = [key for key in arguments if key not in properties]
         if unknown_keys:
-            raise ValueError(
-                f"工具 `{tool_name}` 参数包含未声明字段：{', '.join(sorted(unknown_keys))}"
-            )
+            raise ValueError(f"工具 `{tool_name}` 参数包含未声明字段：{', '.join(sorted(unknown_keys))}")
 
     for key, value in arguments.items():
         prop_schema = properties.get(key)
@@ -71,9 +66,7 @@ def _validate_tool_arguments_schema(
         expected_type = prop_schema.get("type")
         if isinstance(expected_type, str):
             if not _validate_simple_type(value, expected_type):
-                raise ValueError(
-                    f"工具 `{tool_name}` 参数 `{key}` 类型错误，期望 {expected_type}。"
-                )
+                raise ValueError(f"工具 `{tool_name}` 参数 `{key}` 类型错误，期望 {expected_type}。")
 
             if expected_type == "array" and isinstance(value, list):
                 item_schema = prop_schema.get("items")
@@ -87,25 +80,16 @@ def _validate_tool_arguments_schema(
                                 )
 
         enum_values = prop_schema.get("enum")
-        if isinstance(enum_values, list) and enum_values:
-            if value not in enum_values:
-                raise ValueError(
-                    f"工具 `{tool_name}` 参数 `{key}` 不在允许枚举值中。"
-                )
+        if isinstance(enum_values, list) and enum_values and value not in enum_values:
+            raise ValueError(f"工具 `{tool_name}` 参数 `{key}` 不在允许枚举值中。")
 
         minimum = prop_schema.get("minimum")
-        if isinstance(minimum, (int, float)) and isinstance(value, (int, float)):
-            if value < minimum:
-                raise ValueError(
-                    f"工具 `{tool_name}` 参数 `{key}` 小于最小值 {minimum}。"
-                )
+        if isinstance(minimum, (int, float)) and isinstance(value, (int, float)) and value < minimum:
+            raise ValueError(f"工具 `{tool_name}` 参数 `{key}` 小于最小值 {minimum}。")
 
         maximum = prop_schema.get("maximum")
-        if isinstance(maximum, (int, float)) and isinstance(value, (int, float)):
-            if value > maximum:
-                raise ValueError(
-                    f"工具 `{tool_name}` 参数 `{key}` 超过最大值 {maximum}。"
-                )
+        if isinstance(maximum, (int, float)) and isinstance(value, (int, float)) and value > maximum:
+            raise ValueError(f"工具 `{tool_name}` 参数 `{key}` 超过最大值 {maximum}。")
 
 
 def _normalize_builtin_tool_arguments(

@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 from docx import Document
@@ -34,7 +33,7 @@ def _find_paragraph_after_heading(document: Document, heading_prefix: str) -> st
     return ""
 
 
-def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monkeypatch):
+async def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monkeypatch):
     monkeypatch.setattr(
         attachments_module.settings,
         "generated_attachments_dir",
@@ -55,7 +54,7 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
         system_prompt="",
     )
 
-    # 故意传入“半结构化”数据，验证真实 tools.json 调用链下脚本仍能补齐模板关键字段。
+    # 故意传入"半结构化"数据，验证真实 tools.json 调用链下脚本仍能补齐模板关键字段。
     report_data = {
         "reference_no": "DAS-20260408-777",
         "detailed_description": "Payment service outage",
@@ -90,11 +89,11 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
         }
     )
 
-    tool_result, attachments = asyncio.run(execute_skill_tool_call(
+    tool_result, attachments = await execute_skill_tool_call(
         request=request,
         state=state,
         tool_call=tool_call,
-    ))
+    )
 
     assert tool_result.get("ok") is True
     assert len(attachments) == 1
@@ -111,12 +110,12 @@ def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monk
     assert attachment_path.is_file()
 
     document = Document(str(attachment_path))
-    # 新参考模板为“1 张首页表格 + 正文段落”结构。
+    # 新参考模板为"1 张首页表格 + 正文段落"结构。
     assert len(document.tables) == 1
 
     page_one_table = document.tables[0]
 
-    # 断言 Page 1 关键字段单元格不是空字符串，避免“模板区域空白”回归。
+    # 断言 Page 1 关键字段单元格不是空字符串，避免"模板区域空白"回归。
     assert _read_cell(page_one_table, 0, 1) != ""  # Reference No.
     assert _read_cell(page_one_table, 4, 1) != ""  # Site ID
     assert _read_cell(page_one_table, 5, 1) != ""  # Location of Fault

@@ -1,4 +1,3 @@
-import asyncio
 from unittest.mock import patch
 
 from doc_process_studio.skill.schemas.runtime import SkillContextChunk, SkillConversationState
@@ -85,48 +84,48 @@ def test_build_local_summary_from_text_truncation():
     assert len(result) <= 50
 
 
-def test_request_summary_empty_prompt():
-    result = asyncio.run(_request_summary(model="test", system_prompt="sys", user_prompt="", max_characters=500))
+async def test_request_summary_empty_prompt():
+    result = await _request_summary(model="test", system_prompt="sys", user_prompt="", max_characters=500)
     assert result == ""
 
 
-def test_request_summary_whitespace_prompt():
-    result = asyncio.run(_request_summary(model="test", system_prompt="sys", user_prompt="   ", max_characters=500))
+async def test_request_summary_whitespace_prompt():
+    result = await _request_summary(model="test", system_prompt="sys", user_prompt="   ", max_characters=500)
     assert result == ""
 
 
-def test_request_summary_llm_error():
+async def test_request_summary_llm_error():
     with patch(
         "doc_process_studio.skill.service.context_packer.post_chat_completion",
         side_effect=ValueError("LLM error"),
     ):
-        result = asyncio.run(_request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500))
+        result = await _request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500)
     assert result == ""
 
 
-def test_request_summary_ollama_not_configured():
+async def test_request_summary_ollama_not_configured():
     from doc_process_studio.core.ollama import OllamaNotConfiguredError
 
     with patch(
         "doc_process_studio.skill.service.context_packer.post_chat_completion",
         side_effect=OllamaNotConfiguredError("not configured"),
     ):
-        result = asyncio.run(_request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500))
+        result = await _request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500)
     assert result == ""
 
 
-def test_request_summary_http_error():
+async def test_request_summary_http_error():
     import httpx
 
     with patch(
         "doc_process_studio.skill.service.context_packer.post_chat_completion",
         side_effect=httpx.HTTPError("connection error"),
     ):
-        result = asyncio.run(_request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500))
+        result = await _request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500)
     assert result == ""
 
 
-def test_request_summary_empty_content():
+async def test_request_summary_empty_content():
     with patch(
         "doc_process_studio.skill.service.context_packer.post_chat_completion",
         return_value={"choices": [{"message": {"content": "  "}}]},
@@ -134,25 +133,25 @@ def test_request_summary_empty_content():
         "doc_process_studio.skill.service.context_packer.extract_first_message_content",
         return_value="  ",
     ):
-        result = asyncio.run(_request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500))
+        result = await _request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500)
     assert result == ""
 
 
-def test_ensure_hierarchical_memory_empty_chunks():
+async def test_ensure_hierarchical_memory_empty_chunks():
     state = _make_state()
-    asyncio.run(ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=[]))
+    await ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=[])
     assert state.short_term_memory == ""
     assert state.compacted_chunk_ids == []
 
 
-def test_ensure_hierarchical_memory_same_chunks_cached():
+async def test_ensure_hierarchical_memory_same_chunks_cached():
     state = _make_state(short_term_memory="已有摘要", compacted_chunk_ids=["chunk-1"])
     chunks = [_make_chunk()]
-    asyncio.run(ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=False))
+    await ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=False)
     assert state.short_term_memory == "已有摘要"
 
 
-def test_ensure_hierarchical_memory_force_refresh():
+async def test_ensure_hierarchical_memory_force_refresh():
     state = _make_state(short_term_memory="旧摘要", compacted_chunk_ids=["chunk-1"])
     chunks = [_make_chunk()]
 
@@ -160,11 +159,11 @@ def test_ensure_hierarchical_memory_force_refresh():
         "doc_process_studio.skill.service.context_packer._request_summary",
         return_value="新摘要",
     ):
-        asyncio.run(ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=True))
+        await ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=True)
     assert state.short_term_memory == "新摘要"
 
 
-def test_ensure_hierarchical_memory_fallback_to_local():
+async def test_ensure_hierarchical_memory_fallback_to_local():
     state = _make_state()
     chunks = [_make_chunk()]
 
@@ -172,7 +171,7 @@ def test_ensure_hierarchical_memory_fallback_to_local():
         "doc_process_studio.skill.service.context_packer._request_summary",
         return_value="",
     ):
-        asyncio.run(ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=True))
+        await ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=True)
     assert "测试文档" in state.short_term_memory or len(state.short_term_memory) > 0
 
 

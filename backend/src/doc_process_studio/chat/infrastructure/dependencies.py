@@ -3,10 +3,10 @@
 from functools import lru_cache
 
 from ..application.attachment_service import AttachmentService
+from ..application.ports import AttachmentStore, ConversationStateStore, SessionRepository, TitleGenerator
 from ..application.session_service import SessionService
 from .attachment_store import FsAttachmentStore
 from .conversation_state_store import SkillConversationStateStore
-from ..application.ports import AttachmentStore, ConversationStateStore, SessionRepository, TitleGenerator
 from .session_repository import OllamaTitleGenerator, SqlSessionRepository
 
 

@@ -132,7 +132,7 @@ def _read_skill_file_content(skill_id: str, relative_path: str) -> dict[str, Any
         "path": target_path.relative_to(skill_root).as_posix(),
         "kind": "text",
         "content": truncated_content,
-}
+    }
 
 
 def _normalize_relative_path(relative_path: str | None) -> str:
@@ -176,4 +176,3 @@ def _resolve_tool_scope(
     argument_skill_id = str(arguments.get("skill_id", "")).strip()
     resolved_skill_id = scoped_skill_id or argument_skill_id or default_skill_id
     return resolved_skill_id, base_tool_name
-

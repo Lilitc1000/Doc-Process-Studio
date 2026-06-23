@@ -103,6 +103,7 @@ async def _handle_archive_upload(
 
     archive_folder_name = PurePosixPath(archive_name).stem
     from .folders import create_folder
+
     archive_folder = await create_folder(db, project_id, archive_folder_name, folder_id)
     if not archive_folder:
         return None
@@ -128,7 +129,11 @@ async def _handle_archive_upload(
             parent_folder_id = current_parent_id or archive_folder.id
 
         doc = await upload_document(
-            db, project_id, parent_folder_id, extracted.file_name, extracted.file_bytes,
+            db,
+            project_id,
+            parent_folder_id,
+            extracted.file_name,
+            extracted.file_bytes,
         )
         if doc and not doc.is_indexed:
             chunk_count = await index_document(db, doc.id, project_name, extracted.file_bytes)

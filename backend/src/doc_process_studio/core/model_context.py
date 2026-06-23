@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -166,9 +167,7 @@ async def get_model_context_length(model: str) -> int:
             return
         await _set_cached_context_length(normalized_model, refreshed)
 
-    try:
+    with contextlib.suppress(RuntimeError):
         asyncio.create_task(_refresh())
-    except RuntimeError:
-        pass
 
     return settings.agent_executor_default_context_length

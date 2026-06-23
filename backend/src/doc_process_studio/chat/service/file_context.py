@@ -58,10 +58,7 @@ def truncate_content(content: str) -> str:
         return "文件内容为空，或当前无法提取有效文本。"
 
     if len(normalized_text) > MAX_FILE_CHARACTERS:
-        return (
-            normalized_text[:MAX_FILE_CHARACTERS]
-            + "\n\n[文件内容过长，已截断后发送给模型]"
-        )
+        return normalized_text[:MAX_FILE_CHARACTERS] + "\n\n[文件内容过长，已截断后发送给模型]"
 
     return normalized_text
 
@@ -76,11 +73,7 @@ def extract_docx_text(raw_bytes: bytes) -> str:
     document = Document(BytesIO(raw_bytes))
 
     sections: list[str] = []
-    paragraph_texts = [
-        paragraph.text.strip()
-        for paragraph in document.paragraphs
-        if paragraph.text.strip()
-    ]
+    paragraph_texts = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
     if paragraph_texts:
         sections.append("\n".join(paragraph_texts))
 
@@ -113,11 +106,7 @@ def extract_xlsx_text(raw_bytes: bytes) -> str:
     for sheet in workbook.worksheets:
         row_texts: list[str] = []
         for row in sheet.iter_rows(values_only=True):
-            cell_values = [
-                str(cell).strip()
-                for cell in row
-                if cell is not None and str(cell).strip()
-            ]
+            cell_values = [str(cell).strip() for cell in row if cell is not None and str(cell).strip()]
             if cell_values:
                 row_texts.append(" | ".join(cell_values))
 
@@ -160,10 +149,7 @@ def _build_uploaded_file_context(
         extracted_text = None
 
     if extracted_text is None and suffix not in TEXT_EXTENSIONS:
-        content = (
-            "当前后端无法提取该文档的有效文本内容，"
-            "本次仅保留了文件名与类型信息。"
-        )
+        content = "当前后端无法提取该文档的有效文本内容，本次仅保留了文件名与类型信息。"
     else:
         content = truncate_content(extracted_text or "")
 
@@ -220,11 +206,9 @@ async def prepare_uploaded_files(
 
     return prepared_files, (
         "以下是用户本次上传的文件内容，请你优先结合这些文件进行理解与回答：\n\n"
-        + "\n\n---\n\n".join(
-            _build_uploaded_file_section(prepared_file.context)
-            for prepared_file in prepared_files
-        )
+        + "\n\n---\n\n".join(_build_uploaded_file_section(prepared_file.context) for prepared_file in prepared_files)
     )
+
 
 def build_persisted_uploaded_files_context(
     attachment_ids: list[str],
@@ -257,7 +241,6 @@ def build_persisted_uploaded_files_context(
     if not sections:
         return None
 
-    return (
-        "以下是当前会话中已绑定的历史上传文件内容，请你继续结合这些文件进行理解与回答：\n\n"
-        + "\n\n---\n\n".join(sections)
+    return "以下是当前会话中已绑定的历史上传文件内容，请你继续结合这些文件进行理解与回答：\n\n" + "\n\n---\n\n".join(
+        sections
     )

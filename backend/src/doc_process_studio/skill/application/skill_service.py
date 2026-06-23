@@ -27,24 +27,16 @@ class SkillService:
     def list_skills(self) -> list[SkillInterfaceConfig]:
         return self._registry.list_interfaces()
 
-    async def search_context(
-        self, skill_id: str, query: str
-    ) -> list[SkillContextChunk]:
+    async def search_context(self, skill_id: str, query: str) -> list[SkillContextChunk]:
         self._require_skill(skill_id)
         return await self._searcher.search_chunks(skill_id, query)
 
-    async def refresh_conversation_cache(
-        self, conversation_id: str, tenant_id: str = "default"
-    ) -> tuple[bool, int]:
+    async def refresh_conversation_cache(self, conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
         return await self._states.refresh_ttl(conversation_id, tenant_id=tenant_id)
 
-    async def delete_conversation_cache(
-        self, conversation_id: str, tenant_id: str = "default"
-    ) -> tuple[bool, int]:
+    async def delete_conversation_cache(self, conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
         cleared = await self._states.clear_state(conversation_id, tenant_id=tenant_id)
-        ttl_seconds = await self._states.get_ttl_seconds(
-            conversation_id, tenant_id=tenant_id
-        )
+        ttl_seconds = await self._states.get_ttl_seconds(conversation_id, tenant_id=tenant_id)
         return cleared, ttl_seconds
 
     def _require_skill(self, skill_id: str) -> SkillInterfaceConfig:

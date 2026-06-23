@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,8 +77,8 @@ async def update_project_stats(db: AsyncSession, project_id: str) -> None:
         .values(
             folder_count=folder_count,
             document_count=doc_count,
-            last_updated_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            last_updated_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
     )
     await db.flush()

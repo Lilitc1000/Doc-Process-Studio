@@ -1,11 +1,10 @@
 """
-端到端测试：模拟 kb: skill 对话流程。
+集成测试：验证 kb: skill 在 skill 解析和上下文构建阶段不会抛出 ValueError。
 
-直接调用 stream_remote_chat_completion，验证 kb: skill 在整个链路中不会抛出 ValueError。
+直接调用 stream_remote_chat_completion，验证 kb: skill 在整个链路中的错误处理。
 此测试不需要 Ollama 服务可用，重点验证 skill 解析和上下文构建阶段。
 """
 
-import asyncio
 import json
 
 from doc_process_studio.chat.schemas.request import ChatStreamRequest, ChatMessageInput
@@ -51,11 +50,11 @@ def _get_first_error_message(events: list[dict]) -> str:
 # ── 核心断言：kb: skill 不应触发 "未找到 skill" ValueError ──
 
 
-def test_kb_skill_only_no_ollama() -> None:
+async def test_kb_skill_only_no_ollama() -> None:
     """选择 kb: skill 但无 Ollama 服务时，应返回 Ollama 连接错误而非 ValueError。"""
     load_skill_context_chunks.cache_clear()
     request = _make_request(["kb:TestProject"])
-    events = asyncio.run(_collect_stream_events(request))
+    events = await _collect_stream_events(request)
 
     error_msg = _get_first_error_message(events)
     if error_msg:
@@ -64,11 +63,11 @@ def test_kb_skill_only_no_ollama() -> None:
         )
 
 
-def test_kb_skill_mixed_with_regular_no_ollama() -> None:
+async def test_kb_skill_mixed_with_regular_no_ollama() -> None:
     """kb: skill 与普通 skill 混合选择时，不应抛出 ValueError。"""
     load_skill_context_chunks.cache_clear()
     request = _make_request(["document-assistant", "kb:出租车平台"])
-    events = asyncio.run(_collect_stream_events(request))
+    events = await _collect_stream_events(request)
 
     error_msg = _get_first_error_message(events)
     if error_msg:
@@ -77,11 +76,11 @@ def test_kb_skill_mixed_with_regular_no_ollama() -> None:
         )
 
 
-def test_kb_skill_chinese_name_no_ollama() -> None:
+async def test_kb_skill_chinese_name_no_ollama() -> None:
     """中文项目名的 kb: skill 不应抛出 ValueError。"""
     load_skill_context_chunks.cache_clear()
     request = _make_request(["kb:出租车平台"])
-    events = asyncio.run(_collect_stream_events(request))
+    events = await _collect_stream_events(request)
 
     error_msg = _get_first_error_message(events)
     if error_msg:
@@ -90,11 +89,11 @@ def test_kb_skill_chinese_name_no_ollama() -> None:
         )
 
 
-def test_kb_skill_trace_id_returned() -> None:
+async def test_kb_skill_trace_id_returned() -> None:
     """kb: skill 请求应正常返回 trace_id。"""
     load_skill_context_chunks.cache_clear()
     request = _make_request(["kb:TestProject"])
-    events = asyncio.run(_collect_stream_events(request))
+    events = await _collect_stream_events(request)
 
     trace_events = [e for e in events if e.get("type") == "trace" and e.get("phase") == "start"]
     assert len(trace_events) >= 1, "应至少返回一个 trace start 事件"
@@ -104,11 +103,11 @@ def test_kb_skill_trace_id_returned() -> None:
     )
 
 
-def test_multiple_kb_skills_no_ollama() -> None:
+async def test_multiple_kb_skills_no_ollama() -> None:
     """多个 kb: skill 同时选择不应抛出 ValueError。"""
     load_skill_context_chunks.cache_clear()
     request = _make_request(["kb:ProjectA", "kb:ProjectB"])
-    events = asyncio.run(_collect_stream_events(request))
+    events = await _collect_stream_events(request)
 
     error_msg = _get_first_error_message(events)
     if error_msg:
@@ -117,11 +116,11 @@ def test_multiple_kb_skills_no_ollama() -> None:
         )
 
 
-def test_kb_skill_with_special_chars_no_ollama() -> None:
+async def test_kb_skill_with_special_chars_no_ollama() -> None:
     """包含特殊字符的项目名不应导致异常。"""
     load_skill_context_chunks.cache_clear()
     request = _make_request(["kb:Project-Test_123"])
-    events = asyncio.run(_collect_stream_events(request))
+    events = await _collect_stream_events(request)
 
     error_msg = _get_first_error_message(events)
     if error_msg:
@@ -130,11 +129,11 @@ def test_kb_skill_with_special_chars_no_ollama() -> None:
         )
 
 
-def test_kb_skill_error_is_ollama_related_not_skill_related() -> None:
+async def test_kb_skill_error_is_ollama_related_not_skill_related() -> None:
     """kb: skill 的错误应与 Ollama 连接相关，而非 skill 查找相关。"""
     load_skill_context_chunks.cache_clear()
     request = _make_request(["kb:出租车平台"])
-    events = asyncio.run(_collect_stream_events(request))
+    events = await _collect_stream_events(request)
 
     error_msg = _get_first_error_message(events)
     if error_msg:

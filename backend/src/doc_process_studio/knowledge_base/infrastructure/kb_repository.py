@@ -40,9 +40,7 @@ class SqlKnowledgeBaseRepository(KnowledgeBaseRepository):
     async def create_project(self, db: AsyncSession, name: str, description: str) -> KBProjectResponse:
         return await _create_project(db, name, description)
 
-    async def rename_project(
-        self, db: AsyncSession, project_id: str, new_name: str
-    ) -> KBProjectResponse | None:
+    async def rename_project(self, db: AsyncSession, project_id: str, new_name: str) -> KBProjectResponse | None:
         return await _rename_project(db, project_id, new_name)
 
     async def delete_project(self, db: AsyncSession, project_id: str) -> bool:
@@ -60,9 +58,7 @@ class SqlKnowledgeBaseRepository(KnowledgeBaseRepository):
     ) -> KBFolderResponse | None:
         return await _create_folder(db, project_id, name, parent_id)
 
-    async def rename_folder(
-        self, db: AsyncSession, folder_id: str, new_name: str
-    ) -> KBFolderResponse | None:
+    async def rename_folder(self, db: AsyncSession, folder_id: str, new_name: str) -> KBFolderResponse | None:
         return await _rename_folder(db, folder_id, new_name)
 
     async def delete_folder(self, db: AsyncSession, folder_id: str) -> bool:

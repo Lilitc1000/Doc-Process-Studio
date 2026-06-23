@@ -1,5 +1,3 @@
-import asyncio
-
 import doc_process_studio.system.service.trace_store as trace_store_module
 from doc_process_studio.system.service.trace_store import (
     build_agent_trace_key,
@@ -71,95 +69,83 @@ def test_decode_trace_index_member_invalid():
     assert _decode_trace_index_member('["", ""]') is None
 
 
-def test_save_and_load_agent_trace(monkeypatch):
+async def test_save_and_load_agent_trace(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
     monkeypatch.setattr(trace_store_module, "set_json", fake.set)
     monkeypatch.setattr(trace_store_module, "get_json", fake.get)
 
     payload = {"trace_id": "tr1", "events": []}
-    asyncio.run(
-        save_agent_trace(
-            tenant_id="t1",
-            trace_id="tr1",
-            conversation_id="conv-1",
-            payload=payload,
-        )
+    await save_agent_trace(
+        tenant_id="t1",
+        trace_id="tr1",
+        conversation_id="conv-1",
+        payload=payload,
     )
 
-    result = asyncio.run(load_agent_trace(tenant_id="t1", trace_id="tr1"))
+    result = await load_agent_trace(tenant_id="t1", trace_id="tr1")
     assert result is not None
     assert result["trace_id"] == "tr1"
 
 
-def test_load_agent_trace_missing(monkeypatch):
+async def test_load_agent_trace_missing(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_json", fake.get)
 
-    result = asyncio.run(load_agent_trace(tenant_id="t1", trace_id="missing"))
+    result = await load_agent_trace(tenant_id="t1", trace_id="missing")
     assert result is None
 
 
-def test_save_agent_trace_skips_when_disabled(monkeypatch):
+async def test_save_agent_trace_skips_when_disabled(monkeypatch):
     monkeypatch.setattr(trace_store_module.settings, "agent_trace_store_enabled", False)
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
 
-    asyncio.run(
-        save_agent_trace(
-            tenant_id="t1",
-            trace_id="tr1",
-            conversation_id="conv-1",
-            payload={},
-        )
+    await save_agent_trace(
+        tenant_id="t1",
+        trace_id="tr1",
+        conversation_id="conv-1",
+        payload={},
     )
     assert len(fake._store) == 0
 
 
-def test_save_agent_trace_skips_empty_ids(monkeypatch):
+async def test_save_agent_trace_skips_empty_ids(monkeypatch):
     monkeypatch.setattr(trace_store_module.settings, "agent_trace_store_enabled", True)
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
 
-    asyncio.run(
-        save_agent_trace(
-            tenant_id="t1",
-            trace_id="",
-            conversation_id="conv-1",
-            payload={},
-        )
+    await save_agent_trace(
+        tenant_id="t1",
+        trace_id="",
+        conversation_id="conv-1",
+        payload={},
     )
     assert len(fake._store) == 0
 
 
-def test_delete_agent_traces_for_conversation(monkeypatch):
+async def test_delete_agent_traces_for_conversation(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
     monkeypatch.setattr(trace_store_module, "set_json", fake.set)
     monkeypatch.setattr(trace_store_module, "get_json", fake.get)
 
-    asyncio.run(
-        save_agent_trace(
-            tenant_id="t1",
-            trace_id="tr1",
-            conversation_id="conv-1",
-            payload={"trace_id": "tr1"},
-        )
+    await save_agent_trace(
+        tenant_id="t1",
+        trace_id="tr1",
+        conversation_id="conv-1",
+        payload={"trace_id": "tr1"},
     )
 
-    count = asyncio.run(
-        delete_agent_traces_for_conversation(conversation_id="conv-1")
-    )
+    count = await delete_agent_traces_for_conversation(conversation_id="conv-1")
     assert count >= 1
 
 
-def test_delete_agent_traces_for_empty_conversation(monkeypatch):
+async def test_delete_agent_traces_for_empty_conversation(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
 
-    count = asyncio.run(
-        delete_agent_traces_for_conversation(conversation_id="")
-    )
+    count = await delete_agent_traces_for_conversation(conversation_id="")
     assert count == 0
 
 
@@ -184,7 +170,7 @@ def test_agent_trace_recorder():
     assert recorder.payload["final"]["done_reason"] == "stop"
 
 
-def test_agent_trace_recorder_flush(monkeypatch):
+async def test_agent_trace_recorder_flush(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
     monkeypatch.setattr(trace_store_module, "set_json", fake.set)
@@ -198,4 +184,4 @@ def test_agent_trace_recorder_flush(monkeypatch):
         model="test-model",
         reranker_model="reranker",
     )
-    asyncio.run(recorder.flush())
+    await recorder.flush()

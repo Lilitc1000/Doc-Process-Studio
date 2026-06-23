@@ -4,7 +4,8 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,9 +35,7 @@ class KnowledgeBaseRepository(ABC):
     async def create_project(self, db: AsyncSession, name: str, description: str) -> KBProjectResponse: ...
 
     @abstractmethod
-    async def rename_project(
-        self, db: AsyncSession, project_id: str, new_name: str
-    ) -> KBProjectResponse | None: ...
+    async def rename_project(self, db: AsyncSession, project_id: str, new_name: str) -> KBProjectResponse | None: ...
 
     @abstractmethod
     async def delete_project(self, db: AsyncSession, project_id: str) -> bool: ...
@@ -54,9 +53,7 @@ class KnowledgeBaseRepository(ABC):
     ) -> KBFolderResponse | None: ...
 
     @abstractmethod
-    async def rename_folder(
-        self, db: AsyncSession, folder_id: str, new_name: str
-    ) -> KBFolderResponse | None: ...
+    async def rename_folder(self, db: AsyncSession, folder_id: str, new_name: str) -> KBFolderResponse | None: ...
 
     @abstractmethod
     async def delete_folder(self, db: AsyncSession, folder_id: str) -> bool: ...

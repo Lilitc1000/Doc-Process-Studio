@@ -20,7 +20,6 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 from docx.text.run import Run
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 PS_SCRIPT = SCRIPT_DIR / "refresh_with_word.ps1"
 
@@ -135,15 +134,11 @@ def _refresh_with_libreoffice(document_path: Path) -> None:
         )
 
         if result.returncode != 0:
-            raise RuntimeError(
-                f"LibreOffice 刷新失败（退出码 {result.returncode}）：{result.stderr or result.stdout}"
-            )
+            raise RuntimeError(f"LibreOffice 刷新失败（退出码 {result.returncode}）：{result.stderr or result.stdout}")
 
         converted = Path(tmpdir) / document_path.name
         if not converted.exists():
-            raise RuntimeError(
-                f"LibreOffice 未生成输出文件。stdout: {result.stdout}, stderr: {result.stderr}"
-            )
+            raise RuntimeError(f"LibreOffice 未生成输出文件。stdout: {result.stdout}, stderr: {result.stderr}")
 
         if has_toc_field_before:
             has_toc_field_after = _document_has_toc_field(converted)

@@ -34,7 +34,9 @@ class IncidentReport(Base):
     report_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -42,12 +44,12 @@ class IncidentReport(Base):
 
 class IncidentComment(Base):
     __tablename__ = "incident_comments"
-    __table_args__ = (
-        Index("idx_incident_comments_report_id", "report_id"),
-    )
+    __table_args__ = (Index("idx_incident_comments_report_id", "report_id"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    report_id: Mapped[str] = mapped_column(String(32), ForeignKey("incident_reports.id", ondelete="CASCADE"), nullable=False)
+    report_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("incident_reports.id", ondelete="CASCADE"), nullable=False
+    )
     author_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.user_id"), nullable=False)
     content: Mapped[str] = mapped_column(String, nullable=False)
     parent_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("incident_comments.id"), nullable=True)

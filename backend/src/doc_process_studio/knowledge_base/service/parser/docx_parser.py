@@ -2,8 +2,8 @@ import logging
 from dataclasses import dataclass
 from io import BytesIO
 
-from docx.document import Document as DocumentType
 from docx import Document
+from docx.document import Document as DocumentType
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,7 @@ def parse_docx(file_bytes: bytes, file_name: str) -> list[ParsedSection]:
             sections.append(ParsedSection(section_title=current_title, text=trailing_content))
 
         if not sections:
-            full_text = "\n".join(
-                p.text.strip() for p in doc.paragraphs if p.text.strip()
-            )
+            full_text = "\n".join(p.text.strip() for p in doc.paragraphs if p.text.strip())
             if full_text:
                 sections.append(ParsedSection(section_title=file_name, text=full_text))
     except Exception:

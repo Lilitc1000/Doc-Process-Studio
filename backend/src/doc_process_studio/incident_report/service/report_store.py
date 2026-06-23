@@ -6,12 +6,13 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 
+from ...auth.infrastructure.user_repository import SqlUserRepository
 from ...core.database import async_session_factory
 from ...shared.dtutils import to_utc8
-from ...auth.infrastructure.user_repository import SqlUserRepository
-from ..models.incident_report_orm import IncidentComment, IncidentReport as IncidentReportORM
-from ..schemas.response import IncidentReportDetail, IncidentReportSummary
+from ..models.incident_report_orm import IncidentComment
+from ..models.incident_report_orm import IncidentReport as IncidentReportORM
 from ..schemas.common import IncidentReportStatus, IncidentSeverity
+from ..schemas.response import IncidentReportDetail, IncidentReportSummary
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,9 @@ async def create_report_record(
                 return record
             except IntegrityError:
                 await session.rollback()
-                logger.warning("IntegrityError creating report: id=%s, ref_no=%s, attempt=%d", report_id, effective_ref_no, attempt)
+                logger.warning(
+                    "IntegrityError creating report: id=%s, ref_no=%s, attempt=%d", report_id, effective_ref_no, attempt
+                )
                 if ref_no is not None:
                     raise
                 effective_ref_no = None
@@ -210,9 +213,11 @@ async def create_comment_record(
 async def list_comment_records(report_id: str) -> list[IncidentComment]:
     async with async_session_factory() as session:
         result = await session.execute(
-            select(IncidentComment).where(
+            select(IncidentComment)
+            .where(
                 IncidentComment.report_id == report_id,
-            ).order_by(IncidentComment.created_at.asc()),
+            )
+            .order_by(IncidentComment.created_at.asc()),
         )
         return list(result.scalars().all())
 

@@ -13,10 +13,15 @@ SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
 
 def _strip_wrapped_text(value: str) -> str:
     cleaned = value.strip()
-    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {
-        '"',
-        "'",
-    }:
+    if (
+        len(cleaned) >= 2
+        and cleaned[0] == cleaned[-1]
+        and cleaned[0]
+        in {
+            '"',
+            "'",
+        }
+    ):
         return cleaned[1:-1]
     return cleaned
 
@@ -157,10 +162,7 @@ def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | Non
 
     interface_values = _read_yaml_interface_block(config_path)
     skill_markdown_metadata = _read_skill_markdown_metadata(skill_dir)
-    display_name = (
-        interface_values.get("display_name", "").strip()
-        or skill_markdown_metadata.get("name", "").strip()
-    )
+    display_name = interface_values.get("display_name", "").strip() or skill_markdown_metadata.get("name", "").strip()
     skill_type = (
         interface_values.get("skill_type", "").strip()
         or skill_markdown_metadata.get("skill_type", "").strip()
@@ -168,8 +170,7 @@ def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | Non
     )
     default_prompt = interface_values.get("default_prompt", "").strip()
     short_description = (
-        interface_values.get("short_description", "").strip()
-        or skill_markdown_metadata.get("description", "").strip()
+        interface_values.get("short_description", "").strip() or skill_markdown_metadata.get("description", "").strip()
     )
 
     if not display_name or not default_prompt:
@@ -221,9 +222,7 @@ def get_skill_interface(skill_id: str) -> SkillInterfaceConfig:
             return skill
 
     available_skill_ids = ", ".join(skill.id for skill in load_skill_registry())
-    raise ValueError(
-        f"未找到 skill `{normalized_skill_id}`。当前可用 skills: {available_skill_ids}"
-    )
+    raise ValueError(f"未找到 skill `{normalized_skill_id}`。当前可用 skills: {available_skill_ids}")
 
 
 def get_skill_tool_config(skill_id: str, tool_name: str) -> SkillToolConfig:
@@ -234,9 +233,7 @@ def get_skill_tool_config(skill_id: str, tool_name: str) -> SkillToolConfig:
             return tool
 
     available_tool_names = ", ".join(tool.name for tool in skill_interface.tools)
-    raise ValueError(
-        f"未找到 skill `{skill_id}` 的工具 `{normalized_tool_name}`。当前可用工具: {available_tool_names}"
-    )
+    raise ValueError(f"未找到 skill `{skill_id}` 的工具 `{normalized_tool_name}`。当前可用工具: {available_tool_names}")
 
 
 def get_skill_interaction_config(skill_id: str) -> SkillInteractionConfig | None:

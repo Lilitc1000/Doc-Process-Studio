@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Sequence
+from collections.abc import Sequence
 
 from qdrant_client.models import (
     FieldCondition,
@@ -34,7 +34,7 @@ def upsert_chunks(
     collection_name = settings.kb_collection_name
     points: list[PointStruct] = []
 
-    for chunk, vector in zip(chunks, vectors):
+    for chunk, vector in zip(chunks, vectors, strict=False):
         point = PointStruct(
             id=_build_point_id(),
             vector=vector,

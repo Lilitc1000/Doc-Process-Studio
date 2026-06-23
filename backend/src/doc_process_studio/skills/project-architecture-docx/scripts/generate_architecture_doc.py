@@ -27,16 +27,14 @@ except ModuleNotFoundError:  # pragma: no cover
 
 from docx import Document
 from docx.document import Document as DocumentType
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
-from docx.table import _Cell, Table
+from docx.table import Table, _Cell
 from docx.text.paragraph import Paragraph
 from docx.text.run import Run
-
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_ROOT = SCRIPT_DIR.parent
@@ -119,63 +117,74 @@ class TraditionalChineseConverter:
                         "powershell.exe",
                         "-NoProfile",
                         "-Command",
-                        (
-                            f"& {command_prefix} -c "
-                            "\"from opencc import OpenCC; print('OPENCC_OK')\""
-                        ),
+                        (f"& {command_prefix} -c \"from opencc import OpenCC; print('OPENCC_OK')\""),
                     ],
                     capture_output=True,
                     text=True,
                 )
                 if "OPENCC_OK" in probe.stdout:
                     self.backend = "windows-python-opencc"
-                    self._windows_python_cmd = windows_python_cmd
+                    self._windows_python_cmd = tuple(windows_python_cmd)
                     return
 
         raise RuntimeError(
-            "未找到可用的繁简转换后端。请安装 OpenCC，或在 Windows Python 环境中安装 "
-            "opencc-python-reimplemented。"
+            "未找到可用的繁简转换后端。请安装 OpenCC，或在 Windows Python 环境中安装 opencc-python-reimplemented。"
         )
 
-    @lru_cache(maxsize=4096)
     def convert(self, text: str) -> str:
         """把输入文本转换为繁体中文。"""
         if not text:
             return text
-        if self.backend == "python-opencc":
-            assert self._converter is not None
-            return str(self._converter.convert(text))
-        if self.backend == "opencc-cli":
-            completed = subprocess.run(
-                ["opencc", "-c", "s2t.json"],
-                input=str(text),
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return completed.stdout.rstrip("\n")
-        if self.backend == "windows-python-opencc":
-            encoded = base64.b64encode(str(text).encode("utf-8")).decode("ascii")
-            command_prefix = " ".join(self._windows_python_cmd or [])
-            command = (
-                "$OutputEncoding = [Console]::OutputEncoding = "
-                "[System.Text.UTF8Encoding]::new(); "
-                f"$b64='{encoded}'; "
-                f"& {command_prefix} -c "
-                "\"import base64,sys; from opencc import OpenCC; "
-                "text=base64.b64decode(sys.argv[1]).decode('utf-8'); "
-                "result=OpenCC('s2t').convert(text); "
-                "print(base64.b64encode(result.encode('utf-8')).decode('ascii'))\" "
-                "$b64"
-            )
-            completed = subprocess.run(
-                ["powershell.exe", "-NoProfile", "-Command", command],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return base64.b64decode(completed.stdout.strip()).decode("utf-8")
-        raise RuntimeError("繁简转换后端未初始化。")
+        return _convert_traditional(
+            text,
+            backend=self.backend,
+            converter=self._converter,
+            windows_python_cmd=self._windows_python_cmd,
+        )
+
+
+@lru_cache(maxsize=4096)
+def _convert_traditional(
+    text: str,
+    *,
+    backend: str | None,
+    converter: Any | None,
+    windows_python_cmd: tuple[str, ...] | None,
+) -> str:
+    if backend == "python-opencc":
+        assert converter is not None
+        return str(converter.convert(text))
+    if backend == "opencc-cli":
+        completed = subprocess.run(
+            ["opencc", "-c", "s2t.json"],
+            input=str(text),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return completed.stdout.rstrip("\n")
+    if backend == "windows-python-opencc":
+        encoded = base64.b64encode(str(text).encode("utf-8")).decode("ascii")
+        command_prefix = " ".join(windows_python_cmd or [])
+        command = (
+            "$OutputEncoding = [Console]::OutputEncoding = "
+            "[System.Text.UTF8Encoding]::new(); "
+            f"$b64='{encoded}'; "
+            f"& {command_prefix} -c "
+            '"import base64,sys; from opencc import OpenCC; '
+            "text=base64.b64decode(sys.argv[1]).decode('utf-8'); "
+            "result=OpenCC('s2t').convert(text); "
+            "print(base64.b64encode(result.encode('utf-8')).decode('ascii'))\" "
+            "$b64"
+        )
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", command],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return base64.b64decode(completed.stdout.strip()).decode("utf-8")
+    raise RuntimeError("繁简转换后端未初始化。")
 
 
 CONVERTER = TraditionalChineseConverter()
@@ -198,9 +207,7 @@ def resolve_document_identity(
         else to_traditional_text(project_root.resolve().name).strip()
     )
     document_title = (
-        to_traditional_text(explicit_document_title).strip()
-        if explicit_document_title
-        else DEFAULT_DOCUMENT_TITLE
+        to_traditional_text(explicit_document_title).strip() if explicit_document_title else DEFAULT_DOCUMENT_TITLE
     )
     return system_name, document_title
 
@@ -583,7 +590,9 @@ def add_page_break(doc: DocumentType) -> None:
     doc.add_page_break()
 
 
-def add_field(paragraph: Paragraph, field_code: str, result_text: str | None = None, result_size: int | None = None) -> None:
+def add_field(
+    paragraph: Paragraph, field_code: str, result_text: str | None = None, result_size: int | None = None
+) -> None:
     begin_run = paragraph.add_run()
     set_run_font(begin_run, result_size or SIZE_BODY, False)
     begin = OxmlElement("w:fldChar")
@@ -719,7 +728,7 @@ def configure_header_footer(
     set_table_line(footer_table, "top")
     cells = footer_table.rows[0].cells
     widths = (Cm(5.9), Cm(5.9), Cm(5.0))
-    for cell, width in zip(cells, widths):
+    for cell, width in zip(cells, widths, strict=False):
         cell.width = width
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.BOTTOM
     footer_left = cells[0].paragraphs[0]
@@ -828,7 +837,8 @@ def add_cover(
     style_paragraph(doc, notice_p, "Normal", WD_ALIGN_PARAGRAPH.CENTER)
     notice_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = notice_p.add_run(
-        "The contents of this document remain the property of and may not be reproduced in whole or in part without the express permission of the Government of the HKSAR."
+        "The contents of this document remain the property of and may not be reproduced "
+        "in whole or in part without the express permission of the Government of the HKSAR."
     )
     set_run_font(run, SIZE_COPYRIGHT, False)
 
@@ -915,20 +925,14 @@ def add_toc(doc: DocumentType, outline: list[tuple[int, str, str]]) -> None:
 
 def normalize_doc_plan(path: Path) -> list[dict]:
     """读取用户提供的文档结构定义。"""
-    if path.suffix.lower() in {".yaml", ".yml"}:
-        data = load_yaml(path)
-    else:
-        data = load_json(path)
+    data = load_yaml(path) if path.suffix.lower() in {".yaml", ".yml"} else load_json(path)
 
     if isinstance(data, list):
         chapters = data
     elif isinstance(data, dict):
         chapters = data.get("chapters", [])
     else:
-        raise SystemExit(
-            "`--doc-plan` 内容格式错误：应为 JSON/YAML 对象或数组，"
-            f"当前为 {type(data).__name__}。"
-        )
+        raise SystemExit(f"`--doc-plan` 内容格式错误：应为 JSON/YAML 对象或数组，当前为 {type(data).__name__}。")
 
     if not isinstance(chapters, list):
         raise SystemExit("`--doc-plan` 中的 chapters 必须是数组。")

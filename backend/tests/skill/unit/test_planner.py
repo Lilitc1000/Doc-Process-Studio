@@ -1,4 +1,3 @@
-import asyncio
 import json
 from pathlib import Path
 
@@ -23,7 +22,7 @@ def _build_skill(
     )
 
 
-def test_plan_skill_activation_selects_resume_skill() -> None:
+async def test_plan_skill_activation_selects_resume_skill() -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -42,15 +41,13 @@ def test_plan_skill_activation_selects_resume_skill() -> None:
         ),
     ]
 
-    plan = asyncio.run(
-        plan_skill_activation(
-            model="qwen3-coder-next:latest",
-            messages=[ChatMessageInput(role="user", content="请帮我做一轮简历审核，重点看交通行业经验")],
-            available_skills=skills,
-            explicit_skill_ids=[],
-            missing_explicit_skill_ids=[],
-            system_skill_id="document-assistant",
-        )
+    plan = await plan_skill_activation(
+        model="qwen3-coder-next:latest",
+        messages=[ChatMessageInput(role="user", content="请帮我做一轮简历审核，重点看交通行业经验")],
+        available_skills=skills,
+        explicit_skill_ids=[],
+        missing_explicit_skill_ids=[],
+        system_skill_id="document-assistant",
     )
 
     assert plan.required_skill_ids == []
@@ -59,7 +56,7 @@ def test_plan_skill_activation_selects_resume_skill() -> None:
     assert "document-assistant" in plan.active_skill_ids
 
 
-def test_plan_skill_activation_skips_explicit_skills() -> None:
+async def test_plan_skill_activation_skips_explicit_skills() -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -78,20 +75,18 @@ def test_plan_skill_activation_skips_explicit_skills() -> None:
         ),
     ]
 
-    plan = asyncio.run(
-        plan_skill_activation(
-            model="qwen3-coder-next:latest",
-            messages=[
-                ChatMessageInput(
-                    role="user",
-                    content="按事故报告模板整理后，再补一份架构文档",
-                )
-            ],
-            available_skills=skills,
-            explicit_skill_ids=["incident-report"],
-            missing_explicit_skill_ids=[],
-            system_skill_id="document-assistant",
-        )
+    plan = await plan_skill_activation(
+        model="qwen3-coder-next:latest",
+        messages=[
+            ChatMessageInput(
+                role="user",
+                content="按事故报告模板整理后，再补一份架构文档",
+            )
+        ],
+        available_skills=skills,
+        explicit_skill_ids=["incident-report"],
+        missing_explicit_skill_ids=[],
+        system_skill_id="document-assistant",
     )
 
     assert plan.required_skill_ids == ["incident-report"]
@@ -100,7 +95,7 @@ def test_plan_skill_activation_skips_explicit_skills() -> None:
     assert plan.primary_skill_id == "incident-report"
 
 
-def test_plan_skill_activation_fallback_to_lexical(monkeypatch) -> None:
+async def test_plan_skill_activation_fallback_to_lexical(monkeypatch) -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -123,21 +118,19 @@ def test_plan_skill_activation_fallback_to_lexical(monkeypatch) -> None:
         fake_post_chat_completion,
     )
 
-    plan = asyncio.run(
-        plan_skill_activation(
-            model="qwen3-coder-next:latest",
-            messages=[ChatMessageInput(role="user", content="请帮我做交通简历审核")],
-            available_skills=skills,
-            explicit_skill_ids=[],
-            missing_explicit_skill_ids=[],
-            system_skill_id="document-assistant",
-        )
+    plan = await plan_skill_activation(
+        model="qwen3-coder-next:latest",
+        messages=[ChatMessageInput(role="user", content="请帮我做交通简历审核")],
+        available_skills=skills,
+        explicit_skill_ids=[],
+        missing_explicit_skill_ids=[],
+        system_skill_id="document-assistant",
     )
 
     assert plan.optional_skill_ids == ["resume-transport-review"]
 
 
-def test_plan_skill_activation_prefers_rerank_result(monkeypatch) -> None:
+async def test_plan_skill_activation_prefers_rerank_result(monkeypatch) -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -174,20 +167,18 @@ def test_plan_skill_activation_prefers_rerank_result(monkeypatch) -> None:
         fake_post_chat_completion,
     )
 
-    plan = asyncio.run(
-        plan_skill_activation(
-            model="qwen3-coder-next:latest",
-            messages=[
-                ChatMessageInput(
-                    role="user",
-                    content="请按项目现状整理并输出系统架构文档",
-                )
-            ],
-            available_skills=skills,
-            explicit_skill_ids=[],
-            missing_explicit_skill_ids=[],
-            system_skill_id="document-assistant",
-        )
+    plan = await plan_skill_activation(
+        model="qwen3-coder-next:latest",
+        messages=[
+            ChatMessageInput(
+                role="user",
+                content="请按项目现状整理并输出系统架构文档",
+            )
+        ],
+        available_skills=skills,
+        explicit_skill_ids=[],
+        missing_explicit_skill_ids=[],
+        system_skill_id="document-assistant",
     )
 
     assert plan.optional_skill_ids == ["project-architecture-docx"]
@@ -247,4 +238,3 @@ def test_skill_selection_precision_from_benchmark_cases() -> None:
 
     precision = matched / len(cases)
     assert precision >= 0.85
-

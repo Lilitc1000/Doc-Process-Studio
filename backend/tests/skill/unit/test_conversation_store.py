@@ -9,7 +9,7 @@ from doc_process_studio.skill.schemas.runtime import (
 from doc_process_studio.skill.service import conversation_store as store_module
 
 
-def test_save_conversation_state_serializes_datetime_fields(monkeypatch) -> None:
+async def test_save_conversation_state_serializes_datetime_fields(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     async def fake_set_json(key, payload, ttl_seconds=None):
@@ -56,9 +56,7 @@ def test_save_conversation_state_serializes_datetime_fields(monkeypatch) -> None
         ],
     )
 
-    import asyncio
-
-    asyncio.run(store_module.save_conversation_state(state))
+    await store_module.save_conversation_state(state)
 
     payload = captured["payload"]
     assert isinstance(payload, dict)

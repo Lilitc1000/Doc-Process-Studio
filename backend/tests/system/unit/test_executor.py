@@ -80,7 +80,7 @@ def _build_deps(
     )
 
 
-def test_execute_tool_graph_converges_when_prompt_budget_exceeded() -> None:
+async def test_execute_tool_graph_converges_when_prompt_budget_exceeded() -> None:
     budget = ExecutionBudget(
         max_tool_calls=10,
         max_time_seconds=20,
@@ -102,13 +102,9 @@ def test_execute_tool_graph_converges_when_prompt_budget_exceeded() -> None:
     def fake_execute_skill_tool_call(**_kwargs):
         raise AssertionError("预算收束后不应真正执行工具。")
 
-    import asyncio
-
-    result = asyncio.run(
-        execute_tool_graph(
-            execution_input=execution_input,
-            deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
-        )
+    result = await execute_tool_graph(
+        execution_input=execution_input,
+        deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
     )
 
     assert result.disable_tools is True
@@ -116,7 +112,7 @@ def test_execute_tool_graph_converges_when_prompt_budget_exceeded() -> None:
     assert result.state_diff.budget_reason is not None
 
 
-def test_execute_tool_graph_retries_search_without_source_path() -> None:
+async def test_execute_tool_graph_retries_search_without_source_path() -> None:
     budget = ExecutionBudget(
         max_tool_calls=10,
         max_time_seconds=20,
@@ -146,13 +142,9 @@ def test_execute_tool_graph_retries_search_without_source_path() -> None:
             return {"ok": False, "error": "source_path not found"}, []
         return {"ok": True, "chunks": [{"id": "c1"}]}, []
 
-    import asyncio
-
-    result = asyncio.run(
-        execute_tool_graph(
-            execution_input=execution_input,
-            deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
-        )
+    result = await execute_tool_graph(
+        execution_input=execution_input,
+        deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
     )
 
     assert len(observed_arguments) == 2
@@ -161,7 +153,7 @@ def test_execute_tool_graph_retries_search_without_source_path() -> None:
     assert result.round_made_progress is True
 
 
-def test_execute_tool_graph_deduplicates_same_signature_tool_calls() -> None:
+async def test_execute_tool_graph_deduplicates_same_signature_tool_calls() -> None:
     budget = ExecutionBudget(
         max_tool_calls=10,
         max_time_seconds=20,
@@ -185,20 +177,16 @@ def test_execute_tool_graph_deduplicates_same_signature_tool_calls() -> None:
         invoked_counter["value"] += 1
         return {"ok": True, "content": "loaded"}, []
 
-    import asyncio
-
-    result = asyncio.run(
-        execute_tool_graph(
-            execution_input=execution_input,
-            deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
-        )
+    result = await execute_tool_graph(
+        execution_input=execution_input,
+        deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
     )
 
     assert invoked_counter["value"] == 1
     assert result.state_diff.reused_tool_calls >= 1
 
 
-def test_execute_tool_graph_converges_when_accumulated_time_exceeded() -> None:
+async def test_execute_tool_graph_converges_when_accumulated_time_exceeded() -> None:
     budget = ExecutionBudget(
         max_tool_calls=10,
         max_time_seconds=5.0,
@@ -221,13 +209,9 @@ def test_execute_tool_graph_converges_when_accumulated_time_exceeded() -> None:
     def fake_execute_skill_tool_call(**_kwargs):
         raise AssertionError("时间预算超限后不应真正执行工具。")
 
-    import asyncio
-
-    result = asyncio.run(
-        execute_tool_graph(
-            execution_input=execution_input,
-            deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
-        )
+    result = await execute_tool_graph(
+        execution_input=execution_input,
+        deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
     )
 
     assert result.disable_tools is True
@@ -235,7 +219,7 @@ def test_execute_tool_graph_converges_when_accumulated_time_exceeded() -> None:
     assert "时间预算" in result.state_diff.budget_reason
 
 
-def test_execute_tool_graph_converges_when_round_time_exceeded() -> None:
+async def test_execute_tool_graph_converges_when_round_time_exceeded() -> None:
     budget = ExecutionBudget(
         max_tool_calls=10,
         max_time_seconds=5.0,
@@ -259,15 +243,11 @@ def test_execute_tool_graph_converges_when_round_time_exceeded() -> None:
     def fake_execute_skill_tool_call(**_kwargs):
         raise AssertionError("时间预算超限后不应真正执行工具。")
 
-    import asyncio
-
     time.sleep(0.6)
 
-    result = asyncio.run(
-        execute_tool_graph(
-            execution_input=execution_input,
-            deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
-        )
+    result = await execute_tool_graph(
+        execution_input=execution_input,
+        deps=_build_deps(execute_skill_tool_call=fake_execute_skill_tool_call),
     )
 
     assert result.disable_tools is True

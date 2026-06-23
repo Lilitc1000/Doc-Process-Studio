@@ -1,5 +1,3 @@
-import asyncio
-
 import httpx
 
 from doc_process_studio.system.service.error_detail import (
@@ -33,14 +31,14 @@ def test_summarize_exception_fallback_when_no_info() -> None:
     assert "RuntimeError" in summary
 
 
-def test_build_exception_detail_basic() -> None:
+async def test_build_exception_detail_basic() -> None:
     exc = ValueError("test error")
-    detail = asyncio.run(build_exception_detail(exc))
+    detail = await build_exception_detail(exc)
     assert detail["type"] == "ValueError"
     assert detail["message"] == "test error"
 
 
-def test_build_exception_detail_includes_http_status_context() -> None:
+async def test_build_exception_detail_includes_http_status_context() -> None:
     request = httpx.Request("POST", "http://localhost:11434/api/chat")
     response = httpx.Response(503, request=request, text="upstream overloaded")
     exc = httpx.HTTPStatusError(
@@ -49,7 +47,7 @@ def test_build_exception_detail_includes_http_status_context() -> None:
         response=response,
     )
 
-    detail = asyncio.run(build_exception_detail(exc))
+    detail = await build_exception_detail(exc)
 
     assert detail["type"] == "HTTPStatusError"
     assert detail["status_code"] == 503
@@ -58,24 +56,24 @@ def test_build_exception_detail_includes_http_status_context() -> None:
     assert "upstream overloaded" in detail.get("response_excerpt", "")
 
 
-def test_build_exception_detail_http_error_without_status() -> None:
+async def test_build_exception_detail_http_error_without_status() -> None:
     request = httpx.Request("GET", "http://localhost:11434/api/tags")
     exc = httpx.ConnectError("connection refused")
     exc.request = request
 
-    detail = asyncio.run(build_exception_detail(exc))
+    detail = await build_exception_detail(exc)
     assert detail["request_method"] == "GET"
     assert detail["request_url"] == "http://localhost:11434/api/tags"
 
 
-def test_build_exception_detail_contains_cause_chain() -> None:
+async def test_build_exception_detail_contains_cause_chain() -> None:
     try:
         raise ValueError("inner failure")
     except ValueError as inner_exc:
         root_exc = RuntimeError("outer failure")
         root_exc.__cause__ = inner_exc
 
-    detail = asyncio.run(build_exception_detail(root_exc))
+    detail = await build_exception_detail(root_exc)
 
     assert detail["type"] == "RuntimeError"
     cause = detail.get("cause")
@@ -84,25 +82,25 @@ def test_build_exception_detail_contains_cause_chain() -> None:
     assert cause.get("message") == "inner failure"
 
 
-def test_build_exception_detail_max_depth() -> None:
+async def test_build_exception_detail_max_depth() -> None:
     exc1 = ValueError("level1")
     exc2 = RuntimeError("level2")
     exc2.__cause__ = exc1
     exc3 = TypeError("level3")
     exc3.__cause__ = exc2
 
-    detail = asyncio.run(build_exception_detail(exc3, max_depth=1))
+    detail = await build_exception_detail(exc3, max_depth=1)
     assert detail["type"] == "TypeError"
     cause = detail.get("cause")
     assert isinstance(cause, dict)
     assert "cause" not in cause
 
 
-def test_build_exception_detail_circular_reference() -> None:
+async def test_build_exception_detail_circular_reference() -> None:
     exc1 = ValueError("circular")
     exc2 = RuntimeError("outer")
     exc2.__cause__ = exc1
     exc1.__cause__ = exc2
 
-    detail = asyncio.run(build_exception_detail(exc2))
+    detail = await build_exception_detail(exc2)
     assert detail["type"] == "RuntimeError"

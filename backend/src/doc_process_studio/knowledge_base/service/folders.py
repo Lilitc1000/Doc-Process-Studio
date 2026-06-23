@@ -82,6 +82,7 @@ async def build_tree(db: AsyncSession, project_id: str) -> list[KBTreeNode]:
     folders = folder_result.scalars().all()
 
     from ..models import KBDocument
+
     doc_stmt = select(KBDocument).where(KBDocument.project_id == project_id).order_by(KBDocument.file_name)
     doc_result = await db.execute(doc_stmt)
     documents = doc_result.scalars().all()

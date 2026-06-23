@@ -7,9 +7,9 @@ from datetime import timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from ..schemas.attachment import ChatAttachment, ChatAttachmentMetadata
 from ...core.config import settings
 from ...shared.dtutils import to_utc8, utcnow
+from ..schemas.attachment import ChatAttachment, ChatAttachmentMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -91,9 +91,7 @@ def cleanup_expired_attachments() -> None:
             continue
 
         try:
-            metadata = ChatAttachmentMetadata.model_validate_json(
-                metadata_path.read_text(encoding="utf-8")
-            )
+            metadata = ChatAttachmentMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
         except Exception:
             logger.debug("Failed to parse attachment metadata in %s, removing", attachment_dir, exc_info=True)
             shutil.rmtree(attachment_dir, ignore_errors=True)
@@ -132,9 +130,7 @@ def _save_session_attachment(
 
     stat_result = target_path.stat()
     created_at = utcnow()
-    expires_at = created_at + timedelta(
-        seconds=settings.generated_attachment_ttl_seconds
-    )
+    expires_at = created_at + timedelta(seconds=settings.generated_attachment_ttl_seconds)
 
     metadata = ChatAttachmentMetadata(
         attachment_id=attachment_id,
@@ -206,9 +202,7 @@ def _find_reusable_uploaded_attachment(
             continue
 
         try:
-            metadata = ChatAttachmentMetadata.model_validate_json(
-                metadata_path.read_text(encoding="utf-8")
-            )
+            metadata = ChatAttachmentMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
         except Exception:
             logger.debug("Failed to parse attachment metadata in %s", attachment_dir, exc_info=True)
             continue
@@ -275,9 +269,7 @@ def resolve_attachment_path(
         return None, None, False
 
     try:
-        metadata = ChatAttachmentMetadata.model_validate_json(
-            metadata_path.read_text(encoding="utf-8")
-        )
+        metadata = ChatAttachmentMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
     except Exception:
         logger.debug("Failed to parse attachment metadata for %s", attachment_id, exc_info=True)
         shutil.rmtree(_build_attachment_dir(attachment_id), ignore_errors=True)
@@ -341,9 +333,7 @@ def delete_attachments_for_conversation(conversation_id: str) -> int:
             continue
 
         try:
-            metadata = ChatAttachmentMetadata.model_validate_json(
-                metadata_path.read_text(encoding="utf-8")
-            )
+            metadata = ChatAttachmentMetadata.model_validate_json(metadata_path.read_text(encoding="utf-8"))
         except Exception:
             logger.debug("Failed to parse attachment metadata in %s during cleanup", attachment_dir, exc_info=True)
             shutil.rmtree(attachment_dir, ignore_errors=True)

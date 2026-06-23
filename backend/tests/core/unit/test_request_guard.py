@@ -11,7 +11,7 @@ def _reset_guard_state() -> None:
     guard_module._tenant_rate_windows.clear()
 
 
-def test_request_guard_rejects_when_rate_limit_exceeded(monkeypatch) -> None:
+async def test_request_guard_rejects_when_rate_limit_exceeded(monkeypatch) -> None:
     _reset_guard_state()
     monkeypatch.setattr(
         guard_module.settings,
@@ -27,19 +27,16 @@ def test_request_guard_rejects_when_rate_limit_exceeded(monkeypatch) -> None:
     monkeypatch.setattr(guard_module.settings, "request_max_concurrent_per_tenant", 8)
     monkeypatch.setattr(guard_module.settings, "request_queue_wait_timeout_seconds", 0.5)
 
-    async def _run() -> None:
+    async with guard_module.guard_request_slot("tenant-a"):
+        pass
+    async with guard_module.guard_request_slot("tenant-a"):
+        pass
+    with pytest.raises(guard_module.RequestGuardError, match="请求过于频繁"):
         async with guard_module.guard_request_slot("tenant-a"):
             pass
-        async with guard_module.guard_request_slot("tenant-a"):
-            pass
-        with pytest.raises(guard_module.RequestGuardError, match="请求过于频繁"):
-            async with guard_module.guard_request_slot("tenant-a"):
-                pass
-
-    asyncio.run(_run())
 
 
-def test_request_guard_rejects_when_queue_wait_timeout(monkeypatch) -> None:
+async def test_request_guard_rejects_when_queue_wait_timeout(monkeypatch) -> None:
     _reset_guard_state()
     monkeypatch.setattr(
         guard_module.settings,
@@ -64,11 +61,7 @@ def test_request_guard_rejects_when_queue_wait_timeout(monkeypatch) -> None:
             async with guard_module.guard_request_slot("tenant-a"):
                 pass
 
-    async def _run() -> None:
-        holder = asyncio.create_task(_hold_slot())
-        await asyncio.sleep(0.01)
-        await _expect_timeout()
-        await holder
-
-    asyncio.run(_run())
-
+    holder = asyncio.create_task(_hold_slot())
+    await asyncio.sleep(0.01)
+    await _expect_timeout()
+    await holder

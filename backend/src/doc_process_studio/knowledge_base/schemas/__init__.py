@@ -1,3 +1,4 @@
+from .common import KBChunkPayload
 from .request import (
     KBFolderCreateRequest,
     KBFolderRenameRequest,
@@ -16,7 +17,6 @@ from .response import (
     KBTreeNodeFolder,
     KBTreeResponse,
 )
-from .common import KBChunkPayload
 
 __all__ = [
     "KBChunkPayload",

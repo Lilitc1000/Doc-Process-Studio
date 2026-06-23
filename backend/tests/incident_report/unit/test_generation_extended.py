@@ -1,4 +1,3 @@
-import asyncio
 from datetime import UTC, datetime
 
 import doc_process_studio.incident_report.service.report_data as report_data_module
@@ -10,7 +9,7 @@ from doc_process_studio.incident_report.schemas.common import (
 from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
 
 
-def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
+async def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
     async def fake_select_for_workspace_reference(**kwargs):
         planner_messages = kwargs["messages"]
         assert planner_messages
@@ -39,14 +38,12 @@ def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
         fake_select_for_workspace_reference,
     )
 
-    reference_context, selected_files, selection_reason = asyncio.run(
-        reference_module.resolve_generation_reference_context(
-            model="qwen3-coder-next:latest",
-            section_id="impact",
-            timeline_index=None,
-            prompt="Generate impact scope and severity",
-            context_json='{"impact_scope":"Order placement chain"}',
-        )
+    reference_context, selected_files, selection_reason = await reference_module.resolve_generation_reference_context(
+        model="qwen3-coder-next:latest",
+        section_id="impact",
+        timeline_index=None,
+        prompt="Generate impact scope and severity",
+        context_json='{"impact_scope":"Order placement chain"}',
     )
 
     assert "body-sections/impact.md" in selected_files

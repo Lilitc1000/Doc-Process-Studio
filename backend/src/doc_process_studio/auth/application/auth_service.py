@@ -125,9 +125,8 @@ class AuthService:
         if current is None:
             raise UserNotFoundError("User not found")
 
-        if username is not None and username != current[1]:
-            if await self._users.username_exists(username):
-                raise UserAlreadyExistsError("Username already exists")
+        if username is not None and username != current[1] and await self._users.username_exists(username):
+            raise UserAlreadyExistsError("Username already exists")
 
         record = await self._users.update_profile(
             user_id,

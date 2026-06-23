@@ -20,35 +20,23 @@ class SkillContextSearcher(ABC):
     """Skill 上下文检索端口：基于 BM25 + embedding 混合召回。"""
 
     @abstractmethod
-    async def search_chunks(
-        self, skill_id: str, query: str
-    ) -> list[SkillContextChunk]: ...
+    async def search_chunks(self, skill_id: str, query: str) -> list[SkillContextChunk]: ...
 
 
 class ConversationStateRepository(ABC):
     """对话状态仓储端口：会话级 Agent 状态的加载/保存/TTL/清理。"""
 
     @abstractmethod
-    async def load_state(
-        self, conversation_id: str, tenant_id: str = "default"
-    ) -> ConversationAgentState | None: ...
+    async def load_state(self, conversation_id: str, tenant_id: str = "default") -> ConversationAgentState | None: ...
 
     @abstractmethod
-    async def save_state(
-        self, state: ConversationAgentState, tenant_id: str = "default"
-    ) -> None: ...
+    async def save_state(self, state: ConversationAgentState, tenant_id: str = "default") -> None: ...
 
     @abstractmethod
-    async def refresh_ttl(
-        self, conversation_id: str, tenant_id: str = "default"
-    ) -> tuple[bool, int]: ...
+    async def refresh_ttl(self, conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]: ...
 
     @abstractmethod
-    async def clear_state(
-        self, conversation_id: str, tenant_id: str = "default"
-    ) -> bool: ...
+    async def clear_state(self, conversation_id: str, tenant_id: str = "default") -> bool: ...
 
     @abstractmethod
-    async def get_ttl_seconds(
-        self, conversation_id: str, tenant_id: str = "default"
-    ) -> int: ...
+    async def get_ttl_seconds(self, conversation_id: str, tenant_id: str = "default") -> int: ...

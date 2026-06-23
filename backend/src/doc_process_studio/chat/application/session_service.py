@@ -57,18 +57,14 @@ class SessionService:
             snapshot=snapshot,
         )
 
-    async def rename_session(
-        self, session_id: str, user_id: str, title: str
-    ) -> ChatSessionSummary:
+    async def rename_session(self, session_id: str, user_id: str, title: str) -> ChatSessionSummary:
         await self._ensure_access(session_id, user_id)
         summary = await self._repo.update_title(session_id, title.strip())
         if summary is None:
             raise SessionNotFoundError("Session not found")
         return summary
 
-    async def delete_sessions_by_title_prefix(
-        self, user_id: str, title_prefix: str
-    ) -> int:
+    async def delete_sessions_by_title_prefix(self, user_id: str, title_prefix: str) -> int:
         return await self._repo.delete_by_title_prefix(user_id, title_prefix)
 
     async def delete_sessions_by_user(self, target_user_id: str, user_id: str) -> int:

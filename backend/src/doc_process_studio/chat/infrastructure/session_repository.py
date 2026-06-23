@@ -1,5 +1,6 @@
 """会话仓储实现：委托 service/sessions 与 service/db_session_store 工具层。"""
 
+from ..application.ports import SessionRepository, TitleGenerator
 from ..schemas.response import ChatSessionDetail, ChatSessionListResponse
 from ..schemas.session import ChatSessionSnapshot, ChatSessionSummary
 from ..service.db_session_store import (
@@ -16,7 +17,6 @@ from ..service.sessions import (
     get_chat_session,
     list_chat_sessions,
 )
-from ..application.ports import SessionRepository, TitleGenerator
 
 
 class SqlSessionRepository(SessionRepository):
@@ -50,18 +50,14 @@ class SqlSessionRepository(SessionRepository):
             created_at=created_at,
             updated_at=to_utc8(utcnow()),
             selected_model=snapshot.selected_model,
-            selected_reranker_model=(
-                snapshot.selected_reranker_model or snapshot.selected_model
-            ),
+            selected_reranker_model=(snapshot.selected_reranker_model or snapshot.selected_model),
         )
         await save_chat_session_summary_with_user_id(summary, user_id)
         await save_chat_session_snapshot(session_id, snapshot)
         await touch_chat_session_updated_at(session_id)
         return summary
 
-    async def update_title(
-        self, session_id: str, title: str
-    ) -> ChatSessionSummary | None:
+    async def update_title(self, session_id: str, title: str) -> ChatSessionSummary | None:
         from ...shared.dtutils import to_utc8, utcnow
 
         existing = await get_chat_session(session_id)

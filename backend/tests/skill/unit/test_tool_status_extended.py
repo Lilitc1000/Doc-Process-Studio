@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+from doc_process_studio.chat.schemas.attachment import ChatAttachment
 from doc_process_studio.skill.service.tool_loop.tool_status import (
     _build_builtin_tool_status,
     _build_declared_tool_status,
@@ -7,7 +8,6 @@ from doc_process_studio.skill.service.tool_loop.tool_status import (
     build_tool_status_finish,
     build_tool_status_start,
 )
-from doc_process_studio.chat.schemas.attachment import ChatAttachment
 
 
 def _make_attachment(**overrides) -> ChatAttachment:
@@ -102,7 +102,7 @@ def test_build_tool_status_start_declared_tool_no_status():
 
 
 def test_build_tool_status_start_unknown_tool():
-    tool_call = _make_tool_call("unknown_tool", '{}')
+    tool_call = _make_tool_call("unknown_tool", "{}")
     with patch(
         "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
         side_effect=ValueError("not found"),
@@ -406,7 +406,7 @@ def test_build_tool_status_finish_declared():
     mock_tool_config.status = None
     mock_tool_config.description = "自定义工具"
 
-    tool_call = _make_tool_call("custom_tool", '{}')
+    tool_call = _make_tool_call("custom_tool", "{}")
     with patch(
         "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,

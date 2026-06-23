@@ -59,8 +59,8 @@ from .normalization import (
     normalize_severity_option,
     normalize_status_option,
     normalize_text,
-    normalize_timeline_items,
     normalize_time_text,
+    normalize_timeline_items,
     parse_date_time,
     safe_json_list,
     severity_option_to_text,
@@ -123,24 +123,14 @@ def build_report_data_from_snapshot(
     manual_location = answer_text(snapshot, MANUAL_LOCATION)
     manual_fault_symptom = answer_text(snapshot, MANUAL_FAULT_SYMPTOM)
 
-    body_description = answer_text(snapshot, BODY_DESCRIPTION) or answer_text(
-        snapshot, QUICK_NARRATIVE
-    )
+    body_description = answer_text(snapshot, BODY_DESCRIPTION) or answer_text(snapshot, QUICK_NARRATIVE)
     body_timeline = normalize_timeline_items(answer_value(snapshot, BODY_TIMELINE))
     if not body_timeline:
         body_timeline = normalize_timeline_items(answer_value(snapshot, QUICK_TIMELINE))
-    body_impact_scope = answer_text(snapshot, BODY_IMPACT_SCOPE) or answer_text(
-        snapshot, QUICK_IMPACT_SCOPE
-    )
-    body_impact_severity = answer_text(snapshot, BODY_IMPACT_SEVERITY) or answer_text(
-        snapshot, QUICK_IMPACT_SEVERITY
-    )
-    body_root_cause = answer_text(snapshot, BODY_ROOT_CAUSE) or answer_text(
-        snapshot, QUICK_ROOT_CAUSE_GUESS
-    )
-    body_follow_up = answer_text(snapshot, BODY_FOLLOW_UP) or answer_text(
-        snapshot, QUICK_FOLLOW_UP_ACTION
-    )
+    body_impact_scope = answer_text(snapshot, BODY_IMPACT_SCOPE) or answer_text(snapshot, QUICK_IMPACT_SCOPE)
+    body_impact_severity = answer_text(snapshot, BODY_IMPACT_SEVERITY) or answer_text(snapshot, QUICK_IMPACT_SEVERITY)
+    body_root_cause = answer_text(snapshot, BODY_ROOT_CAUSE) or answer_text(snapshot, QUICK_ROOT_CAUSE_GUESS)
+    body_follow_up = answer_text(snapshot, BODY_FOLLOW_UP) or answer_text(snapshot, QUICK_FOLLOW_UP_ACTION)
     body_trigger = answer_text(snapshot, BODY_TRIGGER)
     body_affected_date = answer_text(snapshot, BODY_AFFECTED_DATE)
 
@@ -169,21 +159,13 @@ def build_report_data_from_snapshot(
 
     affected_date, affected_from, affected_to = split_affected_date_summary(body_affected_date)
     incident_date = affected_date or format_date_text(manual_fault_date)
-    timeline_times = [
-        normalize_text(item.get("time"))
-        for item in body_timeline
-        if normalize_text(item.get("time"))
-    ]
+    timeline_times = [normalize_text(item.get("time")) for item in body_timeline if normalize_text(item.get("time"))]
 
     start_time_raw = timeline_times[0] if timeline_times else ""
     if not start_time_raw:
         start_time_raw = affected_from or f"{manual_fault_date} {manual_fault_time}".strip()
 
-    detection_time_raw = (
-        timeline_times[1]
-        if len(timeline_times) > 1
-        else start_time_raw
-    )
+    detection_time_raw = timeline_times[1] if len(timeline_times) > 1 else start_time_raw
     if not detection_time_raw:
         detection_time_raw = start_time_raw
 
@@ -193,14 +175,10 @@ def build_report_data_from_snapshot(
 
     start_time = compose_datetime_text(start_time_raw, fallback_date=incident_date) or start_time_raw
     detection_time = (
-        compose_datetime_text(detection_time_raw, fallback_date=incident_date)
-        or detection_time_raw
-        or start_time
+        compose_datetime_text(detection_time_raw, fallback_date=incident_date) or detection_time_raw or start_time
     )
     resolution_time = (
-        compose_datetime_text(resolution_time_raw, fallback_date=incident_date)
-        or resolution_time_raw
-        or detection_time
+        compose_datetime_text(resolution_time_raw, fallback_date=incident_date) or resolution_time_raw or detection_time
     )
 
     total_duration = "N/A"
@@ -253,9 +231,7 @@ def build_report_data_from_snapshot(
     ]
 
     appendix_raw_value = answer_value(snapshot, APPENDIX_NOTES)
-    appendix_notes, rich_text_images = extract_appendix_from_rich_text(
-        appendix_raw_value
-    )
+    appendix_notes, rich_text_images = extract_appendix_from_rich_text(appendix_raw_value)
     if not appendix_notes and not contains_html_tag(appendix_raw_value):
         appendix_notes = normalize_text(appendix_raw_value)
     appendix_images = merge_appendix_images(
@@ -278,20 +254,15 @@ def build_report_data_from_snapshot(
         "system": manual_system,
         "location": manual_location,
         "fault_details": manual_fault_symptom,
-        "arrival_datetime": format_datetime_text(answer_text(snapshot, MANUAL_ARRIVAL_DATETIME))
-        or start_time,
-        "clearance_datetime": format_datetime_text(
-            answer_text(snapshot, MANUAL_CLEARANCE_DATETIME)
-        )
-        or resolution_time,
+        "arrival_datetime": format_datetime_text(answer_text(snapshot, MANUAL_ARRIVAL_DATETIME)) or start_time,
+        "clearance_datetime": format_datetime_text(answer_text(snapshot, MANUAL_CLEARANCE_DATETIME)) or resolution_time,
         "service_person": answer_text(snapshot, MANUAL_SERVICE_PERSON),
         "fault_cause": answer_text(snapshot, MANUAL_FAULT_CAUSE),
         "materials_used": answer_text(snapshot, MANUAL_MATERIALS_USED),
         "repair_details": answer_text(snapshot, MANUAL_REPAIR_DETAILS),
         "contractor_staff": answer_text(snapshot, MANUAL_CONTRACTOR_STAFF),
         "contractor_signature": answer_text(snapshot, MANUAL_CONTRACTOR_SIGNATURE),
-        "contractor_date": format_date_text(answer_text(snapshot, MANUAL_CONTRACTOR_DATE))
-        or manual_fault_date,
+        "contractor_date": format_date_text(answer_text(snapshot, MANUAL_CONTRACTOR_DATE)) or manual_fault_date,
         "status_option": status_option,
         "status_ref_no": status_ref_no,
         "status": status_option_to_text(status_option),
@@ -300,11 +271,9 @@ def build_report_data_from_snapshot(
         "comments": answer_text(snapshot, MANUAL_COMMENTS),
         "employer_rep": answer_text(snapshot, MANUAL_EMPLOYER_REP),
         "employer_signature": answer_text(snapshot, MANUAL_EMPLOYER_SIGNATURE),
-        "closeout_date": format_date_text(answer_text(snapshot, MANUAL_CLOSEOUT_DATE))
-        or manual_fault_date,
+        "closeout_date": format_date_text(answer_text(snapshot, MANUAL_CLOSEOUT_DATE)) or manual_fault_date,
         "detailed_description": body_description,
-        "affected_date_summary": body_affected_date
-        or f"{start_time} - {resolution_time}",
+        "affected_date_summary": body_affected_date or f"{start_time} - {resolution_time}",
         "start_time": start_time,
         "detection_time": detection_time,
         "resolution_time": resolution_time,
@@ -315,9 +284,7 @@ def build_report_data_from_snapshot(
             "users": "",
             "region": manual_site_id,
             "severity": body_impact_severity,
-            "business_impact": split_lines(
-                answer_value(snapshot, BODY_BUSINESS_IMPACT)
-            ),
+            "business_impact": split_lines(answer_value(snapshot, BODY_BUSINESS_IMPACT)),
         },
         "trigger": body_trigger or body_root_cause,
         "root_cause": body_root_cause,

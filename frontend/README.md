@@ -166,5 +166,6 @@ npm run test:e2e:ui   # E2E 测试（带 UI）
 | Auth           | [src/views/auth/DEVELOPMENT.md](src/views/auth/DEVELOPMENT.md)                       |
 | Chat           | [src/views/chat/DEVELOPMENT.md](src/views/chat/DEVELOPMENT.md)                       |
 | IncidentReport | [src/views/incident-report/DEVELOPMENT.md](src/views/incident-report/DEVELOPMENT.md) |
+| KnowledgeBase  | [src/views/knowledge-base/DEVELOPMENT.md](src/views/knowledge-base/DEVELOPMENT.md)   |
 | Home           | [src/views/home/DEVELOPMENT.md](src/views/home/DEVELOPMENT.md)                       |
 | Settings       | [src/views/settings/DEVELOPMENT.md](src/views/settings/DEVELOPMENT.md)               |

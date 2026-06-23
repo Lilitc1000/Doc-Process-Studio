@@ -11,8 +11,8 @@ from ..application.ports import (
     ReportRepository,
     UserDirectory,
 )
-from ..domain.report import Report
 from ..domain.permission import Permission
+from ..domain.report import Report
 from ..schemas.response import IncidentCommentEntry
 
 
@@ -41,11 +41,14 @@ class CommentService:
         if report is None:
             return []
 
-        if user_id and Permission.REPORT_VIEW_ALL not in await self._checker.permissions_of(user_id):
-            if not _is_participant(report, user_id):
-                from ..domain.errors import PermissionDeniedError
+        if (
+            user_id
+            and Permission.REPORT_VIEW_ALL not in await self._checker.permissions_of(user_id)
+            and not _is_participant(report, user_id)
+        ):
+            from ..domain.errors import PermissionDeniedError
 
-                raise PermissionDeniedError("无权查看此报告的评论")
+            raise PermissionDeniedError("无权查看此报告的评论")
 
         entries = await self._comment_repo.list_by_report(report_id)
         author_ids = {e.author_id for e in entries if e.author_id}

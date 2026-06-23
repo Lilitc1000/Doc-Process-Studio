@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from ..application.ports import AttachmentStore
 from ..schemas.attachment import ChatAttachment, ChatAttachmentMetadata
 from ..service.attachments import (
     cleanup_expired_attachments,
@@ -10,15 +11,12 @@ from ..service.attachments import (
     save_generated_attachment,
     save_uploaded_attachment,
 )
-from ..application.ports import AttachmentStore
 
 
 class FsAttachmentStore(AttachmentStore):
     """基于文件系统的附件存储。"""
 
-    def resolve_path(
-        self, attachment_id: str
-    ) -> tuple[ChatAttachmentMetadata | None, Path | None, bool]:
+    def resolve_path(self, attachment_id: str) -> tuple[ChatAttachmentMetadata | None, Path | None, bool]:
         return resolve_attachment_path(attachment_id)
 
     def save_uploaded(

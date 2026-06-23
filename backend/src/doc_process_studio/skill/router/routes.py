@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ...core.cache import ping_redis
+from ...core.security import get_current_user_id
 from ..application.skill_service import SkillService
 from ..domain.errors import SkillError, SkillNotFoundError
 from ..infrastructure.dependencies import get_skill_service
@@ -9,8 +11,6 @@ from ..schemas import (
     SkillConversationCacheResponse,
     SkillListResponse,
 )
-from ...core.cache import ping_redis
-from ...core.security import get_current_user_id
 
 router = APIRouter(prefix="/api", tags=["skills"])
 
@@ -88,18 +88,12 @@ async def refresh_skill_conversation_cache(
     user_id: str = Depends(get_current_user_id),
     service: SkillService = Depends(get_skill_service),
 ) -> SkillConversationCacheResponse:
-    refreshed, ttl_seconds = await service.refresh_conversation_cache(
-        conversation_id, tenant_id=tenant_id
-    )
+    refreshed, ttl_seconds = await service.refresh_conversation_cache(conversation_id, tenant_id=tenant_id)
     return SkillConversationCacheResponse(
         conversation_id=conversation_id,
         exists=refreshed,
         ttl_seconds=ttl_seconds,
-        message=(
-            "会话缓存 TTL 已刷新。"
-            if refreshed
-            else "未找到该会话缓存，无法刷新 TTL。"
-        ),
+        message=("会话缓存 TTL 已刷新。" if refreshed else "未找到该会话缓存，无法刷新 TTL。"),
     )
 
 
@@ -113,16 +107,10 @@ async def delete_skill_conversation_cache(
     user_id: str = Depends(get_current_user_id),
     service: SkillService = Depends(get_skill_service),
 ) -> SkillConversationCacheResponse:
-    cleared, ttl_seconds = await service.delete_conversation_cache(
-        conversation_id, tenant_id=tenant_id
-    )
+    cleared, ttl_seconds = await service.delete_conversation_cache(conversation_id, tenant_id=tenant_id)
     return SkillConversationCacheResponse(
         conversation_id=conversation_id,
         exists=not cleared and ttl_seconds >= 0,
         ttl_seconds=ttl_seconds,
-        message=(
-            "会话缓存已清理。"
-            if cleared
-            else "未找到该会话缓存，无需清理。"
-        ),
+        message=("会话缓存已清理。" if cleared else "未找到该会话缓存，无需清理。"),
     )

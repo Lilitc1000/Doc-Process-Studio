@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 from fastapi import HTTPException
 
@@ -84,31 +82,31 @@ def test_generate_user_id_uniqueness():
     assert len(ids) == 100
 
 
-def test_get_current_user_id_returns_user_id_from_valid_token():
+async def test_get_current_user_id_returns_user_id_from_valid_token():
     token = create_access_token("usr_test123", "testuser")
-    result = asyncio.run(get_current_user_id(token=token))
+    result = await get_current_user_id(token=token)
     assert result == "usr_test123"
 
 
-def test_get_current_user_id_raises_for_invalid_token():
+async def test_get_current_user_id_raises_for_invalid_token():
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(get_current_user_id(token="invalid.token.here"))
+        await get_current_user_id(token="invalid.token.here")
     assert exc_info.value.status_code == 401
 
 
-def test_get_current_user_id_raises_for_refresh_token():
+async def test_get_current_user_id_raises_for_refresh_token():
     token = create_refresh_token("usr_test123")
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(get_current_user_id(token=token))
+        await get_current_user_id(token=token)
     assert exc_info.value.status_code == 401
 
 
-def test_get_current_user_id_raises_for_token_without_sub():
+async def test_get_current_user_id_raises_for_token_without_sub():
     from jose import jwt
     from doc_process_studio.core.config import settings
 
     payload = {"type": "access", "sub": "", "exp": 9999999999}
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(get_current_user_id(token=token))
+        await get_current_user_id(token=token)
     assert exc_info.value.status_code == 401

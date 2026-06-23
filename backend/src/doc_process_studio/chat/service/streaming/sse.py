@@ -106,6 +106,7 @@ def merge_stream_tool_calls(
     delta_tool_calls: list[dict[str, Any]],
 ) -> None:
     """聚合流式返回中的 tool_calls 片段。"""
+
     def is_complete_json_payload(text: str) -> bool:
         if not text:
             return False
@@ -198,7 +199,7 @@ def merge_stream_tool_calls(
         if current_name and incoming_name and not has_name_fragment_relation(current_name, incoming_name):
             return True
 
-        if (
+        return bool(
             current_name
             and incoming_name
             and current_name == incoming_name
@@ -211,10 +212,7 @@ def merge_stream_tool_calls(
                 is_progressive_json_update(current_arguments_text, incoming_arguments_text)
                 or is_progressive_json_update(incoming_arguments_text, current_arguments_text)
             )
-        ):
-            return True
-
-        return False
+        )
 
     def allocate_next_tool_call_index() -> int:
         if not merged_tool_calls:
@@ -223,9 +221,7 @@ def merge_stream_tool_calls(
 
     for tool_call in delta_tool_calls:
         raw_index = tool_call.get("index", len(merged_tool_calls))
-        index = raw_index if isinstance(raw_index, int) and raw_index >= 0 else len(
-            merged_tool_calls
-        )
+        index = raw_index if isinstance(raw_index, int) and raw_index >= 0 else len(merged_tool_calls)
         current = merged_tool_calls.get(index)
         if current is not None and should_start_new_tool_call(
             current_call=current,

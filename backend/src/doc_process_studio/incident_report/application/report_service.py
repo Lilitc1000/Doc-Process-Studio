@@ -220,9 +220,7 @@ class ReportApplicationService:
 
     async def _to_detail(self, report: Report) -> IncidentReportDetail:
         """聚合根 → IncidentReportDetail DTO。"""
-        user_ids = {
-            uid for uid in (report.reporter_id, report.assignee_id, report.verifier_id) if uid
-        }
+        user_ids = {uid for uid in (report.reporter_id, report.assignee_id, report.verifier_id) if uid}
         usernames = await self._users.resolve_usernames(user_ids)
         return IncidentReportDetail(
             id=report.id,

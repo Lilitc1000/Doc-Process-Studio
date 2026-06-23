@@ -10,9 +10,7 @@ from .exceptions import OllamaNotConfiguredError
 
 def get_ollama_base_url() -> str:
     if not settings.ollama_base_url:
-        raise OllamaNotConfiguredError(
-            "未配置 OLLAMA_BASE_URL，请检查后端环境配置文件。"
-        )
+        raise OllamaNotConfiguredError("未配置 OLLAMA_BASE_URL，请检查后端环境配置文件。")
     return settings.ollama_base_url.rstrip("/")
 
 
@@ -87,25 +85,24 @@ async def stream_chat_completion(
         stream=True,
         tools=tools,
     )
-    async with httpx.AsyncClient(timeout=build_timeout(stream=True)) as client:
-        async with client.stream(
-            "POST",
-            _build_api_url("chat"),
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
+    async with httpx.AsyncClient(timeout=build_timeout(stream=True)) as client, client.stream(
+        "POST",
+        _build_api_url("chat"),
+        json=payload,
+    ) as response:
+        response.raise_for_status()
+        async for line in response.aiter_lines():
+            if not line:
+                continue
 
-                raw_data = line.strip()
-                if not raw_data:
-                    continue
+            raw_data = line.strip()
+            if not raw_data:
+                continue
 
-                try:
-                    yield json.loads(raw_data)
-                except json.JSONDecodeError:
-                    continue
+            try:
+                yield json.loads(raw_data)
+            except json.JSONDecodeError:
+                continue
 
 
 def extract_first_message_content(response_payload: dict[str, Any]) -> str:
@@ -119,7 +116,6 @@ def extract_first_message_content(response_payload: dict[str, Any]) -> str:
 
 async def fetch_remote_model_names() -> list[str]:
     from fastapi import HTTPException
-
 
     try:
         remote_url = _build_api_url("tags")

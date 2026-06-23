@@ -5,34 +5,35 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable
+from typing import Any
 
 from ....chat.schemas.attachment import ChatAttachment
 from ....chat.schemas.request import ChatStreamRequest
-from ....core.config import settings, BACKEND_DIR
 from ....chat.service.attachments import save_generated_attachment
+from ....core.config import BACKEND_DIR, settings
+from ....shared.tool_args import parse_tool_arguments
 from ...schemas.catalog import SkillToolConfig
 from ...schemas.runtime import SkillConversationState
-from ....shared.tool_args import parse_tool_arguments
 from ..context import get_skill_context_chunks_by_ids, search_skill_context_chunks
 from ..registry import get_skill_tool_config
 from .skill_files import (
     DEFAULT_STRUCTURED_TEXT_TITLE,
     _get_skill_root,
-    _resolve_skill_relative_path,
+    _get_tool_name,
     _list_directory_entries,
+    _primary_skill_id,
     _read_skill_file_content,
     _resolve_search_limit_bounds,
+    _resolve_skill_relative_path,
     _resolve_tool_scope,
-    _get_tool_name,
-    _primary_skill_id,
 )
 from .tool_args import (
-    _validate_tool_arguments_schema,
-    _normalize_builtin_tool_arguments,
     _build_builtin_tool_parameters,
+    _normalize_builtin_tool_arguments,
+    _validate_tool_arguments_schema,
 )
 
 try:
@@ -51,6 +52,7 @@ except ModuleNotFoundError:
 
 logger = logging.getLogger(__name__)
 
+
 def _enforce_declared_tool_security_policy(
     *,
     request: ChatStreamRequest,
@@ -64,14 +66,10 @@ def _enforce_declared_tool_security_policy(
     policy = settings.skill_sensitive_operation_policy
 
     if policy == "confirm" and security.requires_confirmation and not request.confirm_sensitive_actions:
-        raise ValueError(
-            f"工具 `{tool.name}` 被标记为需要确认，当前请求未授权执行敏感操作。"
-        )
+        raise ValueError(f"工具 `{tool.name}` 被标记为需要确认，当前请求未授权执行敏感操作。")
 
     if policy == "deny_high" and risk_level == "high":
-        raise ValueError(
-            f"工具 `{tool.name}` 风险等级为 high，当前策略禁止执行。"
-        )
+        raise ValueError(f"工具 `{tool.name}` 风险等级为 high，当前策略禁止执行。")
 
 
 def _build_subprocess_preexec(*, skill_root: Path) -> Callable[[], None] | None:
@@ -98,18 +96,12 @@ def _format_declared_tool_default_name(
 ) -> str:
     attachment_config = tool.execution.attachment
     default_template = (
-        attachment_config.default_name_template
-        if attachment_config is not None
-        else "{tool_name}-output.bin"
+        attachment_config.default_name_template if attachment_config is not None else "{tool_name}-output.bin"
     )
 
     format_payload = {
         "tool_name": tool.name,
-        **{
-            key: value
-            for key, value in arguments.items()
-            if isinstance(value, (str, int, float))
-        },
+        **{key: value for key, value in arguments.items() if isinstance(value, (str, int, float))},
     }
     try:
         return default_template.format(**format_payload)
@@ -160,9 +152,7 @@ def _normalize_text_to_chaptered_document(value: str) -> dict[str, Any] | None:
             if root_sections:
                 first_section = root_sections[0]
                 existing = str(first_section.get("content", "")).strip()
-                first_section["content"] = (
-                    f"{content}\n\n{existing}".strip() if existing else content
-                )
+                first_section["content"] = f"{content}\n\n{existing}".strip() if existing else content
             else:
                 root_sections.append(
                     {
@@ -240,9 +230,7 @@ def _apply_json_file_text_normalizer(
     if text_normalizer == "chaptered_document":
         return _normalize_text_to_chaptered_document(normalized_text)
 
-    raise ValueError(
-        f"参数 `{argument_name}` 配置了不支持的 text_normalizer：{text_normalizer}。"
-    )
+    raise ValueError(f"参数 `{argument_name}` 配置了不支持的 text_normalizer：{text_normalizer}。")
 
 
 def _try_parse_json_like_value(raw_text: str) -> dict[str, Any] | list[Any] | None:
@@ -324,9 +312,7 @@ def _coerce_json_file_argument(
                 if isinstance(parsed_with_punctuation_fix, (dict, list)):
                     return parsed_with_punctuation_fix
 
-                repaired_with_punctuation_fix = _try_repair_truncated_json(
-                    normalized_punctuation
-                )
+                repaired_with_punctuation_fix = _try_repair_truncated_json(normalized_punctuation)
                 if isinstance(repaired_with_punctuation_fix, (dict, list)):
                     return repaired_with_punctuation_fix
 
@@ -345,8 +331,7 @@ def _coerce_json_file_argument(
 
         if json_like:
             raise ValueError(
-                f"参数 `{argument_name}` 看起来是 JSON，但解析失败。"
-                "请检查是否存在中文逗号/冒号、缺失引号或截断。"
+                f"参数 `{argument_name}` 看起来是 JSON，但解析失败。请检查是否存在中文逗号/冒号、缺失引号或截断。"
             )
 
         normalized_value = _apply_json_file_text_normalizer(
@@ -362,9 +347,7 @@ def _coerce_json_file_argument(
             + (" 或当前声明的文本规整格式。" if text_normalizer else "。")
         )
 
-    raise ValueError(
-        f"参数 `{argument_name}` 需要是对象或数组，当前类型为 {type(argument_value).__name__}。"
-    )
+    raise ValueError(f"参数 `{argument_name}` 需要是对象或数组，当前类型为 {type(argument_value).__name__}。")
 
 
 _HEADING_PATTERN = re.compile(
@@ -408,9 +391,8 @@ def _try_repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
             open_stack.append("]")
         elif ch == "{":
             open_stack.append("}")
-        elif ch in ("]", "}"):
-            if open_stack and open_stack[-1] == ch:
-                open_stack.pop()
+        elif ch in ("]", "}") and open_stack and open_stack[-1] == ch:
+            open_stack.pop()
 
     if in_string:
         stripped += '"'
@@ -440,9 +422,8 @@ def _try_repair_truncated_json(text: str) -> dict[str, Any] | list[Any] | None:
             open_stack2.append("]")
         elif ch == "{":
             open_stack2.append("}")
-        elif ch in ("]", "}"):
-            if open_stack2 and open_stack2[-1] == ch:
-                open_stack2.pop()
+        elif ch in ("]", "}") and open_stack2 and open_stack2[-1] == ch:
+            open_stack2.pop()
 
     closing = "".join(reversed(open_stack2))
     repaired = stripped + closing
@@ -544,10 +525,7 @@ def _restructure_section(section: dict[str, Any]) -> dict[str, Any]:
     existing_sections = section.get("sections") or []
     section["sections"] = [
         *existing_sections,
-        *[
-            {"title": f"{num} {title}", "content": "", "sections": []}
-            for num, title in heading_lines
-        ],
+        *[{"title": f"{num} {title}", "content": "", "sections": []} for num, title in heading_lines],
     ]
     return section
 
@@ -624,11 +602,7 @@ def _build_declared_tool_command(
         attachment_output_name = _format_declared_tool_default_name(tool, arguments)
         attachment_output_path = temp_dir_path / attachment_output_name
         output_binding = next(
-            (
-                binding
-                for binding in execution.arg_bindings.values()
-                if binding.serializer == "attachment_output_name"
-            ),
+            (binding for binding in execution.arg_bindings.values() if binding.serializer == "attachment_output_name"),
             None,
         )
         if output_binding is not None:
@@ -678,8 +652,7 @@ def _execute_declared_script_tool(
             return {
                 "ok": False,
                 "error": (
-                    "脚本执行超时，已中止。"
-                    f" 超时阈值：{max(1, settings.skill_tool_script_timeout_seconds)} 秒。"
+                    f"脚本执行超时，已中止。 超时阈值：{max(1, settings.skill_tool_script_timeout_seconds)} 秒。"
                 ),
             }, []
 
@@ -765,11 +738,7 @@ async def _execute_builtin_tool(
         source_path = str(arguments.get("source_path", "")).strip() or None
         default_search_limit, max_search_limit = _resolve_search_limit_bounds()
         raw_limit = arguments.get("limit", default_search_limit)
-        limit = (
-            raw_limit
-            if isinstance(raw_limit, int) and 1 <= raw_limit <= max_search_limit
-            else default_search_limit
-        )
+        limit = raw_limit if isinstance(raw_limit, int) and 1 <= raw_limit <= max_search_limit else default_search_limit
         chunks = await search_skill_context_chunks(
             _primary_skill_id(request),
             query,
@@ -805,9 +774,7 @@ async def _execute_builtin_tool(
             }, []
 
         chunk_ids = [
-            str(chunk_id).strip()
-            for chunk_id in raw_chunk_ids
-            if isinstance(chunk_id, str) and str(chunk_id).strip()
+            str(chunk_id).strip() for chunk_id in raw_chunk_ids if isinstance(chunk_id, str) and str(chunk_id).strip()
         ]
         if not chunk_ids:
             return {
@@ -816,11 +783,7 @@ async def _execute_builtin_tool(
             }, []
 
         loaded_chunks = get_skill_context_chunks_by_ids(_primary_skill_id(request), chunk_ids)
-        next_chunk_ids = [
-            chunk.id
-            for chunk in loaded_chunks
-            if chunk.id not in state.loaded_chunk_ids
-        ]
+        next_chunk_ids = [chunk.id for chunk in loaded_chunks if chunk.id not in state.loaded_chunk_ids]
         if next_chunk_ids:
             state.loaded_chunk_ids.extend(next_chunk_ids)
 
@@ -858,9 +821,9 @@ async def _execute_builtin_tool(
                 "error": "未指定知识库项目。",
             }, []
 
+        from ....core.config import settings as app_settings
         from ....knowledge_base.service.embedding import embed_texts
         from ....knowledge_base.service.qdrant_service import search_knowledge_base as kb_search
-        from ....core.config import settings as app_settings
 
         vectors = await embed_texts([query])
         if not vectors or not vectors[0]:
@@ -902,18 +865,20 @@ async def _execute_builtin_tool(
                 location_parts.append("混合内容页")
             location_label = ", ".join(location_parts)
 
-            kb_chunks.append({
-                "content": payload.get("content", ""),
-                "source": source_label,
-                "location": location_label,
-                "page_number": page_number,
-                "section_title": section_title,
-                "sheet_name": sheet_name,
-                "file_name": file_name,
-                "file_path": file_path,
-                "content_type": content_type,
-                "score": hit.get("score", 0.0),
-            })
+            kb_chunks.append(
+                {
+                    "content": payload.get("content", ""),
+                    "source": source_label,
+                    "location": location_label,
+                    "page_number": page_number,
+                    "section_title": section_title,
+                    "sheet_name": sheet_name,
+                    "file_name": file_name,
+                    "file_path": file_path,
+                    "content_type": content_type,
+                    "score": hit.get("score", 0.0),
+                }
+            )
 
         return {
             "ok": True,
@@ -1026,4 +991,3 @@ async def execute_scoped_skill_tool_call(
         state=scoped_state,
         tool_call=normalized_tool_call,
     )
-

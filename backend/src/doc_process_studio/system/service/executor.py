@@ -2,12 +2,14 @@ import asyncio
 import inspect
 import json
 import time
+from collections.abc import Callable, Coroutine
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Callable, Coroutine, Literal
+from typing import Any, Literal
 
 from ...chat.schemas.request import ChatStreamRequest
+from ...core.config import settings
 from ...shared.dtutils import to_utc8
 from ...shared.tool_args import parse_tool_arguments
 from ...skill.schemas.runtime import (
@@ -16,7 +18,6 @@ from ...skill.schemas.runtime import (
     SkillPlanDecision,
     SkillToolHistoryRecord,
 )
-from ...core.config import settings
 
 TaskNodeType = Literal["read", "search", "load", "declare_tool"]
 
@@ -219,9 +220,7 @@ def _build_retry_fallback_tool_call(
     if node.base_tool_name == "search_skill_context":
         source_path = str(arguments.get("source_path", "")).strip()
         if source_path:
-            updated = {
-                key: value for key, value in arguments.items() if key != "source_path"
-            }
+            updated = {key: value for key, value in arguments.items() if key != "source_path"}
             return (
                 _copy_tool_call_with_arguments(tool_call, updated),
                 "检索失败，已自动移除 source_path 限制后重试。",
@@ -274,9 +273,7 @@ async def _run_tool_with_retry(
 
         if len(execution_input.tooling_skill_ids) == 1:
             single_skill_id = execution_input.tooling_skill_ids[0]
-            scoped_request = execution_input.request.model_copy(
-                update={"selected_skill_ids": [single_skill_id]}
-            )
+            scoped_request = execution_input.request.model_copy(update={"selected_skill_ids": [single_skill_id]})
             last_result = await _invoke_callable(
                 deps.execute_skill_tool_call,
                 request=scoped_request,
@@ -327,9 +324,7 @@ def _build_budget_converged_result(reason: str) -> ExecutionResult:
     result.tool_trace_messages.append(
         {
             "role": "system",
-            "content": (
-                f"{reason} 请基于已经读取到的内容直接完成回答，不要继续调用工具。"
-            ),
+            "content": (f"{reason} 请基于已经读取到的内容直接完成回答，不要继续调用工具。"),
         }
     )
     return result
@@ -387,9 +382,7 @@ async def _execute_single_node(
 
             async def _execute_once() -> tuple[dict[str, Any], list[Any], dict[str, Any], bool, str | None]:
                 async with semaphore:
-                    before_loaded_chunk_ids = _collect_loaded_chunk_signatures(
-                        execution_input.states_by_skill
-                    )
+                    before_loaded_chunk_ids = _collect_loaded_chunk_signatures(execution_input.states_by_skill)
                     (
                         local_tool_result,
                         local_attachments,
@@ -400,9 +393,7 @@ async def _execute_single_node(
                         execution_input=execution_input,
                         deps=deps,
                     )
-                    after_loaded_chunk_ids = _collect_loaded_chunk_signatures(
-                        execution_input.states_by_skill
-                    )
+                    after_loaded_chunk_ids = _collect_loaded_chunk_signatures(execution_input.states_by_skill)
 
                 local_made_progress = deps.detect_tool_call_progress(
                     tool_name=node.tool_name,
@@ -532,15 +523,12 @@ async def execute_tool_graph(
     deps: ExecutorDeps,
 ) -> ExecutionResult:
     budget = execution_input.budget
-    if (
-        budget.max_prompt_tokens > 0
-        and budget.prompt_tokens_estimate >= budget.max_prompt_tokens
-    ):
+    if budget.max_prompt_tokens > 0 and budget.prompt_tokens_estimate >= budget.max_prompt_tokens:
         return _build_budget_converged_result(
-            (
+            
                 "当前会话上下文已接近模型可用窗口上限，"
                 f"估算 token={budget.prompt_tokens_estimate}，预算={budget.max_prompt_tokens}。"
-            )
+            
         )
 
     if _is_execution_time_exceeded(budget):
@@ -550,8 +538,7 @@ async def execute_tool_graph(
         return _build_budget_converged_result("本次工具执行已达到调用次数预算上限。")
 
     before_loaded_states = {
-        skill_id: set(state.loaded_chunk_ids)
-        for skill_id, state in execution_input.states_by_skill.items()
+        skill_id: set(state.loaded_chunk_ids) for skill_id, state in execution_input.states_by_skill.items()
     }
     result = ExecutionResult(executed_tool_calls=execution_input.executed_tool_calls)
     inflight_tool_calls: dict[
@@ -575,11 +562,7 @@ async def execute_tool_graph(
         if budget.used_tool_calls >= budget.max_tool_calls:
             return _build_budget_converged_result("本次工具执行已达到调用次数预算上限。")
 
-        ready_nodes = [
-            node
-            for node in pending_by_index.values()
-            if node.dependencies.issubset(completed_indexes)
-        ]
+        ready_nodes = [node for node in pending_by_index.values() if node.dependencies.issubset(completed_indexes)]
         if not ready_nodes:
             fallback_index = min(pending_by_index.keys())
             ready_nodes = [pending_by_index[fallback_index]]
@@ -596,7 +579,25 @@ async def execute_tool_graph(
         parallel_outcomes: list[tuple[_TaskNode, dict[str, Any], list[Any], dict[str, Any], bool, str | None]] = []
         if parallel_ready_nodes:
             gathered = await asyncio.gather(
-                *[_execute_single_node(
+                *[
+                    _execute_single_node(
+                        node=node,
+                        execution_input=execution_input,
+                        deps=deps,
+                        result=result,
+                        inflight_tool_calls=inflight_tool_calls,
+                        inflight_lock=inflight_lock,
+                        semaphore=semaphore,
+                    )
+                    for node in parallel_ready_nodes
+                ]
+            )
+            parallel_outcomes.extend(gathered)
+
+        serial_outcomes: list[tuple[_TaskNode, dict[str, Any], list[Any], dict[str, Any], bool, str | None]] = []
+        for node in serial_ready_nodes:
+            serial_outcomes.append(
+                await _execute_single_node(
                     node=node,
                     execution_input=execution_input,
                     deps=deps,
@@ -604,21 +605,8 @@ async def execute_tool_graph(
                     inflight_tool_calls=inflight_tool_calls,
                     inflight_lock=inflight_lock,
                     semaphore=semaphore,
-                ) for node in parallel_ready_nodes]
+                )
             )
-            parallel_outcomes.extend(gathered)
-
-        serial_outcomes: list[tuple[_TaskNode, dict[str, Any], list[Any], dict[str, Any], bool, str | None]] = []
-        for node in serial_ready_nodes:
-            serial_outcomes.append(await _execute_single_node(
-                node=node,
-                execution_input=execution_input,
-                deps=deps,
-                result=result,
-                inflight_tool_calls=inflight_tool_calls,
-                inflight_lock=inflight_lock,
-                semaphore=semaphore,
-            ))
 
         outcomes = sorted(
             [*parallel_outcomes, *serial_outcomes],

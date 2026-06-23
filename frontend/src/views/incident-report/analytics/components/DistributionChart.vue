@@ -73,7 +73,15 @@ const props = defineProps<{
   overview: IncidentAnalyticsOverview | null;
 }>();
 
-const getCount = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_progress' | 'closed') => {
+const getCount = (
+  type:
+    | 'draft'
+    | 'pending'
+    | 'rejected'
+    | 'approved'
+    | 'in_progress'
+    | 'closed',
+) => {
   if (!props.overview) return 0;
   if (type === 'draft') return props.overview.draftCount;
   if (type === 'pending') return props.overview.pendingCount;
@@ -83,17 +91,41 @@ const getCount = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_prog
   return props.overview.closedCount;
 };
 
-const getPercent = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_progress' | 'closed') => {
+const getPercent = (
+  type:
+    | 'draft'
+    | 'pending'
+    | 'rejected'
+    | 'approved'
+    | 'in_progress'
+    | 'closed',
+) => {
   if (!props.overview) return 0;
   const total = props.overview.totalCount || 1;
   return Math.round((getCount(type) / total) * 100);
 };
 
-const barWidth = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_progress' | 'closed') => {
+const barWidth = (
+  type:
+    | 'draft'
+    | 'pending'
+    | 'rejected'
+    | 'approved'
+    | 'in_progress'
+    | 'closed',
+) => {
   return `${getPercent(type)}%`;
 };
 
-const barPercent = (type: 'draft' | 'pending' | 'rejected' | 'approved' | 'in_progress' | 'closed') => {
+const barPercent = (
+  type:
+    | 'draft'
+    | 'pending'
+    | 'rejected'
+    | 'approved'
+    | 'in_progress'
+    | 'closed',
+) => {
   return `${getPercent(type)}%`;
 };
 </script>

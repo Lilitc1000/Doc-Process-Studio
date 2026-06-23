@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
+from ...core.security import get_current_user_id
 from ..schemas.request import ChatStreamRequest
 from ..service.stream import stream_remote_chat_completion
-from ...core.security import get_current_user_id
 
 router = APIRouter(prefix="/api", tags=["chat"])
 

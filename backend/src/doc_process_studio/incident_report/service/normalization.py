@@ -5,9 +5,6 @@ from typing import Any
 
 from ...shared.text_utils import parse_json_object
 from .constants import (
-    STATUS_OPTION_FAULT_CLEARED,
-    STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED,
-    STATUS_OPTION_TEMPORARILY_FIXED,
     SEVERITY_OPTION_MAJOR,
     SEVERITY_OPTION_MINOR,
     SEVERITY_OPTION_NOT_APPLICABLE,
@@ -15,6 +12,9 @@ from .constants import (
     SEVERITY_P1,
     SEVERITY_P2,
     SEVERITY_P3,
+    STATUS_OPTION_FAULT_CLEARED,
+    STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED,
+    STATUS_OPTION_TEMPORARILY_FIXED,
 )
 
 
@@ -232,6 +232,7 @@ def safe_json_list(value: Any) -> list[Any]:
             if isinstance(items, list):
                 return items
         import json
+
         try:
             loaded = json.loads(value)
         except json.JSONDecodeError:
@@ -275,11 +276,7 @@ def extract_appendix_from_rich_text(value: Any) -> tuple[str, list[dict[str, str
     text_value = re.sub(r"(?i)</div\s*>", "\n", text_value)
     text_value = re.sub(r"<[^>]+>", "", text_value)
     text_value = re.sub(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", "", text_value)
-    normalized_lines = [
-        unescape(line).strip()
-        for line in text_value.splitlines()
-        if unescape(line).strip()
-    ]
+    normalized_lines = [unescape(line).strip() for line in text_value.splitlines() if unescape(line).strip()]
     return "\n".join(normalized_lines), images
 
 
@@ -326,17 +323,11 @@ def normalize_timeline_items(value: Any) -> list[dict[str, str]]:
                     {
                         "time": compose_datetime_text(
                             normalize_text(
-                                item.get("time")
-                                or item.get("at")
-                                or item.get("timestamp")
-                                or item.get("time_point")
+                                item.get("time") or item.get("at") or item.get("timestamp") or item.get("time_point")
                             )
                         ),
                         "event": normalize_text(
-                            item.get("event")
-                            or item.get("description")
-                            or item.get("detail")
-                            or item.get("what")
+                            item.get("event") or item.get("description") or item.get("detail") or item.get("what")
                         ),
                         "resolution": normalize_text(
                             item.get("resolution")
@@ -430,13 +421,7 @@ def normalize_severity_option(value: str) -> str:
         SEVERITY_OPTION_MAJOR,
     }:
         return lower
-    if (
-        "major" in lower
-        or "high" in lower
-        or "critical" in lower
-        or "严重" in lower
-        or "重大" in lower
-    ):
+    if "major" in lower or "high" in lower or "critical" in lower or "严重" in lower or "重大" in lower:
         return SEVERITY_OPTION_MAJOR
     if "minor" in lower or "low" in lower or "轻微" in lower:
         return SEVERITY_OPTION_MINOR

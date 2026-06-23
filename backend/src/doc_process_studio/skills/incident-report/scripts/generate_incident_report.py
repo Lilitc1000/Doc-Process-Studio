@@ -20,15 +20,11 @@ from docx import Document
 from docx.document import Document as DocumentType
 from docx.oxml import OxmlElement
 from docx.shared import Cm
-from docx.text.paragraph import Paragraph
 from docx.table import _Cell
+from docx.text.paragraph import Paragraph
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REFERENCE_TEMPLATE_PATH = (
-    SCRIPT_DIR.parent
-    / "references"
-    / "DAS2 Fault Log Form Template.docx"
-)
+REFERENCE_TEMPLATE_PATH = SCRIPT_DIR.parent / "references" / "DAS2 Fault Log Form Template.docx"
 
 _IMAGE_DECODE_CACHE_MAX_ENTRIES = 48
 _IMAGE_DECODE_CACHE_MAX_BYTES = 8 * 1024 * 1024
@@ -114,12 +110,8 @@ def _normalize_event_sequence(value: Any) -> list[dict[str, str]]:
             normalized.append(
                 {
                     "time": _to_text(item.get("time", "N/A")),
-                    "event": _to_text(
-                        item.get("event", item.get("description", item.get("detail", "N/A")))
-                    ),
-                    "evidence": _to_text(
-                        item.get("evidence", item.get("source", item.get("proof", "N/A")))
-                    ),
+                    "event": _to_text(item.get("event", item.get("description", item.get("detail", "N/A")))),
+                    "evidence": _to_text(item.get("evidence", item.get("source", item.get("proof", "N/A")))),
                 }
             )
         else:
@@ -150,10 +142,7 @@ def _extract_action_lines(actions: Any) -> list[str]:
     lines: list[str] = []
     if isinstance(actions, list):
         for item in actions:
-            if isinstance(item, dict):
-                text = _to_text(item.get("action"), "").strip()
-            else:
-                text = _to_text(item, "").strip()
+            text = _to_text(item.get("action"), "").strip() if isinstance(item, dict) else _to_text(item, "").strip()
             if text:
                 lines.append(text)
     elif isinstance(actions, dict):
@@ -262,17 +251,17 @@ def validate_required_sections(data: dict[str, Any]) -> list[str]:
         missing_sections.append("3. Event Sequence")
 
     impact = data.get("impact", {})
-    if not isinstance(impact, dict) or _is_placeholder(impact.get("systems")) or _is_placeholder(
-        impact.get("severity")
+    if (
+        not isinstance(impact, dict)
+        or _is_placeholder(impact.get("systems"))
+        or _is_placeholder(impact.get("severity"))
     ):
         missing_sections.append("4. Impact")
 
     if _is_placeholder(data.get("trigger")) or _is_placeholder(data.get("root_cause")):
         missing_sections.append("5. Root Cause")
 
-    if not _has_valid_actions(data.get("immediate_actions")) and not _has_valid_actions(
-        data.get("preventive_actions")
-    ):
+    if not _has_valid_actions(data.get("immediate_actions")) and not _has_valid_actions(data.get("preventive_actions")):
         missing_sections.append("6. Follow-Up Actions")
     return missing_sections
 
@@ -314,9 +303,7 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
         "fault_time": _first_non_empty(source.get("fault_time"), default=fault_time),
         "key_facts": {
             "system": _first_non_empty(
-                source.get("key_facts", {}).get("system")
-                if isinstance(source.get("key_facts"), dict)
-                else None,
+                source.get("key_facts", {}).get("system") if isinstance(source.get("key_facts"), dict) else None,
                 source.get("system"),
                 default="",
             ),
@@ -328,9 +315,7 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
                 default="",
             ),
             "symptoms": _first_non_empty(
-                source.get("key_facts", {}).get("symptoms")
-                if isinstance(source.get("key_facts"), dict)
-                else None,
+                source.get("key_facts", {}).get("symptoms") if isinstance(source.get("key_facts"), dict) else None,
                 source.get("fault_details"),
                 source.get("detailed_description"),
                 default="",
@@ -340,7 +325,9 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
         "verified_by": _first_non_empty(source.get("verified_by"), default=""),
         "site_id": _first_non_empty(source.get("site_id"), impact_map.get("region"), default="N/A"),
         "system": _first_non_empty(source.get("system"), impact_map.get("systems"), default="N/A"),
-        "location": _first_non_empty(source.get("location"), source.get("site_id"), impact_map.get("region"), default="N/A"),
+        "location": _first_non_empty(
+            source.get("location"), source.get("site_id"), impact_map.get("region"), default="N/A"
+        ),
         "fault_details": _first_non_empty(
             source.get("fault_details"),
             source.get("key_facts", {}).get("symptoms") if isinstance(source.get("key_facts"), dict) else None,
@@ -348,14 +335,18 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
             default="",
         ),
         "arrival_datetime": _remove_iso_t_separator(_first_non_empty(source.get("arrival_datetime"), start_time)),
-        "clearance_datetime": _remove_iso_t_separator(_first_non_empty(source.get("clearance_datetime"), resolution_time)),
+        "clearance_datetime": _remove_iso_t_separator(
+            _first_non_empty(source.get("clearance_datetime"), resolution_time)
+        ),
         "service_person": _first_non_empty(source.get("service_person"), default=""),
         "fault_cause": _first_non_empty(source.get("fault_cause"), default=""),
         "materials_used": _first_non_empty(source.get("materials_used"), default=""),
         "repair_details": _first_non_empty(source.get("repair_details"), default=""),
         "contractor_staff": _first_non_empty(source.get("contractor_staff"), default=""),
         "contractor_signature": _first_non_empty(source.get("contractor_signature"), default=""),
-        "contractor_date": _remove_iso_t_separator(_first_non_empty(source.get("contractor_date"), source.get("fault_date"), default=fault_date)),
+        "contractor_date": _remove_iso_t_separator(
+            _first_non_empty(source.get("contractor_date"), source.get("fault_date"), default=fault_date)
+        ),
         "status_option": status_option,
         "status_ref_no": _first_non_empty(source.get("status_ref_no"), default=""),
         "status": _first_non_empty(source.get("status"), default="Fault has been Cleared"),
@@ -364,28 +355,34 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
         "comments": _first_non_empty(source.get("comments"), default=""),
         "employer_rep": _first_non_empty(source.get("employer_rep"), default=""),
         "employer_signature": _first_non_empty(source.get("employer_signature"), default=""),
-        "closeout_date": _remove_iso_t_separator(_first_non_empty(source.get("closeout_date"), source.get("fault_date"), default=fault_date)),
+        "closeout_date": _remove_iso_t_separator(
+            _first_non_empty(source.get("closeout_date"), source.get("fault_date"), default=fault_date)
+        ),
         "detailed_description": _first_non_empty(
             source.get("detailed_description"), body_map.get("description"), source.get("fault_details"), default=""
         ),
-        "affected_date_summary": _remove_iso_t_separator(_first_non_empty(
-            source.get("affected_date_summary"),
-            body_map.get("affected_date_summary"),
-            default=f"{start_time} - {resolution_time}",
-        )),
+        "affected_date_summary": _remove_iso_t_separator(
+            _first_non_empty(
+                source.get("affected_date_summary"),
+                body_map.get("affected_date_summary"),
+                default=f"{start_time} - {resolution_time}",
+            )
+        ),
         "start_time": start_time,
         "detection_time": detection_time,
         "resolution_time": resolution_time,
         "total_duration": _first_non_empty(source.get("total_duration"), default=""),
         "event_sequence": event_sequence,
         "impact": {
-            "systems": _first_non_empty(impact_map.get("systems"), body_map.get("impact_scope"), source.get("system"), default=""),
+            "systems": _first_non_empty(
+                impact_map.get("systems"), body_map.get("impact_scope"), source.get("system"), default=""
+            ),
             "users": _first_non_empty(impact_map.get("users"), default=""),
             "region": _first_non_empty(impact_map.get("region"), source.get("site_id"), default=""),
-            "severity": _first_non_empty(impact_map.get("severity"), body_map.get("impact_severity"), source.get("severity"), default=""),
-            "business_impact": _to_lines(
-                impact_map.get("business_impact", body_map.get("business_impact", ""))
+            "severity": _first_non_empty(
+                impact_map.get("severity"), body_map.get("impact_severity"), source.get("severity"), default=""
             ),
+            "business_impact": _to_lines(impact_map.get("business_impact", body_map.get("business_impact", ""))),
         },
         "trigger": _first_non_empty(
             source.get("trigger"),
@@ -419,7 +416,9 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
             "images": appendix_images,
         },
         "report_body": {
-            "description": _first_non_empty(body_map.get("description"), source.get("detailed_description"), default=""),
+            "description": _first_non_empty(
+                body_map.get("description"), source.get("detailed_description"), default=""
+            ),
             "affected_date_summary": _first_non_empty(
                 body_map.get("affected_date_summary"),
                 source.get("affected_date_summary"),
@@ -479,10 +478,7 @@ def _append_cell_text_block(cell: _Cell, text: str) -> None:
 
 
 def _set_status_cell_text(cell: _Cell, *, status_option: str, status_ref_no: str) -> None:
-    if not cell.paragraphs:
-        paragraph = cell.add_paragraph()
-    else:
-        paragraph = cell.paragraphs[0]
+    paragraph = cell.add_paragraph() if not cell.paragraphs else cell.paragraphs[0]
 
     template_run = None
     for run in paragraph.runs:
@@ -507,11 +503,7 @@ def _set_status_cell_text(cell: _Cell, *, status_option: str, status_ref_no: str
     checked = "☑"
     unchecked = "☐"
     normalized_status_ref = status_ref_no.strip()
-    status_ref_display = (
-        "_________________"
-        if _is_placeholder(normalized_status_ref)
-        else normalized_status_ref
-    )
+    status_ref_display = "_________________" if _is_placeholder(normalized_status_ref) else normalized_status_ref
 
     first_run.text = (
         f"{checked if status_option == STATUS_OPTION_FAULT_CLEARED else unchecked} Fault has been Cleared / "
@@ -667,9 +659,9 @@ class FaultLogFormGenerator:
         _set_cell_text(rows[4].cells[3], data.get("system", ""))
         _set_cell_text(rows[5].cells[1], data.get("location", ""))
 
-        detail_text = _to_text(data.get("fault_details"), "").strip() or _to_text(
-            data.get("detailed_description"), ""
-        ).strip()
+        detail_text = (
+            _to_text(data.get("fault_details"), "").strip() or _to_text(data.get("detailed_description"), "").strip()
+        )
         _set_cell_text(rows[6].cells[1], detail_text)
 
         _set_cell_text(rows[8].cells[1], data.get("arrival_datetime", ""))
@@ -827,7 +819,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print(f"Loading data from {args.json}...")
-    with open(args.json, "r", encoding="utf-8") as file:
+    with open(args.json, encoding="utf-8") as file:
         data = json.load(file)
 
     normalized = normalize_incident_data(data)

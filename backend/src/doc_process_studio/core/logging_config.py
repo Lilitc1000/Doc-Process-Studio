@@ -11,9 +11,7 @@ def setup_logging() -> None:
 
     handlers: dict[str, logging.Handler] = {
         "console": logging.StreamHandler(sys.stdout),
-        "file": logging.FileHandler(
-            LOG_DIR / "app.log", encoding="utf-8", delay=True
-        ),
+        "file": logging.FileHandler(LOG_DIR / "app.log", encoding="utf-8", delay=True),
     }
 
     logging.basicConfig(

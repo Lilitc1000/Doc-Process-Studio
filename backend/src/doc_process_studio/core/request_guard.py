@@ -1,8 +1,8 @@
 import asyncio
 import time
 from collections import deque
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from .config import settings
 from .exceptions import RequestGuardError
@@ -11,6 +11,7 @@ from .exceptions import RequestGuardError
 def normalize_tenant_id(tenant_id: str) -> str:
     normalized = tenant_id.strip()
     return normalized or "default"
+
 
 _global_semaphore: asyncio.Semaphore | None = None
 _tenant_semaphores: dict[str, asyncio.Semaphore] = {}
@@ -52,9 +53,7 @@ async def _check_rate_limit(tenant_id: str) -> None:
             request_window.popleft()
 
         if len(request_window) >= max_requests:
-            raise RequestGuardError(
-                f"租户 `{normalized_tenant_id}` 请求过于频繁，请稍后重试。"
-            )
+            raise RequestGuardError(f"租户 `{normalized_tenant_id}` 请求过于频繁，请稍后重试。")
 
         request_window.append(now)
 

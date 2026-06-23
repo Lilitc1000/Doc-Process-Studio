@@ -1,9 +1,9 @@
 from doc_process_studio.core.exceptions import (
     AppError,
     NotFoundError,
-    ValidationError,
     OllamaNotConfiguredError,
     RequestGuardError,
+    ValidationError,
 )
 
 

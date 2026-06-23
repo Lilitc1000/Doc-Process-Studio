@@ -1,5 +1,3 @@
-import asyncio
-
 import doc_process_studio.skill.service.runtime as runtime_module
 from doc_process_studio.skill.schemas.runtime import SkillContextChunk, SkillConversationState
 
@@ -11,14 +9,14 @@ def _make_chunk(chunk_id="c1", content="chunk content", title="Test", source_pat
     )
 
 
-def test_sync_skill_context_state_no_chunks(monkeypatch):
+async def test_sync_skill_context_state_no_chunks(monkeypatch):
     monkeypatch.setattr(runtime_module, "get_skill_context_chunks_by_ids", lambda sid, cids: [])
     state = SkillConversationState(conversation_id="conv-1", skill_id="test-skill", system_prompt="test")
-    result = asyncio.run(runtime_module.sync_skill_context_state(model="test", state=state))
+    result = await runtime_module.sync_skill_context_state(model="test", state=state)
     assert result is None
 
 
-def test_sync_skill_context_state_with_chunks(monkeypatch):
+async def test_sync_skill_context_state_with_chunks(monkeypatch):
     chunks = [_make_chunk(chunk_id="c1", content="a" * 100)]
     call_count = 0
 
@@ -41,11 +39,11 @@ def test_sync_skill_context_state_with_chunks(monkeypatch):
         conversation_id="conv-1", skill_id="test-skill", system_prompt="test",
         loaded_chunk_ids=["c1"],
     )
-    result = asyncio.run(runtime_module.sync_skill_context_state(model="test", state=state, force_compact=True))
+    result = await runtime_module.sync_skill_context_state(model="test", state=state, force_compact=True)
     assert result is not None
 
 
-def test_sync_skill_context_state_clears_stale_memory(monkeypatch):
+async def test_sync_skill_context_state_clears_stale_memory(monkeypatch):
     chunk = _make_chunk(chunk_id="c1", content="short")
     monkeypatch.setattr(
         runtime_module,
@@ -65,6 +63,6 @@ def test_sync_skill_context_state_clears_stale_memory(monkeypatch):
         short_term_memory="stale",
         compacted_chunk_ids=["old"],
     )
-    asyncio.run(runtime_module.sync_skill_context_state(model="test", state=state))
+    await runtime_module.sync_skill_context_state(model="test", state=state)
     assert state.short_term_memory == ""
     assert state.compacted_chunk_ids == []

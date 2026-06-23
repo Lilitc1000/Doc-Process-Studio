@@ -1,10 +1,10 @@
 import logging
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Iterable, Sequence
 
+from ...core.config import settings
 from ..schemas.catalog import SkillInterfaceConfig
 from ..schemas.runtime import SkillPlanDecision
-from ...core.config import settings
 from .planner import plan_skill_activation
 
 logger = logging.getLogger(__name__)

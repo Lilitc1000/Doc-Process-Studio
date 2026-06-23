@@ -1,5 +1,3 @@
-import asyncio
-
 from doc_process_studio.core import model_context as model_context_module
 
 
@@ -108,16 +106,16 @@ def test_is_cache_fresh_expired() -> None:
     assert model_context_module._is_cache_fresh(cached_at) is False
 
 
-def test_get_model_context_length_empty_model() -> None:
-    result = asyncio.run(model_context_module.get_model_context_length(""))
+async def test_get_model_context_length_empty_model() -> None:
+    result = await model_context_module.get_model_context_length("")
     assert result == model_context_module.settings.agent_executor_default_context_length
 
 
-def test_set_cached_context_length() -> None:
+async def test_set_cached_context_length() -> None:
     from datetime import datetime
 
     model_context_module._CONTEXT_CACHE.clear()
-    asyncio.run(model_context_module._set_cached_context_length("test-model", 8192))
+    await model_context_module._set_cached_context_length("test-model", 8192)
     assert "test-model" in model_context_module._CONTEXT_CACHE
     cached_length, cached_at = model_context_module._CONTEXT_CACHE["test-model"]
     assert cached_length == 8192
@@ -125,26 +123,26 @@ def test_set_cached_context_length() -> None:
     model_context_module._CONTEXT_CACHE.clear()
 
 
-def test_warmup_model_context_cache_skips_when_no_base_url(monkeypatch) -> None:
+async def test_warmup_model_context_cache_skips_when_no_base_url(monkeypatch) -> None:
     model_context_module._WARMED_UP = False
     monkeypatch.setattr(model_context_module.settings, "ollama_base_url", None)
-    asyncio.run(model_context_module.warmup_model_context_cache())
+    await model_context_module.warmup_model_context_cache()
     assert model_context_module._WARMED_UP is True
     model_context_module._WARMED_UP = False
 
 
-def test_warmup_model_context_cache_skips_when_already_warmed() -> None:
+async def test_warmup_model_context_cache_skips_when_already_warmed() -> None:
     model_context_module._WARMED_UP = True
-    asyncio.run(model_context_module.warmup_model_context_cache())
+    await model_context_module.warmup_model_context_cache()
     model_context_module._WARMED_UP = False
 
 
-def test_fetch_model_context_length_empty_model() -> None:
-    result = asyncio.run(model_context_module._fetch_model_context_length(""))
+async def test_fetch_model_context_length_empty_model() -> None:
+    result = await model_context_module._fetch_model_context_length("")
     assert result is None
 
 
-def test_get_model_context_length_with_fresh_cache() -> None:
+async def test_get_model_context_length_with_fresh_cache() -> None:
     from datetime import UTC, datetime
 
     model_context_module._CONTEXT_CACHE.clear()
@@ -152,7 +150,6 @@ def test_get_model_context_length_with_fresh_cache() -> None:
         8192,
         datetime.now(UTC),
     )
-    result = asyncio.run(model_context_module.get_model_context_length("cached-model"))
+    result = await model_context_module.get_model_context_length("cached-model")
     assert result == 8192
     model_context_module._CONTEXT_CACHE.clear()
-

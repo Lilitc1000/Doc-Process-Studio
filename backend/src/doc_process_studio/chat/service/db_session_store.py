@@ -125,9 +125,7 @@ async def get_chat_session_user_id(session_id: str) -> str | None:
         return row
 
 
-async def delete_chat_sessions_by_title_prefix(
-    user_id: str, title_prefix: str
-) -> int:
+async def delete_chat_sessions_by_title_prefix(user_id: str, title_prefix: str) -> int:
     async with async_session_factory() as session:
         result = await session.execute(
             delete(ChatSessionORM).where(
@@ -142,9 +140,7 @@ async def delete_chat_sessions_by_title_prefix(
 
 async def delete_chat_sessions_by_user(user_id: str) -> int:
     async with async_session_factory() as session:
-        result = await session.execute(
-            delete(ChatSessionORM).where(ChatSessionORM.user_id == user_id)
-        )
+        result = await session.execute(delete(ChatSessionORM).where(ChatSessionORM.user_id == user_id))
         await session.commit()
         count: int = cast(CursorResult, result).rowcount
         return count

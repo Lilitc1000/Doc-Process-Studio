@@ -1,4 +1,3 @@
-import asyncio
 from datetime import UTC, datetime
 
 from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
@@ -22,7 +21,7 @@ def _build_skill(
     )
 
 
-def test_resolve_skill_plan_filters_non_chat_skill_types(monkeypatch) -> None:
+async def test_resolve_skill_plan_filters_non_chat_skill_types(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(
@@ -66,7 +65,7 @@ def test_resolve_skill_plan_filters_non_chat_skill_types(monkeypatch) -> None:
         messages=[ChatMessageInput(role="user", content="请用 $incident-report")],
     )
 
-    asyncio.run(chat_stream_module._resolve_skill_plan(request))
+    await chat_stream_module._resolve_skill_plan(request)
 
     assert captured["available_skill_ids"] == [
         "document-assistant",

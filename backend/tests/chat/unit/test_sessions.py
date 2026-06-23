@@ -1,9 +1,7 @@
-import asyncio
-
 from doc_process_studio.chat.service import sessions as sessions_module
 
 
-def test_delete_chat_session_also_cleans_agent_traces(monkeypatch) -> None:
+async def test_delete_chat_session_also_cleans_agent_traces(monkeypatch) -> None:
     async def fake_delete_chat_session_records(session_id: str) -> bool:
         assert session_id == "conversation-1"
         return False
@@ -35,8 +33,5 @@ def test_delete_chat_session_also_cleans_agent_traces(monkeypatch) -> None:
         fake_delete_agent_traces_for_conversation,
     )
 
-    async def _run() -> None:
-        deleted = await sessions_module.delete_chat_session("conversation-1")
-        assert deleted is True
-
-    asyncio.run(_run())
+    deleted = await sessions_module.delete_chat_session("conversation-1")
+    assert deleted is True

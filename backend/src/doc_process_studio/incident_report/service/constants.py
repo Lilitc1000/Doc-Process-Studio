@@ -1,21 +1,11 @@
 from pathlib import Path
 
 INCIDENT_REPORT_SKILL_ID = "incident-report"
-INCIDENT_REPORT_DOCX_MIME_TYPE = (
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-)
+INCIDENT_REPORT_DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 INCIDENT_REPORT_SCRIPT_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "skills"
-    / "incident-report"
-    / "scripts"
-    / "generate_incident_report.py"
+    Path(__file__).resolve().parents[2] / "skills" / "incident-report" / "scripts" / "generate_incident_report.py"
 )
-INCIDENT_REPORT_SKILL_DIR = (
-    Path(__file__).resolve().parents[2]
-    / "skills"
-    / "incident-report"
-)
+INCIDENT_REPORT_SKILL_DIR = Path(__file__).resolve().parents[2] / "skills" / "incident-report"
 INCIDENT_REPORT_SKILL_MD_PATH = INCIDENT_REPORT_SKILL_DIR / "SKILL.md"
 INCIDENT_REPORT_REFERENCE_DIR = INCIDENT_REPORT_SKILL_DIR / "references"
 INCIDENT_REPORT_BODY_REFERENCE_DIR = INCIDENT_REPORT_REFERENCE_DIR / "body-sections"
@@ -67,9 +57,7 @@ BODY_FOLLOW_UP = "body_follow_up"
 APPENDIX_NOTES = "appendix_notes"
 APPENDIX_IMAGES = "appendix_images"
 
-INCIDENT_REPORT_SCHEMA_INTRO = (
-    "欢迎使用事故报告专区。支持快填生成正文、完整分段润色、附录富文本编辑与多版本附件历史。"
-)
+INCIDENT_REPORT_SCHEMA_INTRO = "欢迎使用事故报告专区。支持快填生成正文、完整分段润色、附录富文本编辑与多版本附件历史。"
 SYSTEM_DOCUMENT_SKILL_ID = "document-assistant"
 
 STATUS_OPTION_FAULT_CLEARED = "fault_cleared"
@@ -84,5 +72,3 @@ SEVERITY_P0 = "P0"
 SEVERITY_P1 = "P1"
 SEVERITY_P2 = "P2"
 SEVERITY_P3 = "P3"
-
-

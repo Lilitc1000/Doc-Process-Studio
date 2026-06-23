@@ -34,10 +34,7 @@ def load_incident_skill_markdown() -> str:
     text = load_text_file(INCIDENT_REPORT_SKILL_MD_PATH)
     if text:
         return text
-    return (
-        "# incident-report\n"
-        "事故报告 skill，用于根据当前生成目标选择参考文档并输出结构化正文。"
-    )
+    return "# incident-report\n事故报告 skill，用于根据当前生成目标选择参考文档并输出结构化正文。"
 
 
 def _extract_reference_summary(text: str, *, max_lines: int = 3) -> str:
@@ -78,11 +75,7 @@ def _select_references_by_heuristic(
     available_paths: list[str],
 ) -> list[str]:
     section_key = section_id.strip().lower()
-    tokens = [
-        token
-        for token in re.split(r"[_\-\s]+", section_key)
-        if token
-    ]
+    tokens = [token for token in re.split(r"[_\-\s]+", section_key) if token]
     selected: list[str] = []
 
     for path in available_paths:

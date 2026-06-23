@@ -46,6 +46,9 @@ env ENV=dev uv run --no-sync pytest -q -p no:cacheprovider
 # 语法与代码规范检查
 env ENV=dev uv run --no-sync ruff check src/doc_process_studio
 
+# 自动格式化代码
+env ENV=dev uv run --no-sync ruff format src/doc_process_studio
+
 # 类型检查
 env ENV=dev uv run --no-sync mypy src/doc_process_studio
 
@@ -143,7 +146,7 @@ router 将领域异常映射为 HTTP 状态码（如 `NotFoundError`→404、`Ac
 2. 没有重复写新的 Ollama/Redis 调用，而是复用了 `core/` 或 `shared/`
 3. 涉及会话或 skill 的改动时，检查对应模型是否需要同步调整
 4. 没有在 Pydantic 模型里引入 `AliasChoices`、`serialization_alias` 或 `by_alias=True`
-5. `pytest`、`ruff check` 和 `mypy` 通过
+5. `pytest`、`ruff check`、`ruff format` 和 `mypy` 通过
 
 ## 目录开发文档
 

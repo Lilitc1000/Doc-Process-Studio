@@ -4,14 +4,16 @@ from ....chat.schemas.attachment import ChatAttachment
 from ....chat.schemas.request import ChatStreamRequest
 from ....shared.tool_args import parse_tool_arguments
 from ...schemas.runtime import SkillConversationState
-from ..registry import get_skill_tool_config
 from ..context import get_skill_context_chunks_by_ids
+from ..registry import get_skill_tool_config
 from .skill_files import _categorize_relative_path, _normalize_relative_path, _resolve_tool_scope
+
 
 def _primary_skill_id(request: ChatStreamRequest) -> str:
     if request.selected_skill_ids:
         return request.selected_skill_ids[0]
     return ""
+
 
 def _build_builtin_status_label(tool_name: str, relative_path: str | None = None) -> str:
     path_category = _categorize_relative_path(relative_path)
@@ -273,9 +275,7 @@ def _build_declared_tool_status(
         }
 
     status_label = (
-        declared_tool.status.label
-        if declared_tool.status and declared_tool.status.label
-        else declared_tool.description
+        declared_tool.status.label if declared_tool.status and declared_tool.status.label else declared_tool.description
     )
     if tool_result.get("reused"):
         return {
@@ -285,9 +285,7 @@ def _build_declared_tool_status(
     if not tool_result.get("ok"):
         error_message = str(tool_result.get("error", "未知错误"))
         base_message = (
-            declared_tool.status.failure
-            if declared_tool.status and declared_tool.status.failure
-            else "工具执行失败。"
+            declared_tool.status.failure if declared_tool.status and declared_tool.status.failure else "工具执行失败。"
         )
         return {
             "label": status_label,

@@ -1,5 +1,4 @@
 import json
-import asyncio
 
 import pytest
 
@@ -108,7 +107,7 @@ def test_coerce_json_file_argument_rejects_invalid_json_like_even_with_text_norm
         )
 
 
-def test_builtin_tool_rejects_unknown_arguments() -> None:
+async def test_builtin_tool_rejects_unknown_arguments() -> None:
     request = ChatStreamRequest(
         user_message_id="u1",
         conversation_id="c1",
@@ -131,16 +130,16 @@ def test_builtin_tool_rejects_unknown_arguments() -> None:
             ),
         }
     }
-    tool_result, _attachments = asyncio.run(tool_loop_module.execute_skill_tool_call(
+    tool_result, _attachments = await tool_loop_module.execute_skill_tool_call(
         request=request,
         state=state,
         tool_call=tool_call,
-    ))
+    )
     assert tool_result["ok"] is False
     assert "未声明字段" in str(tool_result.get("error"))
 
 
-def test_declared_tool_honors_sensitive_confirmation_policy(monkeypatch) -> None:
+async def test_declared_tool_honors_sensitive_confirmation_policy(monkeypatch) -> None:
     request = ChatStreamRequest(
         user_message_id="u1",
         conversation_id="c1",
@@ -198,16 +197,16 @@ def test_declared_tool_honors_sensitive_confirmation_policy(monkeypatch) -> None
         "confirm",
     )
 
-    tool_result, _attachments = asyncio.run(tool_loop_module.execute_skill_tool_call(
+    tool_result, _attachments = await tool_loop_module.execute_skill_tool_call(
         request=request,
         state=state,
         tool_call=tool_call,
-    ))
+    )
     assert tool_result["ok"] is False
     assert "需要确认" in str(tool_result.get("error"))
 
 
-def test_builtin_tool_without_required_field_does_not_raise() -> None:
+async def test_builtin_tool_without_required_field_does_not_raise() -> None:
     request = ChatStreamRequest(
         user_message_id="u1",
         conversation_id="c1",
@@ -227,16 +226,16 @@ def test_builtin_tool_without_required_field_does_not_raise() -> None:
             "arguments": json.dumps({}, ensure_ascii=False),
         }
     }
-    tool_result, _attachments = asyncio.run(tool_loop_module.execute_skill_tool_call(
+    tool_result, _attachments = await tool_loop_module.execute_skill_tool_call(
         request=request,
         state=state,
         tool_call=tool_call,
-    ))
+    )
     assert tool_result["ok"] is True
     assert isinstance(tool_result.get("entries"), list)
 
 
-def test_search_skill_context_limit_overflow_is_clamped(monkeypatch) -> None:
+async def test_search_skill_context_limit_overflow_is_clamped(monkeypatch) -> None:
     request = ChatStreamRequest(
         user_message_id="u1",
         conversation_id="c1",
@@ -289,11 +288,11 @@ def test_search_skill_context_limit_overflow_is_clamped(monkeypatch) -> None:
             ),
         }
     }
-    tool_result, _attachments = asyncio.run(tool_loop_module.execute_skill_tool_call(
+    tool_result, _attachments = await tool_loop_module.execute_skill_tool_call(
         request=request,
         state=state,
         tool_call=tool_call,
-    ))
+    )
 
     assert tool_result["ok"] is True
     assert tool_result["limit"] == 16

@@ -3,44 +3,34 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
 from fastapi import UploadFile
 
-from ..schemas.request import ChatMessageInput, ChatStreamRequest
-from ...system.service.executor import (
-    ExecutionBudget,
-    ExecutionInput,
-    ExecutorDeps,
-    execute_tool_graph,
-)
-from ...system.service.feature_flags import is_feature_enabled_for_key
-from ...system.service.error_detail import summarize_exception
-from ...system.service.trace_store import AgentTraceRecorder
+from ...core.config import settings
+from ...core.model_context import estimate_prompt_tokens, get_model_context_length
+from ...core.ollama import OllamaNotConfiguredError, stream_chat_completion
+from ...core.request_guard import RequestGuardError, guard_request_slot
 from ...shared.dtutils import to_utc8
 from ...shared.error_utils import build_error_event_detail
 from ...shared.tool_args import build_normalized_tool_calls
+from ...skill.schemas.catalog import SkillInterfaceConfig
 from ...skill.schemas.runtime import (
     ConversationAgentState,
     SkillConversationState,
     SkillPlanDecision,
 )
-from ...core.config import settings
-from ...core.model_context import estimate_prompt_tokens, get_model_context_length
-from ...core.ollama import OllamaNotConfiguredError, stream_chat_completion
-from ...core.request_guard import RequestGuardError, guard_request_slot
 from ...skill.service.conversation_store import load_conversation_state, save_conversation_state
 from ...skill.service.registry import (
     get_skill_interface,
     list_skill_interfaces,
 )
-from ...skill.schemas.catalog import SkillInterfaceConfig
-from ...skill.service.selector import select_for_chat_skills
 from ...skill.service.runtime import sync_skill_context_state
+from ...skill.service.selector import select_for_chat_skills
 from ...skill.service.tool_loop import (
     build_skill_tools,
     build_skill_tools_for_skills,
@@ -49,7 +39,17 @@ from ...skill.service.tool_loop import (
     execute_scoped_skill_tool_call,
     execute_skill_tool_call,
 )
+from ...system.service.error_detail import summarize_exception
+from ...system.service.executor import (
+    ExecutionBudget,
+    ExecutionInput,
+    ExecutorDeps,
+    execute_tool_graph,
+)
+from ...system.service.feature_flags import is_feature_enabled_for_key
+from ...system.service.trace_store import AgentTraceRecorder
 from ..schemas.file_context import PreparedUploadedFile
+from ..schemas.request import ChatMessageInput, ChatStreamRequest
 from .file_context import build_persisted_uploaded_files_context, prepare_uploaded_files
 from .streaming import (
     build_ollama_assistant_chunk,
@@ -57,18 +57,18 @@ from .streaming import (
     build_tool_call_signature,
     build_upstream_messages_for_skills,
     detect_tool_call_progress,
-    extract_done_reason,
     extract_delta_text,
     extract_delta_tool_calls,
+    extract_done_reason,
     format_sse_event,
     get_tool_call_name,
     merge_stream_tool_calls,
     merge_uploaded_files_context,
 )
 from .streaming.context import (
-    is_kb_skill_id,
-    extract_kb_project_name,
     build_kb_skill_interface,
+    extract_kb_project_name,
+    is_kb_skill_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -170,11 +170,7 @@ async def _extract_http_status_error_message(exc: httpx.HTTPStatusError) -> str:
             return raw_text[:500]
 
     if isinstance(error_payload, dict):
-        detail = (
-            error_payload.get("error")
-            or error_payload.get("message")
-            or error_payload.get("detail")
-        )
+        detail = error_payload.get("error") or error_payload.get("message") or error_payload.get("detail")
         if isinstance(detail, str) and detail.strip():
             return detail.strip()[:500]
 
@@ -226,7 +222,10 @@ async def _resolve_skill_plan(
 
     kb_skill_ids = [sid for sid in explicit_skill_ids if is_kb_skill_id(sid)]
     _register_kb_skills_from_messages(
-        request.messages, kb_skill_ids, available_skills, available_skill_ids,
+        request.messages,
+        kb_skill_ids,
+        available_skills,
+        available_skill_ids,
     )
 
     mentioned_skill_ids, missing_mentioned_skill_ids = _extract_skill_ids_from_messages(
@@ -236,9 +235,7 @@ async def _resolve_skill_plan(
     for mentioned_skill_id in mentioned_skill_ids:
         if mentioned_skill_id not in explicit_skill_ids:
             explicit_skill_ids.append(mentioned_skill_id)
-    missing_explicit_skill_ids = [
-        skill_id for skill_id in explicit_skill_ids if skill_id not in available_skill_ids
-    ]
+    missing_explicit_skill_ids = [skill_id for skill_id in explicit_skill_ids if skill_id not in available_skill_ids]
     for missing_skill_id in missing_mentioned_skill_ids:
         if missing_skill_id not in missing_explicit_skill_ids:
             missing_explicit_skill_ids.append(missing_skill_id)
@@ -265,14 +262,13 @@ def _build_direct_skill_plan(
 
     kb_skill_ids = [sid for sid in explicit_skill_ids_raw if is_kb_skill_id(sid)]
     _register_kb_skills_from_messages(
-        request.messages, kb_skill_ids, available_skills, available_skill_ids,
+        request.messages,
+        kb_skill_ids,
+        available_skills,
+        available_skill_ids,
     )
 
-    explicit_skill_ids = [
-        skill_id
-        for skill_id in explicit_skill_ids_raw
-        if skill_id in available_skill_ids
-    ]
+    explicit_skill_ids = [skill_id for skill_id in explicit_skill_ids_raw if skill_id in available_skill_ids]
     if explicit_skill_ids:
         primary_skill_id = explicit_skill_ids[0]
     elif SYSTEM_DOCUMENT_SKILL_ID in available_skill_ids:
@@ -383,9 +379,7 @@ async def _prepare_skill_context(
         conversation_id=request.conversation_id,
         skill_id=primary_skill_id,
     )
-    persisted_uploaded_files_context = build_persisted_uploaded_files_context(
-        request.attachment_ids
-    )
+    persisted_uploaded_files_context = build_persisted_uploaded_files_context(request.attachment_ids)
     uploaded_files_context = merge_uploaded_files_context(
         persisted_uploaded_files_context,
         new_uploaded_files_context,
@@ -492,10 +486,7 @@ async def _build_round_upstream_messages(
     prompt_tokens_estimate = estimate_prompt_tokens(upstream_messages)
     prompt_budget_tokens = max(
         256,
-        int(
-            max(1, model_context_length)
-            * max(0.2, min(0.95, settings.agent_executor_prompt_budget_ratio))
-        ),
+        int(max(1, model_context_length) * max(0.2, min(0.95, settings.agent_executor_prompt_budget_ratio))),
     )
     execution_budget.prompt_tokens_estimate = prompt_tokens_estimate
     execution_budget.max_prompt_tokens = prompt_budget_tokens
@@ -708,9 +699,7 @@ async def stream_remote_chat_completion(
                 return
 
             tooling_skill_ids = [
-                skill_id
-                for skill_id in skill_ctx.active_skill_ids
-                if skill_id != SYSTEM_DOCUMENT_SKILL_ID
+                skill_id for skill_id in skill_ctx.active_skill_ids if skill_id != SYSTEM_DOCUMENT_SKILL_ID
             ]
             if not tooling_skill_ids:
                 tooling_skill_ids = [skill_ctx.primary_skill_id]
@@ -777,9 +766,7 @@ async def stream_remote_chat_completion(
                 if done_reason:
                     final_done_reason = done_reason
 
-            normalized_tool_calls = [
-                merged_tool_calls[index] for index in sorted(merged_tool_calls.keys())
-            ]
+            normalized_tool_calls = [merged_tool_calls[index] for index in sorted(merged_tool_calls.keys())]
 
             if assistant_content_parts or normalized_tool_calls:
                 tool_trace_messages.append(
@@ -943,9 +930,7 @@ async def stream_remote_chat_completion(
                 exc=exc,
             ),
         )
-        yield format_sse_event(
-            {"type": "error", "message": stream_error_message}
-        )
+        yield format_sse_event({"type": "error", "message": stream_error_message})
     except Exception as exc:
         stream_error_message = f"未预期的错误：{summarize_exception(exc)}"
         logger.exception("stream_remote_chat_completion unhandled error")

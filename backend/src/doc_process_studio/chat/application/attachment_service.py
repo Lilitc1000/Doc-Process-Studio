@@ -63,7 +63,5 @@ class AttachmentService:
             mime_type=mime_type,
         )
 
-    def resolve_path(
-        self, attachment_id: str
-    ) -> tuple[ChatAttachmentMetadata | None, Path | None, bool]:
+    def resolve_path(self, attachment_id: str) -> tuple[ChatAttachmentMetadata | None, Path | None, bool]:
         return self._store.resolve_path(attachment_id)

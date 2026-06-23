@@ -85,9 +85,11 @@ backend/tests/
         └── test_model_context.py
 └── knowledge_base/            # 知识库域
     ├── unit/
-    │   └── test_kb_service.py       # 分块器、文件类型检测、Skill 工具 Schema、内容哈希
+    │   ├── test_kb_service.py               # 分块器、文件类型检测、Skill 工具 Schema、内容哈希
+    │   └── test_kb_skill_integration.py     # kb: skill 动态加载流程（prompt/工具/目录行/规划）
     └── integration/
-        └── test_kb_api.py           # API 端点认证守卫测试
+        ├── test_kb_api.py                   # API 端点认证守卫测试
+        └── test_kb_skill_integration.py     # kb: skill 解析与上下文构建集成测试
 ```
 
 ### 目录组织原则
@@ -117,6 +119,8 @@ backend/tests/
 | 集成测试 | `<domain>/integration/` | API 端点 HTTP 测试 | FastAPI TestClient + monkeypatch |
 | 契约测试 | `<domain>/contract/` | Skill 工具链端到端验证 | 真实文件系统（tmp_path） |
 
+**注意**：后端测试不包含 E2E 测试。需要启动完整后端服务并通过真实 HTTP 调用验证的端到端流程测试属于前端 E2E 测试范畴，应在前端项目中编写。
+
 ## 运行命令
 
 ```bash
@@ -136,6 +140,9 @@ env ENV=dev uv run --no-sync pytest tests/auth/unit/test_security.py -q
 # 语法与代码规范检查
 env ENV=dev uv run --no-sync ruff check src/doc_process_studio
 
+# 自动格式化代码
+env ENV=dev uv run --no-sync ruff format src/doc_process_studio
+
 # 类型检查
 env ENV=dev uv run --no-sync mypy src/doc_process_studio
 ```
@@ -149,7 +156,7 @@ env ENV=dev uv run --no-sync mypy src/doc_process_studio
 | Fixture | 作用 |
 |---------|------|
 | `_reset_cache_client` | 清空 Redis 客户端和连接池，防止缓存状态泄漏 |
-| `_dispose_async_engine` | 调用 `engine.dispose()` 释放异步连接池，防止连接泄漏 |
+| `_dispose_async_engine` | 异步 fixture，调用 `await engine.dispose()` 释放异步连接池，防止连接泄漏 |
 | `_reset_rate_limiter` | 清空速率限制窗口和白名单，防止限制状态泄漏 |
 
 以及手动使用的 fixture：
@@ -203,7 +210,7 @@ def test_jwt_create_and_decode():
 
 #### 2. Service 层测试（monkeypatch 模式）
 
-使用 `monkeypatch` 替换模块级引用，避免真实 I/O：
+使用 `monkeypatch` 替换模块级引用，避免真实 I/O。异步函数直接使用 `async def test_` 编写，pytest-asyncio 会自动识别并执行：
 
 ```python
 import session_module
@@ -212,7 +219,7 @@ from doc_process_studio.chat.service.db_session_store import (
 )
 
 
-def test_delete_chat_session_also_cleans_traces(monkeypatch):
+async def test_delete_chat_session_also_cleans_traces(monkeypatch):
     deleted_session_ids = []
     deleted_trace_ids = []
 
@@ -225,7 +232,7 @@ def test_delete_chat_session_also_cleans_traces(monkeypatch):
     monkeypatch.setattr(session_module, "delete_chat_session", _fake_delete)
     monkeypatch.setattr(session_module, "delete_agent_traces_by_conversation_id", _fake_delete_traces)
 
-    asyncio.run(delete_chat_session("sess-1", db=None))
+    await delete_chat_session("sess-1", db=None)
 
     assert "sess-1" in deleted_session_ids
     assert "sess-1" in deleted_trace_ids
@@ -234,7 +241,7 @@ def test_delete_chat_session_also_cleans_traces(monkeypatch):
 **要点**：
 - 使用 `import xxx as xxx_module` 导入目标模块，便于 monkeypatch 模块级引用
 - 在测试函数内定义 `async def _fake_xxx()` 作为替换函数
-- 使用 `asyncio.run()` 执行异步代码（项目未使用 pytest-asyncio）
+- 异步测试函数使用 `async def test_` 声明，pytest-asyncio（`asyncio_mode = "auto"`）自动识别并运行
 - `monkeypatch` 是 pytest 内置 fixture，每个测试后自动还原
 
 #### 3. 复杂 Service 测试（_FakeRecorder 模式）
@@ -250,12 +257,12 @@ class _FakeRecorder:
         self.calls.append({"trace_id": trace_id, "payload": payload})
 
 
-def test_generation_records_trace(monkeypatch):
+async def test_generation_records_trace(monkeypatch):
     recorder = _FakeRecorder()
     monkeypatch.setattr(generation_module, "record_agent_trace", recorder.record)
     monkeypatch.setattr(generation_module, "stream_chat_completion", fake_stream)
 
-    asyncio.run(quick_generate_body(session_id="s1", model="m1", db=None))
+    await quick_generate_body(session_id="s1", model="m1", db=None)
 
     assert len(recorder.calls) == 1
     assert recorder.calls[0]["trace_id"] == "trace-123"
@@ -492,7 +499,7 @@ def build_plan_decision():
 ### 新增单元测试
 
 - [ ] 外部依赖使用 `monkeypatch` 替换
-- [ ] 异步函数使用 `asyncio.run()` 执行
+- [ ] 异步函数使用 `async def test_` 声明，pytest-asyncio 自动识别运行
 - [ ] 模块级引用使用 `import xxx as xxx_module` 导入以便 monkeypatch
 - [ ] 有模块级全局状态的，测试后手动重置
 

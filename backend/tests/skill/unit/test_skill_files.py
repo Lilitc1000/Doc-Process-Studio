@@ -1,9 +1,9 @@
 from doc_process_studio.skill.service.tool_loop.skill_files import (
+    _categorize_relative_path,
+    _normalize_relative_path,
+    _resolve_search_limit_bounds,
     compose_scoped_tool_name,
     split_scoped_tool_name,
-    _normalize_relative_path,
-    _categorize_relative_path,
-    _resolve_search_limit_bounds,
 )
 
 

@@ -3,6 +3,7 @@ from typing import Any
 from ..registry import get_skill_interface
 from .skill_files import _resolve_search_limit_bounds, compose_scoped_tool_name
 
+
 def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
     """构造当前 skill 对模型暴露的全部工具。"""
 
@@ -16,7 +17,10 @@ def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "list_skill_directory",
-                "description": "列出当前 skill 某个目录下的文件和子目录，优先用于发现 SKILL.md、references、scripts、assets。",
+                "description": (
+                    "列出当前 skill 某个目录下的文件和子目录，"
+                    "优先用于发现 SKILL.md、references、scripts、assets。"
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -262,7 +266,10 @@ def _build_kb_skill_tools(skill_id: str) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "search_knowledge_base",
-                "description": f"在项目「{project_name}」的知识库中检索与查询相关的文档片段，返回文档内容、文件名、页码、章节等信息。",
+                "description": (
+                    f"在项目「{project_name}」的知识库中检索与查询"
+                    "相关的文档片段，返回文档内容、文件名、页码、章节等信息。"
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
