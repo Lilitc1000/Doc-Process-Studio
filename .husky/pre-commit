@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -eu
+
+# Pre-commit hook for monorepo
+# 1. Run lint-staged for formatting and lint fixes
+# 2. Run type checks for changed areas
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+echo "Running lint-staged..."
+npx lint-staged
+
+# Type check backend if Python source files changed
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '^backend/src/.*\.py$'; then
+  echo "Running mypy type check for backend..."
+  (cd "$ROOT/backend" && env ENV=dev uv run --no-sync mypy src/doc_process_studio)
+fi
+
+# Type check frontend if TS/Vue source files changed
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '^frontend/src/.*\.\(ts\|vue\)$'; then
+  echo "Running vue-tsc type check for frontend..."
+  (cd "$ROOT/frontend" && npx vue-tsc --noEmit)
+fi
