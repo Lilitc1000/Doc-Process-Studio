@@ -2,6 +2,7 @@ import axios from 'axios';
 import humps from 'humps';
 import { useAuthStore } from '../stores/auth';
 import router from '../router';
+import { logger } from '../utils/common/logger';
 
 export const apiClient = axios.create({
   baseURL: '/api',
@@ -33,6 +34,31 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
+    const status = error.response?.status;
+    const requestId = error.response?.headers?.['x-request-id'];
+    const method = error.config?.method?.toUpperCase();
+    const url = error.config?.url;
+
+    if (status >= 500) {
+      logger.error('服务端错误', {
+        context: 'api',
+        status,
+        method,
+        url,
+        requestId,
+        detail: error.response?.data?.detail,
+      });
+    } else if (status >= 400 && status !== 401) {
+      logger.warn('请求失败', {
+        context: 'api',
+        status,
+        method,
+        url,
+        requestId,
+        detail: error.response?.data?.detail,
+      });
+    }
+
     const originalRequest = error.config;
 
     if (

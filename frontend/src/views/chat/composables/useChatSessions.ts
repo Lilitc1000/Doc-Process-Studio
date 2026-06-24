@@ -7,6 +7,7 @@ import {
   renameSession,
   saveSession,
 } from '../../../api/chat-sessions';
+import { logger } from '../../../utils/common/logger';
 
 interface UseChatSessionsOptions {
   afterSessionLoaded?: () => Promise<void> | void;
@@ -27,7 +28,10 @@ export const useChatSessions = (options?: UseChatSessionsOptions) => {
         );
       });
     } catch (error) {
-      console.error('加载历史会话列表失败。', error);
+      logger.error('加载历史会话列表失败。', {
+        context: 'useChatSessions',
+        error,
+      });
     }
   };
 
@@ -53,7 +57,11 @@ export const useChatSessions = (options?: UseChatSessionsOptions) => {
       chatStore.mergeSessionSummary(sessionSummary);
       return sessionSummary;
     } catch (error) {
-      console.error('保存历史会话失败。', error);
+      logger.error('保存历史会话失败。', {
+        context: 'useChatSessions',
+        error,
+        sessionId,
+      });
       return null;
     }
   };
@@ -76,7 +84,11 @@ export const useChatSessions = (options?: UseChatSessionsOptions) => {
       chatStore.bumpSessionViewKey();
       await options?.afterSessionLoaded?.();
     } catch (error) {
-      console.error('加载历史会话失败。', error);
+      logger.error('加载历史会话失败。', {
+        context: 'useChatSessions',
+        error,
+        sessionId,
+      });
     }
   };
 
@@ -85,7 +97,11 @@ export const useChatSessions = (options?: UseChatSessionsOptions) => {
       const sessionSummary = await renameSession(sessionId, title);
       chatStore.mergeSessionSummary(sessionSummary);
     } catch (error) {
-      console.error('修改历史会话标题失败。', error);
+      logger.error('修改历史会话标题失败。', {
+        context: 'useChatSessions',
+        error,
+        sessionId,
+      });
     }
   };
 
@@ -102,7 +118,11 @@ export const useChatSessions = (options?: UseChatSessionsOptions) => {
         options?.onDeleteActiveSession?.();
       }
     } catch (error) {
-      console.error('删除历史会话失败。', error);
+      logger.error('删除历史会话失败。', {
+        context: 'useChatSessions',
+        error,
+        sessionId,
+      });
     }
   };
 

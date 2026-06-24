@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...core.cache import ping_redis
@@ -12,12 +14,16 @@ from ..schemas import (
     SkillListResponse,
 )
 
+_logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api", tags=["skills"])
 
 
 def _handle_skill_error(exc: SkillError) -> HTTPException:
     if isinstance(exc, SkillNotFoundError):
+        _logger.warning("Skill error (404): %s", exc)
         return HTTPException(status_code=404, detail=str(exc))
+    _logger.warning("Skill error (400): %s", exc)
     return HTTPException(status_code=400, detail=str(exc))
 
 

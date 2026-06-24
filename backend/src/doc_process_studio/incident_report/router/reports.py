@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime as dt
 from typing import Any
 
@@ -58,22 +59,29 @@ from ..schemas.response import (
 
 router = APIRouter(prefix="/api/incident-report", tags=["incident-report"])
 
+_logger = logging.getLogger(__name__)
+
 
 def _handle_domain_error(exc: DomainError) -> HTTPException:
     """领域异常 → HTTP 状态码映射。"""
     if isinstance(exc, PermissionDeniedError):
+        _logger.warning("Domain error (403): %s", exc)
         return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, ReportNotFoundError):
+        _logger.warning("Domain error (404): %s", exc)
         return HTTPException(status_code=404, detail=str(exc))
+    _logger.warning("Domain error (400): %s", exc)
     return HTTPException(status_code=400, detail=str(exc))
 
 
 def _handle_service_error(exc: ValueError | DomainError) -> HTTPException:
     """将服务层异常映射为 HTTP 响应。"""
     if isinstance(exc, PermissionDenied):
+        _logger.warning("Service error (403): %s", exc)
         return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, DomainError):
         return _handle_domain_error(exc)
+    _logger.warning("Service error (400): %s", exc)
     return HTTPException(status_code=400, detail=str(exc))
 
 

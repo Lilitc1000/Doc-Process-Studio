@@ -1,6 +1,7 @@
 import { fetchAvailableModels, fetchAvailableSkills } from '../../api/catalog';
 import { listKBProjectsSimple } from '../../api/knowledge-base';
 import { useAppStore } from '../../stores/app';
+import { logger } from '../../utils/common/logger';
 
 export const useCatalogLoader = () => {
   const appStore = useAppStore();
@@ -20,7 +21,10 @@ export const useCatalogLoader = () => {
         appStore.selectedRerankerModel = appStore.selectedModel;
       }
     } catch (error) {
-      console.error('加载远程模型列表失败，继续使用前端兜底模型列表。', error);
+      logger.error('加载远程模型列表失败，继续使用前端兜底模型列表。', {
+        context: 'useCatalogLoader',
+        error,
+      });
     }
   };
 
@@ -35,7 +39,10 @@ export const useCatalogLoader = () => {
       });
       appStore.processingModes = filteredSkills;
     } catch (error) {
-      console.error('加载 skill 列表失败，继续使用前端兜底选项。', error);
+      logger.error('加载 skill 列表失败，继续使用前端兜底选项。', {
+        context: 'useCatalogLoader',
+        error,
+      });
     }
   };
 
@@ -44,7 +51,10 @@ export const useCatalogLoader = () => {
       const projects = await listKBProjectsSimple();
       appStore.kbProjects = projects.map((p) => ({ id: p.id, name: p.name }));
     } catch (error) {
-      console.error('加载知识库项目列表失败。', error);
+      logger.error('加载知识库项目列表失败。', {
+        context: 'useCatalogLoader',
+        error,
+      });
     }
   };
 

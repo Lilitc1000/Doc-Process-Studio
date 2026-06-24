@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from ...core.security import get_current_user_id
@@ -14,6 +16,8 @@ from ..schemas.response import (
     IncidentUserWithRolesListResponse,
 )
 from .dependencies import require_admin
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/incident-report", tags=["incident-report-roles"])
 
@@ -55,6 +59,7 @@ async def assign_role(
             assigned_by=admin_id,
         )
     except (ValueError, DomainError) as exc:
+        _logger.warning("Assign role error: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -68,6 +73,7 @@ async def revoke_role(
     try:
         await service.revoke_role(user_id=target_user_id, role=role)
     except (ValueError, DomainError) as exc:
+        _logger.warning("Revoke role error: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"revoked": True}
 

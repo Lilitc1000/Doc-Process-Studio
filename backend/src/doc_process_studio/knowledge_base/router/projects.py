@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,16 +28,22 @@ from ..schemas import (
     KBTreeResponse,
 )
 
+_logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/knowledge-base", tags=["knowledge-base"])
 
 
 def _handle_kb_error(exc: KnowledgeBaseError) -> HTTPException:
     if isinstance(exc, (ProjectNotFoundError, FolderNotFoundError, DocumentNotFoundError)):
+        _logger.warning("KB error (404): %s", exc)
         return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, FileTooLargeError):
+        _logger.warning("KB error (413): %s", exc)
         return HTTPException(status_code=413, detail=str(exc))
     if isinstance(exc, UnsupportedFileTypeError):
+        _logger.warning("KB error (400): %s", exc)
         return HTTPException(status_code=400, detail=str(exc))
+    _logger.warning("KB error (400): %s", exc)
     return HTTPException(status_code=400, detail=str(exc))
 
 

@@ -8,6 +8,7 @@ import type {
 } from '../../../types/chat/chat';
 import { formatFileSize } from '../../../utils/common/file';
 import { triggerBlobDownload } from '../../../utils/common/download';
+import { logger } from '../../../utils/common/logger';
 import { getErrorMessage } from '../../../utils/common/error';
 
 interface UseMessageActionsOptions {
@@ -260,7 +261,10 @@ export const useMessageActions = (options: UseMessageActionsOptions) => {
       await navigator.clipboard.writeText(messageNode.content);
       options.showCopyToast('内容已复制到剪贴板');
     } catch (error) {
-      console.error('复制消息失败。', error);
+      logger.error('复制消息失败。', {
+        context: 'useMessageActions',
+        error,
+      });
     }
   };
 

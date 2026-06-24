@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import deque
 
@@ -30,6 +31,8 @@ from ..schemas.response import (
     UpdateProfileResponse,
     UserInfoResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -65,13 +68,18 @@ def _check_auth_rate_limit(client_key: str) -> None:
 
 def _handle_auth_error(exc: AuthError) -> HTTPException:
     if isinstance(exc, UserAlreadyExistsError):
+        logger.warning("Auth error: %s", exc)
         return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, (InvalidCredentialsError, InvalidTokenError)):
+        logger.warning("Auth error: %s", exc)
         return HTTPException(status_code=401, detail=str(exc))
     if isinstance(exc, IncorrectPasswordError):
+        logger.warning("Auth error: %s", exc)
         return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, UserNotFoundError):
+        logger.warning("Auth error: %s", exc)
         return HTTPException(status_code=404, detail=str(exc))
+    logger.warning("Auth error: %s", exc)
     return HTTPException(status_code=400, detail=str(exc))
 
 

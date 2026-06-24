@@ -18,6 +18,9 @@ frontend/src/utils/
     ├── file.ts             # 文件大小格式化
     ├── file-type-visuals.ts # 文件类型视觉映射
     ├── ids.ts              # ID 生成
+    ├── logger.ts           # 统一日志工具（替代散落的 console.error/warn）
+    ├── error.ts            # 错误消息提取
+    ├── download.ts         # Blob 下载触发
     └── render-markdown.ts  # Markdown 渲染引擎
 ```
 
@@ -33,3 +36,19 @@ frontend/src/utils/
 - 纯格式化、纯映射、纯解析逻辑优先放 `src/utils/`，不要放进组件或 composable
 - 单元测试中直接导入函数，断言输入输出，无需 mock
 - 每个测试只测一个行为，边界情况必须覆盖
+
+## 日志工具
+
+`common/logger.ts` 提供统一的日志输出接口，替代散落的 `console.error` / `console.warn`：
+
+```ts
+import { logger } from '../utils/common/logger';
+
+logger.error('加载模型列表失败', { context: 'useCatalogLoader', error });
+logger.warn('请求失败', { context: 'api', status: 404, url: '/api/projects' });
+```
+
+- 每条日志自动携带 `timestamp`、`level`
+- `context` 字段标识日志来源模块，便于检索
+- `error` 字段自动展开 Error 堆栈
+- 业务代码中使用 `logger` 替代 `console.error` / `console.warn`

@@ -29,6 +29,8 @@ frontend/src/api/
 - 将 `response.data` 中的 snake_case 字段自动转换为 camelCase
 - 遇到 401 时自动尝试使用 refresh_token 刷新 access_token，成功后重试原请求
 - 刷新失败则清除认证状态并跳转到登录页
+- **5xx 响应**：使用 `logger.error` 记录服务端错误，包含 `status`、`method`、`url`、`requestId`（从响应头 `X-Request-Id` 提取）、`detail`
+- **4xx 响应**（401 除外）：使用 `logger.warn` 记录客户端错误，包含相同结构化字段
 
 ## chat-stream.ts 特殊说明
 
