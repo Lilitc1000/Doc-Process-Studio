@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+sudo chown -R vscode:vscode /home/vscode
 LOGDIR="$LOCAL_WORKSPACE_FOLDER/.devcontainer/logs"
 mkdir -p "$LOGDIR"
 cd "$LOCAL_WORKSPACE_FOLDER"
@@ -37,7 +38,7 @@ run_step() {
   local cmd="$*"
   local logfile="$LOGDIR/${name}.log"
   echo "[startup] $name -> $logfile"
-  (cd "$workdir" && bash -lc "$cmd") > "$logfile" 2>&1 || {
+  sudo -H -u vscode bash -lc "cd '$workdir' && $cmd" > "$logfile" 2>&1 || {
     echo "[startup] $name failed, see $logfile"
     return 1
   }

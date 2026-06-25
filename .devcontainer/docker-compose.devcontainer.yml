@@ -14,6 +14,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LOCAL_WORKSPACE_FOLDER=/workspace
+      - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+      - PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
     volumes:
       - /var/run/docker.sock:/var/run/docker-host.sock
       - ..:/workspace:delegated

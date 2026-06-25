@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "postinstall": "npx playwright install chromium --with-deps",
+    "postinstall": "npx playwright install chromium",
     "e2e-report": "npx playwright show-report --host 0.0.0.0 --port 9323"
   },
   "dependencies": {
@@ -34,7 +34,7 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "1.48.0",
     "@types/dompurify": "^3.0.5",
     "@types/markdown-it": "^14.1.1",
     "@types/node": "^20.14.10",
