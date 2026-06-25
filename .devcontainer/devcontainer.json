@@ -16,7 +16,8 @@
         "vue.volar",
         "ms-vscode.vscode-typescript-next",
         "ms-playwright.playwright",
-        "openai.chatgpt"
+        "openai.chatgpt",
+        "kilocode.kilo-code"
       ]
     }
   }
