@@ -13,6 +13,7 @@ services:
         condition: service_healthy
     environment:
       - PYTHONUNBUFFERED=1
+      - UV_LINK_MODE=copy
       - LOCAL_WORKSPACE_FOLDER=/workspace
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
       - PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright

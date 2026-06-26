@@ -13,4 +13,7 @@ module.exports = {
     sourceType: 'module',
     warnOnUnsupportedTypeScriptVersion: false,
   },
+  rules: {
+    '@typescript-eslint/no-unused-vars': 'error',
+  },
 };

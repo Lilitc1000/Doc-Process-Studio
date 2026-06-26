@@ -7,12 +7,31 @@
 ```bash
 npm install
 npm run dev
-npm run build
-npm run lint
-npm run test
 ```
 
-开发时至少保证 `lint` 和 `build` 通过；提交前建议再跑一遍 `test`。
+### 测试
+
+```bash
+npm run test          # 单元 + 集成测试
+npm run test:e2e      # E2E 测试（需要后端运行）
+npm run test:e2e:ui   # E2E 测试（带 UI）
+```
+
+详细测试开发指南见 [tests/DEVELOPMENT.md](tests/DEVELOPMENT.md)。
+
+### 代码质量检查
+
+```bash
+npm run lint          # ESLint 语法与代码规范检查（含自动修复）
+npm run build         # 构建检查（含 vue-tsc 类型检查）
+npx knip --no-progress  # 未使用代码检测（导出的函数、类型、依赖等）
+```
+
+| 检查项 | 工具 | 说明 |
+|--------|------|------|
+| 语法与规范 | ESLint | 代码风格、未使用变量/参数等 |
+| 类型检查 | vue-tsc | TypeScript 类型校验（集成在 `npm run build` 中） |
+| 未使用代码 | [knip](https://github.com/webpro-nl/knip) | 导出但未被引用的函数、类型、依赖；配置文件为 `knip.json`，已集成到 pre-commit |
 
 ## 目录结构
 
@@ -122,16 +141,6 @@ frontend/src/
 ### 新增工具函数
 
 纯格式化、纯映射、纯解析逻辑，优先放 `src/utils/`，不要放进组件。
-
-## 测试
-
-```bash
-npm run test          # 单元 + 集成测试
-npm run test:e2e      # E2E 测试（需要后端运行）
-npm run test:e2e:ui   # E2E 测试（带 UI）
-```
-
-详细测试开发指南见 [tests/DEVELOPMENT.md](tests/DEVELOPMENT.md)。
 
 ## 维护时尽量避免的事
 

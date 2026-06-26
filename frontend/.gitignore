@@ -7,6 +7,10 @@ node_modules
 dist
 dist-ssr
 
+# Volar/TSC 编译缓存（.vue.ts -> .vue.js, .ts -> .js）
+src/**/*.js
+tests/**/*.js
+
 # Vite 缓存
 .vite
 

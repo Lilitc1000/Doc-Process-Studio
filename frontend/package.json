@@ -10,6 +10,7 @@
     "lint": "eslint . --ext .vue,.ts,.js --fix && prettier --write .",
     "format": "prettier --check .",
     "type-check": "vue-tsc --noEmit",
+    "knip": "knip --no-progress",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -20,7 +21,6 @@
   "dependencies": {
     "@tiptap/extension-image": "^3.22.4",
     "@tiptap/extension-placeholder": "^3.22.4",
-    "@tiptap/extension-underline": "^3.22.4",
     "@tiptap/starter-kit": "^3.22.4",
     "@tiptap/vue-3": "^3.22.4",
     "axios": "^1.7.7",
@@ -35,7 +35,6 @@
   },
   "devDependencies": {
     "@playwright/test": "1.48.0",
-    "@types/dompurify": "^3.0.5",
     "@types/markdown-it": "^14.1.1",
     "@types/node": "^20.14.10",
     "@vitejs/plugin-vue": "^6.0.5",
@@ -48,6 +47,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.26.0",
     "happy-dom": "^20.8.9",
+    "knip": "^6.21.0",
     "prettier": "^3.3.3",
     "typescript": "^5.9.3",
     "vite": "^8.0.5",

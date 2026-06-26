@@ -44,13 +44,16 @@ cd backend
 env ENV=dev uv run --no-sync pytest -q -p no:cacheprovider
 
 # 语法与代码规范检查
-env ENV=dev uv run --no-sync ruff check src/doc_process_studio
+env ENV=dev uv run --no-sync ruff check --ignore-noqa src/doc_process_studio
 
 # 自动格式化代码
 env ENV=dev uv run --no-sync ruff format src/doc_process_studio
 
 # 类型检查
 env ENV=dev uv run --no-sync mypy src/doc_process_studio
+
+# 死代码检测
+env ENV=dev uv run --no-sync vulture src/doc_process_studio --min-confidence 60
 
 # 只跑某个域
 env ENV=dev uv run --no-sync pytest tests/auth/ -q
@@ -145,7 +148,7 @@ router 将领域异常映射为 HTTP 状态码（如 `SessionNotFoundError`→40
 3. 跨域调用通过 `application/ports.py` 端口抽象，不直接 import 其他域的 service 或 infrastructure
 4. 涉及会话或 skill 的改动时，检查对应模型是否需要同步调整
 5. 没有在 Pydantic 模型里引入 `AliasChoices`、`serialization_alias` 或 `by_alias=True`
-6. `pytest`、`ruff check`、`ruff format` 和 `mypy` 通过
+6. `pytest`、`ruff check`、`ruff format`、`mypy` 和 `vulture` 通过
 
 ## 目录开发文档
 
