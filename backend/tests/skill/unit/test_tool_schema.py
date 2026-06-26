@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from doc_process_studio.skill.service.tool_loop.tool_schema import (
+from doc_process_studio.skill.infrastructure.tool_loop.tool_schema import (
     build_skill_tools,
     build_skill_tools_for_skills,
 )
@@ -10,8 +10,8 @@ def test_build_skill_tools_includes_builtin(monkeypatch):
     fake_interface = MagicMock()
     fake_interface.tools = []
     monkeypatch.setattr(
-        "doc_process_studio.skill.service.tool_loop.tool_schema.get_skill_interface",
-        lambda sid: fake_interface,
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_schema.get_skill_interface",
+        lambda _sid: fake_interface,
     )
     tools = build_skill_tools("test-skill")
     tool_names = [t["function"]["name"] for t in tools]
@@ -30,8 +30,8 @@ def test_build_skill_tools_includes_declared(monkeypatch):
     fake_interface = MagicMock()
     fake_interface.tools = [fake_tool]
     monkeypatch.setattr(
-        "doc_process_studio.skill.service.tool_loop.tool_schema.get_skill_interface",
-        lambda sid: fake_interface,
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_schema.get_skill_interface",
+        lambda _sid: fake_interface,
     )
     tools = build_skill_tools("test-skill")
     tool_names = [t["function"]["name"] for t in tools]
@@ -47,8 +47,8 @@ def test_build_skill_tools_for_skills_dedup(monkeypatch):
     fake_interface = MagicMock()
     fake_interface.tools = []
     monkeypatch.setattr(
-        "doc_process_studio.skill.service.tool_loop.tool_schema.get_skill_interface",
-        lambda sid: fake_interface,
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_schema.get_skill_interface",
+        lambda _sid: fake_interface,
     )
     result = build_skill_tools_for_skills(["skill-a", "skill-a", "  ", "skill-b"])
     tool_names = [t["function"]["name"] for t in result]
@@ -59,8 +59,8 @@ def test_build_skill_tools_for_skills_includes_skill_id_param(monkeypatch):
     fake_interface = MagicMock()
     fake_interface.tools = []
     monkeypatch.setattr(
-        "doc_process_studio.skill.service.tool_loop.tool_schema.get_skill_interface",
-        lambda sid: fake_interface,
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_schema.get_skill_interface",
+        lambda _sid: fake_interface,
     )
     tools = build_skill_tools_for_skills(["skill-a"])
     list_dir_tool = next(t for t in tools if t["function"]["name"] == "list_skill_directory")
@@ -78,16 +78,25 @@ def test_build_skill_tools_for_skills_scoped_declared(monkeypatch):
     fake_interface.display_name = "测试技能"
     fake_interface.tools = [fake_tool]
 
-    import doc_process_studio.skill.service.tool_loop.tool_schema as schema_module
+    import doc_process_studio.skill.infrastructure.tool_loop.tool_schema as schema_module
+
     monkeypatch.setattr(
         schema_module,
         "get_skill_interface",
-        lambda sid: fake_interface,
+        lambda _sid: fake_interface,
     )
     tools = build_skill_tools_for_skills(["skill-a"])
-    declared = [t for t in tools if t["function"]["name"] not in {
-        "list_skill_directory", "read_skill_file", "search_skill_context", "read_skill_context",
-    }]
+    declared = [
+        t
+        for t in tools
+        if t["function"]["name"]
+        not in {
+            "list_skill_directory",
+            "read_skill_file",
+            "search_skill_context",
+            "read_skill_context",
+        }
+    ]
     assert len(declared) == 1
     assert "skill-a" in declared[0]["function"]["name"]
     assert "测试技能" in declared[0]["function"]["description"]

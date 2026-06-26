@@ -1,5 +1,5 @@
-from doc_process_studio.incident_report.schemas.common import IncidentFormAnswer, IncidentFormSnapshot
-from doc_process_studio.incident_report.service.report_data import (
+from doc_process_studio.incident_report.application.dtos import IncidentFormAnswer, IncidentFormSnapshot
+from doc_process_studio.incident_report.infrastructure.utils.report_data import (
     answer_text,
     answer_value,
     answer_value_from_answers,

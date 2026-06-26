@@ -1,4 +1,4 @@
-from doc_process_studio.shared.error_utils import build_error_event_detail
+from doc_process_studio.common.utils.error_utils import build_error_event_detail
 
 
 def test_build_error_event_detail_message_only():
@@ -21,8 +21,6 @@ def test_build_error_event_detail_with_extra():
 
 def test_build_error_event_detail_with_exception_and_extra():
     exc = RuntimeError("crash")
-    result = build_error_event_detail(
-        message="error", exc=exc, extra={"trace_id": "abc"}
-    )
+    result = build_error_event_detail(message="error", exc=exc, extra={"trace_id": "abc"})
     assert result["error_detail"]["type"] == "RuntimeError"
     assert result["trace_id"] == "abc"

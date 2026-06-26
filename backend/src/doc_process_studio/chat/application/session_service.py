@@ -1,8 +1,8 @@
 """会话用例服务。"""
 
 from ..domain.errors import SessionAccessDeniedError, SessionNotFoundError
-from ..schemas.response import ChatSessionDetail, ChatSessionListResponse
-from ..schemas.session import ChatSessionSnapshot, ChatSessionSummary
+from ..router.schemas.response import ChatSessionDetail, ChatSessionListResponse
+from .dtos.session import ChatSessionSnapshot, ChatSessionSummary
 from .ports import ConversationStateStore, SessionRepository, TitleGenerator
 
 
@@ -53,7 +53,6 @@ class SessionService:
             session_id=session_id,
             user_id=user_id,
             title=normalized_title,
-            title_source_messages=title_source_messages,
             snapshot=snapshot,
         )
 

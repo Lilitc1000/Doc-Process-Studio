@@ -1,4 +1,4 @@
-from doc_process_studio.system.service.feature_flags import is_feature_enabled_for_key
+from doc_process_studio.system.infrastructure.utils.feature_flags import is_feature_enabled_for_key
 
 
 def test_feature_flag_rollout_ratio_boundary() -> None:
@@ -48,4 +48,3 @@ def test_feature_flag_can_be_hard_disabled() -> None:
         )
         is False
     )
-

@@ -1,16 +1,16 @@
 from datetime import UTC, datetime
 
-from doc_process_studio.chat.schemas.request import ChatMessageInput
-from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
-from doc_process_studio.skill.service import selector as selector_module
-from doc_process_studio.skill.service.selector import (
+from doc_process_studio.chat.router.schemas.request import ChatMessageInput
+from doc_process_studio.common.infrastructure.config import settings
+from doc_process_studio.skill.application.dtos.runtime import SkillPlanDecision
+from doc_process_studio.skill.infrastructure import selector as selector_module
+from doc_process_studio.skill.infrastructure.selector import (
     SelectorOption,
     build_selector_skill_interfaces,
     select_for_chat_skills,
     select_for_workspace_reference,
     select_skills_with_planner,
 )
-from doc_process_studio.core.config import settings
 
 
 def test_build_selector_skill_interfaces_dedupes_and_fallbacks() -> None:

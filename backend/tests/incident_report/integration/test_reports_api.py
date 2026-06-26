@@ -3,18 +3,18 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from doc_process_studio.core.security import create_access_token
-from doc_process_studio.incident_report.domain.errors import PermissionDeniedError
+from doc_process_studio.common.security.security import create_access_token
+from doc_process_studio.incident_report.application.dtos import (
+    IncidentReportDetail,
+    IncidentReportListResponse,
+)
+from doc_process_studio.incident_report.domain.values.errors import PermissionDeniedError
 from doc_process_studio.incident_report.infrastructure.dependencies import (
     get_report_application_service,
     get_role_service,
 )
 from doc_process_studio.incident_report.router.reports import router as reports_router
 from doc_process_studio.incident_report.router.roles import router as roles_router
-from doc_process_studio.incident_report.schemas.response import (
-    IncidentReportDetail,
-    IncidentReportListResponse,
-)
 
 
 def _create_test_app() -> FastAPI:
@@ -95,7 +95,7 @@ def test_submit_report_requires_auth():
 def test_get_my_roles():
     app = _create_test_app()
 
-    from doc_process_studio.incident_report.schemas.response import (
+    from doc_process_studio.incident_report.application.dtos import (
         IncidentUserPermissionsResponse,
     )
 

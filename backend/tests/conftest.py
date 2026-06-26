@@ -1,7 +1,9 @@
+import contextlib
+
 import pytest
 
-import doc_process_studio.core.cache_client as _cache_module
-from doc_process_studio.core.security import create_access_token
+import doc_process_studio.common.infrastructure.cache_client as _cache_module
+from doc_process_studio.common.security.security import create_access_token
 
 
 @pytest.fixture(autouse=True)
@@ -16,18 +18,16 @@ def _reset_cache_client():
 @pytest.fixture(autouse=True)
 async def _dispose_async_engine():
     yield
-    from doc_process_studio.core.database import engine
+    from doc_process_studio.common.infrastructure.database import engine
 
-    try:
+    with contextlib.suppress(Exception):
         await engine.dispose()
-    except Exception:
-        pass
 
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     yield
-    from doc_process_studio.auth.router.auth import _auth_rate_windows, _RATE_LIMIT_WHITELIST
+    from doc_process_studio.auth.router.auth import _RATE_LIMIT_WHITELIST, _auth_rate_windows
 
     _auth_rate_windows.clear()
     _RATE_LIMIT_WHITELIST.clear()

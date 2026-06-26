@@ -2,13 +2,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from doc_process_studio.incident_report.schemas.response import IncidentReportPreviewResponse
-from doc_process_studio.incident_report.service.preview import (
+from doc_process_studio.incident_report.application.dtos import IncidentReportPreviewResponse
+from doc_process_studio.incident_report.infrastructure.utils.preview import (
     _build_output_name,
     _stable_payload_hash,
     convert_docx_bytes_to_pdf_bytes,
     is_docx_attachment,
-    load_docx_bytes_from_attachment,
     preview_cache_get,
     preview_cache_set,
     preview_template_token,
@@ -44,7 +43,7 @@ def test_build_output_name_empty_title():
 
 
 def test_preview_template_token_with_missing_file():
-    import doc_process_studio.incident_report.service.preview as preview_module
+    import doc_process_studio.incident_report.infrastructure.utils.preview as preview_module
 
     original_path = preview_module.INCIDENT_REPORT_SCRIPT_PATH
     fake_path = MagicMock()
@@ -58,7 +57,7 @@ def test_preview_template_token_with_missing_file():
 
 
 def test_preview_template_token_with_existing_file():
-    import doc_process_studio.incident_report.service.preview as preview_module
+    import doc_process_studio.incident_report.infrastructure.utils.preview as preview_module
 
     original_path = preview_module.INCIDENT_REPORT_SCRIPT_PATH
     fake_path = MagicMock()
@@ -76,46 +75,8 @@ def test_convert_docx_bytes_to_pdf_bytes_no_libreoffice():
         convert_docx_bytes_to_pdf_bytes(b"fake docx")
 
 
-def test_load_docx_bytes_from_attachment_expired():
-    with (
-        patch(
-            "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
-            return_value=(MagicMock(), MagicMock(), True),
-        ),
-        pytest.raises(RuntimeError, match="expired"),
-    ):
-        load_docx_bytes_from_attachment("att-1")
-
-
-def test_load_docx_bytes_from_attachment_not_found():
-    with (
-        patch(
-            "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
-            return_value=(None, None, False),
-        ),
-        pytest.raises(RuntimeError, match="No previewable"),
-    ):
-        load_docx_bytes_from_attachment("att-1")
-
-
-def test_load_docx_bytes_from_attachment_not_docx():
-    fake_metadata = MagicMock()
-    fake_metadata.name = "report.pdf"
-    fake_metadata.mime_type = "application/pdf"
-    fake_path = MagicMock()
-
-    with (
-        patch(
-            "doc_process_studio.incident_report.service.preview.resolve_attachment_path",
-            return_value=(fake_metadata, fake_path, False),
-        ),
-        pytest.raises(RuntimeError, match="DOCX"),
-    ):
-        load_docx_bytes_from_attachment("att-1")
-
-
 def test_preview_cache_returns_deep_copy():
-    import doc_process_studio.incident_report.service.preview as preview_module
+    import doc_process_studio.incident_report.infrastructure.utils.preview as preview_module
 
     preview_module._PREVIEW_RESULT_CACHE.clear()
     payload = IncidentReportPreviewResponse(source="draft", label="test")
@@ -138,7 +99,7 @@ def test_render_docx_bytes_from_report_data():
     mock_module.FaultLogFormGenerator.return_value = mock_generator
 
     with patch(
-        "doc_process_studio.incident_report.service.preview.load_incident_generator_module",
+        "doc_process_studio.incident_report.infrastructure.utils.preview.load_incident_generator_module",
         return_value=mock_module,
     ):
         result = render_docx_bytes_from_report_data({"key": "value"})

@@ -1,6 +1,6 @@
 import httpx
 
-from doc_process_studio.system.service.error_detail import (
+from doc_process_studio.system.infrastructure.utils.error_detail import (
     build_exception_detail,
     summarize_exception,
 )

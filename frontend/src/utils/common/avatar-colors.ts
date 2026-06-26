@@ -6,5 +6,3 @@ export const AVATAR_COLORS = [
   '#8b5cf6',
   '#06b6d4',
 ] as const;
-
-export type AvatarColor = (typeof AVATAR_COLORS)[number];

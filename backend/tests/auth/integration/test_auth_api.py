@@ -1,9 +1,16 @@
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
+from doc_process_studio.auth.application.contracts import AuthServiceContract
+from doc_process_studio.auth.application.dtos import (
+    RegisterResponse,
+    TokenResponse,
+    UserInfoResponse,
+)
 from doc_process_studio.auth.domain.errors import (
     IncorrectPasswordError,
     InvalidCredentialsError,
@@ -12,20 +19,16 @@ from doc_process_studio.auth.domain.errors import (
     UserNotFoundError,
 )
 from doc_process_studio.auth.infrastructure.dependencies import get_auth_service
-from doc_process_studio.auth.schemas.response import (
-    RegisterResponse,
-    TokenResponse,
-    UserInfoResponse,
-)
 
 
-class FakeAuthService:
+class FakeAuthService(AuthServiceContract):
     """测试用 AuthService 替身。"""
 
     def __init__(self) -> None:
         self.responses: dict[str, Any] = {}
         self.errors: dict[str, Exception] = {}
         self.calls: dict[str, list[Any]] = {}
+        self.register_fn: Callable[..., Awaitable[RegisterResponse]] | None = None
 
     def _record(self, name: str, *args: Any) -> None:
         self.calls.setdefault(name, []).append(args)
@@ -34,6 +37,8 @@ class FakeAuthService:
         self._record("register", username, password)
         if exc := self.errors.get("register"):
             raise exc
+        if self.register_fn is not None:
+            return await self.register_fn(username=username, password=password)
         return self.responses["register"]
 
     async def authenticate(self, *, username: str, password: str) -> TokenResponse:
@@ -227,12 +232,11 @@ def test_api_auth_rate_limit(fake_auth_service: FakeAuthService) -> None:
             created_at="2026-01-01T00:00:00Z",
         )
 
-    fake_auth_service.responses["register"] = None
-
     async def fake_register(*, username: str, password: str) -> RegisterResponse:
+        _ = password
         return make_response(username)
 
-    fake_auth_service.register = fake_register  # type: ignore[method-assign]
+    fake_auth_service.register_fn = fake_register
 
     client = TestClient(main_module.app)
 

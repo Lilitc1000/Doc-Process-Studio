@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from doc_process_studio.core.security import create_access_token
+from doc_process_studio.common.security.security import create_access_token
 from doc_process_studio.knowledge_base.router.projects import router as kb_router
 
 

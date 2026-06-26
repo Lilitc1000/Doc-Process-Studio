@@ -1,5 +1,5 @@
-from doc_process_studio.skill.schemas.runtime import SkillContextChunk
-from doc_process_studio.skill.service.context import (
+from doc_process_studio.skill.application.dtos.runtime import SkillContextChunk
+from doc_process_studio.skill.infrastructure.context import (
     _build_chunk_embedding_fingerprint,
     _cosine_similarity,
     _extract_embeddings_from_embed_payload,

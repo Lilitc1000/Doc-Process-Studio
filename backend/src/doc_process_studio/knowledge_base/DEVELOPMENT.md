@@ -6,56 +6,49 @@
 
 ## 目录结构
 
-KnowledgeBase 域采用 DDD 分层架构。CRUD/上传/索引/树构建等用例走 domain/application/infrastructure 分层；解析/分块/向量化等纯函数工具保留在 service/ 供 infrastructure 委托和跨域调用。
+KnowledgeBase 域采用 DDD 四层架构（端口与适配器模式）：
 
 ```text
 knowledge_base/
-├── __init__.py
 ├── domain/                      # 领域层：领域异常
 │   └── errors.py                # KnowledgeBaseError / ProjectNotFoundError / FolderNotFoundError / ...
-├── application/                 # 应用层：用例编排 + 端口
+├── application/                 # 应用层：用例编排 + 端口 + DTO
 │   ├── ports.py                 # KnowledgeBaseRepository / VectorStore / EmbeddingService 端口
+│   ├── dtos/                    # 应用层 DTO
+│   │   └── __init__.py          # KBChunkPayload 等跨层共享结构
 │   └── kb_service.py            # KnowledgeBaseService（项目/文件夹/文档 CRUD、树、上传索引）
-├── infrastructure/              # 基础设施层：端口实现 + 依赖装配
+├── infrastructure/              # 基础设施层：端口实现 + 依赖装配 + 技术工具
 │   ├── kb_repository.py         # SqlKnowledgeBaseRepository
 │   ├── vector_store.py          # QdrantVectorStore
 │   ├── embedding_service.py     # OllamaEmbeddingService
+│   ├── persistence/             # ORM 模型
+│   │   └── knowledge_base_orm.py # KBProject, KBFolder, KBDocument ORM
+│   ├── documents.py             # 文档上传、解析、索引编排
+│   ├── folders.py               # 文件夹 CRUD 与树形结构构建
+│   ├── projects.py              # 项目 CRUD
+│   ├── chunker.py               # 文本分块器
+│   ├── embedding.py             # Ollama 文本向量化
+│   ├── qdrant_service.py        # Qdrant 向量操作（upsert/search/delete）
+│   ├── parser/                  # 文档解析器
+│   │   ├── __init__.py
+│   │   ├── pdf_parser.py        # PDF 解析
+│   │   ├── docx_parser.py       # Word 解析
+│   │   ├── xlsx_parser.py       # Excel 解析
+│   │   └── archive.py           # 压缩包解析（ZIP/RAR/7z）
 │   └── dependencies.py          # FastAPI 依赖装配（get_kb_service 工厂）
-├── models/
-│   ├── __init__.py
-│   └── knowledge_base_orm.py    # KBProject, KBFolder, KBDocument ORM 模型
-├── schemas/
-│   ├── __init__.py
-│   ├── common.py                # KBChunkPayload 等共享类型
-│   ├── request.py               # 请求 Pydantic 模型
-│   └── response.py              # 响应 Pydantic 模型
-├── router/
-│   ├── __init__.py
-│   └── projects.py              # API 路由（依赖注入 KnowledgeBaseService）
-└── service/                     # 纯函数工具层（被 infrastructure 委托 + 跨域调用）
-    ├── __init__.py
-    ├── documents.py             # 文档上传、解析、索引编排
-    ├── folders.py               # 文件夹 CRUD 与树形结构构建
-    ├── projects.py              # 项目 CRUD
-    ├── kb_skill.py              # 知识库虚拟 Skill 提示词与工具定义
-    ├── chunker.py               # 文本分块器
-    ├── embedding.py             # Ollama 文本向量化
-    ├── qdrant_service.py        # Qdrant 向量操作（upsert/search/delete）
-    └── parser/
-        ├── __init__.py
-        ├── pdf_parser.py        # PDF 解析
-        ├── docx_parser.py       # Word 解析
-        ├── xlsx_parser.py       # Excel 解析
-        └── archive.py           # 压缩包解析（ZIP/RAR/7z）
+└── router/                      # 用户接口层：API 端点 + 请求/响应 Schema
+    ├── projects.py              # API 路由（依赖注入 KnowledgeBaseService）
+    └── schemas/                 # HTTP DTO
+        ├── request.py           # 入参 Pydantic 模型
+        └── response.py          # 出参 Pydantic 模型
 ```
 
 ### 分层依赖规则
 
 - **domain** 不依赖任何其他层，只包含领域异常定义
 - **application** 依赖 domain + 端口抽象，不依赖 infrastructure 实现
-- **infrastructure** 实现 application 端口，委托 service/ 纯函数和 core/qdrant
+- **infrastructure** 实现 application 端口，包含技术工具函数和外部服务调用
 - **router** 通过 `Depends(get_kb_service)` 注入应用服务，事务边界由 router 调用 `db.commit()`
-- **service/** 是纯函数工具层，被 infrastructure 委托，也被 chat/skill 跨域直接调用（embedding/qdrant_service/kb_skill）
 
 ### 依赖注入
 

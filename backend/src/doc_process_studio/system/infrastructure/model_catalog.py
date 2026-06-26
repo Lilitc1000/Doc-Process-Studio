@@ -3,7 +3,7 @@
 实现 ModelCatalog 端口，委托 core/ollama 的 fetch_remote_model_names。
 """
 
-from ...core.ollama import fetch_remote_model_names
+from ...common.infrastructure.ollama import fetch_remote_model_names
 from ..application.ports import ModelCatalog
 
 

@@ -5,24 +5,29 @@
 
 from functools import lru_cache
 
-from ..application.analytics_service import AnalyticsService
-from ..application.audit_query_service import AuditQueryService
-from ..application.comment_service import CommentService
-from ..application.generation_service import GenerationService
-from ..application.preview_service import PreviewService
-from ..application.report_service import ReportApplicationService
-from ..application.role_service import RoleService
-from .analytics_repository import SqlAnalyticsRepository
-from .audit_event_sink import SqlAuditEventSink
-from .audit_log_repository import SqlAuditLogRepository
-from .comment_repository import SqlCommentRepository
+from ..application.services.analytics_service import AnalyticsService
+from ..application.services.audit_query_service import AuditQueryService
+from ..application.services.comment_service import CommentService
+from ..application.services.generation_service import GenerationService
+from ..application.services.preview_service import PreviewService
+from ..application.services.report_service import ReportApplicationService
+from ..application.services.role_service import RoleService
+from .adapters.attachment_store import ChatAttachmentStore
+from .adapters.document_assistant import SkillDocumentAssistant
+from .adapters.llm_streaming import OllamaLLMStreaming
+from .adapters.reference_context import SkillReferenceContext
+from .adapters.trace_recorder import SystemTraceRecorder
 from .permission_checker import RbacPermissionChecker
-from .report_repository import (
+from .repositories.analytics_repository import SqlAnalyticsRepository
+from .repositories.audit_event_sink import SqlAuditEventSink
+from .repositories.audit_log_repository import SqlAuditLogRepository
+from .repositories.comment_repository import SqlCommentRepository
+from .repositories.report_repository import (
     SequentialRefNoGenerator,
     SqlAlchemyReportRepository,
     SqlUserDirectory,
 )
-from .role_repository import SqlRoleRepository
+from .repositories.role_repository import SqlRoleRepository
 
 
 @lru_cache(maxsize=1)
@@ -71,6 +76,31 @@ def get_analytics_repository() -> SqlAnalyticsRepository:
 @lru_cache(maxsize=1)
 def get_role_repository() -> SqlRoleRepository:
     return SqlRoleRepository()
+
+
+@lru_cache(maxsize=1)
+def get_llm_streaming() -> OllamaLLMStreaming:
+    return OllamaLLMStreaming()
+
+
+@lru_cache(maxsize=1)
+def get_trace_recorder() -> SystemTraceRecorder:
+    return SystemTraceRecorder()
+
+
+@lru_cache(maxsize=1)
+def get_reference_context() -> SkillReferenceContext:
+    return SkillReferenceContext()
+
+
+@lru_cache(maxsize=1)
+def get_document_assistant() -> SkillDocumentAssistant:
+    return SkillDocumentAssistant()
+
+
+@lru_cache(maxsize=1)
+def get_attachment_store() -> ChatAttachmentStore:
+    return ChatAttachmentStore()
 
 
 @lru_cache(maxsize=1)
@@ -129,10 +159,20 @@ def get_role_service() -> RoleService:
 @lru_cache(maxsize=1)
 def get_generation_service() -> GenerationService:
     """装配报告生成服务（单例）。"""
-    return GenerationService()
+    return GenerationService(
+        repo=get_report_repository(),
+        checker=get_permission_checker(),
+        llm=get_llm_streaming(),
+        trace=get_trace_recorder(),
+        reference=get_reference_context(),
+        doc_assistant=get_document_assistant(),
+    )
 
 
 @lru_cache(maxsize=1)
 def get_preview_service() -> PreviewService:
     """装配报告预览服务（单例）。"""
-    return PreviewService()
+    return PreviewService(
+        repo=get_report_repository(),
+        checker=get_permission_checker(),
+    )

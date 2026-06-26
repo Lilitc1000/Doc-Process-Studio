@@ -1,14 +1,13 @@
+import time
 from datetime import UTC, datetime
 
-import time
-
-from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
-from doc_process_studio.skill.schemas.runtime import (
+from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
+from doc_process_studio.skill.application.dtos.runtime import (
     ConversationAgentState,
     SkillConversationState,
     SkillPlanDecision,
 )
-from doc_process_studio.system.service.executor import (
+from doc_process_studio.system.infrastructure.utils.executor import (
     ExecutionBudget,
     ExecutionInput,
     ExecutorDeps,

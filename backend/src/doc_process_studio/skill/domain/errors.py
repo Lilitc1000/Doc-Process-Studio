@@ -7,7 +7,3 @@ class SkillError(Exception):
 
 class SkillNotFoundError(SkillError):
     """Skill 不存在。"""
-
-
-class SkillToolNotFoundError(SkillError):
-    """Skill 工具不存在。"""

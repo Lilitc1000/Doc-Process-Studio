@@ -1,4 +1,4 @@
-from doc_process_studio.incident_report.service.constants import (
+from doc_process_studio.incident_report.domain.values.constants import (
     BODY_AFFECTED_DATE,
     BODY_BUSINESS_IMPACT,
     BODY_DESCRIPTION,

@@ -1,6 +1,6 @@
 import hashlib
 
-from doc_process_studio.knowledge_base.schemas.common import KBChunkPayload
+from doc_process_studio.knowledge_base.application.dtos import KBChunkPayload
 
 
 def _compute_content_hash(file_bytes: bytes) -> str:
@@ -11,7 +11,7 @@ def _compute_content_hash(file_bytes: bytes) -> str:
 
 
 def test_chunk_text_splits_long_text_by_paragraphs() -> None:
-    from doc_process_studio.knowledge_base.service.chunker import chunk_text
+    from doc_process_studio.knowledge_base.infrastructure.chunker import chunk_text
 
     paragraphs = [f"Paragraph {i}. " + "A" * 500 for i in range(10)]
     long_text = "\n\n".join(paragraphs)
@@ -22,7 +22,7 @@ def test_chunk_text_splits_long_text_by_paragraphs() -> None:
 
 
 def test_chunk_text_short_text_single_chunk() -> None:
-    from doc_process_studio.knowledge_base.service.chunker import chunk_text
+    from doc_process_studio.knowledge_base.infrastructure.chunker import chunk_text
 
     short_text = "Hello world"
     chunks = chunk_text(short_text)
@@ -31,7 +31,7 @@ def test_chunk_text_short_text_single_chunk() -> None:
 
 
 def test_chunk_text_preserves_metadata() -> None:
-    from doc_process_studio.knowledge_base.service.chunker import chunk_text
+    from doc_process_studio.knowledge_base.infrastructure.chunker import chunk_text
 
     text = "Some content here"
     chunks = chunk_text(
@@ -46,14 +46,14 @@ def test_chunk_text_preserves_metadata() -> None:
 
 
 def test_chunk_text_empty_input() -> None:
-    from doc_process_studio.knowledge_base.service.chunker import chunk_text
+    from doc_process_studio.knowledge_base.infrastructure.chunker import chunk_text
 
     chunks = chunk_text("")
     assert len(chunks) == 0
 
 
 def test_chunk_text_normalizes_whitespace() -> None:
-    from doc_process_studio.knowledge_base.service.chunker import chunk_text
+    from doc_process_studio.knowledge_base.infrastructure.chunker import chunk_text
 
     text = "Hello\n\n\n\nWorld"
     chunks = chunk_text(text)
@@ -116,43 +116,43 @@ def test_kb_chunk_payload_defaults() -> None:
 
 
 def test_detect_file_type_pdf() -> None:
-    from doc_process_studio.knowledge_base.service.documents import _detect_file_type
+    from doc_process_studio.knowledge_base.infrastructure.documents import _detect_file_type
 
     assert _detect_file_type("report.pdf") == "pdf"
 
 
 def test_detect_file_type_docx() -> None:
-    from doc_process_studio.knowledge_base.service.documents import _detect_file_type
+    from doc_process_studio.knowledge_base.infrastructure.documents import _detect_file_type
 
     assert _detect_file_type("document.docx") == "docx"
 
 
 def test_detect_file_type_xlsx() -> None:
-    from doc_process_studio.knowledge_base.service.documents import _detect_file_type
+    from doc_process_studio.knowledge_base.infrastructure.documents import _detect_file_type
 
     assert _detect_file_type("spreadsheet.xlsx") == "xlsx"
 
 
 def test_detect_file_type_unsupported_returns_empty() -> None:
-    from doc_process_studio.knowledge_base.service.documents import _detect_file_type
+    from doc_process_studio.knowledge_base.infrastructure.documents import _detect_file_type
 
     assert _detect_file_type("image.png") == ""
 
 
 def test_detect_file_type_case_insensitive() -> None:
-    from doc_process_studio.knowledge_base.service.documents import _detect_file_type
+    from doc_process_studio.knowledge_base.infrastructure.documents import _detect_file_type
 
     assert _detect_file_type("Report.PDF") == "pdf"
 
 
 def test_detect_file_type_doc_alias() -> None:
-    from doc_process_studio.knowledge_base.service.documents import _detect_file_type
+    from doc_process_studio.knowledge_base.infrastructure.documents import _detect_file_type
 
     assert _detect_file_type("old.doc") == "docx"
 
 
 def test_detect_file_type_xls_alias() -> None:
-    from doc_process_studio.knowledge_base.service.documents import _detect_file_type
+    from doc_process_studio.knowledge_base.infrastructure.documents import _detect_file_type
 
     assert _detect_file_type("old.xls") == "xlsx"
 
@@ -161,7 +161,7 @@ def test_detect_file_type_xls_alias() -> None:
 
 
 def test_is_kb_skill_id() -> None:
-    from doc_process_studio.chat.service.streaming.context import is_kb_skill_id
+    from doc_process_studio.chat.infrastructure.streaming.context import is_kb_skill_id
 
     assert is_kb_skill_id("kb:MyProject") is True
     assert is_kb_skill_id("document-assistant") is False
@@ -169,7 +169,7 @@ def test_is_kb_skill_id() -> None:
 
 
 def test_extract_kb_project_name() -> None:
-    from doc_process_studio.chat.service.streaming.context import extract_kb_project_name
+    from doc_process_studio.chat.infrastructure.streaming.context import extract_kb_project_name
 
     assert extract_kb_project_name("kb:MyProject") == "MyProject"
     assert extract_kb_project_name("kb:") == ""
@@ -177,7 +177,7 @@ def test_extract_kb_project_name() -> None:
 
 
 def test_build_kb_skill_interface() -> None:
-    from doc_process_studio.chat.service.streaming.context import build_kb_skill_interface
+    from doc_process_studio.chat.infrastructure.streaming.context import build_kb_skill_interface
 
     interface = build_kb_skill_interface("TestProject")
     assert interface.id == "kb:TestProject"
@@ -189,7 +189,7 @@ def test_build_kb_skill_interface() -> None:
 
 
 def test_build_kb_skill_tools() -> None:
-    from doc_process_studio.skill.service.tool_loop.tool_schema import _build_kb_skill_tools
+    from doc_process_studio.skill.infrastructure.tool_loop.tool_schema import _build_kb_skill_tools
 
     tools = _build_kb_skill_tools("kb:MyProject")
     assert len(tools) == 1
@@ -198,7 +198,7 @@ def test_build_kb_skill_tools() -> None:
 
 
 def test_build_skill_tools_kb_prefix() -> None:
-    from doc_process_studio.skill.service.tool_loop.tool_schema import build_skill_tools
+    from doc_process_studio.skill.infrastructure.tool_loop.tool_schema import build_skill_tools
 
     tools = build_skill_tools("kb:TestProject")
     assert len(tools) == 1

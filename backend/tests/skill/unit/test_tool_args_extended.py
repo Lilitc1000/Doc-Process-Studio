@@ -1,6 +1,6 @@
 import pytest
 
-from doc_process_studio.skill.service.tool_loop.tool_args import (
+from doc_process_studio.skill.infrastructure.tool_loop.tool_args import (
     _build_builtin_tool_parameters,
     _normalize_builtin_tool_arguments,
     _validate_simple_type,

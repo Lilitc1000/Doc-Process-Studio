@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
-from doc_process_studio.chat.schemas.attachment import ChatAttachment
-from doc_process_studio.skill.service.tool_loop.tool_status import (
+from doc_process_studio.chat.application.dtos.attachment import ChatAttachment
+from doc_process_studio.skill.infrastructure.tool_loop.tool_status import (
     _build_builtin_tool_status,
     _build_declared_tool_status,
     _build_reused_tool_status,
@@ -63,7 +63,7 @@ def test_build_tool_status_start_search_context_with_source():
 def test_build_tool_status_start_read_context():
     tool_call = _make_tool_call("read_skill_context", '{"chunk_ids": ["c1", "c2"]}')
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_context_chunks_by_ids",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_context_chunks_by_ids",
         return_value=[],
     ):
         result = build_tool_status_start(skill_id="test-skill", tool_call=tool_call)
@@ -79,7 +79,7 @@ def test_build_tool_status_start_declared_tool():
 
     tool_call = _make_tool_call("custom_tool", '{"param": "value"}')
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = build_tool_status_start(skill_id="test-skill", tool_call=tool_call)
@@ -94,7 +94,7 @@ def test_build_tool_status_start_declared_tool_no_status():
 
     tool_call = _make_tool_call("custom_tool", '{"param": "value"}')
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = build_tool_status_start(skill_id="test-skill", tool_call=tool_call)
@@ -104,7 +104,7 @@ def test_build_tool_status_start_declared_tool_no_status():
 def test_build_tool_status_start_unknown_tool():
     tool_call = _make_tool_call("unknown_tool", "{}")
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         side_effect=ValueError("not found"),
     ):
         result = build_tool_status_start(skill_id="test-skill", tool_call=tool_call)
@@ -236,7 +236,7 @@ def test_build_declared_tool_status_success():
     mock_tool_config.description = "报告生成工具"
 
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = _build_declared_tool_status(
@@ -256,7 +256,7 @@ def test_build_declared_tool_status_failure():
     mock_tool_config.description = "报告生成工具"
 
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = _build_declared_tool_status(
@@ -276,7 +276,7 @@ def test_build_declared_tool_status_reused():
     mock_tool_config.description = "报告生成工具"
 
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = _build_declared_tool_status(
@@ -294,7 +294,7 @@ def test_build_declared_tool_status_with_single_attachment():
     mock_tool_config.description = "生成工具"
 
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = _build_declared_tool_status(
@@ -312,7 +312,7 @@ def test_build_declared_tool_status_with_multiple_attachments():
     mock_tool_config.description = "生成工具"
 
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = _build_declared_tool_status(
@@ -330,7 +330,7 @@ def test_build_declared_tool_status_no_attachments():
     mock_tool_config.description = "通用工具"
 
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = _build_declared_tool_status(
@@ -344,7 +344,7 @@ def test_build_declared_tool_status_no_attachments():
 
 def test_build_declared_tool_status_unknown_tool():
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         side_effect=ValueError("not found"),
     ):
         result = _build_declared_tool_status(
@@ -357,8 +357,8 @@ def test_build_declared_tool_status_unknown_tool():
 
 
 def test_build_tool_status_finish_reused():
-    from doc_process_studio.chat.schemas.request import ChatStreamRequest
-    from doc_process_studio.skill.schemas.runtime import SkillConversationState
+    from doc_process_studio.chat.router.schemas.request import ChatStreamRequest
+    from doc_process_studio.skill.application.dtos.runtime import SkillConversationState
 
     request = MagicMock(spec=ChatStreamRequest)
     request.selected_skill_ids = ["test-skill"]
@@ -376,8 +376,8 @@ def test_build_tool_status_finish_reused():
 
 
 def test_build_tool_status_finish_builtin():
-    from doc_process_studio.chat.schemas.request import ChatStreamRequest
-    from doc_process_studio.skill.schemas.runtime import SkillConversationState
+    from doc_process_studio.chat.router.schemas.request import ChatStreamRequest
+    from doc_process_studio.skill.application.dtos.runtime import SkillConversationState
 
     request = MagicMock(spec=ChatStreamRequest)
     request.selected_skill_ids = ["test-skill"]
@@ -395,8 +395,8 @@ def test_build_tool_status_finish_builtin():
 
 
 def test_build_tool_status_finish_declared():
-    from doc_process_studio.chat.schemas.request import ChatStreamRequest
-    from doc_process_studio.skill.schemas.runtime import SkillConversationState
+    from doc_process_studio.chat.router.schemas.request import ChatStreamRequest
+    from doc_process_studio.skill.application.dtos.runtime import SkillConversationState
 
     request = MagicMock(spec=ChatStreamRequest)
     request.selected_skill_ids = ["test-skill"]
@@ -408,7 +408,7 @@ def test_build_tool_status_finish_declared():
 
     tool_call = _make_tool_call("custom_tool", "{}")
     with patch(
-        "doc_process_studio.skill.service.tool_loop.tool_status.get_skill_tool_config",
+        "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         return_value=mock_tool_config,
     ):
         result = build_tool_status_finish(

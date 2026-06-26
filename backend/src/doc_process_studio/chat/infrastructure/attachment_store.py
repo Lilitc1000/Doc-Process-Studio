@@ -1,12 +1,10 @@
-"""附件存储实现：委托 service/attachments 工具层。"""
+"""附件存储实现：委托 attachments 工具层。"""
 
 from pathlib import Path
 
+from ..application.dtos.attachment import ChatAttachment, ChatAttachmentMetadata
 from ..application.ports import AttachmentStore
-from ..schemas.attachment import ChatAttachment, ChatAttachmentMetadata
-from ..service.attachments import (
-    cleanup_expired_attachments,
-    delete_attachments_for_conversation,
+from .attachments import (
     resolve_attachment_path,
     save_generated_attachment,
     save_uploaded_attachment,
@@ -54,9 +52,3 @@ class FsAttachmentStore(AttachmentStore):
             output_name=output_name,
             mime_type=mime_type,
         )
-
-    def delete_for_conversation(self, conversation_id: str) -> int:
-        return delete_attachments_for_conversation(conversation_id)
-
-    def cleanup_expired(self) -> None:
-        cleanup_expired_attachments()

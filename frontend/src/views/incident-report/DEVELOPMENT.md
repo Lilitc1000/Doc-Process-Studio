@@ -238,8 +238,6 @@ frontend/src/views/incident-report/
 | `IncidentAnalyticsTrend`        | 趋势数据                                                       |
 | `IncidentUserRolesResponse`     | 用户角色和权限响应                                             |
 | `IncidentRoleEntry`             | 角色分配条目                                                   |
-| `IncidentRoleDefinitionEntry`   | 角色定义条目（含权限列表）                                     |
-| `IncidentPermissionEntry`       | 权限定义条目                                                   |
 
 ## 开发注意
 

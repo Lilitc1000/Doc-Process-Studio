@@ -1,13 +1,13 @@
-from doc_process_studio.chat.schemas.request import (
-    ChatMessageInput,
-    ChatStreamRequest,
-)
-from doc_process_studio.chat.service.streaming import (
+from doc_process_studio.chat.infrastructure.streaming import (
     build_skill_prompt,
     build_upstream_messages_for_skills,
     extract_delta_text,
     extract_done_reason,
     merge_stream_tool_calls,
+)
+from doc_process_studio.chat.router.schemas.request import (
+    ChatMessageInput,
+    ChatStreamRequest,
 )
 
 

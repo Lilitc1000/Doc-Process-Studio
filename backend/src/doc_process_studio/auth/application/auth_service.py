@@ -3,7 +3,7 @@
 用例编排：注册、登录、令牌刷新、用户信息、资料更新、密码修改、登出、删除、管理员初始化。
 """
 
-from ...core.security import (
+from ...common.security.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -11,7 +11,7 @@ from ...core.security import (
     hash_password,
     verify_password,
 )
-from ...shared.dtutils import to_utc8
+from ...common.utils.dtutils import to_utc8
 from ..domain.errors import (
     IncorrectPasswordError,
     InvalidCredentialsError,
@@ -19,7 +19,7 @@ from ..domain.errors import (
     UserAlreadyExistsError,
     UserNotFoundError,
 )
-from ..schemas.response import (
+from .dtos import (
     RegisterResponse,
     TokenResponse,
     UpdateProfileResponse,

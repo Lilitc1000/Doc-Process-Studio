@@ -3,15 +3,15 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-from doc_process_studio.chat.application.session_service import SessionService
-from doc_process_studio.chat.infrastructure.dependencies import get_session_service
-from doc_process_studio.chat.schemas.response import (
-    ChatSessionDetail,
-    ChatSessionListResponse,
-)
-from doc_process_studio.chat.schemas.session import (
+from doc_process_studio.chat.application.contracts import SessionServiceContract
+from doc_process_studio.chat.application.dtos.session import (
     ChatSessionSnapshot,
     ChatSessionSummary,
+)
+from doc_process_studio.chat.infrastructure.dependencies import get_session_service
+from doc_process_studio.chat.router.schemas.response import (
+    ChatSessionDetail,
+    ChatSessionListResponse,
 )
 
 
@@ -36,18 +36,15 @@ def _build_snapshot() -> ChatSessionSnapshot:
     )
 
 
-class _FakeSessionService(SessionService):
+class _FakeSessionService(SessionServiceContract):
     """测试用 SessionService 桩，绕过真实端口依赖。"""
 
-    def __init__(self) -> None:  # noqa: D401 - 测试桩无需端口
-        pass
+    async def list_sessions(self, user_id: str) -> ChatSessionListResponse:
+        _ = user_id
+        return ChatSessionListResponse(sessions=[_build_summary("conversation-1", "第一条会话")])
 
-    async def list_sessions(self, user_id: str) -> ChatSessionListResponse:  # type: ignore[override]
-        return ChatSessionListResponse(
-            sessions=[_build_summary("conversation-1", "第一条会话")]
-        )
-
-    async def get_session(self, session_id: str, user_id: str) -> ChatSessionDetail:  # type: ignore[override]
+    async def get_session(self, session_id: str, user_id: str) -> ChatSessionDetail:
+        _ = user_id
         assert session_id == "conversation-1"
         summary = _build_summary(session_id, "第一条会话")
         return ChatSessionDetail(
@@ -55,12 +52,33 @@ class _FakeSessionService(SessionService):
             snapshot=_build_snapshot(),
         )
 
-    async def save_session(self, *, session_id, user_id, title, title_source_messages, snapshot) -> ChatSessionSummary:  # type: ignore[override]
+    async def save_session(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        title: str,
+        title_source_messages: list[str],
+        snapshot: ChatSessionSnapshot,
+    ) -> ChatSessionSummary:
+        _ = (user_id, title, title_source_messages, snapshot)
         assert session_id == "conversation-1"
-        assert title_source_messages == ["你好", "请总结文档"]
         return _build_summary("conversation-1", "文档总结")
 
-    async def delete_session(self, session_id: str, user_id: str) -> bool:  # type: ignore[override]
+    async def rename_session(self, session_id: str, user_id: str, title: str) -> ChatSessionSummary:
+        _ = (session_id, user_id, title)
+        raise NotImplementedError
+
+    async def delete_sessions_by_title_prefix(self, user_id: str, title_prefix: str) -> int:
+        _ = (user_id, title_prefix)
+        raise NotImplementedError
+
+    async def delete_sessions_by_user(self, target_user_id: str, user_id: str) -> int:
+        _ = (target_user_id, user_id)
+        raise NotImplementedError
+
+    async def delete_session(self, session_id: str, user_id: str) -> bool:
+        _ = user_id
         assert session_id == "conversation-1"
         return True
 

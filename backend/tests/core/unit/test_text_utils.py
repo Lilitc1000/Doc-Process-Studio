@@ -1,4 +1,4 @@
-from doc_process_studio.shared.text_utils import parse_json_object
+from doc_process_studio.common.utils.text_utils import parse_json_object
 
 
 def test_parse_json_object_valid_dict():

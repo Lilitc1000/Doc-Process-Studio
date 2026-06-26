@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 from doc_process_studio.core.database import Base
-import doc_process_studio.auth.models
+import doc_process_studio.auth.infrastructure.persistence
 import doc_process_studio.chat.models
-import doc_process_studio.incident_report.models
+import doc_process_studio.incident_report.infrastructure.persistence
 
 config = context.config
 

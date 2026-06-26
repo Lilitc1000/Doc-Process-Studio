@@ -1,4 +1,4 @@
-from doc_process_studio.skill.service.tool_loop.tool_status import (
+from doc_process_studio.skill.infrastructure.tool_loop.tool_status import (
     _build_builtin_status_label,
     _format_short_path,
     _get_read_context_relative_path,

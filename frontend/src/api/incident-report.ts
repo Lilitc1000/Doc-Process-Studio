@@ -10,8 +10,6 @@ import type {
   IncidentAnalyticsTrend,
   IncidentUserRolesResponse,
   IncidentRoleEntry,
-  IncidentRoleDefinitionListResponse,
-  IncidentPermissionListResponse,
   IncidentUserWithRolesListResponse,
 } from '../types/incident-report/incident-report';
 
@@ -198,33 +196,10 @@ export const fetchUserIncidentRolesAndPermissions =
     return response.data;
   };
 
-export const fetchAllIncidentRoles = async (): Promise<IncidentRoleEntry[]> => {
-  const response = await apiClient.get<{ items: IncidentRoleEntry[] }>(
-    '/incident-report/roles',
-  );
-  return response.data.items ?? [];
-};
-
 export const fetchUsersWithRoles =
   async (): Promise<IncidentUserWithRolesListResponse> => {
     const response = await apiClient.get<IncidentUserWithRolesListResponse>(
       '/incident-report/users-with-roles',
-    );
-    return response.data;
-  };
-
-export const fetchRoleDefinitions =
-  async (): Promise<IncidentRoleDefinitionListResponse> => {
-    const response = await apiClient.get<IncidentRoleDefinitionListResponse>(
-      '/incident-report/role-definitions',
-    );
-    return response.data;
-  };
-
-export const fetchPermissions =
-  async (): Promise<IncidentPermissionListResponse> => {
-    const response = await apiClient.get<IncidentPermissionListResponse>(
-      '/incident-report/permissions',
     );
     return response.data;
   };

@@ -1,9 +1,7 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
 
-from doc_process_studio.incident_report.models.incident_report_orm import IncidentReport
-from doc_process_studio.incident_report.service.report_store import (
-    _CLEAR_SENTINEL,
+from doc_process_studio.incident_report.infrastructure.persistence.incident_report_orm import IncidentReport
+from doc_process_studio.incident_report.infrastructure.repositories.orm_mappers import (
     orm_to_detail,
     orm_to_summary,
 )
@@ -38,12 +36,7 @@ def _make_report(**overrides) -> IncidentReport:
 
 async def test_orm_to_summary_maps_fields():
     report = _make_report()
-    with patch(
-        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
-        new_callable=AsyncMock,
-        return_value={},
-    ):
-        summary = await orm_to_summary(report)
+    summary = await orm_to_summary(report, usernames={})
     assert summary.id == "rep-1"
     assert summary.ref_no == "DAS-0001"
     assert summary.title == "测试报告"
@@ -59,12 +52,7 @@ async def test_orm_to_summary_maps_fields():
 
 async def test_orm_to_detail_maps_fields():
     report = _make_report()
-    with patch(
-        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
-        new_callable=AsyncMock,
-        return_value={},
-    ):
-        detail = await orm_to_detail(report)
+    detail = await orm_to_detail(report, usernames={})
     assert detail.id == "rep-1"
     assert detail.system == "数据库"
     assert detail.site_id == "SITE-01"
@@ -87,12 +75,7 @@ async def test_orm_to_detail_with_all_fields():
         resolution_date=now,
         report_data={"severity": "P2"},
     )
-    with patch(
-        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
-        new_callable=AsyncMock,
-        return_value={},
-    ):
-        detail = await orm_to_detail(report)
+    detail = await orm_to_detail(report, usernames={})
     assert detail.assignee_id == "usr_handler"
     assert detail.verifier_id == "usr_verifier"
     assert detail.submitted_at is not None
@@ -102,30 +85,28 @@ async def test_orm_to_detail_with_all_fields():
     assert detail.report_data == {"severity": "P2"}
 
 
-def test_clear_sentinel_is_unique():
-    assert _CLEAR_SENTINEL is not None
-    assert _CLEAR_SENTINEL is not False
-    sentinel2 = object()
-    assert _CLEAR_SENTINEL is not sentinel2
-
-
 async def test_orm_to_summary_with_none_severity():
     report = _make_report(severity=None)
-    with patch(
-        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
-        new_callable=AsyncMock,
-        return_value={},
-    ):
-        summary = await orm_to_summary(report)
+    summary = await orm_to_summary(report, usernames={})
     assert summary.severity is None
 
 
 async def test_orm_to_detail_empty_form_data():
     report = _make_report(form_data=None)
-    with patch(
-        "doc_process_studio.incident_report.service.report_store._resolve_usernames_safe",
-        new_callable=AsyncMock,
-        return_value={},
-    ):
-        detail = await orm_to_detail(report)
+    detail = await orm_to_detail(report, usernames={})
     assert detail.form_data == {}
+
+
+async def test_orm_to_summary_resolves_usernames():
+    report = _make_report(reporter_id="usr_test", assignee_id="usr_handler")
+    usernames = {"usr_test": "测试用户", "usr_handler": "处理人"}
+    summary = await orm_to_summary(report, usernames=usernames)
+    assert summary.reporter_name == "测试用户"
+    assert summary.assignee_name == "处理人"
+
+
+async def test_orm_to_detail_resolves_usernames():
+    report = _make_report(verifier_id="usr_verifier")
+    usernames = {"usr_verifier": "验证人"}
+    detail = await orm_to_detail(report, usernames=usernames)
+    assert detail.verifier_name == "验证人"

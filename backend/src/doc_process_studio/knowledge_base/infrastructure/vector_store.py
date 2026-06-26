@@ -1,14 +1,14 @@
 """Qdrant 向量存储实现。
 
-实现 VectorStore 端口，委托 service/qdrant_service.py 的纯函数。
+实现 VectorStore 端口，委托基础设施层 qdrant_service 的纯函数。
 """
 
 from collections.abc import Sequence
 from typing import Any
 
+from ..application.dtos import KBChunkPayload
 from ..application.ports import VectorStore
-from ..schemas.common import KBChunkPayload
-from ..service.qdrant_service import (
+from .qdrant_service import (
     delete_document_vectors,
     delete_project_vectors,
     search_knowledge_base,
@@ -27,12 +27,10 @@ class QdrantVectorStore(VectorStore):
 
     def upsert_chunks(
         self,
-        project_name: str,
-        document_id: str,
         chunks: Sequence[KBChunkPayload],
         vectors: Sequence[list[float]],
     ) -> int:
-        return upsert_chunks(project_name, document_id, chunks, vectors)
+        return upsert_chunks(chunks, vectors)
 
     def search(
         self,

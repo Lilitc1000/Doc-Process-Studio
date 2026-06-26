@@ -9,13 +9,13 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..schemas import (
+from ..router.schemas import (
     KBDocumentResponse,
     KBFolderResponse,
     KBProjectResponse,
     KBTreeNode,
 )
-from ..schemas.common import KBChunkPayload
+from .dtos import KBChunkPayload
 
 
 class KnowledgeBaseRepository(ABC):
@@ -99,8 +99,6 @@ class VectorStore(ABC):
     @abstractmethod
     def upsert_chunks(
         self,
-        project_name: str,
-        document_id: str,
         chunks: Sequence[KBChunkPayload],
         vectors: Sequence[list[float]],
     ) -> int: ...

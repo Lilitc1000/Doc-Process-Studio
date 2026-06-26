@@ -7,10 +7,10 @@ import logging
 
 from sqlalchemy import select
 
-from ...core.database import async_session_factory
-from ..application.ports import PermissionChecker
-from ..domain.permission import ROLE_PERMISSIONS, Permission, Role
-from ..models.incident_report_role import IncidentReportUserRole
+from ...common.infrastructure.database import async_session_factory
+from ..application.ports.ports import PermissionChecker
+from ..domain.values.permission import ROLE_PERMISSIONS, Permission, Role
+from .persistence.incident_report_role import IncidentReportUserRole
 
 logger = logging.getLogger(__name__)
 

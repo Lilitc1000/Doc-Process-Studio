@@ -29,16 +29,16 @@ backend/tests/
 │   │   ├── test_report_aggregate.py        # 报告聚合根（状态流转 + 权限 + 事件）
 │   │   ├── test_report_store.py            # ORM→Schema 映射 + _CLEAR_SENTINEL
 │   │   ├── test_report_store_extended.py   # DB 操作（create/load/update/delete/list/comment）
-│   │   ├── test_report_data.py             # 表单数据读写工具函数
+│   │   ├── test_report_data.py             # 表单数据读写工具函数（infrastructure/utils/report_data）
 │   │   ├── test_role_service.py            # 角色管理（基础）
-│   │   ├── test_form_schema.py             # 表单 Schema 结构
-│   │   ├── test_generation.py              # 正文生成（prompt 构建 + payload 应用）
+│   │   ├── test_form_schema.py             # 表单 Schema 结构（domain/values/form_schema）
+│   │   ├── test_generation.py              # 正文生成（prompt 构建 + payload 应用，infrastructure/utils/generation）
 │   │   ├── test_generation_extended.py     # 正文生成（reference/report_data 直通）
-│   │   ├── test_normalization.py           # 文本归一化（日期/时间/状态/严重级别）
-│   │   ├── test_preview.py                 # 预览缓存与文件名构建
+│   │   ├── test_normalization.py           # 文本归一化（日期/时间/状态/严重级别，infrastructure/utils/normalization）
+│   │   ├── test_preview.py                 # 预览缓存与文件名构建（infrastructure/utils/preview）
 │   │   ├── test_preview_extended.py        # 预览转换（PDF/附件加载）
-│   │   ├── test_reference.py               # 参考资料提取与启发式选择
-│   │   ├── test_constants.py               # 常量定义
+│   │   ├── test_reference.py               # 参考资料提取与启发式选择（infrastructure/adapters/reference_context）
+│   │   ├── test_constants.py               # 常量定义（domain/values/constants）
 │   │   └── test_schemas_common.py          # 公共 Schema（状态/角色/表单快照）
 │   ├── integration/
 │   │   ├── test_reports_api.py      # 报告 API（CRUD + 状态流转 + 权限）
@@ -108,7 +108,7 @@ backend/tests/
 | `incident_report/` | `doc_process_studio/incident_report/` | 事故报告（报告 CRUD、状态流转、角色管理、审计日志、正文生成、数据分析） |
 | `skill/` | `doc_process_studio/skill/` | 技能系统（注册、选择、规划、工具循环、会话存储） |
 | `system/` | `doc_process_studio/system/` | 系统服务（执行器、特性开关、错误详情、链路追踪、模型管理） |
-| `core/` | `doc_process_studio/core/` | 核心基础设施（配置、请求防护、模型上下文、安全、缓存、数据库） |
+| `core/` | `doc_process_studio/common/` | 共享内核（配置、请求防护、模型上下文、安全、缓存、数据库） |
 | `knowledge_base/` | `doc_process_studio/knowledge_base/` | 知识库（项目/文件夹/文档管理、分块、向量化、Skill 集成） |
 
 ## 测试分层
@@ -171,7 +171,7 @@ env ENV=dev uv run --no-sync mypy src/doc_process_studio
 
 ### 适用场景
 
-- `core/security.py` 中的 JWT、密码哈希等纯逻辑
+- `common/security/security.py` 中的 JWT、密码哈希等纯逻辑
 - `service/` 层的业务逻辑（使用 monkeypatch 替换外部依赖）
 - `utils/` 下的纯函数
 - 模块级别的状态管理（如速率限制、特性开关）
@@ -183,7 +183,7 @@ env ENV=dev uv run --no-sync mypy src/doc_process_studio
 直接导入函数，断言输入输出：
 
 ```python
-from doc_process_studio.core.security import (
+from doc_process_studio.common.security.security import (
     hash_password,
     verify_password,
     create_access_token,
@@ -290,7 +290,7 @@ def _build_detail(**overrides):
 
 ```python
 def _reset_guard_state():
-    from doc_process_studio.core.request_guard import _rate_windows, _semaphores
+    from doc_process_studio.common.middleware.request_guard import _rate_windows, _semaphores
     _rate_windows.clear()
     _semaphores.clear()
 
@@ -345,7 +345,7 @@ def test_register_success(client, monkeypatch):
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from doc_process_studio.core.security import create_access_token
+from doc_process_studio.common.security.security import create_access_token
 from doc_process_studio.incident_report.router.reports import router as reports_router
 from doc_process_studio.incident_report.router.dependencies import require_admin
 
@@ -390,6 +390,48 @@ def test_get_current_user(client, auth_headers):
     data = resp.json()
     assert data["username"] == "testuser"
 ```
+
+#### 2b. 桩服务类（继承应用服务契约）
+
+集成测试中需要替换应用服务时，桩类**必须继承对应的应用服务契约**（`application/contracts.py`），确保方法签名与业务接口同步。
+
+**契约类位置**：各域 `application/contracts.py`，与 `ports.py` 并列。
+
+```python
+from doc_process_studio.chat.application.contracts import SessionServiceContract
+
+class _FakeSessionService(SessionServiceContract):
+    """测试用 SessionService 桩，绕过真实端口依赖。"""
+
+    async def list_sessions(self, user_id: str) -> ChatSessionListResponse:
+        _ = user_id  # 未使用的参数用 _ = 标记，避免 ARG 规则报错
+        return ChatSessionListResponse(sessions=[...])
+
+    async def save_session(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        title: str,
+        title_source_messages: list[str],
+        snapshot: ChatSessionSnapshot,
+    ) -> ChatSessionSummary:
+        _ = (user_id, title, title_source_messages, snapshot)
+        assert session_id == "conversation-1"
+        return _build_summary("conversation-1", "文档总结")
+
+    # 测试中不使用的方法用 raise NotImplementedError 实现
+    async def rename_session(self, session_id: str, user_id: str, title: str) -> ChatSessionSummary:
+        _ = (session_id, user_id, title)
+        raise NotImplementedError
+    ...
+```
+
+**要点**：
+- 继承契约类后，**运行时实例化桩类会自动检测未实现的抽象方法**（ABC 机制），确保桩类与业务接口同步
+- 业务接口变更时（增删方法、修改签名），桩类必须在编译/运行时同步更新
+- 未使用的参数用 `_ = param` 标记（保持原参数名，不破坏关键字参数调用）
+- 测试中不使用的方法用 `raise NotImplementedError` 实现
 
 #### 3. 流式 API 测试
 
@@ -509,6 +551,7 @@ def build_plan_decision():
 - [ ] 需要认证的测试使用 `auth_headers` fixture
 - [ ] service 层使用 `monkeypatch` 替换，避免依赖真实数据库
 - [ ] Pydantic 响应模型字段使用 snake_case
+- [ ] 桩服务类继承对应的应用服务契约（`application/contracts.py`），未使用的方法用 `raise NotImplementedError` 实现
 
 ### 新增契约测试
 

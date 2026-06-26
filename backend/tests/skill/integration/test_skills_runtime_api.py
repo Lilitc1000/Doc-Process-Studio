@@ -1,51 +1,52 @@
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-from doc_process_studio.skill.application.skill_service import SkillService
-from doc_process_studio.skill.infrastructure.dependencies import get_skill_service
-from doc_process_studio.skill.schemas.catalog import SkillInterfaceConfig
-from doc_process_studio.skill.schemas.runtime import (
+from doc_process_studio.skill.application.contracts import SkillServiceContract
+from doc_process_studio.skill.application.dtos.catalog import SkillInterfaceConfig
+from doc_process_studio.skill.application.dtos.runtime import (
     SkillContextChunk,
     SkillConversationState,
 )
-from doc_process_studio.skill.service.context_packer import (
+from doc_process_studio.skill.infrastructure.context_packer import (
     _build_local_summary_from_chunks,
     build_skill_context_budget_text,
 )
+from doc_process_studio.skill.infrastructure.dependencies import get_skill_service
 
 
-def _build_fake_skill_service(
-    *,
-    chunks: list[SkillContextChunk] | None = None,
-    refresh_result: tuple[bool, int] | None = None,
-    delete_result: tuple[bool, int] | None = None,
-) -> SkillService:
-    fake = SkillService.__new__(SkillService)
+class _FakeSkillService(SkillServiceContract):
+    """测试用 SkillService 桩，绕过真实端口依赖。"""
 
-    def _list_skills() -> list[SkillInterfaceConfig]:
+    def __init__(
+        self,
+        *,
+        chunks: list[SkillContextChunk] | None = None,
+        refresh_result: tuple[bool, int] | None = None,
+        delete_result: tuple[bool, int] | None = None,
+    ) -> None:
+        self._chunks = chunks
+        self._refresh_result = refresh_result
+        self._delete_result = delete_result
+
+    def list_skills(self) -> list[SkillInterfaceConfig]:
         return []
 
-    async def _search_context(skill_id: str, query: str) -> list[SkillContextChunk]:
-        return chunks or []
+    async def search_context(self, skill_id: str, query: str) -> list[SkillContextChunk]:
+        _ = (skill_id, query)
+        return self._chunks or []
 
-    async def _refresh(conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
+    async def refresh_conversation_cache(self, conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
         assert conversation_id == "conversation-1"
         assert tenant_id == "default"
-        return refresh_result or (True, 3600)
+        return self._refresh_result or (True, 3600)
 
-    async def _delete(conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
+    async def delete_conversation_cache(self, conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
         assert conversation_id == "conversation-1"
         assert tenant_id == "default"
-        return delete_result or (True, -2)
-
-    fake.list_skills = _list_skills  # type: ignore[assignment]
-    fake.search_context = _search_context  # type: ignore[assignment]
-    fake.refresh_conversation_cache = _refresh  # type: ignore[assignment]
-    fake.delete_conversation_cache = _delete  # type: ignore[assignment]
-    return fake
+        return self._delete_result or (True, -2)
 
 
-def _install_fake_service(monkeypatch, fake: SkillService) -> None:
+def _install_fake_service(monkeypatch, fake: _FakeSkillService) -> None:
     monkeypatch.setitem(
         main_module.app.dependency_overrides,
         get_skill_service,
@@ -54,7 +55,7 @@ def _install_fake_service(monkeypatch, fake: SkillService) -> None:
 
 
 def test_api_skill_context_search_returns_chunks(monkeypatch, auth_headers) -> None:
-    fake = _build_fake_skill_service(
+    fake = _FakeSkillService(
         chunks=[
             SkillContextChunk(
                 id="chunk-1",
@@ -100,7 +101,7 @@ def test_api_skill_cache_status_reports_redis_ping(monkeypatch, auth_headers) ->
 
 
 def test_api_skill_cache_refresh_reports_ttl(monkeypatch, auth_headers) -> None:
-    fake = _build_fake_skill_service(refresh_result=(True, 3600))
+    fake = _FakeSkillService(refresh_result=(True, 3600))
     _install_fake_service(monkeypatch, fake)
 
     client = TestClient(main_module.app)
@@ -119,7 +120,7 @@ def test_api_skill_cache_refresh_reports_ttl(monkeypatch, auth_headers) -> None:
 
 
 def test_api_skill_cache_delete_clears_state(monkeypatch, auth_headers) -> None:
-    fake = _build_fake_skill_service(delete_result=(True, -2))
+    fake = _FakeSkillService(delete_result=(True, -2))
     _install_fake_service(monkeypatch, fake)
 
     client = TestClient(main_module.app)

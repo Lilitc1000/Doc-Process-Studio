@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from doc_process_studio.core import request_guard as guard_module
+from doc_process_studio.common.middleware import request_guard as guard_module
 
 
 def _reset_guard_state() -> None:

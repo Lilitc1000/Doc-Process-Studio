@@ -1,4 +1,6 @@
-from doc_process_studio.skill.service.registry import (
+import pytest
+
+from doc_process_studio.skill.infrastructure.registry import (
     _read_skill_markdown_metadata,
     _read_yaml_interface_block,
     _strip_wrapped_text,
@@ -76,8 +78,5 @@ def test_get_skill_interface_valid():
 
 
 def test_get_skill_interface_invalid():
-    try:
+    with pytest.raises(ValueError):
         get_skill_interface("nonexistent-skill-id-xyz")
-        assert False, "Should have raised ValueError"
-    except ValueError:
-        pass

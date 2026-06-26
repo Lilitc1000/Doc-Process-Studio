@@ -116,28 +116,6 @@ export interface IncidentRoleEntry {
   assignedAt: string | null;
 }
 
-export interface IncidentRoleDefinitionEntry {
-  roleKey: string;
-  roleName: string;
-  description: string | null;
-  permissions: string[];
-}
-
-export interface IncidentRoleDefinitionListResponse {
-  items: IncidentRoleDefinitionEntry[];
-}
-
-export interface IncidentPermissionEntry {
-  permissionKey: string;
-  permissionName: string;
-  description: string | null;
-  category: string;
-}
-
-export interface IncidentPermissionListResponse {
-  items: IncidentPermissionEntry[];
-}
-
 export interface IncidentUserWithRolesEntry {
   userId: string;
   username: string;

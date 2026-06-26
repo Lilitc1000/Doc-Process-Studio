@@ -4,17 +4,17 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from doc_process_studio.core.security import create_access_token
+from doc_process_studio.common.security.security import create_access_token
+from doc_process_studio.incident_report.application.dtos import (
+    IncidentCommentEntry,
+    IncidentReportDetail,
+)
 from doc_process_studio.incident_report.infrastructure.dependencies import (
     get_audit_query_service,
     get_comment_service,
     get_report_application_service,
 )
 from doc_process_studio.incident_report.router.reports import router as reports_router
-from doc_process_studio.incident_report.schemas.response import (
-    IncidentCommentEntry,
-    IncidentReportDetail,
-)
 
 
 def _create_test_app() -> FastAPI:
@@ -59,9 +59,7 @@ def test_report_status_transitions():
 
     fake_service = AsyncMock()
     fake_service.create.return_value = _mock_report(status="draft")
-    fake_service.submit.return_value = _mock_report(
-        status="pending", submitted_at="2026-04-20T01:00:00Z"
-    )
+    fake_service.submit.return_value = _mock_report(status="pending", submitted_at="2026-04-20T01:00:00Z")
     _override_service(app, fake_service)
 
     client = TestClient(app)

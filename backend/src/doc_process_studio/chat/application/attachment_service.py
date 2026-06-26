@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.responses import FileResponse
 
 from ..domain.errors import AttachmentExpiredError, AttachmentNotFoundError
-from ..schemas.attachment import ChatAttachment, ChatAttachmentMetadata
+from .dtos.attachment import ChatAttachment, ChatAttachmentMetadata
 from .ports import AttachmentStore
 
 

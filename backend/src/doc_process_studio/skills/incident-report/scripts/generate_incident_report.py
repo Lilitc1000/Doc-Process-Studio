@@ -119,7 +119,7 @@ def _normalize_event_sequence(value: Any) -> list[dict[str, str]]:
     return normalized
 
 
-def _normalize_actions(value: Any, action_type: str) -> list[dict[str, str]]:
+def _normalize_actions(value: Any) -> list[dict[str, str]]:
     if value is None:
         return []
     if not isinstance(value, list):
@@ -285,8 +285,8 @@ def normalize_incident_data(raw_data: Any) -> dict[str, Any]:
     )
 
     event_sequence = _normalize_event_sequence(source.get("event_sequence"))
-    immediate_actions = _normalize_actions(source.get("immediate_actions"), "immediate")
-    preventive_actions = _normalize_actions(source.get("preventive_actions"), "preventive")
+    immediate_actions = _normalize_actions(source.get("immediate_actions"))
+    preventive_actions = _normalize_actions(source.get("preventive_actions"))
     status_option = _normalize_status_option(source.get("status_option", source.get("status")))
     severity_option = _normalize_severity_option(source.get("severity_option", source.get("severity")))
 

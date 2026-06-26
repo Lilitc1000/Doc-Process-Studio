@@ -7,13 +7,13 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
-from doc_process_studio.incident_report.application.role_service import RoleService
-from doc_process_studio.incident_report.domain.permission import Permission
-from doc_process_studio.incident_report.schemas.response import (
+from doc_process_studio.incident_report.application.dtos import (
     IncidentPermissionEntry,
     IncidentRoleDefinitionEntry,
     IncidentRoleEntry,
 )
+from doc_process_studio.incident_report.application.services.role_service import RoleService
+from doc_process_studio.incident_report.domain.values.permission import Permission
 
 
 def _make_service(
@@ -126,9 +126,7 @@ async def test_list_users_with_roles_empty():
 async def test_assign_role_delegates_to_repo_and_resolves_name():
     service = _make_service(usernames={"usr_admin": "管理员"})
     result = await service.assign_role(user_id="usr_1", role="reporter", assigned_by="usr_admin")
-    service._role_repo.assign_role.assert_awaited_once_with(
-        user_id="usr_1", role="reporter", assigned_by="usr_admin"
-    )
+    service._role_repo.assign_role.assert_awaited_once_with(user_id="usr_1", role="reporter", assigned_by="usr_admin")
     assert result.user_id == "usr_1"
     assert result.role == "reporter"
     assert result.assigned_by == "usr_admin"
@@ -138,20 +136,14 @@ async def test_assign_role_delegates_to_repo_and_resolves_name():
 async def test_revoke_role_delegates_to_repo():
     service = _make_service()
     await service.revoke_role(user_id="usr_1", role="reporter")
-    service._role_repo.revoke_role.assert_awaited_once_with(
-        user_id="usr_1", role="reporter"
-    )
+    service._role_repo.revoke_role.assert_awaited_once_with(user_id="usr_1", role="reporter")
 
 
 # ---- list_role_definitions / list_permissions ----
 async def test_list_role_definitions_with_permissions_map():
     defs = [
-        IncidentRoleDefinitionEntry(
-            role_key="reporter", role_name="报告人", description="创建报告", permissions=[]
-        ),
-        IncidentRoleDefinitionEntry(
-            role_key="viewer", role_name="观察者", description="仅查看", permissions=[]
-        ),
+        IncidentRoleDefinitionEntry(role_key="reporter", role_name="报告人", description="创建报告", permissions=[]),
+        IncidentRoleDefinitionEntry(role_key="viewer", role_name="观察者", description="仅查看", permissions=[]),
     ]
     service = _make_service(
         role_defs=defs,

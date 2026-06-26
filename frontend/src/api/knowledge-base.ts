@@ -25,13 +25,6 @@ export const createKBProject = async (
   return response.data;
 };
 
-export const getKBProject = async (projectId: string): Promise<KBProject> => {
-  const response = await apiClient.get<KBProject>(
-    `/knowledge-base/projects/${projectId}`,
-  );
-  return response.data;
-};
-
 export const renameKBProject = async (
   projectId: string,
   name: string,

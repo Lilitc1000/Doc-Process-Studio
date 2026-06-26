@@ -3,8 +3,8 @@ import logging
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.database import get_db
-from ...core.security import get_current_user_id
+from ...common.infrastructure.database import get_db
+from ...common.security.security import get_current_user_id
 from ..application.kb_service import KnowledgeBaseService
 from ..domain.errors import (
     DocumentNotFoundError,
@@ -15,7 +15,7 @@ from ..domain.errors import (
     UnsupportedFileTypeError,
 )
 from ..infrastructure.dependencies import get_kb_service
-from ..schemas import (
+from .schemas import (
     KBDocumentResponse,
     KBFolderCreateRequest,
     KBFolderRenameRequest,
@@ -30,7 +30,11 @@ from ..schemas import (
 
 _logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/knowledge-base", tags=["knowledge-base"])
+router = APIRouter(
+    prefix="/api/knowledge-base",
+    tags=["knowledge-base"],
+    dependencies=[Depends(get_current_user_id)],
+)
 
 
 def _handle_kb_error(exc: KnowledgeBaseError) -> HTTPException:
@@ -49,7 +53,6 @@ def _handle_kb_error(exc: KnowledgeBaseError) -> HTTPException:
 
 @router.get("/projects", response_model=KBProjectListResponse)
 async def list_kb_projects(
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectListResponse:
@@ -59,7 +62,6 @@ async def list_kb_projects(
 @router.post("/projects", response_model=KBProjectResponse, status_code=201)
 async def create_kb_project(
     body: KBProjectCreateRequest,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectResponse:
@@ -71,7 +73,6 @@ async def create_kb_project(
 @router.get("/projects/{project_id}", response_model=KBProjectResponse)
 async def get_kb_project(
     project_id: str,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectResponse:
@@ -85,7 +86,6 @@ async def get_kb_project(
 async def rename_kb_project(
     project_id: str,
     body: KBProjectRenameRequest,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectResponse:
@@ -100,7 +100,6 @@ async def rename_kb_project(
 @router.delete("/projects/{project_id}", status_code=204)
 async def delete_kb_project(
     project_id: str,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> None:
@@ -115,7 +114,6 @@ async def delete_kb_project(
 async def create_kb_folder(
     project_id: str,
     body: KBFolderCreateRequest,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBFolderResponse:
@@ -131,7 +129,6 @@ async def create_kb_folder(
 async def rename_kb_folder(
     folder_id: str,
     body: KBFolderRenameRequest,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBFolderResponse:
@@ -146,7 +143,6 @@ async def rename_kb_folder(
 @router.delete("/folders/{folder_id}", status_code=204)
 async def delete_kb_folder(
     folder_id: str,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> None:
@@ -160,7 +156,6 @@ async def delete_kb_folder(
 @router.get("/projects/{project_id}/tree", response_model=KBTreeResponse)
 async def get_kb_tree(
     project_id: str,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBTreeResponse:
@@ -175,7 +170,6 @@ async def upload_kb_document(
     project_id: str,
     file: UploadFile = File(...),
     folder_id: str | None = Form(None),
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBDocumentResponse:
@@ -197,7 +191,6 @@ async def upload_kb_document(
 @router.delete("/documents/{document_id}", status_code=204)
 async def delete_kb_document(
     document_id: str,
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> None:
@@ -210,7 +203,6 @@ async def delete_kb_document(
 
 @router.get("/projects-simple", response_model=KBProjectListSimpleResponse)
 async def list_kb_projects_simple(
-    user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectListSimpleResponse:

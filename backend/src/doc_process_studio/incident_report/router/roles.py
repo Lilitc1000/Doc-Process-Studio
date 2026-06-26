@@ -2,12 +2,13 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ...core.security import get_current_user_id
-from ..application.role_service import RoleService
-from ..domain.errors import DomainError
+from ...common.security.security import get_current_user_id
+from ..application.services.role_service import RoleService
+from ..domain.values.errors import DomainError
 from ..infrastructure.dependencies import get_role_service
-from ..schemas.request import IncidentRoleAssignRequest
-from ..schemas.response import (
+from .dependencies import require_admin
+from .schemas.request import IncidentRoleAssignRequest
+from .schemas.response import (
     IncidentPermissionListResponse,
     IncidentRoleDefinitionListResponse,
     IncidentRoleEntry,
@@ -15,11 +16,14 @@ from ..schemas.response import (
     IncidentUserPermissionsResponse,
     IncidentUserWithRolesListResponse,
 )
-from .dependencies import require_admin
 
 _logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/incident-report", tags=["incident-report-roles"])
+router = APIRouter(
+    prefix="/api/incident-report",
+    tags=["incident-report-roles"],
+    dependencies=[Depends(get_current_user_id)],
+)
 
 
 @router.get("/roles/me", response_model=IncidentUserPermissionsResponse)
@@ -30,17 +34,19 @@ async def get_my_roles(
     return await service.get_my_permissions(user_id=user_id)
 
 
-@router.get("/roles", response_model=IncidentRoleListResponse)
+@router.get("/roles", response_model=IncidentRoleListResponse, dependencies=[Depends(require_admin)])
 async def list_roles(
-    user_id: str = Depends(require_admin),
     service: RoleService = Depends(get_role_service),
 ) -> IncidentRoleListResponse:
     return await service.list_role_assignments()
 
 
-@router.get("/users-with-roles", response_model=IncidentUserWithRolesListResponse)
+@router.get(
+    "/users-with-roles",
+    response_model=IncidentUserWithRolesListResponse,
+    dependencies=[Depends(require_admin)],
+)
 async def list_users_with_roles(
-    admin_id: str = Depends(require_admin),
     service: RoleService = Depends(get_role_service),
 ) -> IncidentUserWithRolesListResponse:
     return await service.list_users_with_roles()
@@ -63,11 +69,10 @@ async def assign_role(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/roles/{target_user_id}/{role}")
+@router.delete("/roles/{target_user_id}/{role}", dependencies=[Depends(require_admin)])
 async def revoke_role(
     target_user_id: str,
     role: str,
-    admin_id: str = Depends(require_admin),
     service: RoleService = Depends(get_role_service),
 ) -> dict[str, bool]:
     try:
@@ -80,7 +85,6 @@ async def revoke_role(
 
 @router.get("/role-definitions", response_model=IncidentRoleDefinitionListResponse)
 async def list_role_defs(
-    user_id: str = Depends(get_current_user_id),
     service: RoleService = Depends(get_role_service),
 ) -> IncidentRoleDefinitionListResponse:
     return await service.list_role_definitions()
@@ -88,7 +92,6 @@ async def list_role_defs(
 
 @router.get("/permissions", response_model=IncidentPermissionListResponse)
 async def list_perms(
-    user_id: str = Depends(get_current_user_id),
     service: RoleService = Depends(get_role_service),
 ) -> IncidentPermissionListResponse:
     return await service.list_permissions()

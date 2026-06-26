@@ -1,4 +1,6 @@
-from doc_process_studio.skill.service.tool_loop.tool_exec import (
+import pytest
+
+from doc_process_studio.skill.infrastructure.tool_loop.tool_exec import (
     _apply_json_file_text_normalizer,
     _format_declared_tool_default_name,
     _normalize_json_like_punctuation,
@@ -65,15 +67,12 @@ def test_apply_json_file_text_normalizer_chaptered():
 
 
 def test_apply_json_file_text_normalizer_unsupported():
-    try:
+    with pytest.raises(ValueError):
         _apply_json_file_text_normalizer(
             argument_name="test",
             normalized_text="text",
             text_normalizer="unsupported",
         )
-        assert False, "Should have raised ValueError"
-    except ValueError:
-        pass
 
 
 def test_normalize_json_like_punctuation():
@@ -100,7 +99,7 @@ def test_try_parse_json_like_value_double_encoded():
 
 
 def test_format_declared_tool_default_name():
-    from doc_process_studio.skill.schemas.catalog import SkillToolConfig
+    from doc_process_studio.skill.application.dtos.catalog import SkillToolConfig
 
     tool = SkillToolConfig.model_validate(
         {

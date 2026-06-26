@@ -1,12 +1,16 @@
-from doc_process_studio.incident_report.schemas.common import (
-    INCIDENT_VALID_ROLES,
-    STATUS_TRANSITIONS,
-    VALID_ROLES,
-    VALID_SEVERITIES,
-    VALID_STATUSES,
+from doc_process_studio.incident_report.application.dtos import (
     IncidentFormAnswer,
     IncidentFormSnapshot,
     build_empty_form_snapshot,
+)
+from doc_process_studio.incident_report.domain.entities.status import TRANSITIONS, ReportStatus
+from doc_process_studio.incident_report.domain.values.permission import (
+    INCIDENT_VALID_ROLES,
+    VALID_ROLES,
+)
+from doc_process_studio.incident_report.domain.values.status_types import (
+    VALID_SEVERITIES,
+    VALID_STATUSES,
 )
 
 
@@ -39,27 +43,27 @@ def test_incident_valid_roles_sorted():
 
 
 def test_status_transitions_draft():
-    assert STATUS_TRANSITIONS["draft"] == {"pending"}
+    assert TRANSITIONS[ReportStatus.DRAFT] == {ReportStatus.PENDING}
 
 
 def test_status_transitions_rejected():
-    assert STATUS_TRANSITIONS["rejected"] == {"pending"}
+    assert TRANSITIONS[ReportStatus.REJECTED] == {ReportStatus.PENDING}
 
 
 def test_status_transitions_pending():
-    assert STATUS_TRANSITIONS["pending"] == {"approved", "rejected"}
+    assert TRANSITIONS[ReportStatus.PENDING] == {ReportStatus.APPROVED, ReportStatus.REJECTED}
 
 
 def test_status_transitions_approved():
-    assert STATUS_TRANSITIONS["approved"] == {"in_progress"}
+    assert TRANSITIONS[ReportStatus.APPROVED] == {ReportStatus.IN_PROGRESS}
 
 
 def test_status_transitions_in_progress():
-    assert STATUS_TRANSITIONS["in_progress"] == {"closed"}
+    assert TRANSITIONS[ReportStatus.IN_PROGRESS] == {ReportStatus.CLOSED}
 
 
 def test_status_transitions_closed():
-    assert STATUS_TRANSITIONS["closed"] == {"draft"}
+    assert TRANSITIONS[ReportStatus.CLOSED] == {ReportStatus.DRAFT}
 
 
 def test_incident_form_answer_defaults():

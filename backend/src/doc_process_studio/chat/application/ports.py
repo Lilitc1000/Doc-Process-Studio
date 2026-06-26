@@ -3,9 +3,9 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from ..schemas.attachment import ChatAttachment, ChatAttachmentMetadata
-from ..schemas.response import ChatSessionDetail, ChatSessionListResponse
-from ..schemas.session import ChatSessionSnapshot, ChatSessionSummary
+from ..router.schemas.response import ChatSessionDetail, ChatSessionListResponse
+from .dtos.attachment import ChatAttachment, ChatAttachmentMetadata
+from .dtos.session import ChatSessionSnapshot, ChatSessionSummary
 
 
 class SessionRepository(ABC):
@@ -30,7 +30,6 @@ class SessionRepository(ABC):
         session_id: str,
         user_id: str,
         title: str,
-        title_source_messages: list[str],
         snapshot: ChatSessionSnapshot,
     ) -> ChatSessionSummary: ...
 
@@ -92,9 +91,3 @@ class AttachmentStore(ABC):
         output_name: str | None = None,
         mime_type: str | None = None,
     ) -> ChatAttachment: ...
-
-    @abstractmethod
-    def delete_for_conversation(self, conversation_id: str) -> int: ...
-
-    @abstractmethod
-    def cleanup_expired(self) -> None: ...

@@ -2,8 +2,8 @@
 
 from abc import ABC, abstractmethod
 
-from ..schemas.catalog import SkillInterfaceConfig
-from ..schemas.runtime import ConversationAgentState, SkillContextChunk
+from .dtos.catalog import SkillInterfaceConfig
+from .dtos.runtime import SkillContextChunk
 
 
 class SkillRegistry(ABC):
@@ -24,13 +24,7 @@ class SkillContextSearcher(ABC):
 
 
 class ConversationStateRepository(ABC):
-    """对话状态仓储端口：会话级 Agent 状态的加载/保存/TTL/清理。"""
-
-    @abstractmethod
-    async def load_state(self, conversation_id: str, tenant_id: str = "default") -> ConversationAgentState | None: ...
-
-    @abstractmethod
-    async def save_state(self, state: ConversationAgentState, tenant_id: str = "default") -> None: ...
+    """对话状态仓储端口：会话级 Agent 状态的 TTL/清理。"""
 
     @abstractmethod
     async def refresh_ttl(self, conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]: ...

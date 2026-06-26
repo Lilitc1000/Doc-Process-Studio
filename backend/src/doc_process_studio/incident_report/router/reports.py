@@ -4,8 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ...core.security import get_current_user_id
-from ..application.audit_query_service import AuditQueryService
+from ...common.security.security import get_current_user_id
 from ..application.commands import (
     ApproveReportCommand,
     AssignHandlerCommand,
@@ -17,11 +16,12 @@ from ..application.commands import (
     SubmitReportCommand,
     UpdateReportCommand,
 )
-from ..application.comment_service import CommentService
-from ..application.generation_service import GenerationService
-from ..application.preview_service import PreviewService
-from ..application.report_service import ReportApplicationService
-from ..domain.errors import (
+from ..application.services.audit_query_service import AuditQueryService
+from ..application.services.comment_service import CommentService
+from ..application.services.generation_service import GenerationService
+from ..application.services.preview_service import PreviewService
+from ..application.services.report_service import ReportApplicationService
+from ..domain.values.errors import (
     DomainError,
     PermissionDeniedError,
     ReportNotFoundError,
@@ -33,8 +33,7 @@ from ..infrastructure.dependencies import (
     get_preview_service,
     get_report_application_service,
 )
-from ..schemas.common import PermissionDenied
-from ..schemas.request import (
+from .schemas.request import (
     IncidentBodyQuickGenerateRequest,
     IncidentBodySectionGenerateRequest,
     IncidentCommentCreateRequest,
@@ -48,7 +47,7 @@ from ..schemas.request import (
     IncidentReportSubmitRequest,
     IncidentReportUpdateRequest,
 )
-from ..schemas.response import (
+from .schemas.response import (
     IncidentAuditLogEntry,
     IncidentBodyGenerateResponse,
     IncidentCommentEntry,
@@ -76,9 +75,6 @@ def _handle_domain_error(exc: DomainError) -> HTTPException:
 
 def _handle_service_error(exc: ValueError | DomainError) -> HTTPException:
     """将服务层异常映射为 HTTP 响应。"""
-    if isinstance(exc, PermissionDenied):
-        _logger.warning("Service error (403): %s", exc)
-        return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, DomainError):
         return _handle_domain_error(exc)
     _logger.warning("Service error (400): %s", exc)

@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from ...core.security import get_current_user_id
+from ...common.security.security import get_current_user_id
+from ..application.dtos.session import ChatSessionSummary
 from ..application.session_service import SessionService
 from ..domain.errors import ChatError, SessionAccessDeniedError, SessionNotFoundError
 from ..infrastructure.dependencies import get_session_service
-from ..schemas.request import ChatSessionTitleUpdateRequest, ChatSessionUpsertRequest
-from ..schemas.response import ChatSessionDetail, ChatSessionListResponse
-from ..schemas.session import ChatSessionSummary
+from .schemas.request import ChatSessionTitleUpdateRequest, ChatSessionUpsertRequest
+from .schemas.response import ChatSessionDetail, ChatSessionListResponse
 
 router = APIRouter(prefix="/api/chat-sessions", tags=["chat-sessions"])
 

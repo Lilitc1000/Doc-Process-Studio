@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 
-from ...core.security import get_current_user_id
-from ..application.analytics_service import AnalyticsService
-from ..domain.errors import DomainError
+from ...common.security.security import get_current_user_id
+from ..application.services.analytics_service import AnalyticsService
+from ..domain.values.errors import DomainError
 from ..infrastructure.dependencies import get_analytics_service
-from ..schemas.response import IncidentAnalyticsOverview, IncidentAnalyticsTrend
+from .schemas.response import IncidentAnalyticsOverview, IncidentAnalyticsTrend
 
 router = APIRouter(prefix="/api/incident-report/analytics", tags=["incident-report-analytics"])
 

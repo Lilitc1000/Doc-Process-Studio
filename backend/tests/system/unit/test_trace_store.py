@@ -1,13 +1,13 @@
-import doc_process_studio.system.service.trace_store as trace_store_module
-from doc_process_studio.system.service.trace_store import (
-    build_agent_trace_key,
-    build_agent_trace_conversation_index_key,
-    _encode_trace_index_member,
-    _decode_trace_index_member,
-    save_agent_trace,
-    load_agent_trace,
-    delete_agent_traces_for_conversation,
+import doc_process_studio.system.infrastructure.trace_store as trace_store_module
+from doc_process_studio.system.infrastructure.trace_store import (
     AgentTraceRecorder,
+    _decode_trace_index_member,
+    _encode_trace_index_member,
+    build_agent_trace_conversation_index_key,
+    build_agent_trace_key,
+    delete_agent_traces_for_conversation,
+    load_agent_trace,
+    save_agent_trace,
 )
 
 
@@ -19,7 +19,7 @@ class _FakeRedis:
     async def get(self, key):
         return self._store.get(key)
 
-    async def set(self, key, value, **kwargs):
+    async def set(self, key, value, **_kwargs):
         self._store[key] = value
 
     async def sadd(self, key, *members):
@@ -42,7 +42,7 @@ class _FakeRedis:
                 count += 1
         return count
 
-    async def expire(self, key, seconds):
+    async def expire(self, _key, _seconds):
         return True
 
 

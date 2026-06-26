@@ -1,4 +1,4 @@
-from doc_process_studio.shared.tool_args import (
+from doc_process_studio.common.utils.tool_args import (
     build_normalized_tool_calls,
     parse_tool_arguments,
 )

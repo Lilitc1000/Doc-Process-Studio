@@ -2,10 +2,10 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
-import doc_process_studio.chat.service.stream as chat_stream_module
+import doc_process_studio.chat.infrastructure.stream as chat_stream_module
 import doc_process_studio.main as main_module
-from doc_process_studio.chat.schemas.attachment import ChatAttachment
-from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
+from doc_process_studio.chat.application.dtos.attachment import ChatAttachment
+from doc_process_studio.skill.application.dtos.runtime import SkillPlanDecision
 
 
 def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch, auth_headers) -> None:
@@ -35,6 +35,7 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch, auth_he
     observed_tools: list[object] = []
 
     async def fake_stream_chat_completion(*, model, messages, tools=None):
+        _ = messages
         assert model == "qwen3-coder-next:latest"
         observed_tools.append(tools)
         if call_counter["value"] == 0:

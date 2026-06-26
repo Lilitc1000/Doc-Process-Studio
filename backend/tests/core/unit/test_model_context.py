@@ -1,4 +1,4 @@
-from doc_process_studio.core import model_context as model_context_module
+from doc_process_studio.common.infrastructure import model_context as model_context_module
 
 
 def test_estimate_prompt_tokens_returns_positive_value() -> None:
@@ -81,15 +81,11 @@ def test_extract_context_length_num_ctx_train() -> None:
 
 
 def test_extract_context_length_parameters_with_context_length() -> None:
-    assert model_context_module._extract_context_length(
-        {"parameters": "context_length=8192"}
-    ) == 8192
+    assert model_context_module._extract_context_length({"parameters": "context_length=8192"}) == 8192
 
 
 def test_extract_context_length_model_info_with_ctx() -> None:
-    assert model_context_module._extract_context_length(
-        {"model_info": {"some.ctx.field": 16384}}
-    ) == 16384
+    assert model_context_module._extract_context_length({"model_info": {"some.ctx.field": 16384}}) == 16384
 
 
 def test_is_cache_fresh_within_ttl() -> None:

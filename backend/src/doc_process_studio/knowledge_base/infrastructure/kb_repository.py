@@ -1,31 +1,31 @@
 """SQLAlchemy 知识库仓储实现。
 
-实现 KnowledgeBaseRepository 端口，委托 service/ 下的纯函数工具层完成数据访问与索引编排。
+实现 KnowledgeBaseRepository 端口，委托基础设施层函数完成数据访问与索引编排。
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..application.ports import KnowledgeBaseRepository
-from ..schemas import (
+from ..router.schemas import (
     KBDocumentResponse,
     KBFolderResponse,
     KBProjectResponse,
     KBTreeNode,
 )
-from ..service.documents import delete_document as _delete_document
-from ..service.documents import index_document as _index_document
-from ..service.documents import upload_document as _upload_document
-from ..service.folders import build_tree as _build_tree
-from ..service.folders import create_folder as _create_folder
-from ..service.folders import delete_folder as _delete_folder
-from ..service.folders import rename_folder as _rename_folder
-from ..service.projects import create_project as _create_project
-from ..service.projects import delete_project as _delete_project
-from ..service.projects import get_project as _get_project
-from ..service.projects import list_projects as _list_projects
-from ..service.projects import list_simple_projects as _list_simple_projects
-from ..service.projects import rename_project as _rename_project
-from ..service.projects import update_project_stats as _update_project_stats
+from .documents import delete_document as _delete_document
+from .documents import index_document as _index_document
+from .documents import upload_document as _upload_document
+from .folders import build_tree as _build_tree
+from .folders import create_folder as _create_folder
+from .folders import delete_folder as _delete_folder
+from .folders import rename_folder as _rename_folder
+from .projects import create_project as _create_project
+from .projects import delete_project as _delete_project
+from .projects import get_project as _get_project
+from .projects import list_projects as _list_projects
+from .projects import list_simple_projects as _list_simple_projects
+from .projects import rename_project as _rename_project
+from .projects import update_project_stats as _update_project_stats
 
 
 class SqlKnowledgeBaseRepository(KnowledgeBaseRepository):

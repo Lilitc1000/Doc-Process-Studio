@@ -4,10 +4,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
+from doc_process_studio.system.application.contracts import TraceQueryServiceContract
 from doc_process_studio.system.infrastructure.dependencies import get_trace_query_service
 
 
-class FakeTraceQueryService:
+class FakeTraceQueryService(TraceQueryServiceContract):
     """测试用 TraceQueryService 替身。"""
 
     def __init__(self) -> None:

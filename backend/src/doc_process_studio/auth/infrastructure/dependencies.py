@@ -5,7 +5,7 @@
 
 from functools import lru_cache
 
-from ...core.config import settings
+from ...common.infrastructure.config import settings
 from ..application.auth_service import AuthService
 from ..application.ports import TokenBlacklist, UserRepository
 from .token_blacklist import RedisTokenBlacklist

@@ -14,14 +14,14 @@ import pytest
 
 
 def test_get_skill_interface_raises_for_kb_skill() -> None:
-    from doc_process_studio.skill.service.registry import get_skill_interface
+    from doc_process_studio.skill.infrastructure.registry import get_skill_interface
 
     with pytest.raises(ValueError, match="未找到 skill"):
         get_skill_interface("kb:出租车平台")
 
 
 def test_get_skill_interface_raises_for_kb_empty() -> None:
-    from doc_process_studio.skill.service.registry import get_skill_interface
+    from doc_process_studio.skill.infrastructure.registry import get_skill_interface
 
     with pytest.raises(ValueError, match="未找到 skill"):
         get_skill_interface("kb:")
@@ -31,7 +31,7 @@ def test_get_skill_interface_raises_for_kb_empty() -> None:
 
 
 def test_build_skill_prompt_kb_skill() -> None:
-    from doc_process_studio.chat.service.streaming.context import build_skill_prompt
+    from doc_process_studio.chat.infrastructure.streaming.context import build_skill_prompt
 
     prompt = build_skill_prompt("kb:TestProject")
     assert "TestProject" in prompt
@@ -39,14 +39,14 @@ def test_build_skill_prompt_kb_skill() -> None:
 
 
 def test_build_skill_prompt_kb_skill_chinese_name() -> None:
-    from doc_process_studio.chat.service.streaming.context import build_skill_prompt
+    from doc_process_studio.chat.infrastructure.streaming.context import build_skill_prompt
 
     prompt = build_skill_prompt("kb:出租车平台")
     assert "出租车平台" in prompt
 
 
 def test_build_skill_prompt_regular_skill() -> None:
-    from doc_process_studio.chat.service.streaming.context import build_skill_prompt
+    from doc_process_studio.chat.infrastructure.streaming.context import build_skill_prompt
 
     # document-assistant 是静态注册的 skill
     prompt = build_skill_prompt("document-assistant")
@@ -57,7 +57,7 @@ def test_build_skill_prompt_regular_skill() -> None:
 
 
 def test_build_skills_catalog_lines_with_kb_skill() -> None:
-    from doc_process_studio.chat.service.streaming.context import _build_skills_catalog_lines
+    from doc_process_studio.chat.infrastructure.streaming.context import _build_skills_catalog_lines
 
     lines = _build_skills_catalog_lines(["document-assistant", "kb:TestProject"])
     kb_lines = [line for line in lines if "kb:TestProject" in line]
@@ -66,7 +66,7 @@ def test_build_skills_catalog_lines_with_kb_skill() -> None:
 
 
 def test_build_skills_catalog_lines_kb_skill_chinese() -> None:
-    from doc_process_studio.chat.service.streaming.context import _build_skills_catalog_lines
+    from doc_process_studio.chat.infrastructure.streaming.context import _build_skills_catalog_lines
 
     lines = _build_skills_catalog_lines(["kb:出租车平台"])
     assert len(lines) == 1
@@ -75,7 +75,7 @@ def test_build_skills_catalog_lines_kb_skill_chinese() -> None:
 
 
 def test_build_skills_catalog_lines_mixed_skills() -> None:
-    from doc_process_studio.chat.service.streaming.context import _build_skills_catalog_lines
+    from doc_process_studio.chat.infrastructure.streaming.context import _build_skills_catalog_lines
 
     lines = _build_skills_catalog_lines(["document-assistant", "kb:TestProject"])
     assert len(lines) == 2
@@ -89,7 +89,7 @@ def test_build_skills_catalog_lines_mixed_skills() -> None:
 
 
 def test_build_skill_tools_for_skills_kb_only() -> None:
-    from doc_process_studio.skill.service.tool_loop.tool_schema import build_skill_tools_for_skills
+    from doc_process_studio.skill.infrastructure.tool_loop.tool_schema import build_skill_tools_for_skills
 
     tools = build_skill_tools_for_skills(["kb:TestProject"])
     assert len(tools) >= 1
@@ -98,7 +98,7 @@ def test_build_skill_tools_for_skills_kb_only() -> None:
 
 
 def test_build_skill_tools_for_skills_mixed() -> None:
-    from doc_process_studio.skill.service.tool_loop.tool_schema import build_skill_tools_for_skills
+    from doc_process_studio.skill.infrastructure.tool_loop.tool_schema import build_skill_tools_for_skills
 
     tools = build_skill_tools_for_skills(["document-assistant", "kb:TestProject"])
     tool_names = [t["function"]["name"] for t in tools]
@@ -108,7 +108,7 @@ def test_build_skill_tools_for_skills_mixed() -> None:
 
 
 def test_build_skill_tools_for_skills_multiple_kb() -> None:
-    from doc_process_studio.skill.service.tool_loop.tool_schema import build_skill_tools_for_skills
+    from doc_process_studio.skill.infrastructure.tool_loop.tool_schema import build_skill_tools_for_skills
 
     tools = build_skill_tools_for_skills(["kb:ProjectA", "kb:ProjectB"])
     assert len(tools) == 2
@@ -120,8 +120,8 @@ def test_build_skill_tools_for_skills_multiple_kb() -> None:
 
 
 def test_build_direct_skill_plan_with_kb_skill() -> None:
-    from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
-    from doc_process_studio.chat.service.stream import _build_direct_skill_plan
+    from doc_process_studio.chat.infrastructure.stream import _build_direct_skill_plan
+    from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
 
     request = ChatStreamRequest(
         user_message_id="msg-001",
@@ -136,8 +136,8 @@ def test_build_direct_skill_plan_with_kb_skill() -> None:
 
 
 def test_build_direct_skill_plan_kb_skill_not_in_missing() -> None:
-    from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
-    from doc_process_studio.chat.service.stream import _build_direct_skill_plan
+    from doc_process_studio.chat.infrastructure.stream import _build_direct_skill_plan
+    from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
 
     request = ChatStreamRequest(
         user_message_id="msg-001",
@@ -151,8 +151,8 @@ def test_build_direct_skill_plan_kb_skill_not_in_missing() -> None:
 
 
 def test_build_direct_skill_plan_mixed_skills() -> None:
-    from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
-    from doc_process_studio.chat.service.stream import _build_direct_skill_plan
+    from doc_process_studio.chat.infrastructure.stream import _build_direct_skill_plan
+    from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
 
     request = ChatStreamRequest(
         user_message_id="msg-001",
@@ -170,14 +170,14 @@ def test_build_direct_skill_plan_mixed_skills() -> None:
 
 
 def test_context_is_kb_skill_id() -> None:
-    from doc_process_studio.chat.service.streaming.context import is_kb_skill_id
+    from doc_process_studio.chat.infrastructure.streaming.context import is_kb_skill_id
 
     assert is_kb_skill_id("kb:TestProject") is True
     assert is_kb_skill_id("document-assistant") is False
 
 
 def test_context_extract_kb_project_name() -> None:
-    from doc_process_studio.chat.service.streaming.context import extract_kb_project_name
+    from doc_process_studio.chat.infrastructure.streaming.context import extract_kb_project_name
 
     assert extract_kb_project_name("kb:出租车平台") == "出租车平台"
     assert extract_kb_project_name("kb:") == ""
@@ -185,7 +185,7 @@ def test_context_extract_kb_project_name() -> None:
 
 
 def test_context_build_kb_skill_interface() -> None:
-    from doc_process_studio.chat.service.streaming.context import build_kb_skill_interface
+    from doc_process_studio.chat.infrastructure.streaming.context import build_kb_skill_interface
 
     interface = build_kb_skill_interface("出租车平台")
     assert interface.id == "kb:出租车平台"

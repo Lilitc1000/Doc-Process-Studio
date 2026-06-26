@@ -1,8 +1,8 @@
 """Skill 用例服务。"""
 
 from ..domain.errors import SkillNotFoundError
-from ..schemas.catalog import SkillInterfaceConfig
-from ..schemas.runtime import SkillContextChunk
+from .dtos.catalog import SkillInterfaceConfig
+from .dtos.runtime import SkillContextChunk
 from .ports import (
     ConversationStateRepository,
     SkillContextSearcher,

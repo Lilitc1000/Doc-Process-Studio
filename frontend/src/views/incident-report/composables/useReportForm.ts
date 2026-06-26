@@ -1,4 +1,4 @@
-import { ref, watch, type Ref } from 'vue';
+import { type Ref } from 'vue';
 import {
   severityOptions as _severityOptions,
   statusOptions as _statusOptions,
@@ -131,67 +131,4 @@ export function validateTimelineTimeOrder(
       errors.value[i] = '时间不能早于上一条';
     }
   }
-}
-
-export function useReportFormState() {
-  const formData = ref({
-    title: '',
-    severity: '',
-    system: '',
-    siteId: '',
-    faultDate: '',
-  });
-
-  const formAnswers = ref<Record<string, string>>({ ...defaultFormAnswers });
-
-  const bodyTimelineItems = ref<TimelineItem[]>([
-    { time: '', event: '', resolution: '' },
-  ]);
-
-  const timelineTimeErrors = ref<Record<number, string>>({});
-
-  watch(
-    bodyTimelineItems,
-    (items) => {
-      formAnswers.value.body_timeline = JSON.stringify(items);
-    },
-    { deep: true },
-  );
-
-  const onBodyTimelineChange = (
-    index: number,
-    key: keyof TimelineItem,
-    value: string,
-  ) => {
-    bodyTimelineItems.value[index][key] = value;
-    if (key === 'time') {
-      validateTimelineTimeOrder(bodyTimelineItems, timelineTimeErrors);
-    }
-  };
-
-  const onBodyTimelineInput = (
-    index: number,
-    key: keyof TimelineItem,
-    event: Event,
-  ) => {
-    const value = (event.target as HTMLInputElement).value;
-    onBodyTimelineChange(index, key, value);
-  };
-
-  const getPayload = () =>
-    buildFormPayload(
-      formData.value,
-      formAnswers.value,
-      bodyTimelineItems.value,
-    );
-
-  return {
-    formData,
-    formAnswers,
-    bodyTimelineItems,
-    timelineTimeErrors,
-    onBodyTimelineChange,
-    onBodyTimelineInput,
-    getPayload,
-  };
 }

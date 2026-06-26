@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from doc_process_studio.core.security import create_access_token
+from doc_process_studio.common.security.security import create_access_token
 from doc_process_studio.incident_report.router.dependencies import require_admin
 from doc_process_studio.incident_report.router.roles import router as roles_router
 

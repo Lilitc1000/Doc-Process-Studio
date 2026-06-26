@@ -1,11 +1,10 @@
 import json
 from pathlib import Path
 
-from doc_process_studio.skill.schemas.catalog import SkillToolConfig
-from doc_process_studio.skill.schemas.interaction import SkillInteractionConfig
-from doc_process_studio.skill.service.registry import (
+from doc_process_studio.skill.application.dtos.catalog import SkillToolConfig
+from doc_process_studio.skill.application.dtos.interaction import SkillInteractionConfig
+from doc_process_studio.skill.infrastructure.registry import (
     SKILLS_DIR,
-    get_skill_interaction_config,
     get_skill_interface,
     list_skill_interfaces,
 )
@@ -65,9 +64,4 @@ def test_all_skill_declared_configs_are_valid() -> None:
         interaction_file = _resolve_interaction_file(skill_dir)
         if interaction_file is not None:
             interaction_payload = json.loads(interaction_file.read_text(encoding="utf-8"))
-            config = SkillInteractionConfig.model_validate(interaction_payload)
-            runtime_config = get_skill_interaction_config(skill_dir.name)
-            if config.enabled and config.steps:
-                assert runtime_config is not None
-            else:
-                assert runtime_config is None
+            SkillInteractionConfig.model_validate(interaction_payload)

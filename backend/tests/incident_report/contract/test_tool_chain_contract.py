@@ -2,10 +2,10 @@ import json
 
 from docx import Document
 
-from doc_process_studio.chat.schemas.request import ChatStreamRequest
-from doc_process_studio.skill.schemas.runtime import SkillConversationState
-from doc_process_studio.chat.service import attachments as attachments_module
-from doc_process_studio.skill.service.tool_loop import execute_skill_tool_call
+from doc_process_studio.chat.infrastructure import attachments as attachments_module
+from doc_process_studio.chat.router.schemas.request import ChatStreamRequest
+from doc_process_studio.skill.application.dtos.runtime import SkillConversationState
+from doc_process_studio.skill.infrastructure.tool_loop import execute_skill_tool_call
 
 
 def _build_tool_call(arguments: dict) -> dict:
@@ -99,9 +99,7 @@ async def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path
     assert len(attachments) == 1
 
     attachment = attachments[0]
-    metadata, attachment_path, is_expired = attachments_module.resolve_attachment_path(
-        attachment.attachment_id
-    )
+    metadata, attachment_path, is_expired = attachments_module.resolve_attachment_path(attachment.attachment_id)
 
     assert metadata is not None
     assert is_expired is False

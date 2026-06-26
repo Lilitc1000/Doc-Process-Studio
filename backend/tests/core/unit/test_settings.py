@@ -1,4 +1,4 @@
-from doc_process_studio.core.config import resolve_env_file_path, resolve_runtime_env
+from doc_process_studio.common.infrastructure.config import resolve_env_file_path, resolve_runtime_env
 
 
 def test_resolve_runtime_env_defaults_to_dev(monkeypatch) -> None:

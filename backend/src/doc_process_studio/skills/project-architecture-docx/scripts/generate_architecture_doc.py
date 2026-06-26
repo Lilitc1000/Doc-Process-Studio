@@ -910,7 +910,7 @@ def add_revision_history(doc: DocumentType, version: str, current: datetime) -> 
     add_page_break(doc)
 
 
-def add_toc(doc: DocumentType, outline: list[tuple[int, str, str]]) -> None:
+def add_toc(doc: DocumentType) -> None:
     title = doc.add_paragraph()
     clear_paragraph_numbering(title)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1014,23 +1014,7 @@ def build_document(
     add_cover(doc, system_name, document_title, version, current, resolved_logo)
     add_revision_history(doc, version, current)
     plan_chapters = normalize_doc_plan(doc_plan_path)
-    outline_source: list[tuple[int, str]] = []
-
-    def collect_outline(nodes: list[dict], level: int) -> None:
-        for node in nodes:
-            title = normalize_heading_text(str(node.get("title") or node.get("heading") or "").strip())
-            if title:
-                outline_source.append((level, title))
-            children = node.get("sections", []) or []
-            if isinstance(children, list) and children:
-                collect_outline(children, min(level + 1, 3))
-
-    collect_outline(plan_chapters, 1)
-
-    outline = []
-    for index, (level, text) in enumerate(outline_source, start=1):
-        outline.append((level, text, make_bookmark_name(text, index)))
-    add_toc(doc, outline)
+    add_toc(doc)
     render_custom_plan(doc, plan_chapters)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

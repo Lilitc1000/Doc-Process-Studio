@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from ...core.security import get_current_user_id
+from ...common.security.security import get_current_user_id
 from ..application.attachment_service import AttachmentService
 from ..domain.errors import AttachmentExpiredError, AttachmentNotFoundError, ChatError
 from ..infrastructure.dependencies import get_attachment_service
 
-router = APIRouter(prefix="/api", tags=["attachments"])
+router = APIRouter(
+    prefix="/api",
+    tags=["attachments"],
+    dependencies=[Depends(get_current_user_id)],
+)
 
 
 def _handle_attachment_error(exc: ChatError) -> HTTPException:
@@ -20,7 +24,6 @@ def _handle_attachment_error(exc: ChatError) -> HTTPException:
 @router.get("/attachments/{attachment_id}/download")
 async def download_attachment(
     attachment_id: str,
-    user_id: str = Depends(get_current_user_id),
     service: AttachmentService = Depends(get_attachment_service),
 ) -> FileResponse:
     try:

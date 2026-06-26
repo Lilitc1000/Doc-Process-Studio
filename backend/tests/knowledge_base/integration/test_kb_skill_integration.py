@@ -7,9 +7,9 @@
 
 import json
 
-from doc_process_studio.chat.schemas.request import ChatStreamRequest, ChatMessageInput
-from doc_process_studio.chat.service.stream import stream_remote_chat_completion
-from doc_process_studio.skill.service.context import load_skill_context_chunks
+from doc_process_studio.chat.infrastructure.stream import stream_remote_chat_completion
+from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
+from doc_process_studio.skill.infrastructure.context import load_skill_context_chunks
 
 
 def _make_request(skill_ids: list[str]) -> ChatStreamRequest:
@@ -84,9 +84,7 @@ async def test_kb_skill_chinese_name_no_ollama() -> None:
 
     error_msg = _get_first_error_message(events)
     if error_msg:
-        assert "未找到 skill" not in error_msg, (
-            f"中文 kb: skill 不应触发 ValueError，实际错误: {error_msg}"
-        )
+        assert "未找到 skill" not in error_msg, f"中文 kb: skill 不应触发 ValueError，实际错误: {error_msg}"
 
 
 async def test_kb_skill_trace_id_returned() -> None:
@@ -98,9 +96,7 @@ async def test_kb_skill_trace_id_returned() -> None:
     trace_events = [e for e in events if e.get("type") == "trace" and e.get("phase") == "start"]
     assert len(trace_events) >= 1, "应至少返回一个 trace start 事件"
     trace_event = trace_events[0]
-    assert "traceId" in trace_event or "trace_id" in trace_event, (
-        f"trace 事件应包含 traceId，实际: {trace_event}"
-    )
+    assert "traceId" in trace_event or "trace_id" in trace_event, f"trace 事件应包含 traceId，实际: {trace_event}"
 
 
 async def test_multiple_kb_skills_no_ollama() -> None:
@@ -111,9 +107,7 @@ async def test_multiple_kb_skills_no_ollama() -> None:
 
     error_msg = _get_first_error_message(events)
     if error_msg:
-        assert "未找到 skill" not in error_msg, (
-            f"多个 kb: skill 不应触发 ValueError，实际错误: {error_msg}"
-        )
+        assert "未找到 skill" not in error_msg, f"多个 kb: skill 不应触发 ValueError，实际错误: {error_msg}"
 
 
 async def test_kb_skill_with_special_chars_no_ollama() -> None:
@@ -124,9 +118,7 @@ async def test_kb_skill_with_special_chars_no_ollama() -> None:
 
     error_msg = _get_first_error_message(events)
     if error_msg:
-        assert "未找到 skill" not in error_msg, (
-            f"特殊字符 kb: skill 不应触发 ValueError，实际错误: {error_msg}"
-        )
+        assert "未找到 skill" not in error_msg, f"特殊字符 kb: skill 不应触发 ValueError，实际错误: {error_msg}"
 
 
 async def test_kb_skill_error_is_ollama_related_not_skill_related() -> None:
@@ -138,8 +130,7 @@ async def test_kb_skill_error_is_ollama_related_not_skill_related() -> None:
     error_msg = _get_first_error_message(events)
     if error_msg:
         is_ollama_error = any(
-            kw in error_msg
-            for kw in ["Ollama", "ollama", "连接", "远程", "OLLAMA_BASE_URL", "HTTP", "404"]
+            kw in error_msg for kw in ["Ollama", "ollama", "连接", "远程", "OLLAMA_BASE_URL", "HTTP", "404"]
         )
         is_skill_error = "未找到 skill" in error_msg
         assert is_ollama_error or not is_skill_error, (

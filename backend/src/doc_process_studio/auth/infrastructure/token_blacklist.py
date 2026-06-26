@@ -3,7 +3,7 @@
 实现 TokenBlacklist 端口，将 refresh_token 的 jti 写入 Redis 实现登出失效。
 """
 
-from ...core.cache import get_redis_client
+from ...common.infrastructure.cache import get_redis_client
 from ..application.ports import TokenBlacklist
 
 

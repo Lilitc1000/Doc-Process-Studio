@@ -1,8 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from doc_process_studio.chat.schemas.attachment import ChatAttachmentMetadata
-from doc_process_studio.chat.service import attachments as attachments_module
+from doc_process_studio.chat.application.dtos.attachment import ChatAttachmentMetadata
+from doc_process_studio.chat.infrastructure import attachments as attachments_module
 
 
 def _write_attachment_dir(
@@ -49,9 +49,7 @@ def test_delete_attachments_for_conversation_removes_only_target(tmp_path, monke
         conversation_id="conversation-b",
     )
 
-    deleted_count = attachments_module.delete_attachments_for_conversation(
-        "conversation-a"
-    )
+    deleted_count = attachments_module.delete_attachments_for_conversation("conversation-a")
 
     assert deleted_count == 1
     assert not (tmp_path / "attachment-a").exists()

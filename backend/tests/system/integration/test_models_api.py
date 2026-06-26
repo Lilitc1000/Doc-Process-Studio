@@ -4,7 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
-from doc_process_studio.core.ollama import extract_model_names
+from doc_process_studio.common.infrastructure.ollama import extract_model_names
+from doc_process_studio.system.application.contracts import ModelQueryServiceContract
 from doc_process_studio.system.infrastructure.dependencies import get_model_query_service
 
 
@@ -25,7 +26,7 @@ def test_extract_model_names_supports_multiple_payload_shapes() -> None:
     ]
 
 
-class FakeModelQueryService:
+class FakeModelQueryService(ModelQueryServiceContract):
     """测试用 ModelQueryService 替身。"""
 
     def __init__(self) -> None:

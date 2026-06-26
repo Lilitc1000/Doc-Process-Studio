@@ -1,14 +1,14 @@
 import httpx
 import pytest
 
-import doc_process_studio.core.ollama as ollama_module
-from doc_process_studio.core.exceptions import OllamaNotConfiguredError
-from doc_process_studio.core.ollama import (
-    get_ollama_base_url,
-    build_timeout,
+import doc_process_studio.common.infrastructure.ollama as ollama_module
+from doc_process_studio.common.infrastructure.exceptions import OllamaNotConfiguredError
+from doc_process_studio.common.infrastructure.ollama import (
     build_chat_payload,
+    build_timeout,
     extract_first_message_content,
     extract_model_names,
+    get_ollama_base_url,
 )
 
 
@@ -45,14 +45,12 @@ def test_build_chat_payload_plain_messages():
 def test_build_chat_payload_with_tools():
     messages = [{"role": "user", "content": "hello"}]
     tools = [{"type": "function", "function": {"name": "test_tool"}}]
-    payload = build_chat_payload(
-        model="test-model", messages=messages, stream=True, tools=tools
-    )
+    payload = build_chat_payload(model="test-model", messages=messages, stream=True, tools=tools)
     assert payload["stream"] is True
     assert payload["tools"] == tools
 
 
-def test_build_chat_payload_normalizes_pydantic_messages(monkeypatch):
+def test_build_chat_payload_normalizes_pydantic_messages():
     class FakeModel:
         def model_dump(self):
             return {"role": "user", "content": "from_pydantic"}
@@ -126,16 +124,12 @@ def test_extract_model_names_skips_empty_names():
 async def test_post_chat_completion_success(monkeypatch):
     fake_response = {"message": {"content": "hi"}}
 
-    async def _fake_post_chat_completion(*, model, messages, tools=None):
+    async def _fake_post_chat_completion(**_kwargs):
         return fake_response
 
-    monkeypatch.setattr(
-        ollama_module, "post_chat_completion", _fake_post_chat_completion
-    )
+    monkeypatch.setattr(ollama_module, "post_chat_completion", _fake_post_chat_completion)
 
-    result = await ollama_module.post_chat_completion(
-        model="test", messages=[{"role": "user", "content": "hi"}]
-    )
+    result = await ollama_module.post_chat_completion(model="test", messages=[{"role": "user", "content": "hi"}])
     assert result["message"]["content"] == "hi"
 
 
@@ -153,7 +147,7 @@ async def test_fetch_remote_model_names_raises_502_on_http_error(monkeypatch):
 
     monkeypatch.setattr(ollama_module.settings, "ollama_base_url", "http://ollama:11434")
 
-    async def _fake_get(self, url):
+    async def _fake_get(_self, _url):
         raise httpx.ConnectError("connection refused")
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)

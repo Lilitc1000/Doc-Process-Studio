@@ -6,51 +6,52 @@ Chat 域负责对话功能，包括消息流式生成、会话管理、文件附
 
 ## 目录结构
 
-Chat 域采用 DDD 分层架构。会话 CRUD 与附件管理走 domain/application/infrastructure 分层；流式聊天编排、SSE 格式化、文件上下文准备等纯函数工具保留在 service/ 供 infrastructure 委托和跨域调用。
+Chat 域采用 DDD 四层架构（端口与适配器模式）：
 
 ```text
 backend/src/doc_process_studio/chat/
 ├── domain/                      # 领域层：领域异常
 │   └── errors.py                # ChatError / SessionNotFoundError / AttachmentExpiredError / ...
-├── application/                 # 应用层：用例编排 + 端口
+├── application/                 # 应用层：用例编排 + 端口 + DTO
 │   ├── ports.py                 # SessionRepository / TitleGenerator / ConversationStateStore / AttachmentStore 端口
+│   ├── contracts.py             # SessionServiceContract / AttachmentServiceContract 应用服务契约
+│   ├── dtos/                    # 应用层 DTO
+│   │   ├── attachment.py        # ChatAttachment, ChatAttachmentMetadata
+│   │   ├── file_context.py      # UploadedFileContext, PreparedUploadedFile
+│   │   └── session.py           # ChatSessionSummary, ChatSessionSnapshot
 │   ├── session_service.py       # SessionService（会话 CRUD、归属校验、标题生成、状态清理）
 │   └── attachment_service.py    # AttachmentService（附件下载响应、上传/生成保存）
-├── infrastructure/              # 基础设施层：端口实现 + 依赖装配
+├── infrastructure/              # 基础设施层：端口实现 + 依赖装配 + 技术工具
 │   ├── session_repository.py    # SqlSessionRepository / OllamaTitleGenerator
 │   ├── attachment_store.py      # FsAttachmentStore
 │   ├── conversation_state_store.py  # SkillConversationStateStore
-│   └── dependencies.py          # FastAPI 依赖装配（get_session_service / get_attachment_service 工厂）
-├── router/
-│   ├── stream.py                # POST /api/chat/stream
-│   ├── sessions.py              # 会话 API（依赖注入 SessionService）
-│   └── attachments.py           # 附件下载 API（依赖注入 AttachmentService）
-├── service/                     # 纯函数工具层（被 infrastructure 委托 + 跨域调用）
-│   ├── stream.py                # 流式聊天编排入口
-│   ├── sessions.py              # 会话 CRUD 工具函数
-│   ├── attachments.py           # 附件管理工具函数
+│   ├── attachments.py           # 附件管理实现
+│   ├── sessions.py              # 会话 CRUD 实现
 │   ├── db_session_store.py      # PostgreSQL 会话存储
 │   ├── file_context.py          # 上传文件上下文准备
-│   └── streaming/               # SSE 格式化、工具调用合并、上下文构建
-├── models/
-│   ├── chat_session_orm.py      # ChatSession ORM
-│   └── __init__.py
-└── schemas/
-    ├── request.py               # ChatStreamRequest, ChatMessageInput 等
-    ├── response.py              # ChatSessionListResponse, ChatSessionDetail
-    ├── session.py               # ChatSessionSummary, ChatSessionSnapshot
-    ├── attachment.py            # ChatAttachment, ChatAttachmentMetadata
-    ├── file_context.py          # UploadedFileContext, PreparedUploadedFile
-    └── common.py                # 共享基类
+│   ├── stream.py                # 流式聊天编排入口
+│   ├── streaming/               # SSE 格式化、工具调用合并、上下文构建
+│   │   ├── context.py           # 上下文构建
+│   │   ├── sse.py               # SSE 事件格式化
+│   │   └── tooling.py           # 工具调用合并
+│   ├── persistence/             # ORM 模型
+│   │   └── chat_session_orm.py  # ChatSession ORM
+│   └── dependencies.py          # FastAPI 依赖装配（get_session_service / get_attachment_service 工厂）
+└── router/                      # 用户接口层：API 端点 + 请求/响应 Schema
+    ├── stream.py                # POST /api/chat/stream
+    ├── sessions.py              # 会话 API（依赖注入 SessionService）
+    ├── attachments.py           # 附件下载 API（依赖注入 AttachmentService）
+    └── schemas/                 # HTTP DTO
+        ├── request.py           # ChatStreamRequest, ChatMessageInput 等
+        └── response.py          # ChatSessionListResponse, ChatSessionDetail
 ```
 
 ### 分层依赖规则
 
 - **domain** 不依赖任何其他层，只包含领域异常定义
 - **application** 依赖 domain + 端口抽象，不依赖 infrastructure 实现
-- **infrastructure** 实现 application 端口，委托 service/ 纯函数和 skill/system 域工具
+- **infrastructure** 实现 application 端口，包含技术工具函数和跨域调用适配
 - **router** 通过 `Depends(get_session_service)` / `Depends(get_attachment_service)` 注入应用服务，将领域异常映射为 HTTP 状态码
-- **service/** 是纯函数工具层，被 infrastructure 委托，也被 incident_report/skill 跨域直接调用（attachments/streaming）
 
 ### 依赖注入
 
@@ -92,18 +93,21 @@ router 将领域异常映射为 HTTP 状态码：`SessionAccessDeniedError`→40
 
 ## 跨域依赖
 
-- `skill.service.registry` — Skill 发现与选择
-- `skill.service.context` — 上下文检索
-- `skill.service.tool_loop` — 工具执行循环
-- `system.service.executor` — DAG 执行器
-- `system.service.trace_store` — trace 审计
-- `core.ollama` — Ollama 调用
-- `core.request_guard` — 请求防护
+跨域调用部分通过 `application/ports.py` 定义的端口抽象隔离（如 `ConversationStateStore`），部分仍在 `infrastructure/stream.py` 中直接引用（待改造）：
+
+- `skill.infrastructure.registry` — Skill 发现与选择
+- `skill.infrastructure.selector` — Skill 选择
+- `skill.infrastructure.context` — 上下文检索
+- `skill.infrastructure.tool_loop` — 工具执行循环
+- `system.infrastructure.utils.executor` — DAG 执行器
+- `system.infrastructure.trace_store` — trace 审计
+- `common.infrastructure.ollama` — Ollama 调用
+- `common.middleware.request_guard` — 请求防护
 
 ## 开发注意
 
-- 流式响应使用 SSE 格式，事件类型定义在 `service/streaming/` 中
-- 会话数据存储在 PostgreSQL，使用 `session_store.py` 重新导出 `db_session_store` 中的函数
-- 不要在 `router/` 中写业务逻辑，所有编排逻辑放 `service/`
-- Pydantic 数据模型统一放在 `schemas/` 目录，`models/` 仅保留 ORM 模型
+- 流式响应使用 SSE 格式，事件类型定义在 `infrastructure/streaming/` 中
+- 会话数据存储在 PostgreSQL，使用 `db_session_store.py` 管理
+- 不要在 `router/` 中写业务逻辑，所有编排逻辑放 `application/` 层服务
+- ORM 模型放在 `infrastructure/persistence/` 目录下
 - 服务层异常处理使用 `logging` 记录上下文信息（如 trace_id、model 名称），与 `AgentTraceRecorder` 审计日志互补

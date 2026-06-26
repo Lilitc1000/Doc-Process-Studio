@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
 
-from doc_process_studio.chat.schemas.request import ChatMessageInput
-from doc_process_studio.skill.schemas.catalog import SkillInterfaceConfig
-from doc_process_studio.skill.service import planner as planner_module
-from doc_process_studio.skill.service.planner import plan_skill_activation
+from doc_process_studio.chat.router.schemas.request import ChatMessageInput
+from doc_process_studio.skill.application.dtos.catalog import SkillInterfaceConfig
+from doc_process_studio.skill.infrastructure import planner as planner_module
+from doc_process_studio.skill.infrastructure.planner import plan_skill_activation
 
 
 def _build_skill(

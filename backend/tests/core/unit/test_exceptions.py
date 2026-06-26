@@ -1,6 +1,5 @@
-from doc_process_studio.core.exceptions import (
+from doc_process_studio.common.infrastructure.exceptions import (
     AppError,
-    NotFoundError,
     OllamaNotConfiguredError,
     RequestGuardError,
     ValidationError,
@@ -16,18 +15,6 @@ def test_app_error_default_status_code():
 def test_app_error_custom_status_code():
     err = AppError("custom", status_code=400)
     assert err.status_code == 400
-
-
-def test_not_found_error():
-    err = NotFoundError()
-    assert err.status_code == 404
-    assert "未找到" in err.message
-
-
-def test_not_found_error_custom_message():
-    err = NotFoundError("自定义消息")
-    assert err.message == "自定义消息"
-    assert err.status_code == 404
 
 
 def test_validation_error():

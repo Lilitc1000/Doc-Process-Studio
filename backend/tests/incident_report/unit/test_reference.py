@@ -1,9 +1,11 @@
 from pathlib import Path
 
-from doc_process_studio.incident_report.service.reference import (
+from doc_process_studio.incident_report.infrastructure.adapters.reference_context import (
     _extract_reference_summary,
     _select_references_by_heuristic,
-    load_text_file,
+)
+from doc_process_studio.incident_report.infrastructure.adapters.reference_context import (
+    _load_text_file as load_text_file,
 )
 
 

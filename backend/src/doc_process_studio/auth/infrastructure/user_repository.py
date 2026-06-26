@@ -9,10 +9,10 @@ from typing import cast
 from sqlalchemy import delete, select
 from sqlalchemy.engine import CursorResult
 
-from ...core.database import async_session_factory
-from ...core.security import generate_user_id
+from ...common.infrastructure.database import async_session_factory
+from ...common.security.security import generate_user_id
 from ..application.ports import UserRepository
-from ..models.user import User
+from .persistence.user import User
 
 
 class SqlUserRepository(UserRepository):
@@ -119,12 +119,12 @@ class SqlUserRepository(UserRepository):
             return True
 
     async def delete_by_username_prefix(self, prefix: str) -> int:
-        from ...incident_report.models.audit_log import IncidentAuditLog
-        from ...incident_report.models.incident_report_orm import (
+        from ...incident_report.infrastructure.persistence.audit_log import IncidentAuditLog
+        from ...incident_report.infrastructure.persistence.incident_report_orm import (
             IncidentComment,
             IncidentReport,
         )
-        from ...incident_report.models.incident_report_role import IncidentReportUserRole
+        from ...incident_report.infrastructure.persistence.incident_report_role import IncidentReportUserRole
 
         async with async_session_factory() as session:
             user_ids_result = await session.execute(select(User.user_id).where(User.username.like(f"{prefix}%")))
@@ -166,8 +166,8 @@ class SqlUserRepository(UserRepository):
             return {row[0]: row[1] for row in result.all()}
 
     async def assign_all_roles_to_admin(self, user_id: str) -> None:
-        from ...incident_report.models.incident_report_role import IncidentReportUserRole
-        from ...incident_report.schemas.common import VALID_ROLES
+        from ...incident_report.domain.values.permission import VALID_ROLES
+        from ...incident_report.infrastructure.persistence.incident_report_role import IncidentReportUserRole
 
         async with async_session_factory() as session:
             for role_key in VALID_ROLES:

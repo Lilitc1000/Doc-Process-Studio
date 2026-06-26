@@ -1,12 +1,13 @@
 from datetime import UTC, datetime
 
-import doc_process_studio.incident_report.service.report_data as report_data_module
-import doc_process_studio.incident_report.service.reference as reference_module
-from doc_process_studio.incident_report.schemas.common import (
+import doc_process_studio.incident_report.infrastructure.adapters.reference_context as reference_module
+import doc_process_studio.incident_report.infrastructure.utils.report_data as report_data_module
+from doc_process_studio.incident_report.application.dtos import (
     IncidentFormAnswer,
     IncidentFormSnapshot,
 )
-from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
+from doc_process_studio.incident_report.infrastructure.adapters.reference_context import SkillReferenceContext
+from doc_process_studio.skill.application.dtos.runtime import SkillPlanDecision
 
 
 async def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
@@ -14,9 +15,7 @@ async def test_reference_selector_chooses_section_reference(monkeypatch) -> None
         planner_messages = kwargs["messages"]
         assert planner_messages
         first_content = (
-            planner_messages[0].content
-            if hasattr(planner_messages[0], "content")
-            else planner_messages[0]["content"]
+            planner_messages[0].content if hasattr(planner_messages[0], "content") else planner_messages[0]["content"]
         )
         assert "incident-report SKILL.md" in first_content
         return SkillPlanDecision(
@@ -38,7 +37,23 @@ async def test_reference_selector_chooses_section_reference(monkeypatch) -> None
         fake_select_for_workspace_reference,
     )
 
-    reference_context, selected_files, selection_reason = await reference_module.resolve_generation_reference_context(
+    fake_catalog = [
+        {"path": "body-sections/common.md", "title": "Common", "summary": "Common reference"},
+        {"path": "body-sections/impact.md", "title": "Impact", "summary": "Impact reference"},
+    ]
+    monkeypatch.setattr(
+        reference_module,
+        "_build_incident_reference_catalog",
+        lambda: fake_catalog,
+    )
+    monkeypatch.setattr(
+        reference_module,
+        "_load_text_file",
+        lambda path: f"Content of {path.name}" if hasattr(path, "name") else "Reference content",
+    )
+
+    context = SkillReferenceContext()
+    reference_context, selected_files, selection_reason = await context.resolve(
         model="qwen3-coder-next:latest",
         section_id="impact",
         timeline_index=None,

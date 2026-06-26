@@ -1,9 +1,9 @@
 from datetime import UTC, datetime
 
-from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
-from doc_process_studio.skill.schemas.catalog import SkillInterfaceConfig
-from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
-import doc_process_studio.chat.service.stream as chat_stream_module
+import doc_process_studio.chat.infrastructure.stream as chat_stream_module
+from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
+from doc_process_studio.skill.application.dtos.catalog import SkillInterfaceConfig
+from doc_process_studio.skill.application.dtos.runtime import SkillPlanDecision
 
 
 def _build_skill(

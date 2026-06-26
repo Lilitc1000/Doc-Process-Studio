@@ -1,5 +1,5 @@
-import doc_process_studio.skill.service.conversation_store as cs_module
-from doc_process_studio.skill.schemas.runtime import ConversationAgentState, SkillConversationState
+import doc_process_studio.skill.infrastructure.conversation_store as cs_module
+from doc_process_studio.skill.application.dtos.runtime import ConversationAgentState, SkillConversationState
 
 
 class _FakeRedis:
@@ -9,7 +9,7 @@ class _FakeRedis:
     async def get(self, key):
         return self._store.get(key)
 
-    async def set(self, key, value, **kwargs):
+    async def set(self, key, value, **_kwargs):
         self._store[key] = value
 
     async def delete(self, *keys):
@@ -20,10 +20,10 @@ class _FakeRedis:
                 count += 1
         return count
 
-    async def expire(self, key, seconds):
+    async def expire(self, _key, _seconds):
         return True
 
-    async def ttl(self, key):
+    async def ttl(self, _key):
         return -1
 
 
@@ -61,10 +61,10 @@ async def test_save_and_load_conversation_state(monkeypatch):
 
 
 async def test_refresh_conversation_state_ttl(monkeypatch):
-    async def _fake_refresh_ttl(key, ttl_seconds=None):
+    async def _fake_refresh_ttl(_key, **_kwargs):
         return True
 
-    async def _fake_get_ttl(key):
+    async def _fake_get_ttl(_key):
         return 3600
 
     monkeypatch.setattr(cs_module, "refresh_ttl", _fake_refresh_ttl)
@@ -75,7 +75,7 @@ async def test_refresh_conversation_state_ttl(monkeypatch):
 
 
 async def test_clear_conversation_state(monkeypatch):
-    async def _fake_delete_key(key):
+    async def _fake_delete_key(_key):
         return 1
 
     monkeypatch.setattr(cs_module, "delete_key", _fake_delete_key)

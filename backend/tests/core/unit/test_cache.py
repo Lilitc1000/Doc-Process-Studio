@@ -1,12 +1,12 @@
-import doc_process_studio.core.cache as cache_module
-from doc_process_studio.core.cache import (
+import doc_process_studio.common.infrastructure.cache as cache_module
+from doc_process_studio.common.infrastructure.cache import (
     build_cache_key,
-    get_json,
-    set_json,
-    ping_redis,
     delete_key,
+    get_json,
     get_ttl_seconds,
+    ping_redis,
     refresh_ttl,
+    set_json,
 )
 
 
@@ -17,7 +17,7 @@ class _FakeRedis:
     async def get(self, key):
         return self._store.get(key)
 
-    async def set(self, key, value, **kwargs):
+    async def set(self, key, value, **_kwargs):
         self._store[key] = value
 
     async def ping(self):
@@ -31,10 +31,10 @@ class _FakeRedis:
                 count += 1
         return count
 
-    async def ttl(self, key):
+    async def ttl(self, _key):
         return -1
 
-    async def expire(self, key, seconds):
+    async def expire(self, _key, _seconds):
         return True
 
 

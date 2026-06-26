@@ -7,12 +7,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from ..domain.values.status_types import IncidentSeverity
+
 
 @dataclass
 class CreateReportCommand:
     title: str
     reporter_id: str
-    severity: str | None = None
+    severity: IncidentSeverity | None = None
     system: str | None = None
     site_id: str | None = None
     fault_date: datetime | None = None

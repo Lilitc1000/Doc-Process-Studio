@@ -2,8 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from doc_process_studio.skill.schemas.catalog import SkillInterfaceConfig
-from doc_process_studio.skill.schemas.runtime import SkillPlanDecision
+from doc_process_studio.skill.application.dtos.catalog import SkillInterfaceConfig
+from doc_process_studio.skill.application.dtos.runtime import SkillPlanDecision
 
 
 @pytest.fixture()

@@ -6,26 +6,28 @@ Auth 域负责用户认证与账号管理，包括注册、登录、令牌刷新
 
 ## 目录结构
 
-Auth 域采用 DDD 分层架构，分为 domain / application / infrastructure / router / models / schemas 六层。
+Auth 域采用 DDD 四层架构（端口与适配器模式）：
 
 ```text
 backend/src/doc_process_studio/auth/
 ├── domain/                       # 领域层：领域异常
 │   └── errors.py                 # AuthError 及子类（UserAlreadyExistsError/InvalidCredentialsError/...）
-├── application/                  # 应用层：用例编排 + 端口
+├── application/                  # 应用层：用例编排 + 端口 + DTO
 │   ├── ports.py                  # UserRepository / TokenBlacklist 端口
+│   ├── contracts.py              # AuthServiceContract 应用服务契约
+│   ├── dtos.py                   # 应用层 DTO（TokenResponse/RegisterResponse/...）
 │   └── auth_service.py           # AuthService（注册/登录/令牌/资料/密码/登出/删除/管理员初始化）
 ├── infrastructure/               # 基础设施层：端口实现 + 依赖装配
+│   ├── persistence/              # ORM 模型
+│   │   └── user.py               # SQLAlchemy ORM 模型（User）
 │   ├── user_repository.py        # SqlUserRepository
 │   ├── token_blacklist.py        # RedisTokenBlacklist
 │   └── dependencies.py           # FastAPI 依赖装配（get_auth_service 工厂）
-├── router/
-│   └── auth.py                   # 认证 API 端点（速率限制、异常映射）
-├── models/
-│   └── user.py                   # SQLAlchemy ORM 模型（User）
-└── schemas/
-    ├── request.py                # 入参 Pydantic 模型
-    └── response.py               # 出参 Pydantic 模型
+└── router/                       # 用户接口层：API 端点 + 请求/响应 Schema
+    ├── schemas/                  # HTTP DTO
+    │   ├── request.py            # 入参 Pydantic 模型
+    │   └── response.py           # 出参 Pydantic 模型
+    └── auth.py                   # 认证 API 端点（速率限制、异常映射）
 ```
 
 ### 分层依赖规则
@@ -78,10 +80,10 @@ backend/src/doc_process_studio/auth/
 
 ## 跨域依赖
 
-- `core.security` — JWT 令牌生成/验证、密码哈希/校验、`get_current_user_id` 依赖（被其他域 router 使用）
-- `core.database` — PostgreSQL 异步连接池
-- `core.cache` — Redis 缓存客户端（token 黑名单）
-- `core.config` — 配置（JWT 密钥、过期时间、管理员账号）
+- `common.security.security` — JWT 令牌生成/验证、密码哈希/校验、`get_current_user_id` 依赖（被其他域 router 使用）
+- `common.infrastructure.database` — PostgreSQL 异步连接池
+- `common.infrastructure.cache` — Redis 缓存客户端（token 黑名单）
+- `common.infrastructure.config` — 配置（JWT 密钥、过期时间、管理员账号）
 
 ## 数据模型
 
@@ -101,9 +103,9 @@ backend/src/doc_process_studio/auth/
 - **测试专用端点**：`DELETE /users/by-prefix/{prefix}`、`POST /rate-limit-whitelist`、`POST /ensure-admin` 仅在 `settings.env == "dev"` 时注册，生产环境不可访问
 - **E2E 测试数据标识**：测试创建的用户名统一使用 `e2e_w{n}_` 前缀（Worker 隔离），清理时调用 `DELETE /users/by-prefix/{prefix}` 批量删除
 - **分层规范**：不要在 `router/` 中写业务逻辑，所有编排逻辑放 `application/auth_service.py`；领域异常定义在 `domain/errors.py`
-- **不要在 `models/` 中引入 Pydantic**
-- **ORM 模型归属**：每个业务域的 ORM 模型放在自己的 `models/` 目录下，`Base` 定义在 `core/database.py`
-- **共享认证依赖**：`get_current_user_id` 定义在 `core/security.py`，其他域 router 通过 `from ...core.security import get_current_user_id` 引用
+- **ORM 模型禁止引入 Pydantic**
+- **ORM 模型归属**：ORM 模型放在 `infrastructure/persistence/` 目录下，`Base` 定义在 `common/infrastructure/database.py`
+- **共享认证依赖**：`get_current_user_id` 定义在 `common/security/security.py`，其他域 router 通过 `from ...common.security.security import get_current_user_id` 引用
 - **跨域用户名解析**：其他域通过 `auth.infrastructure.user_repository.SqlUserRepository.resolve_usernames()` 解析用户 ID → 用户名
 - **异常映射**：`router/auth.py` 的 `_handle_auth_error` 将 `AuthError` 子类映射为 HTTP 状态码（409/401/400/404）
 - **测试规范**：集成测试通过 `app.dependency_overrides[get_auth_service]` 注入 `FakeAuthService`，不 patch 模块路径

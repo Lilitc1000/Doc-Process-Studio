@@ -7,10 +7,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from doc_process_studio.incident_report.domain.errors import (
-    FormIncompleteError,
-    InvalidTransitionError,
-)
+from doc_process_studio.incident_report.domain.entities.report import Report
+from doc_process_studio.incident_report.domain.entities.status import ReportStatus
 from doc_process_studio.incident_report.domain.events import (
     HandlerAssigned,
     ReportApproved,
@@ -19,9 +17,11 @@ from doc_process_studio.incident_report.domain.events import (
     ReportReopened,
     ReportSubmitted,
 )
-from doc_process_studio.incident_report.domain.permission import Permission
-from doc_process_studio.incident_report.domain.report import Report
-from doc_process_studio.incident_report.domain.status import ReportStatus
+from doc_process_studio.incident_report.domain.values.errors import (
+    FormIncompleteError,
+    InvalidTransitionError,
+)
+from doc_process_studio.incident_report.domain.values.permission import Permission
 
 
 def _make_report(**overrides) -> Report:
@@ -158,7 +158,6 @@ class TestReportAssignHandler:
         report.assign_handler(
             actor_id="usr_verifier",
             assignee_id="usr_handler",
-            assignee_display="处理人张三",
         )
         assert report.status == ReportStatus.IN_PROGRESS
         assert report.assignee_id == "usr_handler"
@@ -168,7 +167,6 @@ class TestReportAssignHandler:
         report.assign_handler(
             actor_id="usr_verifier",
             assignee_id="usr_new",
-            assignee_display="处理人李四",
         )
         assert report.status == ReportStatus.IN_PROGRESS
         assert report.assignee_id == "usr_new"
@@ -179,15 +177,13 @@ class TestReportAssignHandler:
             report.assign_handler(
                 actor_id="usr_verifier",
                 assignee_id="usr_handler",
-                assignee_display="处理人",
             )
 
-    def test_assign_event_comment_uses_display_name(self):
+    def test_assign_event_has_no_comment(self):
         report = _make_report(status=ReportStatus.APPROVED)
         report.assign_handler(
             actor_id="usr_verifier",
             assignee_id="usr_handler",
-            assignee_display="处理人张三",
         )
         events = report.consume_events()
         assert len(events) == 1
@@ -195,7 +191,7 @@ class TestReportAssignHandler:
         assert events[0].action == "assign"
         assert events[0].from_status == "approved"
         assert events[0].to_status == "in_progress"
-        assert events[0].comment == "分配处理人: 处理人张三"
+        assert events[0].comment is None
 
 
 # ---- close ----
@@ -257,31 +253,31 @@ class TestReportReopen:
 class TestReportUpdateFields:
     def test_update_in_draft_allowed(self):
         report = _make_report(status=ReportStatus.DRAFT)
-        report.update_fields(actor_id="usr_1", title="新标题", severity="P1")
+        report.update_fields(title="新标题", severity="P1")
         assert report.title == "新标题"
         assert report.severity == "P1"
 
     def test_update_in_rejected_allowed(self):
         report = _make_report(status=ReportStatus.REJECTED)
-        report.update_fields(actor_id="usr_1", title="新标题")
+        report.update_fields(title="新标题")
         assert report.title == "新标题"
 
     def test_update_in_pending_raises(self):
         report = _make_report(status=ReportStatus.PENDING)
         with pytest.raises(InvalidTransitionError):
-            report.update_fields(actor_id="usr_1", title="新标题")
+            report.update_fields(title="新标题")
 
     def test_update_skips_none_values(self):
         report = _make_report(status=ReportStatus.DRAFT, title="原标题")
-        report.update_fields(actor_id="usr_1", title=None, severity="P1")
+        report.update_fields(title=None, severity="P1")
         # None 值被跳过，不覆盖原值
         assert report.title == "原标题"
         assert report.severity == "P1"
 
     def test_update_does_not_produce_event(self):
-        """update 仅修改字段，不写审计日志，不产生事件。"""
+        """update 仅修改字段，不产生审计事件。"""
         report = _make_report(status=ReportStatus.DRAFT)
-        report.update_fields(actor_id="usr_1", title="新标题")
+        report.update_fields(title="新标题")
         assert report.consume_events() == []
 
 
@@ -319,21 +315,15 @@ class TestReportPermissions:
 # ---- 事件消费 ----
 class TestEventConsumption:
     def test_consume_events_clears_queue(self):
-        report = Report.create(
-            report_id="rep-1", ref_no="DAS-0001", title="t", reporter_id="usr_1"
-        )
+        report = Report.create(report_id="rep-1", ref_no="DAS-0001", title="t", reporter_id="usr_1")
         assert len(report.consume_events()) == 1
         assert report.consume_events() == []
 
     def test_multiple_transitions_produce_multiple_events(self):
-        report = _make_report(
-            status=ReportStatus.DRAFT, form_data=_full_form_data()
-        )
+        report = _make_report(status=ReportStatus.DRAFT, form_data=_full_form_data())
         report.submit(actor_id="usr_1", comment=None)
         report.approve(actor_id="usr_v", comment=None)
-        report.assign_handler(
-            actor_id="usr_v", assignee_id="usr_h", assignee_display="处理人"
-        )
+        report.assign_handler(actor_id="usr_v", assignee_id="usr_h")
         report.close(actor_id="usr_h", comment=None)
         events = report.consume_events()
         assert len(events) == 4  # submit + approve + assign + close

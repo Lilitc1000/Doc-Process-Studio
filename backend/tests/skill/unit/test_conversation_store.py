@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 
-from doc_process_studio.skill.schemas.runtime import (
+from doc_process_studio.skill.application.dtos.runtime import (
     ConversationAgentState,
     SkillConversationState,
     SkillPlanDecision,
     SkillToolHistoryRecord,
 )
-from doc_process_studio.skill.service import conversation_store as store_module
+from doc_process_studio.skill.infrastructure import conversation_store as store_module
 
 
 async def test_save_conversation_state_serializes_datetime_fields(monkeypatch) -> None:

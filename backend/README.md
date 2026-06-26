@@ -63,8 +63,11 @@ env ENV=dev uv run --no-sync pytest tests/auth/ -q
 ```text
 backend/src/doc_process_studio/
 ├── main.py                     # FastAPI 应用入口
-├── core/                       # 基础设施（配置、数据库、安全、缓存、Ollama、Qdrant）
-├── shared/                     # 跨模块共享工具
+├── common/                     # 共享内核（跨域通用基础设施）
+│   ├── infrastructure/         #   配置、数据库、缓存、Ollama、Qdrant、异常
+│   ├── security/               #   JWT、密码哈希、认证
+│   ├── middleware/             #   请求日志、请求ID、请求防护
+│   └── utils/                  #   日期工具、文本工具、错误工具、参数工具
 ├── auth/                       # 业务域：认证
 ├── chat/                       # 业务域：对话
 ├── incident_report/            # 业务域：事故报告
@@ -76,39 +79,34 @@ backend/src/doc_process_studio/
 
 各目录的详细说明见下方「目录开发文档」。
 
-### DDD 分层架构
+### DDD 四层架构（端口与适配器模式）
 
-所有业务域（auth、chat、incident_report、knowledge_base、skill、system）均采用 DDD 分层架构，在 4 子文件夹基础上新增 `domain/`、`application/`、`infrastructure/` 三层：
+所有业务域均采用 DDD 四层架构，遵循端口与适配器（六边形）模式：
 
-| 子文件夹 | 职责 | 约束 |
-|---------|------|------|
-| `domain/` | 领域层：领域异常（复杂域可含聚合根、值对象、领域事件） | 不依赖任何框架和其他层 |
-| `application/` | 应用层：用例编排、端口定义 | 依赖 domain + 端口抽象，不依赖 infrastructure 实现 |
-| `infrastructure/` | 基础设施层：端口实现（仓储、外部服务适配器）、依赖装配 | 实现 application 端口，依赖 ORM 和外部服务 |
-| `router/` | API 路由 | 通过 `Depends` 注入 application 服务，仅做参数解析与异常映射 |
-| `service/` | 保留的工具层 | 纯函数工具，被 infrastructure 委托，也可被跨域直接调用 |
-| `models/` | ORM / 数据模型 | 禁止引入 Pydantic |
-| `schemas/` | Pydantic 模型 | HTTP DTO |
+| 层 | 子目录 | 职责 | 约束 |
+|----|--------|------|------|
+| 领域层 | `domain/` | 领域异常、聚合根、值对象、领域事件 | 不依赖任何框架和其他层 |
+| 应用层 | `application/` | 用例编排、端口定义、DTO | 依赖 domain + 端口抽象，不依赖 infrastructure 实现 |
+| 基础设施层 | `infrastructure/` | 端口实现（仓储、适配器）、ORM、依赖装配 | 实现 application 端口，依赖 ORM 和外部服务 |
+| 用户接口层 | `router/` | API 路由、请求/响应 Schema | 通过 `Depends` 注入 application 服务，仅做参数解析与异常映射 |
 
-各域分层深度按业务复杂度调整：incident_report 含完整聚合根与领域事件；auth/system/chat/knowledge_base/skill 采用轻量分层（domain 仅含领域异常，application 定义端口+用例服务，infrastructure 委托 service/ 工具层）。
+各域分层深度按业务复杂度调整：
+- **incident_report**（复杂域）：完整四层 + 子文件夹（domain/entities|events|values、application/services|ports|dtos、infrastructure/repositories|adapters|persistence|utils）
+- **auth/chat/knowledge_base/skill/system**（轻量域）：四层扁平结构（domain 含领域异常，application 含端口+用例+DTO，infrastructure 含实现+依赖装配）
 
 ### 跨层依赖方向
 
-DDD 业务域：
 ```
 router → application → domain
-router → schemas
 infrastructure → application（实现端口） → domain
-infrastructure → models
-infrastructure → service（委托工具函数）
+common → 无依赖（被所有域引用）
 ```
 
 禁止反向依赖：
 - 不要让 `domain` 依赖任何其他层
 - 不要让 `application` 依赖 `infrastructure` 具体实现（只依赖端口）
-- 不要让 `models` 依赖 `services`
 - 不要让 `router` 直接写 Redis 或 Ollama 调用
-- 不要在 `models` 里引入 Pydantic
+- 跨域调用必须通过端口抽象（`application/ports.py`），由 infrastructure 层提供适配器实现
 
 ### 依赖注入
 
@@ -116,7 +114,7 @@ infrastructure → service（委托工具函数）
 
 ### 异常映射
 
-router 将领域异常映射为 HTTP 状态码（如 `NotFoundError`→404、`AccessDeniedError`→403、`ExpiredError`→410），不向客户端暴露内部异常。
+router 将领域异常映射为 HTTP 状态码（如 `SessionNotFoundError`→404、`AccessDeniedError`→403、`AttachmentExpiredError`→410），不向客户端暴露内部异常。
 
 ### 单文件拆分
 
@@ -137,23 +135,23 @@ router 将领域异常映射为 HTTP 状态码（如 `NotFoundError`→404、`Ac
 类型注解覆盖率 > 90%。
 
 - ORM 模型统一使用 SQLAlchemy 2.0 的 `Mapped[]` + `mapped_column()` 声明式类型注解
-- 每个 `models/` 目录包含 `__init__.py`，通过包级导入将 ORM 模型注册到 `Base.metadata`，供 Alembic 迁移自动发现
+- ORM 模型归属各域的 `infrastructure/persistence/` 目录，通过 `Base.metadata` 注册供 Alembic 迁移自动发现
 - mypy 配置启用 `sqlalchemy.ext.mypy.plugin` 插件，配置项见 `pyproject.toml`
 
 ## 提交改动前建议自查
 
-1. 新代码放在了正确的职责目录下（`router/` 不写业务，`service/` 不操作 HTTP，`models/` 不引入 Pydantic）
-2. 没有重复写新的 Ollama/Redis 调用，而是复用了 `core/` 或 `shared/`
-3. 涉及会话或 skill 的改动时，检查对应模型是否需要同步调整
-4. 没有在 Pydantic 模型里引入 `AliasChoices`、`serialization_alias` 或 `by_alias=True`
-5. `pytest`、`ruff check`、`ruff format` 和 `mypy` 通过
+1. 新代码放在了正确的职责目录下（`router/` 不写业务，`infrastructure/` 不跨域直接调用，`domain/` 不依赖框架）
+2. 没有重复写新的 Ollama/Redis 调用，而是复用了 `common/` 中的基础设施
+3. 跨域调用通过 `application/ports.py` 端口抽象，不直接 import 其他域的 service 或 infrastructure
+4. 涉及会话或 skill 的改动时，检查对应模型是否需要同步调整
+5. 没有在 Pydantic 模型里引入 `AliasChoices`、`serialization_alias` 或 `by_alias=True`
+6. `pytest`、`ruff check`、`ruff format` 和 `mypy` 通过
 
 ## 目录开发文档
 
 | 目录 | 文档 | 说明 |
 |------|------|------|
-| `src/doc_process_studio/core/` | [core/DEVELOPMENT.md](src/doc_process_studio/core/DEVELOPMENT.md) | 基础设施（配置、数据库、安全、缓存、Ollama） |
-| `src/doc_process_studio/shared/` | [shared/DEVELOPMENT.md](src/doc_process_studio/shared/DEVELOPMENT.md) | 跨模块共享工具 |
+| `src/doc_process_studio/common/` | [common/DEVELOPMENT.md](src/doc_process_studio/common/DEVELOPMENT.md) | 共享内核（配置、安全、中间件、工具） |
 | `src/doc_process_studio/skills/` | [skills/DEVELOPMENT.md](src/doc_process_studio/skills/DEVELOPMENT.md) | Skill 定义与开发规范 |
 
 ## 业务域开发文档

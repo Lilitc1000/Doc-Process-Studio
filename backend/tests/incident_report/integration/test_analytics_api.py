@@ -3,15 +3,15 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from doc_process_studio.core.security import create_access_token
+from doc_process_studio.common.security.security import create_access_token
+from doc_process_studio.incident_report.application.dtos import (
+    IncidentAnalyticsOverview,
+    IncidentAnalyticsTrend,
+)
 from doc_process_studio.incident_report.infrastructure.dependencies import (
     get_analytics_service,
 )
 from doc_process_studio.incident_report.router.analytics import router as analytics_router
-from doc_process_studio.incident_report.schemas.response import (
-    IncidentAnalyticsOverview,
-    IncidentAnalyticsTrend,
-)
 
 
 def _create_test_app() -> FastAPI:

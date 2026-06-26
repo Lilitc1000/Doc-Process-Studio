@@ -5,8 +5,8 @@ from collections import deque
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
-from ...core.config import settings
-from ...core.security import get_current_user_id
+from ...common.infrastructure.config import settings
+from ...common.security.security import get_current_user_id
 from ..application.auth_service import AuthService
 from ..domain.errors import (
     AuthError,
@@ -17,14 +17,14 @@ from ..domain.errors import (
     UserNotFoundError,
 )
 from ..infrastructure.dependencies import get_auth_service
-from ..schemas.request import (
+from .schemas.request import (
     ChangePasswordRequest,
     LogoutRequest,
     RefreshTokenRequest,
     RegisterRequest,
     UpdateProfileRequest,
 )
-from ..schemas.response import (
+from .schemas.response import (
     MessageResponse,
     RegisterResponse,
     TokenResponse,
@@ -164,10 +164,9 @@ async def change_password(
         raise _handle_auth_error(exc) from exc
 
 
-@router.post("/logout", response_model=MessageResponse)
+@router.post("/logout", response_model=MessageResponse, dependencies=[Depends(get_current_user_id)])
 async def logout(
     payload: LogoutRequest,
-    user_id: str = Depends(get_current_user_id),
     service: AuthService = Depends(get_auth_service),
 ) -> MessageResponse:
     await service.logout(refresh_token=payload.refresh_token)

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from docx import Document
 from openpyxl import Workbook
 
-from doc_process_studio.chat.service.file_context import (
+from doc_process_studio.chat.infrastructure.file_context import (
     decode_file_bytes,
     extract_docx_text,
     extract_pdf_text,
@@ -52,7 +52,7 @@ def test_extract_pdf_text_reads_page_text(monkeypatch) -> None:
     fake_reader = SimpleNamespace(pages=[fake_page])
 
     monkeypatch.setattr(
-        "doc_process_studio.chat.service.file_context.PdfReader",
+        "doc_process_studio.chat.infrastructure.file_context.PdfReader",
         lambda _: fake_reader,
     )
 

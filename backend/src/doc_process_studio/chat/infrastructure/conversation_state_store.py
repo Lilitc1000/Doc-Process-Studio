@@ -1,6 +1,6 @@
 """对话状态存储实现：委托 skill 域 conversation_store。"""
 
-from ...skill.service.conversation_store import clear_conversation_state
+from ...skill.infrastructure.conversation_store import clear_conversation_state
 from ..application.ports import ConversationStateStore
 
 

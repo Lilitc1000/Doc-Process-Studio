@@ -2,18 +2,21 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from ...core.security import get_current_user_id
-from ..schemas.request import ChatStreamRequest
-from ..service.stream import stream_remote_chat_completion
+from ...common.security.security import get_current_user_id
+from ..infrastructure.stream import stream_remote_chat_completion
+from .schemas.request import ChatStreamRequest
 
-router = APIRouter(prefix="/api", tags=["chat"])
+router = APIRouter(
+    prefix="/api",
+    tags=["chat"],
+    dependencies=[Depends(get_current_user_id)],
+)
 
 
 @router.post("/chat/stream")
 async def stream_chat(
     payload: str = Form(...),
     files: list[UploadFile] = File(default=[]),
-    user_id: str = Depends(get_current_user_id),
 ) -> StreamingResponse:
     try:
         request = ChatStreamRequest.model_validate_json(payload)

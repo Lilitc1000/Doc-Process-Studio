@@ -1,9 +1,9 @@
-"""会话仓储实现：委托 service/sessions 与 service/db_session_store 工具层。"""
+"""会话仓储实现：委托 sessions 与 db_session_store 工具层。"""
 
+from ..application.dtos.session import ChatSessionSnapshot, ChatSessionSummary
 from ..application.ports import SessionRepository, TitleGenerator
-from ..schemas.response import ChatSessionDetail, ChatSessionListResponse
-from ..schemas.session import ChatSessionSnapshot, ChatSessionSummary
-from ..service.db_session_store import (
+from ..router.schemas.response import ChatSessionDetail, ChatSessionListResponse
+from .db_session_store import (
     delete_chat_sessions_by_title_prefix,
     delete_chat_sessions_by_user,
     get_chat_session_user_id,
@@ -11,7 +11,7 @@ from ..service.db_session_store import (
     save_chat_session_summary_with_user_id,
     touch_chat_session_updated_at,
 )
-from ..service.sessions import (
+from .sessions import (
     delete_chat_session,
     generate_session_title,
     get_chat_session,
@@ -37,10 +37,9 @@ class SqlSessionRepository(SessionRepository):
         session_id: str,
         user_id: str,
         title: str,
-        title_source_messages: list[str],
         snapshot: ChatSessionSnapshot,
     ) -> ChatSessionSummary:
-        from ...shared.dtutils import to_utc8, utcnow
+        from ...common.utils.dtutils import to_utc8, utcnow
 
         existing = await get_chat_session(session_id)
         created_at = existing.created_at if existing else to_utc8(utcnow())
@@ -58,7 +57,7 @@ class SqlSessionRepository(SessionRepository):
         return summary
 
     async def update_title(self, session_id: str, title: str) -> ChatSessionSummary | None:
-        from ...shared.dtutils import to_utc8, utcnow
+        from ...common.utils.dtutils import to_utc8, utcnow
 
         existing = await get_chat_session(session_id)
         if existing is None:

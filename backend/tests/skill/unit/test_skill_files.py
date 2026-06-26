@@ -1,4 +1,4 @@
-from doc_process_studio.skill.service.tool_loop.skill_files import (
+from doc_process_studio.skill.infrastructure.tool_loop.skill_files import (
     _categorize_relative_path,
     _normalize_relative_path,
     _resolve_search_limit_bounds,

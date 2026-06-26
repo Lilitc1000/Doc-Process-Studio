@@ -4,10 +4,7 @@ from pathlib import Path
 
 def _load_incident_report_module():
     backend_root = Path(__file__).resolve().parents[3]
-    script_path = (
-        backend_root
-        / "src/doc_process_studio/skills/incident-report/scripts/generate_incident_report.py"
-    )
+    script_path = backend_root / "src/doc_process_studio/skills/incident-report/scripts/generate_incident_report.py"
     spec = importlib.util.spec_from_file_location("incident_report_script", script_path)
     assert spec is not None
     assert spec.loader is not None
@@ -70,4 +67,3 @@ def test_generate_form_accepts_mixed_payload_without_crash():
 
     document = generator.generate_form(normalized, output_path=None)
     assert document is not None
-

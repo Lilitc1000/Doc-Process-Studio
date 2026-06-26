@@ -7,16 +7,16 @@ from fastapi.responses import JSONResponse
 
 from .auth.infrastructure.dependencies import get_auth_service
 from .auth.router.auth import router as auth_router
+from .chat.infrastructure.attachments import cleanup_expired_attachments
 from .chat.router.attachments import router as chat_attachments_router
 from .chat.router.sessions import router as chat_sessions_router
 from .chat.router.stream import router as chat_stream_router
-from .chat.service.attachments import cleanup_expired_attachments
-from .core.config import settings
-from .core.database import Base, engine
-from .core.logging_config import setup_logging
-from .core.model_context import warmup_model_context_cache
-from .core.request_id import RequestIdMiddleware
-from .core.request_logging import RequestLoggingMiddleware
+from .common.infrastructure.config import settings
+from .common.infrastructure.database import Base, engine
+from .common.infrastructure.model_context import warmup_model_context_cache
+from .common.middleware.logging_config import setup_logging
+from .common.middleware.request_id import RequestIdMiddleware
+from .common.middleware.request_logging import RequestLoggingMiddleware
 from .incident_report.infrastructure.dependencies import get_role_repository
 from .incident_report.router.analytics import router as incident_report_analytics_router
 from .incident_report.router.reports import router as incident_report_reports_router
@@ -31,7 +31,7 @@ _logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
 
     async with engine.begin() as conn:
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     cleanup_expired_attachments()
     await warmup_model_context_cache()
 
-    from .core.qdrant import ensure_knowledge_base_collection
+    from .common.infrastructure.qdrant import ensure_knowledge_base_collection
 
     ensure_knowledge_base_collection()
 
@@ -64,7 +64,7 @@ app.add_middleware(RequestIdMiddleware)
 
 
 @app.exception_handler(Exception)
-async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def _unhandled_exception_handler(request: Request, _exc: Exception) -> JSONResponse:
     _logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,

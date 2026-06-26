@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
-from doc_process_studio.skill.schemas.runtime import SkillContextChunk, SkillConversationState
-from doc_process_studio.skill.service.context_packer import (
+from doc_process_studio.skill.application.dtos.runtime import SkillContextChunk, SkillConversationState
+from doc_process_studio.skill.infrastructure.context_packer import (
     _build_local_summary_from_chunks,
     _build_local_summary_from_text,
     _request_summary,
@@ -57,7 +57,10 @@ def test_build_local_summary_from_chunks_truncation():
 
 
 def test_build_local_summary_from_chunks_multiple():
-    chunks = [_make_chunk(id="c1", source_path="a.md", title="A", content="内容A"), _make_chunk(id="c2", source_path="b.md", title="B", content="内容B")]
+    chunks = [
+        _make_chunk(id="c1", source_path="a.md", title="A", content="内容A"),
+        _make_chunk(id="c2", source_path="b.md", title="B", content="内容B"),
+    ]
     result = _build_local_summary_from_chunks(chunks=chunks, title="摘要：", max_characters=500)
     assert "a.md" in result
     assert "b.md" in result
@@ -96,7 +99,7 @@ async def test_request_summary_whitespace_prompt():
 
 async def test_request_summary_llm_error():
     with patch(
-        "doc_process_studio.skill.service.context_packer.post_chat_completion",
+        "doc_process_studio.skill.infrastructure.context_packer.post_chat_completion",
         side_effect=ValueError("LLM error"),
     ):
         result = await _request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500)
@@ -104,10 +107,10 @@ async def test_request_summary_llm_error():
 
 
 async def test_request_summary_ollama_not_configured():
-    from doc_process_studio.core.ollama import OllamaNotConfiguredError
+    from doc_process_studio.common.infrastructure.exceptions import OllamaNotConfiguredError
 
     with patch(
-        "doc_process_studio.skill.service.context_packer.post_chat_completion",
+        "doc_process_studio.skill.infrastructure.context_packer.post_chat_completion",
         side_effect=OllamaNotConfiguredError("not configured"),
     ):
         result = await _request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500)
@@ -118,7 +121,7 @@ async def test_request_summary_http_error():
     import httpx
 
     with patch(
-        "doc_process_studio.skill.service.context_packer.post_chat_completion",
+        "doc_process_studio.skill.infrastructure.context_packer.post_chat_completion",
         side_effect=httpx.HTTPError("connection error"),
     ):
         result = await _request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500)
@@ -126,12 +129,15 @@ async def test_request_summary_http_error():
 
 
 async def test_request_summary_empty_content():
-    with patch(
-        "doc_process_studio.skill.service.context_packer.post_chat_completion",
-        return_value={"choices": [{"message": {"content": "  "}}]},
-    ), patch(
-        "doc_process_studio.skill.service.context_packer.extract_first_message_content",
-        return_value="  ",
+    with (
+        patch(
+            "doc_process_studio.skill.infrastructure.context_packer.post_chat_completion",
+            return_value={"choices": [{"message": {"content": "  "}}]},
+        ),
+        patch(
+            "doc_process_studio.skill.infrastructure.context_packer.extract_first_message_content",
+            return_value="  ",
+        ),
     ):
         result = await _request_summary(model="test", system_prompt="sys", user_prompt="test", max_characters=500)
     assert result == ""
@@ -156,7 +162,7 @@ async def test_ensure_hierarchical_memory_force_refresh():
     chunks = [_make_chunk()]
 
     with patch(
-        "doc_process_studio.skill.service.context_packer._request_summary",
+        "doc_process_studio.skill.infrastructure.context_packer._request_summary",
         return_value="新摘要",
     ):
         await ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=True)
@@ -168,7 +174,7 @@ async def test_ensure_hierarchical_memory_fallback_to_local():
     chunks = [_make_chunk()]
 
     with patch(
-        "doc_process_studio.skill.service.context_packer._request_summary",
+        "doc_process_studio.skill.infrastructure.context_packer._request_summary",
         return_value="",
     ):
         await ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=True)
@@ -207,7 +213,10 @@ def test_build_skill_context_budget_text_compacted_chunks_excluded():
 
 def test_build_skill_context_budget_text_mixed():
     state = _make_state(short_term_memory="短期记忆", compacted_chunk_ids=["chunk-1"])
-    chunks = [_make_chunk(), _make_chunk(id="chunk-2", source_path="refs/other.md", title="其他文档", content="其他内容")]
+    chunks = [
+        _make_chunk(),
+        _make_chunk(id="chunk-2", source_path="refs/other.md", title="其他文档", content="其他内容"),
+    ]
     result = build_skill_context_budget_text(state, chunks)
     assert result is not None
     assert "短期记忆" in result

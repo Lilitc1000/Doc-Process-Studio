@@ -6,7 +6,7 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.config import settings
+from ...common.infrastructure.config import settings
 from ..domain.errors import (
     DocumentNotFoundError,
     FileTooLargeError,
@@ -14,7 +14,7 @@ from ..domain.errors import (
     ProjectNotFoundError,
     UnsupportedFileTypeError,
 )
-from ..schemas import (
+from ..router.schemas import (
     KBDocumentResponse,
     KBFolderResponse,
     KBProjectListResponse,

@@ -2,12 +2,16 @@ import json
 
 import pytest
 
-from doc_process_studio.chat.schemas.request import ChatMessageInput, ChatStreamRequest
-from doc_process_studio.skill.schemas.catalog import SkillToolConfig
-from doc_process_studio.skill.schemas.runtime import SkillConversationState
-from doc_process_studio.skill.service import tool_loop as tool_loop_module
-from doc_process_studio.skill.service.tool_loop import _coerce_json_file_argument, _restructure_doc_plan, _try_repair_truncated_json
-from doc_process_studio.skill.service.tool_loop import tool_exec as _tool_exec_module
+from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
+from doc_process_studio.skill.application.dtos.catalog import SkillToolConfig
+from doc_process_studio.skill.application.dtos.runtime import SkillConversationState
+from doc_process_studio.skill.infrastructure import tool_loop as tool_loop_module
+from doc_process_studio.skill.infrastructure.tool_loop import (
+    _coerce_json_file_argument,
+    _restructure_doc_plan,
+    _try_repair_truncated_json,
+)
+from doc_process_studio.skill.infrastructure.tool_loop import tool_exec as _tool_exec_module
 
 
 def test_coerce_json_file_argument_accepts_object_and_list() -> None:
@@ -26,10 +30,7 @@ def test_coerce_json_file_argument_accepts_json_string() -> None:
 
 
 def test_coerce_json_file_argument_accepts_json_string_with_chinese_punctuation() -> None:
-    payload = (
-        '[{"title":"1. 概述","content":"正文一"}，'
-        '{"title":"2. 架构","content":"正文二"}]'
-    )
+    payload = '[{"title":"1. 概述","content":"正文一"}，{"title":"2. 架构","content":"正文二"}]'
     parsed = _coerce_json_file_argument("doc_plan", payload)
     assert isinstance(parsed, list)
     assert len(parsed) == 2
@@ -95,10 +96,7 @@ def test_coerce_json_file_argument_rejects_plain_text_without_text_normalizer() 
 
 
 def test_coerce_json_file_argument_rejects_invalid_json_like_even_with_text_normalizer() -> None:
-    payload = (
-        '{"chapters":[{"title":"1. 概述","content":"正文"}]，'
-        '{"title":"2. 架构","content":"正文二"}}'
-    )
+    payload = '{"chapters":[{"title":"1. 概述","content":"正文"}]，{"title":"2. 架构","content":"正文二"}}'
     with pytest.raises(ValueError, match="看起来是 JSON"):
         _coerce_json_file_argument(
             "doc_plan",
@@ -261,6 +259,7 @@ async def test_search_skill_context_limit_overflow_is_clamped(monkeypatch) -> No
         source_path_contains: str | None = None,
         reranker_model: str | None = None,
     ) -> list[object]:
+        _ = exclude_chunk_ids
         captured["skill_id"] = skill_id
         captured["query"] = query
         captured["limit"] = limit

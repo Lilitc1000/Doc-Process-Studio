@@ -1,4 +1,4 @@
-from doc_process_studio.incident_report.service.normalization import (
+from doc_process_studio.incident_report.infrastructure.utils.normalization import (
     compose_datetime_text,
     contains_html_tag,
     extract_appendix_from_rich_text,

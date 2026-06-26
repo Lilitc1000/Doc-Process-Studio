@@ -1,21 +1,19 @@
-"""Skill 基础设施实现：委托 service/ 工具层。"""
+"""Skill 基础设施实现：委托基础设施层工具函数。"""
 
+from ..application.dtos.catalog import SkillInterfaceConfig
+from ..application.dtos.runtime import SkillContextChunk
 from ..application.ports import (
     ConversationStateRepository,
     SkillContextSearcher,
     SkillRegistry,
 )
-from ..schemas.catalog import SkillInterfaceConfig
-from ..schemas.runtime import ConversationAgentState, SkillContextChunk
-from ..service.context import search_skill_context_chunks
-from ..service.conversation_store import (
+from .context import search_skill_context_chunks
+from .conversation_store import (
     clear_conversation_state,
     get_conversation_state_ttl_seconds,
-    load_conversation_state,
     refresh_conversation_state_ttl,
-    save_conversation_state,
 )
-from ..service.registry import get_skill_interface, list_skill_interfaces
+from .registry import get_skill_interface, list_skill_interfaces
 
 
 class LocalSkillRegistry(SkillRegistry):
@@ -37,12 +35,6 @@ class HybridSkillContextSearcher(SkillContextSearcher):
 
 class RedisConversationStateRepository(ConversationStateRepository):
     """基于 Redis 的对话状态仓储。"""
-
-    async def load_state(self, conversation_id: str, tenant_id: str = "default") -> ConversationAgentState | None:
-        return await load_conversation_state(conversation_id, tenant_id=tenant_id)
-
-    async def save_state(self, state: ConversationAgentState, tenant_id: str = "default") -> None:
-        await save_conversation_state(state, tenant_id=tenant_id)
 
     async def refresh_ttl(self, conversation_id: str, tenant_id: str = "default") -> tuple[bool, int]:
         return await refresh_conversation_state_ttl(conversation_id, tenant_id=tenant_id)

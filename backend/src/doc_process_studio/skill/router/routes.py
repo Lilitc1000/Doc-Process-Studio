@@ -2,12 +2,12 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ...core.cache import ping_redis
-from ...core.security import get_current_user_id
+from ...common.infrastructure.cache import ping_redis
+from ...common.security.security import get_current_user_id
 from ..application.skill_service import SkillService
 from ..domain.errors import SkillError, SkillNotFoundError
 from ..infrastructure.dependencies import get_skill_service
-from ..schemas import (
+from .schemas import (
     SkillCacheStatusResponse,
     SkillContextSearchResponse,
     SkillConversationCacheResponse,
@@ -16,7 +16,11 @@ from ..schemas import (
 
 _logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["skills"])
+router = APIRouter(
+    prefix="/api",
+    tags=["skills"],
+    dependencies=[Depends(get_current_user_id)],
+)
 
 
 def _handle_skill_error(exc: SkillError) -> HTTPException:
@@ -29,7 +33,6 @@ def _handle_skill_error(exc: SkillError) -> HTTPException:
 
 @router.get("/skills", response_model=SkillListResponse)
 async def list_skills(
-    user_id: str = Depends(get_current_user_id),
     service: SkillService = Depends(get_skill_service),
 ) -> SkillListResponse:
     return SkillListResponse(skills=service.list_skills())
@@ -42,7 +45,6 @@ async def list_skills(
 async def search_skill_context(
     skill_id: str,
     query: str = Query(..., min_length=1),
-    user_id: str = Depends(get_current_user_id),
     service: SkillService = Depends(get_skill_service),
 ) -> SkillContextSearchResponse:
     try:
@@ -66,9 +68,7 @@ async def search_skill_context(
 
 
 @router.get("/skills/cache/status", response_model=SkillCacheStatusResponse)
-async def get_skill_cache_status(
-    user_id: str = Depends(get_current_user_id),
-) -> SkillCacheStatusResponse:
+async def get_skill_cache_status() -> SkillCacheStatusResponse:
     try:
         if await ping_redis():
             return SkillCacheStatusResponse(
@@ -91,7 +91,6 @@ async def get_skill_cache_status(
 async def refresh_skill_conversation_cache(
     conversation_id: str,
     tenant_id: str = Query(default="default"),
-    user_id: str = Depends(get_current_user_id),
     service: SkillService = Depends(get_skill_service),
 ) -> SkillConversationCacheResponse:
     refreshed, ttl_seconds = await service.refresh_conversation_cache(conversation_id, tenant_id=tenant_id)
@@ -110,7 +109,6 @@ async def refresh_skill_conversation_cache(
 async def delete_skill_conversation_cache(
     conversation_id: str,
     tenant_id: str = Query(default="default"),
-    user_id: str = Depends(get_current_user_id),
     service: SkillService = Depends(get_skill_service),
 ) -> SkillConversationCacheResponse:
     cleared, ttl_seconds = await service.delete_conversation_cache(conversation_id, tenant_id=tenant_id)

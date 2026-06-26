@@ -1,4 +1,4 @@
-from doc_process_studio.incident_report.service.form_schema import (
+from doc_process_studio.incident_report.domain.values.form_schema import (
     INCIDENT_REPORT_FORM_SCHEMA,
     FormFieldSchema,
     FormSchemaDefinition,

@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from doc_process_studio.core.security import (
+from doc_process_studio.common.security.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -57,16 +57,14 @@ def test_decode_token_returns_none_for_expired_token():
 
     from jose import jwt
 
-    from doc_process_studio.core.config import settings
+    from doc_process_studio.common.infrastructure.config import settings
 
     expired_payload = {
         "sub": "usr_test",
         "type": "access",
         "exp": datetime.now(UTC) - timedelta(hours=1),
     }
-    expired_token = jwt.encode(
-        expired_payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
-    )
+    expired_token = jwt.encode(expired_payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     result = decode_token(expired_token)
     assert result is None
 
@@ -103,7 +101,8 @@ async def test_get_current_user_id_raises_for_refresh_token():
 
 async def test_get_current_user_id_raises_for_token_without_sub():
     from jose import jwt
-    from doc_process_studio.core.config import settings
+
+    from doc_process_studio.common.infrastructure.config import settings
 
     payload = {"type": "access", "sub": "", "exp": 9999999999}
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)

@@ -1,4 +1,4 @@
-from doc_process_studio.chat.service import sessions as sessions_module
+from doc_process_studio.chat.infrastructure import sessions as sessions_module
 
 
 async def test_delete_chat_session_also_cleans_agent_traces(monkeypatch) -> None:
