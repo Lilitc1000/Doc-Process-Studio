@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '@modules/auth';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -7,13 +7,13 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: () => import('../views/auth/LoginView.vue'),
+      component: () => import('@modules/auth/views/LoginView.vue'),
       meta: { requiresAuth: false, hideForAuth: true },
     },
     {
       path: '/register',
       name: 'register',
-      component: () => import('../views/auth/RegisterView.vue'),
+      component: () => import('@modules/auth/views/RegisterView.vue'),
       meta: { requiresAuth: false, hideForAuth: true },
     },
     {
@@ -24,78 +24,78 @@ const router = createRouter({
         {
           path: '',
           name: 'home',
-          component: () => import('../views/home/HomeView.vue'),
+          component: () => import('@modules/home/views/HomeView.vue'),
         },
         {
           path: '/chat',
           name: 'chat',
-          component: () => import('../views/chat/ChatView.vue'),
+          component: () => import('@modules/chat/views/ChatView.vue'),
         },
         {
           path: '/incident-report',
           name: 'incident-report-list',
           component: () =>
-            import('../views/incident-report/list/IncidentReportListView.vue'),
+            import('@modules/incident-report/views/list/IncidentReportListView.vue'),
           meta: { requiresAuth: true, pageTitle: '事故报告管理' },
         },
         {
           path: '/incident-report/create',
           name: 'incident-report-create',
           component: () =>
-            import('../views/incident-report/create/IncidentReportCreateView.vue'),
+            import('@modules/incident-report/views/create/IncidentReportCreateView.vue'),
           meta: { requiresAuth: true, pageTitle: '新建事故报告' },
         },
         {
           path: '/incident-report/analytics',
           name: 'incident-report-analytics',
           component: () =>
-            import('../views/incident-report/analytics/IncidentReportAnalyticsView.vue'),
+            import('@modules/incident-report/views/analytics/IncidentReportAnalyticsView.vue'),
           meta: { requiresAuth: true, pageTitle: '统计分析' },
         },
         {
           path: '/incident-report/roles',
           name: 'incident-report-roles',
           component: () =>
-            import('../views/incident-report/roles/RoleManagementView.vue'),
+            import('@modules/incident-report/views/roles/RoleManagementView.vue'),
           meta: { requiresAuth: true, pageTitle: '角色权限管理' },
         },
         {
           path: '/incident-report/:id/edit',
           name: 'incident-report-edit',
           component: () =>
-            import('../views/incident-report/edit/IncidentReportEditView.vue'),
+            import('@modules/incident-report/views/edit/IncidentReportEditView.vue'),
           meta: { requiresAuth: true, pageTitle: '编辑报告' },
         },
         {
           path: '/incident-report/:id',
           name: 'incident-report-detail',
           component: () =>
-            import('../views/incident-report/detail/IncidentReportDetailView.vue'),
+            import('@modules/incident-report/views/detail/IncidentReportDetailView.vue'),
           meta: { requiresAuth: true, pageTitle: '报告详情' },
         },
         {
           path: '/settings',
           name: 'settings',
-          component: () => import('../views/settings/SettingsView.vue'),
+          component: () => import('@modules/settings/views/SettingsView.vue'),
         },
         {
           path: '/knowledge-base',
           name: 'knowledge-base-list',
           component: () =>
-            import('../views/knowledge-base/KnowledgeBaseListView.vue'),
+            import('@modules/knowledge-base/views/KnowledgeBaseListView.vue'),
           meta: { requiresAuth: true, pageTitle: '知识库' },
         },
         {
           path: '/knowledge-base/:id',
           name: 'knowledge-base-detail',
           component: () =>
-            import('../views/knowledge-base/KnowledgeBaseDetailView.vue'),
+            import('@modules/knowledge-base/views/KnowledgeBaseDetailView.vue'),
           meta: { requiresAuth: true, pageTitle: '知识库项目' },
         },
         {
           path: '/:pathMatch(.*)*',
           name: 'not-found',
-          component: () => import('../views/NotFoundView.vue'),
+          component: () => import('@shared/views/NotFoundView.vue'),
           meta: { requiresAuth: true },
         },
       ],

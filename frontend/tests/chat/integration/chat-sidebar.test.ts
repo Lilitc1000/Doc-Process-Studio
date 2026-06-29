@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import SessionSidebar from '../../../src/components/business/SessionSidebar.vue';
+import SessionSidebar from '@shared/components/SessionSidebar.vue';
 
 describe('SessionSidebar', () => {
   it('渲染会话分组并在点击时抛出加载事件', async () => {

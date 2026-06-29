@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import ChatPage from '../../../src/views/chat/ChatView.vue';
+import ChatPage from '@modules/chat/views/ChatView.vue';
 
 const streamChatReplyMock = vi.hoisted(() => vi.fn());
 const fetchAgentTraceReplayMock = vi.hoisted(() => vi.fn());
@@ -10,25 +10,25 @@ const fetchAvailableSkillsMock = vi.hoisted(() => vi.fn());
 const fetchSessionSummariesMock = vi.hoisted(() => vi.fn());
 const saveSessionMock = vi.hoisted(() => vi.fn());
 
-vi.mock('../../../src/api/chat-stream', () => ({
+vi.mock('@modules/chat/api/chat-stream', () => ({
   streamChatReply: streamChatReplyMock,
 }));
 
-vi.mock('../../../src/api/trace', () => ({
+vi.mock('@shared/api/trace', () => ({
   fetchAgentTraceReplay: fetchAgentTraceReplayMock,
 }));
 
-vi.mock('../../../src/api/chat-attachments', () => ({
+vi.mock('@modules/chat/api/chat-attachments', () => ({
   downloadAttachment: downloadAttachmentMock,
 }));
 
-vi.mock('../../../src/api/catalog', () => ({
+vi.mock('@shared/api/catalog', () => ({
   fallbackModels: ['qwen3-coder-next:latest'],
   fetchAvailableModels: fetchAvailableModelsMock,
   fetchAvailableSkills: fetchAvailableSkillsMock,
 }));
 
-vi.mock('../../../src/api/chat-sessions', () => ({
+vi.mock('@modules/chat/api/chat-sessions', () => ({
   fetchSessionSummaries: fetchSessionSummariesMock,
   fetchSessionDetail: vi.fn(),
   renameSession: vi.fn(),
@@ -36,7 +36,7 @@ vi.mock('../../../src/api/chat-sessions', () => ({
   saveSession: saveSessionMock,
 }));
 
-vi.mock('../../../src/api/incident', () => ({
+vi.mock('@modules/chat/api/incident', () => ({
   fetchIncidentFormSchema: vi.fn(),
   fetchIncidentSessionSummaries: vi.fn(),
   createIncidentSession: vi.fn(),

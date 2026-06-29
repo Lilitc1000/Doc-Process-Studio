@@ -4,7 +4,7 @@ import {
   renderPlainText,
   getCachedRenderedContent,
   setCachedRenderedContent,
-} from '../../../src/utils/common/render-markdown';
+} from '@shared/utils/render-markdown';
 
 describe('shouldUseMarkdownRendering', () => {
   it('空内容返回 false', () => {

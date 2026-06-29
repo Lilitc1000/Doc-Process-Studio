@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import StatsCards from '../../../src/views/incident-report/analytics/components/StatsCards.vue';
-import type { IncidentAnalyticsOverview } from '../../../src/types/incident-report/incident-report';
+import StatsCards from '@modules/incident-report/views/analytics/components/StatsCards.vue';
+import type { IncidentAnalyticsOverview } from '@modules/incident-report';
 
 describe('StatsCards', () => {
   beforeEach(() => {

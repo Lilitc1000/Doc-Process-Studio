@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import ReportStatusBadge from '../../../src/views/incident-report/components/ReportStatusBadge.vue';
+import ReportStatusBadge from '@modules/incident-report/views/components/ReportStatusBadge.vue';
 
 describe('ReportStatusBadge', () => {
   beforeEach(() => {

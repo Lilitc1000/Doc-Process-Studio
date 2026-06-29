@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import UserAvatar from '../../../src/components/business/UserAvatar.vue';
+import UserAvatar from '@shared/components/UserAvatar.vue';
 
 describe('UserAvatar', () => {
   it('显示用户名首字母大写', () => {

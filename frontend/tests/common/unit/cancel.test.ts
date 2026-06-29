@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRequestCanceled } from '../../../src/utils/common/cancel';
+import { isRequestCanceled } from '@shared/utils/cancel';
 
 describe('isRequestCanceled', () => {
   it('识别 DOMException AbortError', () => {

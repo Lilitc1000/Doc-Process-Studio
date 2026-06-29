@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseStreamEvents } from '../../../src/utils/chat/chat-stream';
+import { parseStreamEvents } from '@modules/chat';
 
 describe('parseStreamEvents', () => {
   it('parses single SSE event', () => {

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createConversationId,
-  createMessageId,
-} from '../../../src/utils/common/ids';
+import { createConversationId, createMessageId } from '@shared/utils/ids';
 
 describe('createConversationId', () => {
   it('返回非空字符串', () => {

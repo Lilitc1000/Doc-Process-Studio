@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupSessionsByDate } from '../../../src/utils/chat/session-groups';
+import { groupSessionsByDate } from '@modules/chat';
 
 describe('session groups', () => {
   it('按最近和年月分组历史会话', () => {

@@ -1,11 +1,11 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useChatStore } from '../../../src/stores/chat';
+import { useChatStore } from '@modules/chat';
 import type {
   ChatMessageNode,
   ChatAttachment,
   ChatToolStatus,
-} from '../../../src/types/chat/chat';
+} from '@modules/chat';
 
 function makeNode(
   id: string,

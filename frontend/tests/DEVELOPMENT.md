@@ -87,7 +87,7 @@ frontend/tests/
 
 ### 目录组织原则
 
-- **按业务域划分**：与 `src/views/` 的业务域一一对应（auth、chat、incident-report、settings、home）
+- **按业务域划分**：与 `src/modules/` 的业务域一一对应（auth、chat、incident-report、settings、home）
 - **域内按测试类型划分**：`unit/`（单元测试）、`integration/`（集成测试）、`e2e/`（端到端测试）
 - **跨域测试**：放在 `app/` 目录下（如全局导航）
 - **通用工具**：放在 `common/` 目录下（如目录归一化）
@@ -137,7 +137,7 @@ npx playwright test tests/chat/e2e/  # chat 域的 E2E 测试
 
 ```typescript
 import { describe, expect, it } from 'vitest';
-import { parseStreamEvents } from '../../../src/utils/chat/chat-stream';
+import { parseStreamEvents } from '@modules/chat';
 
 describe('parseStreamEvents', () => {
   it('解析单个 SSE 事件', () => {
@@ -170,18 +170,22 @@ describe('parseStreamEvents', () => {
 ```typescript
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useAuthStore } from '../../../src/stores/auth';
-import * as authApi from '../../../src/api/auth';
+import { useAuthStore } from '@modules/auth';
+import * as authApi from '@modules/auth';
 
-vi.mock('../../../src/api/auth', () => ({
-  loginUser: vi.fn(),
-  registerUser: vi.fn(),
-  refreshToken: vi.fn(),
-  logoutUser: vi.fn(),
-  getCurrentUser: vi.fn(),
-  updateProfile: vi.fn(),
-  changePassword: vi.fn(),
-}));
+vi.mock('@modules/auth', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@modules/auth')>();
+  return {
+    ...original,
+    loginUser: vi.fn(),
+    registerUser: vi.fn(),
+    refreshToken: vi.fn(),
+    logoutUser: vi.fn(),
+    getCurrentUser: vi.fn(),
+    updateProfile: vi.fn(),
+    changePassword: vi.fn(),
+  };
+});
 
 describe('useAuthStore', () => {
   beforeEach(() => {
@@ -266,7 +270,7 @@ function makeNode(
 ```typescript
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import UserAvatar from '../../../src/components/business/UserAvatar.vue';
+import UserAvatar from '@shared/components/UserAvatar.vue';
 
 describe('UserAvatar', () => {
   it('显示用户名首字母大写', () => {
@@ -298,12 +302,17 @@ describe('UserAvatar', () => {
 ```typescript
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useReportList } from '../../../src/views/incident-report/list/composables/useReportList';
+import { useReportList } from '@modules/incident-report/views/list/composables/useReportList';
 
-vi.mock('../../../src/api/incident-report', () => ({
-  fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
-  fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
-}));
+vi.mock('@modules/incident-report', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@modules/incident-report')>();
+  return {
+    ...original,
+    fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
+    fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
+  };
+});
 
 describe('useReportList', () => {
   beforeEach(() => {
@@ -332,11 +341,11 @@ describe('useReportList', () => {
 ```typescript
 import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import ChatPage from '../../../src/views/chat/ChatView.vue';
+import ChatPage from '@modules/chat/views/ChatView.vue';
 
 const streamChatReplyMock = vi.hoisted(() => vi.fn());
 
-vi.mock('../../../src/api/chat-stream', () => ({
+vi.mock('@modules/chat/api/chat-stream', () => ({
   streamChatReply: streamChatReplyMock,
 }));
 
@@ -619,7 +628,7 @@ test.describe('功能名称', () => {
 - [ ] 文件放在 `tests/<domain>/<type>/` 目录（域与 `src/views/` 对应）
 - [ ] 单元测试文件名与源文件对应（如 `auth-store.test.ts` 对应 `auth.ts`）
 - [ ] E2E 测试文件名以 `.spec.ts` 结尾
-- [ ] 导入路径使用 `../../../src/...`（从 `<domain>/<type>/` 到 `src/`）
+- [ ] 导入路径使用 `@shared/...` 或 `@modules/...` 路径别名（从 `<domain>/<type>/` 到 `src/`）
 - [ ] E2E 辅助函数从 `../../helpers` 导入
 - [ ] 无 eslint 警告或错误（运行 `npx eslint <file>` 检查，`npm run lint` 的 `--fix` 无法自动修复 `no-unused-vars` 等逻辑类问题）
 

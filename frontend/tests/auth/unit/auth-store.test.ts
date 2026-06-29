@@ -1,17 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useAuthStore } from '../../../src/stores/auth';
-import * as authApi from '../../../src/api/auth';
+import { useAuthStore } from '@modules/auth';
+import * as authApi from '@modules/auth';
 
-vi.mock('../../../src/api/auth', () => ({
-  loginUser: vi.fn(),
-  registerUser: vi.fn(),
-  refreshToken: vi.fn(),
-  logoutUser: vi.fn(),
-  getCurrentUser: vi.fn(),
-  updateProfile: vi.fn(),
-  changePassword: vi.fn(),
-}));
+vi.mock('@modules/auth', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@modules/auth')>();
+  return {
+    ...original,
+    loginUser: vi.fn(),
+    registerUser: vi.fn(),
+    refreshToken: vi.fn(),
+    logoutUser: vi.fn(),
+    getCurrentUser: vi.fn(),
+    updateProfile: vi.fn(),
+    changePassword: vi.fn(),
+  };
+});
 
 describe('useAuthStore', () => {
   beforeEach(() => {

@@ -67,10 +67,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import UserMenuDropdown from '../../components/business/UserMenuDropdown.vue';
-import UserProfileModal from '../../components/business/UserProfileModal.vue';
-import { useAuthStore } from '../../stores/auth';
-import type { PageId } from '../../stores/app';
+import UserMenuDropdown from '@shared/components/UserMenuDropdown.vue';
+import UserProfileModal from '@shared/components/UserProfileModal.vue';
+import { useAuthStore } from '@modules/auth';
+import type { PageId } from '@shared/stores/app';
 
 const props = defineProps<{
   pageId: PageId;

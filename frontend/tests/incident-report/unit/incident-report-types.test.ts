@@ -3,11 +3,11 @@ import {
   INCIDENT_STATUS_LABELS,
   INCIDENT_SEVERITY_LABELS,
   INCIDENT_ROLE_LABELS,
-} from '../../../src/types/incident-report/incident-report';
+} from '@modules/incident-report';
 import type {
   IncidentReportStatus,
   IncidentSeverity,
-} from '../../../src/types/incident-report/incident-report';
+} from '@modules/incident-report';
 
 describe('IncidentReport 类型常量', () => {
   it('INCIDENT_STATUS_LABELS 包含所有状态', () => {

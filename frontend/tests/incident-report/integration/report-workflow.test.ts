@@ -1,28 +1,33 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import * as api from '../../../src/api/incident-report';
+import * as api from '@modules/incident-report';
 
-vi.mock('../../../src/api/incident-report', () => ({
-  fetchUserIncidentRolesAndPermissions: vi.fn().mockResolvedValue({
-    roles: ['reporter'],
-    permissions: ['report:create', 'report:edit_own', 'report:submit'],
-  }),
-  fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
-  fetchIncidentReportDetail: vi.fn(),
-  fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({
-    total_this_month: 0,
-    pending_count: 0,
-    in_progress_count: 0,
-    closed_this_month: 0,
-    avg_resolution_hours: null,
-  }),
-  createIncidentReport: vi.fn(),
-  submitIncidentReport: vi.fn(),
-  approveIncidentReport: vi.fn(),
-  rejectIncidentReport: vi.fn(),
-  closeIncidentReport: vi.fn(),
-  reopenIncidentReport: vi.fn(),
-}));
+vi.mock('@modules/incident-report', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@modules/incident-report')>();
+  return {
+    ...original,
+    fetchUserIncidentRolesAndPermissions: vi.fn().mockResolvedValue({
+      roles: ['reporter'],
+      permissions: ['report:create', 'report:edit_own', 'report:submit'],
+    }),
+    fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
+    fetchIncidentReportDetail: vi.fn(),
+    fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({
+      total_this_month: 0,
+      pending_count: 0,
+      in_progress_count: 0,
+      closed_this_month: 0,
+      avg_resolution_hours: null,
+    }),
+    createIncidentReport: vi.fn(),
+    submitIncidentReport: vi.fn(),
+    approveIncidentReport: vi.fn(),
+    rejectIncidentReport: vi.fn(),
+    closeIncidentReport: vi.fn(),
+    reopenIncidentReport: vi.fn(),
+  };
+});
 
 describe('报告状态流转集成测试', () => {
   beforeEach(() => {

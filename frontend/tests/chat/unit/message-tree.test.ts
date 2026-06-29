@@ -6,8 +6,8 @@ import {
   getMessageVersionCount,
   getMessageVersionIndex,
   resolveCurrentLeafMessageId,
-} from '../../../src/utils/chat/message-tree';
-import type { ChatMessageNode } from '../../../src/types/chat/chat';
+} from '@modules/chat';
+import type { ChatMessageNode } from '@modules/chat';
 
 function makeNode(
   id: string,

@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import {
-  formatFileSize,
-  getFileTypeVisual,
-} from '../../../src/utils/common/file';
+import { formatFileSize, getFileTypeVisual } from '@shared/utils/file';
 import {
   FILE_TYPE_VISUALS,
   FILE_EXTENSION_VISUAL_MAP,
   MIME_TYPE_CATEGORY_MAP,
-} from '../../../src/utils/common/file-type-visuals';
+} from '@shared/utils/file-type-visuals';
 
 describe('formatFileSize', () => {
   it('小于 1KB 显示字节', () => {

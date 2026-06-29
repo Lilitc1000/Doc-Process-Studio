@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { triggerBlobDownload } from '../../../src/utils/common/download';
+import { triggerBlobDownload } from '@shared/utils/download';
 
 describe('triggerBlobDownload', () => {
   let createObjectURLSpy: (obj: Blob | MediaSource) => string;

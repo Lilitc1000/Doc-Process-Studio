@@ -1,19 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useKnowledgeBaseStore } from '../../../src/stores/knowledge-base';
-import * as kbApi from '../../../src/api/knowledge-base';
-import type {
-  KBProject,
-  KBTreeResponse,
-} from '../../../src/types/knowledge-base/knowledge-base';
+import { useKnowledgeBaseStore } from '@modules/knowledge-base';
+import * as kbApi from '@modules/knowledge-base';
+import type { KBProject, KBTreeResponse } from '@modules/knowledge-base';
 
-vi.mock('../../../src/api/knowledge-base', () => ({
-  listKBProjects: vi.fn(),
-  createKBProject: vi.fn(),
-  renameKBProject: vi.fn(),
-  deleteKBProject: vi.fn(),
-  getKBTree: vi.fn(),
-}));
+vi.mock('@modules/knowledge-base', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@modules/knowledge-base')>();
+  return {
+    ...original,
+    listKBProjects: vi.fn(),
+    createKBProject: vi.fn(),
+    renameKBProject: vi.fn(),
+    deleteKBProject: vi.fn(),
+    getKBTree: vi.fn(),
+  };
+});
 
 function makeProject(overrides: Partial<KBProject> = {}): KBProject {
   return {

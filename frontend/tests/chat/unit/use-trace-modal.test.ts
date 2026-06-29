@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { useTraceModal } from '../../../src/composables/business/useTraceModal';
-import * as traceApi from '../../../src/api/trace';
+import { useTraceModal } from '@shared/composables/useTraceModal';
+import * as traceApi from '@shared/api/trace';
 
-vi.mock('../../../src/api/trace', () => ({
+vi.mock('@shared/api/trace', () => ({
   fetchAgentTraceReplay: vi.fn(),
 }));
 

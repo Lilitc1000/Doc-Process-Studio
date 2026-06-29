@@ -1,14 +1,19 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useReportEditWizard } from '../../../src/views/incident-report/edit/composables/useReportEditWizard';
-import * as incidentApi from '../../../src/api/incident-report';
+import { useReportEditWizard } from '@modules/incident-report/views/edit/composables/useReportEditWizard';
+import * as incidentApi from '@modules/incident-report';
 
-vi.mock('../../../src/api/incident-report', () => ({
-  fetchIncidentReportDetail: vi.fn(),
-  updateIncidentReport: vi.fn(),
-  generateIncidentReportBodySection: vi.fn(),
-  previewIncidentReport: vi.fn(),
-}));
+vi.mock('@modules/incident-report', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@modules/incident-report')>();
+  return {
+    ...original,
+    fetchIncidentReportDetail: vi.fn(),
+    updateIncidentReport: vi.fn(),
+    generateIncidentReportBodySection: vi.fn(),
+    previewIncidentReport: vi.fn(),
+  };
+});
 
 describe('useReportEditWizard', () => {
   beforeEach(() => {

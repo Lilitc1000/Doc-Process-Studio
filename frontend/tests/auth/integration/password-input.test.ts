@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import PasswordInput from '../../../src/components/base/PasswordInput.vue';
+import PasswordInput from '@shared/ui/PasswordInput.vue';
 
 describe('PasswordInput', () => {
   it('默认类型为 password', () => {

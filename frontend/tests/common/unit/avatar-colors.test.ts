@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AVATAR_COLORS } from '../../../src/utils/common/avatar-colors';
+import { AVATAR_COLORS } from '@shared/utils/avatar-colors';
 
 describe('AVATAR_COLORS', () => {
   it('包含至少 6 种颜色', () => {

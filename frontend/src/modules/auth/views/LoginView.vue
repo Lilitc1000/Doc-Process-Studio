@@ -1,0 +1,88 @@
+<template>
+  <section class="login-page">
+    <div class="login-card fade-slide-up-target">
+      <h1 class="login-title">登录</h1>
+      <form class="login-form" @submit.prevent="onSubmit">
+        <div class="login-field">
+          <label class="login-label">用户名</label>
+          <base-input
+            v-model="username"
+            placeholder="请输入用户名"
+            autocomplete="username"
+          />
+        </div>
+        <div class="login-field">
+          <label class="login-label">密码</label>
+          <password-input
+            v-model="password"
+            placeholder="请输入密码"
+            autocomplete="current-password"
+          />
+        </div>
+        <Transition name="fade">
+          <div v-if="errorMessage" class="login-error">
+            {{ errorMessage }}
+          </div>
+        </Transition>
+        <base-button
+          type="submit"
+          variant="primary"
+          block
+          :disabled="isLoading"
+          class="login-submit"
+        >
+          {{ isLoading ? '登录中...' : '登录' }}
+        </base-button>
+      </form>
+      <div class="login-footer">
+        <span>还没有账号？</span>
+        <router-link to="/register" class="login-link">去注册</router-link>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import BaseButton from '@shared/ui/BaseButton.vue';
+import BaseInput from '@shared/ui/BaseInput.vue';
+import PasswordInput from '@shared/ui/PasswordInput.vue';
+import { useAuthStore } from '../store/auth';
+import { getErrorMessage } from '@shared/utils/error';
+
+const router = useRouter();
+const route = useRoute();
+const authStore = useAuthStore();
+
+const username = ref('');
+const password = ref('');
+const isLoading = ref(false);
+const errorMessage = ref('');
+
+async function onSubmit() {
+  errorMessage.value = '';
+
+  if (!username.value.trim()) {
+    errorMessage.value = '请输入用户名';
+    return;
+  }
+  if (!password.value) {
+    errorMessage.value = '请输入密码';
+    return;
+  }
+
+  isLoading.value = true;
+  try {
+    await authStore.login(username.value.trim(), password.value);
+    const redirect = (route.query.redirect as string) || '/';
+    router.push(redirect);
+  } catch (err: unknown) {
+    errorMessage.value = getErrorMessage(err, '登录失败，请重试');
+  } finally {
+    isLoading.value = false;
+  }
+}
+</script>
+
+<style scoped src="./styles/login-page.css" />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { useCopyToast } from '../../../src/composables/business/useCopyToast';
+import { useCopyToast } from '@shared/composables/useCopyToast';
 import { withSetup } from '../../helpers/composable-setup';
 
 describe('useCopyToast', () => {

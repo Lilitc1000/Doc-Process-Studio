@@ -8,7 +8,7 @@ import type {
   KBTreeNodeDocument,
   KBTreeResponse,
   KBProjectSimple,
-} from '../../../src/types/knowledge-base/knowledge-base';
+} from '@modules/knowledge-base';
 
 function makeKBProject(overrides: Partial<KBProject> = {}): KBProject {
   return {

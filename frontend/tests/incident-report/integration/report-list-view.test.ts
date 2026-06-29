@@ -2,59 +2,64 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
-import IncidentReportListView from '../../../src/views/incident-report/list/IncidentReportListView.vue';
+import IncidentReportListView from '@modules/incident-report/views/list/IncidentReportListView.vue';
 
-vi.mock('../../../src/api/incident-report', () => ({
-  fetchIncidentReportList: vi.fn().mockResolvedValue({
-    total: 2,
-    items: [
-      {
-        id: 'rep-1',
-        refNo: 'DAS-001',
-        title: '测试1',
-        status: 'draft',
-        severity: 'P1',
-        reporterId: 'usr-1',
-        reporterName: null,
-        assigneeId: null,
-        assigneeName: null,
-        verifierId: null,
-        verifierName: null,
-        faultDate: null,
-        createdAt: '2026-04-20',
-        updatedAt: '2026-04-20',
-      },
-      {
-        id: 'rep-2',
-        refNo: 'DAS-002',
-        title: '测试2',
-        status: 'pending',
-        severity: 'P2',
-        reporterId: 'usr-2',
-        reporterName: null,
-        assigneeId: null,
-        assigneeName: null,
-        verifierId: null,
-        verifierName: null,
-        faultDate: null,
-        createdAt: '2026-04-19',
-        updatedAt: '2026-04-19',
-      },
-    ],
-  }),
-  fetchUserIncidentRolesAndPermissions: vi.fn().mockResolvedValue({
-    roles: ['reporter'],
-    permissions: ['report:create', 'report:edit_own', 'report:submit'],
-  }),
-  fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({
-    total_this_month: 2,
-    pending_count: 1,
-    in_progress_count: 0,
-    closed_this_month: 1,
-    avg_resolution_hours: null,
-  }),
-  deleteIncidentReport: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('@modules/incident-report', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@modules/incident-report')>();
+  return {
+    ...original,
+    fetchIncidentReportList: vi.fn().mockResolvedValue({
+      total: 2,
+      items: [
+        {
+          id: 'rep-1',
+          refNo: 'DAS-001',
+          title: '测试1',
+          status: 'draft',
+          severity: 'P1',
+          reporterId: 'usr-1',
+          reporterName: null,
+          assigneeId: null,
+          assigneeName: null,
+          verifierId: null,
+          verifierName: null,
+          faultDate: null,
+          createdAt: '2026-04-20',
+          updatedAt: '2026-04-20',
+        },
+        {
+          id: 'rep-2',
+          refNo: 'DAS-002',
+          title: '测试2',
+          status: 'pending',
+          severity: 'P2',
+          reporterId: 'usr-2',
+          reporterName: null,
+          assigneeId: null,
+          assigneeName: null,
+          verifierId: null,
+          verifierName: null,
+          faultDate: null,
+          createdAt: '2026-04-19',
+          updatedAt: '2026-04-19',
+        },
+      ],
+    }),
+    fetchUserIncidentRolesAndPermissions: vi.fn().mockResolvedValue({
+      roles: ['reporter'],
+      permissions: ['report:create', 'report:edit_own', 'report:submit'],
+    }),
+    fetchIncidentAnalyticsOverview: vi.fn().mockResolvedValue({
+      total_this_month: 2,
+      pending_count: 1,
+      in_progress_count: 0,
+      closed_this_month: 1,
+      avg_resolution_hours: null,
+    }),
+    deleteIncidentReport: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 describe('IncidentReportListView', () => {
   let router: ReturnType<typeof createRouter>;

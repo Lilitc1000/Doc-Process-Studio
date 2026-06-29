@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractModelNames,
   normalizeSkillCatalog,
-} from '../../../src/utils/common/catalog';
+} from '@shared/utils/catalog';
 
 describe('extractModelNames', () => {
   it('extracts model names from models array', () => {

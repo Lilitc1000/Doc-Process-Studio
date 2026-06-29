@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useCatalogLoader } from '../../../src/composables/business/useCatalogLoader';
-import * as catalogApi from '../../../src/api/catalog';
+import { useCatalogLoader } from '@shared/composables/useCatalogLoader';
+import * as catalogApi from '@shared/api/catalog';
 
-vi.mock('../../../src/api/catalog', () => ({
+vi.mock('@shared/api/catalog', () => ({
   fetchAvailableModels: vi.fn(),
   fetchAvailableSkills: vi.fn(),
   fallbackModels: ['qwen3:8b'],
@@ -25,7 +25,7 @@ describe('useCatalogLoader', () => {
       const { loadAvailableModels } = useCatalogLoader();
       await loadAvailableModels();
 
-      const { useAppStore } = await import('../../../src/stores/app');
+      const { useAppStore } = await import('@shared/stores/app');
       const appStore = useAppStore();
       expect(appStore.availableModels).toEqual([
         'model-a',
@@ -43,7 +43,7 @@ describe('useCatalogLoader', () => {
       const { loadAvailableModels } = useCatalogLoader();
       await loadAvailableModels();
 
-      const { useAppStore } = await import('../../../src/stores/app');
+      const { useAppStore } = await import('@shared/stores/app');
       const appStore = useAppStore();
       expect(appStore.availableModels).not.toEqual([]);
     });
@@ -57,7 +57,7 @@ describe('useCatalogLoader', () => {
       const { loadAvailableModels } = useCatalogLoader();
       await loadAvailableModels();
 
-      const { useAppStore } = await import('../../../src/stores/app');
+      const { useAppStore } = await import('@shared/stores/app');
       const appStore = useAppStore();
       expect(appStore.selectedModel).toBe('model-x');
     });
@@ -88,7 +88,7 @@ describe('useCatalogLoader', () => {
       const { loadAvailableSkills } = useCatalogLoader();
       await loadAvailableSkills();
 
-      const { useAppStore } = await import('../../../src/stores/app');
+      const { useAppStore } = await import('@shared/stores/app');
       const appStore = useAppStore();
       expect(appStore.processingModes).toHaveLength(2);
     });
@@ -112,7 +112,7 @@ describe('useCatalogLoader', () => {
       const { loadAvailableSkills } = useCatalogLoader();
       await loadAvailableSkills();
 
-      const { useAppStore } = await import('../../../src/stores/app');
+      const { useAppStore } = await import('@shared/stores/app');
       const appStore = useAppStore();
       expect(appStore.processingModes).toHaveLength(1);
       expect(appStore.processingModes[0].id).toBe('skill-1');
@@ -127,7 +127,7 @@ describe('useCatalogLoader', () => {
       const { loadAvailableSkills } = useCatalogLoader();
       await loadAvailableSkills();
 
-      const { useAppStore } = await import('../../../src/stores/app');
+      const { useAppStore } = await import('@shared/stores/app');
       const appStore = useAppStore();
       expect(appStore.processingModes).toEqual([]);
     });

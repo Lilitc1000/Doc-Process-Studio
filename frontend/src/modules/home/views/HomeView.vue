@@ -1,0 +1,198 @@
+<template>
+  <section class="home-page">
+    <div class="home-content">
+      <div class="home-hero">
+        <h1 class="home-title">文档处理平台</h1>
+        <p class="home-subtitle">
+          集成智能对话、文档生成与数据分析能力，为您提供高效的文档处理与知识管理解决方案
+        </p>
+      </div>
+
+      <div class="home-grid">
+        <base-button
+          type="button"
+          class="home-card"
+          variant="ghost"
+          @click="onNavigate('chat')"
+        >
+          <div class="home-card-icon">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <rect
+                x="6"
+                y="8"
+                width="36"
+                height="28"
+                rx="4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+              />
+              <path
+                d="M14 20h20M14 26h14"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="2"
+              />
+              <path
+                d="M18 36l-4 6"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="2"
+              />
+              <path
+                d="M30 36l4 6"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="2"
+              />
+            </svg>
+          </div>
+          <div class="home-card-text">
+            <span class="home-card-label">对话</span>
+            <span class="home-card-desc">智能问答与文档对话</span>
+          </div>
+        </base-button>
+
+        <base-button
+          type="button"
+          class="home-card"
+          variant="ghost"
+          @click="onNavigate('incident-report')"
+        >
+          <div class="home-card-icon">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <rect
+                x="8"
+                y="4"
+                width="32"
+                height="40"
+                rx="3"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+              />
+              <path
+                d="M16 14h16M16 20h16M16 26h10"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="2"
+              />
+              <circle
+                cx="30"
+                cy="34"
+                r="5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              />
+              <path
+                d="M30 32v2.5h2"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+              />
+            </svg>
+          </div>
+          <div class="home-card-text">
+            <span class="home-card-label">事故报告</span>
+            <span class="home-card-desc">结构化报告生成与管理</span>
+          </div>
+        </base-button>
+
+        <base-button
+          type="button"
+          class="home-card"
+          variant="ghost"
+          @click="onNavigate('knowledge-base')"
+        >
+          <div class="home-card-icon">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <path
+                d="M6 10h36v28H6z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M6 18h36"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              />
+              <path
+                d="M14 26h8M14 32h12"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="2"
+              />
+            </svg>
+          </div>
+          <div class="home-card-text">
+            <span class="home-card-label">知识库</span>
+            <span class="home-card-desc">项目文档知识管理</span>
+          </div>
+        </base-button>
+
+        <base-button
+          type="button"
+          class="home-card"
+          variant="ghost"
+          @click="onNavigate('settings')"
+        >
+          <div class="home-card-icon">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <circle
+                cx="24"
+                cy="24"
+                r="6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+              />
+              <path
+                d="M24 4v6M24 38v6M4 24h6M38 24h6M9.86 9.86l4.24 4.24M33.9 33.9l4.24 4.24M9.86 38.14l4.24-4.24M33.9 14.1l4.24-4.24"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="2.2"
+              />
+            </svg>
+          </div>
+          <div class="home-card-text">
+            <span class="home-card-label">设置</span>
+            <span class="home-card-desc">模型与系统配置</span>
+          </div>
+        </base-button>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script setup lang="ts">
+import { useRouter } from 'vue-router';
+import BaseButton from '@shared/ui/BaseButton.vue';
+
+const router = useRouter();
+
+const routeMap: Record<string, string> = {
+  chat: 'chat',
+  'incident-report': 'incident-report-list',
+  'knowledge-base': 'knowledge-base-list',
+  settings: 'settings',
+};
+
+const onNavigate = (pageId: string) => {
+  const routeName = routeMap[pageId] ?? pageId;
+  router.push({ name: routeName });
+};
+</script>
+
+<style scoped src="./styles/home-page.css"></style>

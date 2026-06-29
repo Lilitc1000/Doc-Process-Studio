@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getErrorMessage } from '../../../src/utils/common/error';
+import { getErrorMessage } from '@shared/utils/error';
 
 describe('getErrorMessage', () => {
   it('返回 Error 实例的 message', () => {
