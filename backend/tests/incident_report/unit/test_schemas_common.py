@@ -14,7 +14,7 @@ from doc_process_studio.incident_report.domain.values.status_types import (
 )
 
 
-def test_valid_statuses():
+def test_valid_statuses() -> None:
     assert "draft" in VALID_STATUSES
     assert "pending" in VALID_STATUSES
     assert "approved" in VALID_STATUSES
@@ -23,14 +23,14 @@ def test_valid_statuses():
     assert "closed" in VALID_STATUSES
 
 
-def test_valid_severities():
+def test_valid_severities() -> None:
     assert "P0" in VALID_SEVERITIES
     assert "P1" in VALID_SEVERITIES
     assert "P2" in VALID_SEVERITIES
     assert "P3" in VALID_SEVERITIES
 
 
-def test_valid_roles():
+def test_valid_roles() -> None:
     assert "reporter" in VALID_ROLES
     assert "handler" in VALID_ROLES
     assert "verifier" in VALID_ROLES
@@ -38,47 +38,45 @@ def test_valid_roles():
     assert "viewer" in VALID_ROLES
 
 
-def test_incident_valid_roles_sorted():
+def test_incident_valid_roles_sorted() -> None:
     assert sorted(VALID_ROLES) == INCIDENT_VALID_ROLES
 
 
-def test_status_transitions_draft():
+def test_status_transitions_draft() -> None:
     assert TRANSITIONS[ReportStatus.DRAFT] == {ReportStatus.PENDING}
 
 
-def test_status_transitions_rejected():
+def test_status_transitions_rejected() -> None:
     assert TRANSITIONS[ReportStatus.REJECTED] == {ReportStatus.PENDING}
 
 
-def test_status_transitions_pending():
+def test_status_transitions_pending() -> None:
     assert TRANSITIONS[ReportStatus.PENDING] == {ReportStatus.APPROVED, ReportStatus.REJECTED}
 
 
-def test_status_transitions_approved():
+def test_status_transitions_approved() -> None:
     assert TRANSITIONS[ReportStatus.APPROVED] == {ReportStatus.IN_PROGRESS}
 
 
-def test_status_transitions_in_progress():
+def test_status_transitions_in_progress() -> None:
     assert TRANSITIONS[ReportStatus.IN_PROGRESS] == {ReportStatus.CLOSED}
 
 
-def test_status_transitions_closed():
+def test_status_transitions_closed() -> None:
     assert TRANSITIONS[ReportStatus.CLOSED] == {ReportStatus.DRAFT}
 
 
-def test_incident_form_answer_defaults():
+def test_incident_form_answer_defaults() -> None:
     answer = IncidentFormAnswer()
     assert answer.value is None
-    assert answer.custom_value is None
 
 
-def test_incident_form_answer_with_value():
-    answer = IncidentFormAnswer(value="test", custom_value="custom")
+def test_incident_form_answer_with_value() -> None:
+    answer = IncidentFormAnswer(value="test")
     assert answer.value == "test"
-    assert answer.custom_value == "custom"
 
 
-def test_incident_form_snapshot_defaults():
+def test_incident_form_snapshot_defaults() -> None:
     snapshot = IncidentFormSnapshot()
     assert snapshot.form_answers == {}
     assert snapshot.report_data is None
@@ -88,7 +86,7 @@ def test_incident_form_snapshot_defaults():
     assert snapshot.polish_error is None
 
 
-def test_build_empty_form_snapshot():
+def test_build_empty_form_snapshot() -> None:
     snapshot = build_empty_form_snapshot()
     assert snapshot.form_answers == {}
     assert snapshot.report_data is None

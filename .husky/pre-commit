@@ -16,10 +16,10 @@ if git diff --cached --name-only --diff-filter=ACMR | grep -q '^backend/\(src\|t
   (cd "$ROOT/backend" && env ENV=dev uv run --no-sync ruff check --ignore-noqa --select F,ARG src/doc_process_studio tests/)
 
   echo "Running vulture dead code check for backend..."
-  (cd "$ROOT/backend" && env ENV=dev uv run --no-sync vulture src/doc_process_studio --min-confidence 60)
+  (cd "$ROOT/backend" && env ENV=dev uv run --no-sync vulture src/doc_process_studio tests/ --min-confidence 80)
 
   echo "Running mypy type check for backend..."
-  (cd "$ROOT/backend" && env ENV=dev uv run --no-sync mypy src/doc_process_studio)
+  (cd "$ROOT/backend" && env ENV=dev uv run --no-sync mypy src/doc_process_studio tests/)
 fi
 
 # --- Frontend checks ---

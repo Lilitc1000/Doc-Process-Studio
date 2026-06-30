@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 from doc_process_studio.incident_report.infrastructure.persistence.incident_report_orm import IncidentReport
 from doc_process_studio.incident_report.infrastructure.repositories.orm_mappers import (
@@ -7,7 +8,7 @@ from doc_process_studio.incident_report.infrastructure.repositories.orm_mappers 
 )
 
 
-def _make_report(**overrides) -> IncidentReport:
+def _make_report(**overrides: Any) -> IncidentReport:
     now = datetime.now(UTC)
     defaults = dict(
         id="rep-1",
@@ -34,7 +35,7 @@ def _make_report(**overrides) -> IncidentReport:
     return IncidentReport(**defaults)
 
 
-async def test_orm_to_summary_maps_fields():
+async def test_orm_to_summary_maps_fields() -> None:
     report = _make_report()
     summary = await orm_to_summary(report, usernames={})
     assert summary.id == "rep-1"
@@ -50,7 +51,7 @@ async def test_orm_to_summary_maps_fields():
     assert summary.updated_at is not None
 
 
-async def test_orm_to_detail_maps_fields():
+async def test_orm_to_detail_maps_fields() -> None:
     report = _make_report()
     detail = await orm_to_detail(report, usernames={})
     assert detail.id == "rep-1"
@@ -64,7 +65,7 @@ async def test_orm_to_detail_maps_fields():
     assert detail.resolution_date is None
 
 
-async def test_orm_to_detail_with_all_fields():
+async def test_orm_to_detail_with_all_fields() -> None:
     now = datetime.now(UTC)
     report = _make_report(
         assignee_id="usr_handler",
@@ -85,19 +86,19 @@ async def test_orm_to_detail_with_all_fields():
     assert detail.report_data == {"severity": "P2"}
 
 
-async def test_orm_to_summary_with_none_severity():
+async def test_orm_to_summary_with_none_severity() -> None:
     report = _make_report(severity=None)
     summary = await orm_to_summary(report, usernames={})
     assert summary.severity is None
 
 
-async def test_orm_to_detail_empty_form_data():
+async def test_orm_to_detail_empty_form_data() -> None:
     report = _make_report(form_data=None)
     detail = await orm_to_detail(report, usernames={})
     assert detail.form_data == {}
 
 
-async def test_orm_to_summary_resolves_usernames():
+async def test_orm_to_summary_resolves_usernames() -> None:
     report = _make_report(reporter_id="usr_test", assignee_id="usr_handler")
     usernames = {"usr_test": "测试用户", "usr_handler": "处理人"}
     summary = await orm_to_summary(report, usernames=usernames)
@@ -105,7 +106,7 @@ async def test_orm_to_summary_resolves_usernames():
     assert summary.assignee_name == "处理人"
 
 
-async def test_orm_to_detail_resolves_usernames():
+async def test_orm_to_detail_resolves_usernames() -> None:
     report = _make_report(verifier_id="usr_verifier")
     usernames = {"usr_verifier": "验证人"}
     detail = await orm_to_detail(report, usernames=usernames)

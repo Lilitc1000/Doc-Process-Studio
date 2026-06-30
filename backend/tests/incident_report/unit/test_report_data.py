@@ -1,3 +1,5 @@
+from typing import Any
+
 from doc_process_studio.incident_report.application.dtos import IncidentFormAnswer, IncidentFormSnapshot
 from doc_process_studio.incident_report.infrastructure.utils.report_data import (
     answer_text,
@@ -9,8 +11,8 @@ from doc_process_studio.incident_report.infrastructure.utils.report_data import 
 )
 
 
-def _make_snapshot(**overrides) -> IncidentFormSnapshot:
-    defaults = dict(
+def _make_snapshot(**overrides: Any) -> IncidentFormSnapshot:
+    defaults: dict[str, Any] = dict(
         form_answers={},
         report_data=None,
     )
@@ -18,81 +20,81 @@ def _make_snapshot(**overrides) -> IncidentFormSnapshot:
     return IncidentFormSnapshot(**defaults)
 
 
-def test_answer_value_returns_value():
+def test_answer_value_returns_value() -> None:
     snapshot = _make_snapshot(form_answers={"key": IncidentFormAnswer(value="hello")})
     assert answer_value(snapshot, "key") == "hello"
 
 
-def test_answer_value_missing():
+def test_answer_value_missing() -> None:
     snapshot = _make_snapshot(form_answers={})
     assert answer_value(snapshot, "key") is None
 
 
-def test_answer_text_returns_stripped():
+def test_answer_text_returns_stripped() -> None:
     snapshot = _make_snapshot(form_answers={"key": IncidentFormAnswer(value="  hello  ")})
     assert answer_text(snapshot, "key") == "hello"
 
 
-def test_answer_text_none_value():
+def test_answer_text_none_value() -> None:
     snapshot = _make_snapshot(form_answers={"key": IncidentFormAnswer(value=None)})
     assert answer_text(snapshot, "key") == ""
 
 
-def test_answer_value_from_answers():
+def test_answer_value_from_answers() -> None:
     form_answers = {"key": IncidentFormAnswer(value="val")}
     assert answer_value_from_answers(form_answers, "key") == "val"
 
 
-def test_answer_value_from_answers_missing():
-    form_answers = {}
+def test_answer_value_from_answers_missing() -> None:
+    form_answers: dict[str, Any] = {}
     assert answer_value_from_answers(form_answers, "key") is None
 
 
-def test_set_answer():
-    form_answers = {}
+def test_set_answer() -> None:
+    form_answers: dict[str, Any] = {}
     set_answer(form_answers, "key", "value")
     assert form_answers["key"].value == "value"
 
 
-def test_set_answer_overwrites():
-    form_answers = {"key": IncidentFormAnswer(value="old")}
+def test_set_answer_overwrites() -> None:
+    form_answers: dict[str, Any] = {"key": IncidentFormAnswer(value="old")}
     set_answer(form_answers, "key", "new")
     assert form_answers["key"].value == "new"
 
 
-def test_set_answer_if_non_empty():
-    form_answers = {}
+def test_set_answer_if_non_empty() -> None:
+    form_answers: dict[str, Any] = {}
     set_answer_if_non_empty(form_answers, "key", "value")
     assert form_answers["key"].value == "value"
 
 
-def test_set_answer_if_non_empty_skips_empty():
-    form_answers = {}
+def test_set_answer_if_non_empty_skips_empty() -> None:
+    form_answers: dict[str, Any] = {}
     set_answer_if_non_empty(form_answers, "key", "")
     assert "key" not in form_answers
 
 
-def test_set_answer_if_non_empty_skips_whitespace():
-    form_answers = {}
+def test_set_answer_if_non_empty_skips_whitespace() -> None:
+    form_answers: dict[str, Any] = {}
     set_answer_if_non_empty(form_answers, "key", "   ")
     assert "key" not in form_answers
 
 
-def test_build_report_data_strict_required():
+def test_build_report_data_strict_required() -> None:
     snapshot = _make_snapshot(form_answers={})
     result, missing = build_report_data_from_snapshot(snapshot, strict_required=True)
     assert result is None
     assert len(missing) > 0
 
 
-def test_build_report_data_non_strict():
+def test_build_report_data_non_strict() -> None:
     snapshot = _make_snapshot(form_answers={})
     result, missing = build_report_data_from_snapshot(snapshot, strict_required=False)
     assert result is not None
     assert isinstance(missing, list)
 
 
-def test_build_report_data_with_minimal_fields():
+def test_build_report_data_with_minimal_fields() -> None:
     snapshot = _make_snapshot(
         form_answers={
             "manual_fault_date": IncidentFormAnswer(value="2026-04-08"),

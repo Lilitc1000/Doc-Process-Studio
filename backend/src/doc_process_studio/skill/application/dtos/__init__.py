@@ -7,12 +7,6 @@ from .catalog import (
     SkillToolSecurityConfig,
     SkillToolStatusConfig,
 )
-from .interaction import (
-    SkillInteractionConfig,
-    SkillInteractionFinalToolConfig,
-    SkillInteractionOption,
-    SkillInteractionStep,
-)
 from .runtime import (
     ConversationAgentState,
     SkillContextChunk,
@@ -27,10 +21,6 @@ __all__ = [
     "SkillContextChunk",
     "SkillConversationCacheResponse",
     "SkillConversationState",
-    "SkillInteractionConfig",
-    "SkillInteractionFinalToolConfig",
-    "SkillInteractionOption",
-    "SkillInteractionStep",
     "SkillInterfaceConfig",
     "SkillPlanDecision",
     "SkillPlannerCandidate",

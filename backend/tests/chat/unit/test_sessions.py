@@ -1,7 +1,9 @@
-from doc_process_studio.chat.infrastructure import sessions as sessions_module
+import pytest
+
+import doc_process_studio.chat.infrastructure.sessions as sessions_module
 
 
-async def test_delete_chat_session_also_cleans_agent_traces(monkeypatch) -> None:
+async def test_delete_chat_session_also_cleans_agent_traces(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_delete_chat_session_records(session_id: str) -> bool:
         assert session_id == "conversation-1"
         return False

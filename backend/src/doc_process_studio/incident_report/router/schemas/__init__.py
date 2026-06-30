@@ -16,7 +16,6 @@ from .request import (
     IncidentReportSubmitRequest,
     IncidentReportUpdateRequest,
     IncidentRoleAssignRequest,
-    IncidentRolePermissionUpdateRequest,
 )
 from .response import (
     IncidentAnalyticsOverview,
@@ -54,7 +53,6 @@ __all__ = [
     "IncidentReportSubmitRequest",
     "IncidentReportUpdateRequest",
     "IncidentRoleAssignRequest",
-    "IncidentRolePermissionUpdateRequest",
     "IncidentAnalyticsOverview",
     "IncidentAnalyticsTrend",
     "IncidentAuditLogEntry",

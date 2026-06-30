@@ -1,18 +1,21 @@
 from datetime import UTC, datetime
+from typing import Any
 
+import pytest
+
+import doc_process_studio.skill.infrastructure.conversation_store as store_module
 from doc_process_studio.skill.application.dtos.runtime import (
     ConversationAgentState,
     SkillConversationState,
     SkillPlanDecision,
     SkillToolHistoryRecord,
 )
-from doc_process_studio.skill.infrastructure import conversation_store as store_module
 
 
-async def test_save_conversation_state_serializes_datetime_fields(monkeypatch) -> None:
+async def test_save_conversation_state_serializes_datetime_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_set_json(key, payload, ttl_seconds=None):
+    async def fake_set_json(key: str, payload: dict[str, Any], ttl_seconds: Any = None) -> None:
         captured["key"] = key
         captured["payload"] = payload
         captured["ttl_seconds"] = ttl_seconds

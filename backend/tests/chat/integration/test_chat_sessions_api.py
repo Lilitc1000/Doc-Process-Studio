@@ -83,16 +83,14 @@ class _FakeSessionService(SessionServiceContract):
         return True
 
 
-def _install_fake_service(monkeypatch, fake: _FakeSessionService) -> None:
-    monkeypatch.setitem(
-        main_module.app.dependency_overrides,
-        get_session_service,
-        lambda: fake,
-    )
+def _install_fake_service(fake: _FakeSessionService) -> None:
+    main_module.app.dependency_overrides[get_session_service] = lambda: fake
 
 
-def test_api_chat_sessions_list_returns_summaries(monkeypatch, auth_headers) -> None:
-    _install_fake_service(monkeypatch, _FakeSessionService())
+def test_api_chat_sessions_list_returns_summaries(
+    auth_headers: dict[str, str],
+) -> None:
+    _install_fake_service(_FakeSessionService())
 
     client = TestClient(main_module.app)
     response = client.get("/api/chat-sessions", headers=auth_headers)
@@ -101,8 +99,8 @@ def test_api_chat_sessions_list_returns_summaries(monkeypatch, auth_headers) -> 
     assert response.json()["sessions"][0]["id"] == "conversation-1"
 
 
-def test_api_chat_sessions_get_returns_detail(monkeypatch, auth_headers) -> None:
-    _install_fake_service(monkeypatch, _FakeSessionService())
+def test_api_chat_sessions_get_returns_detail(auth_headers: dict[str, str]) -> None:
+    _install_fake_service(_FakeSessionService())
 
     client = TestClient(main_module.app)
     response = client.get("/api/chat-sessions/conversation-1", headers=auth_headers)
@@ -111,8 +109,8 @@ def test_api_chat_sessions_get_returns_detail(monkeypatch, auth_headers) -> None
     assert response.json()["title"] == "第一条会话"
 
 
-def test_api_chat_sessions_save_upserts_snapshot(monkeypatch, auth_headers) -> None:
-    _install_fake_service(monkeypatch, _FakeSessionService())
+def test_api_chat_sessions_save_upserts_snapshot(auth_headers: dict[str, str]) -> None:
+    _install_fake_service(_FakeSessionService())
 
     client = TestClient(main_module.app)
     response = client.put(
@@ -129,8 +127,8 @@ def test_api_chat_sessions_save_upserts_snapshot(monkeypatch, auth_headers) -> N
     assert response.json()["title"] == "文档总结"
 
 
-def test_api_chat_sessions_delete_clears_state(monkeypatch, auth_headers) -> None:
-    _install_fake_service(monkeypatch, _FakeSessionService())
+def test_api_chat_sessions_delete_clears_state(auth_headers: dict[str, str]) -> None:
+    _install_fake_service(_FakeSessionService())
 
     client = TestClient(main_module.app)
     response = client.delete("/api/chat-sessions/conversation-1", headers=auth_headers)

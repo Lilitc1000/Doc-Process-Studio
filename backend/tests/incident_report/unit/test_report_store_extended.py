@@ -5,6 +5,7 @@
 """
 
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,9 +25,9 @@ from doc_process_studio.incident_report.infrastructure.repositories.report_repos
 )
 
 
-def _make_report_orm(**overrides) -> IncidentReport:
+def _make_report_orm(**overrides: Any) -> IncidentReport:
     now = datetime.now(UTC)
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         id="rep-1",
         ref_no="DAS-0001",
         title="测试报告",
@@ -39,9 +40,9 @@ def _make_report_orm(**overrides) -> IncidentReport:
     return IncidentReport(**defaults)
 
 
-def _make_report_aggregate(**overrides) -> Report:
+def _make_report_aggregate(**overrides: Any) -> Report:
     now = datetime.now(UTC)
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         id="rep-1",
         ref_no="DAS-0001",
         title="测试报告",
@@ -60,7 +61,7 @@ def _make_report_aggregate(**overrides) -> Report:
 
 
 @pytest.fixture
-def mock_session():
+def mock_session() -> Any:
     session = AsyncMock()
     session.add = MagicMock()
     session.commit = AsyncMock()
@@ -74,7 +75,7 @@ def mock_session():
 # --- SequentialRefNoGenerator ---
 
 
-async def test_ref_no_generator_increments(mock_session):
+async def test_ref_no_generator_increments(mock_session: Any) -> None:
     mock_scalar = MagicMock()
     mock_scalar.scalar_one_or_none.return_value = "DAS-0042"
     mock_session.execute.return_value = mock_scalar
@@ -89,7 +90,7 @@ async def test_ref_no_generator_increments(mock_session):
     assert result == "DAS-0043"
 
 
-async def test_ref_no_generator_starts_at_1(mock_session):
+async def test_ref_no_generator_starts_at_1(mock_session: Any) -> None:
     mock_scalar = MagicMock()
     mock_scalar.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_scalar
@@ -107,7 +108,7 @@ async def test_ref_no_generator_starts_at_1(mock_session):
 # --- SqlAlchemyReportRepository.add ---
 
 
-async def test_repo_add_creates_report(mock_session):
+async def test_repo_add_creates_report(mock_session: Any) -> None:
     mock_session.refresh = AsyncMock()
 
     with patch(
@@ -132,7 +133,7 @@ async def test_repo_add_creates_report(mock_session):
 # --- SqlAlchemyReportRepository.get ---
 
 
-async def test_repo_get_found(mock_session):
+async def test_repo_get_found(mock_session: Any) -> None:
     orm = _make_report_orm()
     mock_scalar = MagicMock()
     mock_scalar.scalar_one_or_none.return_value = orm
@@ -152,7 +153,7 @@ async def test_repo_get_found(mock_session):
     assert result.id == "rep-1"
 
 
-async def test_repo_get_not_found(mock_session):
+async def test_repo_get_not_found(mock_session: Any) -> None:
     mock_scalar = MagicMock()
     mock_scalar.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_scalar
@@ -173,7 +174,7 @@ async def test_repo_get_not_found(mock_session):
 # --- SqlAlchemyReportRepository.update ---
 
 
-async def test_repo_update_found(mock_session):
+async def test_repo_update_found(mock_session: Any) -> None:
     orm = _make_report_orm()
     mock_scalar = MagicMock()
     mock_scalar.scalar_one_or_none.return_value = orm
@@ -195,7 +196,7 @@ async def test_repo_update_found(mock_session):
     mock_session.commit.assert_called_once()
 
 
-async def test_repo_update_not_found(mock_session):
+async def test_repo_update_not_found(mock_session: Any) -> None:
     mock_scalar = MagicMock()
     mock_scalar.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_scalar
@@ -217,7 +218,7 @@ async def test_repo_update_not_found(mock_session):
 # --- SqlAlchemyReportRepository.delete ---
 
 
-async def test_repo_delete_found(mock_session):
+async def test_repo_delete_found(mock_session: Any) -> None:
     orm = _make_report_orm()
     mock_session.get = AsyncMock(return_value=orm)
     mock_session.execute = AsyncMock()
@@ -235,7 +236,7 @@ async def test_repo_delete_found(mock_session):
     assert result is True
 
 
-async def test_repo_delete_not_found(mock_session):
+async def test_repo_delete_not_found(mock_session: Any) -> None:
     mock_session.get = AsyncMock(return_value=None)
 
     with patch(
@@ -254,7 +255,7 @@ async def test_repo_delete_not_found(mock_session):
 # --- SqlCommentRepository ---
 
 
-async def test_comment_repo_add(mock_session):
+async def test_comment_repo_add(mock_session: Any) -> None:
     with patch(
         "doc_process_studio.incident_report.infrastructure.repositories.comment_repository.async_session_factory"
     ) as mock_factory:
@@ -272,7 +273,7 @@ async def test_comment_repo_add(mock_session):
     mock_session.add.assert_called_once()
 
 
-async def test_comment_repo_add_with_parent(mock_session):
+async def test_comment_repo_add_with_parent(mock_session: Any) -> None:
     with patch(
         "doc_process_studio.incident_report.infrastructure.repositories.comment_repository.async_session_factory"
     ) as mock_factory:
@@ -290,7 +291,7 @@ async def test_comment_repo_add_with_parent(mock_session):
     assert result is not None
 
 
-async def test_comment_repo_list_by_report(mock_session):
+async def test_comment_repo_list_by_report(mock_session: Any) -> None:
     now = datetime.now(UTC)
     comment = IncidentComment(
         id="cmt-1",

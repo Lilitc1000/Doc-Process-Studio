@@ -11,7 +11,6 @@ export interface LoginRequest {
 export interface TokenResponse {
   accessToken: string;
   refreshToken: string;
-  tokenType: string;
 }
 
 export interface UserInfoResponse {

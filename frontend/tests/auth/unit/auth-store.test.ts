@@ -39,7 +39,6 @@ describe('useAuthStore', () => {
     mockLogin.mockResolvedValue({
       accessToken: 'test_access_token',
       refreshToken: 'test_refresh_token',
-      tokenType: 'bearer',
     });
     mockGetUser.mockResolvedValue({
       userId: 'usr_test123',
@@ -89,7 +88,6 @@ describe('useAuthStore', () => {
     mockRefresh.mockResolvedValue({
       accessToken: 'new_access',
       refreshToken: 'new_refresh',
-      tokenType: 'bearer',
     });
 
     const result = await store.refreshAccessToken();

@@ -8,43 +8,43 @@ from doc_process_studio.skill.infrastructure.tool_loop.tool_args import (
 )
 
 
-def test_validate_simple_type_string():
+def test_validate_simple_type_string() -> None:
     assert _validate_simple_type("hello", "string") is True
     assert _validate_simple_type(123, "string") is False
 
 
-def test_validate_simple_type_integer():
+def test_validate_simple_type_integer() -> None:
     assert _validate_simple_type(42, "integer") is True
     assert _validate_simple_type(True, "integer") is False
     assert _validate_simple_type(3.14, "integer") is False
 
 
-def test_validate_simple_type_number():
+def test_validate_simple_type_number() -> None:
     assert _validate_simple_type(42, "number") is True
     assert _validate_simple_type(3.14, "number") is True
     assert _validate_simple_type(True, "number") is False
 
 
-def test_validate_simple_type_boolean():
+def test_validate_simple_type_boolean() -> None:
     assert _validate_simple_type(True, "boolean") is True
     assert _validate_simple_type(1, "boolean") is False
 
 
-def test_validate_simple_type_array():
+def test_validate_simple_type_array() -> None:
     assert _validate_simple_type([1, 2], "array") is True
     assert _validate_simple_type("not array", "array") is False
 
 
-def test_validate_simple_type_object():
+def test_validate_simple_type_object() -> None:
     assert _validate_simple_type({"a": 1}, "object") is True
     assert _validate_simple_type([1], "object") is False
 
 
-def test_validate_simple_type_unknown():
+def test_validate_simple_type_unknown() -> None:
     assert _validate_simple_type("anything", "unknown") is True
 
 
-def test_validate_tool_arguments_schema_missing_required():
+def test_validate_tool_arguments_schema_missing_required() -> None:
     with pytest.raises(ValueError, match="缺少必填参数"):
         _validate_tool_arguments_schema(
             tool_name="test_tool",
@@ -53,7 +53,7 @@ def test_validate_tool_arguments_schema_missing_required():
         )
 
 
-def test_validate_tool_arguments_schema_unknown_keys_rejected():
+def test_validate_tool_arguments_schema_unknown_keys_rejected() -> None:
     with pytest.raises(ValueError, match="未声明字段"):
         _validate_tool_arguments_schema(
             tool_name="test_tool",
@@ -67,7 +67,7 @@ def test_validate_tool_arguments_schema_unknown_keys_rejected():
         )
 
 
-def test_validate_tool_arguments_schema_type_mismatch():
+def test_validate_tool_arguments_schema_type_mismatch() -> None:
     with pytest.raises(ValueError, match="类型错误"):
         _validate_tool_arguments_schema(
             tool_name="test_tool",
@@ -79,7 +79,7 @@ def test_validate_tool_arguments_schema_type_mismatch():
         )
 
 
-def test_validate_tool_arguments_schema_array_item_type():
+def test_validate_tool_arguments_schema_array_item_type() -> None:
     with pytest.raises(ValueError, match="类型错误"):
         _validate_tool_arguments_schema(
             tool_name="test_tool",
@@ -91,7 +91,7 @@ def test_validate_tool_arguments_schema_array_item_type():
         )
 
 
-def test_validate_tool_arguments_schema_enum():
+def test_validate_tool_arguments_schema_enum() -> None:
     with pytest.raises(ValueError, match="枚举值"):
         _validate_tool_arguments_schema(
             tool_name="test_tool",
@@ -103,7 +103,7 @@ def test_validate_tool_arguments_schema_enum():
         )
 
 
-def test_validate_tool_arguments_schema_minimum():
+def test_validate_tool_arguments_schema_minimum() -> None:
     with pytest.raises(ValueError, match="小于最小值"):
         _validate_tool_arguments_schema(
             tool_name="test_tool",
@@ -115,7 +115,7 @@ def test_validate_tool_arguments_schema_minimum():
         )
 
 
-def test_validate_tool_arguments_schema_maximum():
+def test_validate_tool_arguments_schema_maximum() -> None:
     with pytest.raises(ValueError, match="超过最大值"):
         _validate_tool_arguments_schema(
             tool_name="test_tool",
@@ -127,7 +127,7 @@ def test_validate_tool_arguments_schema_maximum():
         )
 
 
-def test_validate_tool_arguments_schema_non_object_type():
+def test_validate_tool_arguments_schema_non_object_type() -> None:
     with pytest.raises(ValueError, match="仅支持 object"):
         _validate_tool_arguments_schema(
             tool_name="test_tool",
@@ -136,76 +136,76 @@ def test_validate_tool_arguments_schema_non_object_type():
         )
 
 
-def test_normalize_builtin_tool_arguments_search_limit_none():
+def test_normalize_builtin_tool_arguments_search_limit_none() -> None:
     result = _normalize_builtin_tool_arguments(tool_name="search_skill_context", arguments={"query": "test"})
     assert "limit" not in result
 
 
-def test_normalize_builtin_tool_arguments_search_limit_valid():
+def test_normalize_builtin_tool_arguments_search_limit_valid() -> None:
     result = _normalize_builtin_tool_arguments(
         tool_name="search_skill_context", arguments={"query": "test", "limit": 5}
     )
     assert result["limit"] == 5
 
 
-def test_normalize_builtin_tool_arguments_search_limit_string():
+def test_normalize_builtin_tool_arguments_search_limit_string() -> None:
     result = _normalize_builtin_tool_arguments(
         tool_name="search_skill_context", arguments={"query": "test", "limit": "5"}
     )
     assert result["limit"] == 5
 
 
-def test_normalize_builtin_tool_arguments_search_limit_invalid_string():
+def test_normalize_builtin_tool_arguments_search_limit_invalid_string() -> None:
     result = _normalize_builtin_tool_arguments(
         tool_name="search_skill_context", arguments={"query": "test", "limit": "abc"}
     )
     assert "limit" not in result
 
 
-def test_normalize_builtin_tool_arguments_search_limit_too_low():
+def test_normalize_builtin_tool_arguments_search_limit_too_low() -> None:
     result = _normalize_builtin_tool_arguments(
         tool_name="search_skill_context", arguments={"query": "test", "limit": -1}
     )
     assert result["limit"] >= 1
 
 
-def test_normalize_builtin_tool_arguments_search_limit_too_high():
+def test_normalize_builtin_tool_arguments_search_limit_too_high() -> None:
     result = _normalize_builtin_tool_arguments(
         tool_name="search_skill_context", arguments={"query": "test", "limit": 999}
     )
     assert result["limit"] <= 16
 
 
-def test_normalize_builtin_tool_arguments_non_search():
+def test_normalize_builtin_tool_arguments_non_search() -> None:
     result = _normalize_builtin_tool_arguments(
         tool_name="read_skill_file", arguments={"relative_path": "test.md", "limit": 5}
     )
     assert result["limit"] == 5
 
 
-def test_build_builtin_tool_parameters_list_directory():
+def test_build_builtin_tool_parameters_list_directory() -> None:
     params = _build_builtin_tool_parameters("list_skill_directory")
     assert params is not None
     assert "relative_path" in params["properties"]
 
 
-def test_build_builtin_tool_parameters_read_file():
+def test_build_builtin_tool_parameters_read_file() -> None:
     params = _build_builtin_tool_parameters("read_skill_file")
     assert params is not None
     assert "relative_path" in params["required"]
 
 
-def test_build_builtin_tool_parameters_search():
+def test_build_builtin_tool_parameters_search() -> None:
     params = _build_builtin_tool_parameters("search_skill_context")
     assert params is not None
     assert "query" in params["required"]
 
 
-def test_build_builtin_tool_parameters_read_context():
+def test_build_builtin_tool_parameters_read_context() -> None:
     params = _build_builtin_tool_parameters("read_skill_context")
     assert params is not None
     assert "chunk_ids" in params["required"]
 
 
-def test_build_builtin_tool_parameters_unknown():
+def test_build_builtin_tool_parameters_unknown() -> None:
     assert _build_builtin_tool_parameters("unknown_tool") is None

@@ -1,13 +1,12 @@
-from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
 from doc_process_studio.skill.application.dtos.catalog import SkillInterfaceConfig
-from doc_process_studio.skill.application.dtos.runtime import SkillPlanDecision
 
 
 @pytest.fixture()
-def build_skill():
+def build_skill() -> Any:
     def _build_skill(
         *,
         skill_id: str = "test-skill",
@@ -25,24 +24,3 @@ def build_skill():
         )
 
     return _build_skill
-
-
-@pytest.fixture()
-def build_plan_decision():
-    def _build_plan_decision(**overrides) -> SkillPlanDecision:
-        defaults = dict(
-            planner_model="qwen3-coder-next:latest",
-            required_skill_ids=[],
-            optional_skill_ids=[],
-            missing_explicit_skill_ids=[],
-            active_skill_ids=["document-assistant"],
-            primary_skill_id="document-assistant",
-            confidence=1.0,
-            reasons={},
-            candidates=[],
-            created_at=datetime.now(UTC),
-        )
-        defaults.update(overrides)
-        return SkillPlanDecision(**defaults)
-
-    return _build_plan_decision

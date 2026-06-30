@@ -221,7 +221,6 @@ describe('useReportWizard', () => {
       source: 'draft',
       version: null,
       label: 'test-preview',
-      html: '<p>预览内容</p>',
       docxBase64: 'base64docx',
       docxFileName: 'test.docx',
       pdfBase64: 'base64pdf',
@@ -230,14 +229,12 @@ describe('useReportWizard', () => {
 
     const wizard = useReportWizard();
     wizard.reportId.value = 'report-7';
-    const result = await wizard.generatePreview();
 
     expect(mockPreview).toHaveBeenCalledWith(
       'report-7',
       { version: undefined, model: undefined, rerankerModel: undefined },
       { signal: undefined },
     );
-    expect(result.html).toBe('<p>预览内容</p>');
     expect(wizard.previewData.value?.pdfBase64).toBe('base64pdf');
   });
 

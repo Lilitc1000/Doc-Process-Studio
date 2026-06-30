@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
@@ -23,13 +24,14 @@ def _create_test_app() -> FastAPI:
     return app
 
 
-def _auth_headers(user_id: str = "usr_test", username: str = "testuser") -> dict:
+def _auth_headers(user_id: str = "usr_test", username: str = "testuser") -> dict[str, str]:
     token = create_access_token(user_id, username)
     return {"Authorization": f"Bearer {token}"}
 
 
-def _mock_report(**overrides) -> IncidentReportDetail:
-    defaults = dict(
+def _mock_report(**overrides: Any) -> IncidentReportDetail:
+    now = datetime.now(UTC)
+    defaults: dict[str, Any] = dict(
         id="rep-1",
         ref_no="DAS-001",
         title="工作流测试报告",
@@ -42,8 +44,8 @@ def _mock_report(**overrides) -> IncidentReportDetail:
         verifier_id=None,
         verifier_name=None,
         fault_date=None,
-        created_at="2026-04-20T00:00:00Z",
-        updated_at="2026-04-20T00:00:00Z",
+        created_at=now,
+        updated_at=now,
     )
     defaults.update(overrides)
     return IncidentReportDetail(**defaults)
@@ -54,7 +56,7 @@ def _override_service(app: FastAPI, service: AsyncMock) -> None:
     app.dependency_overrides[get_report_application_service] = lambda: service
 
 
-def test_report_status_transitions():
+def test_report_status_transitions() -> None:
     app = _create_test_app()
 
     fake_service = AsyncMock()
@@ -80,7 +82,7 @@ def test_report_status_transitions():
     assert submit_resp.json()["status"] == "pending"
 
 
-def test_report_audit_logs():
+def test_report_audit_logs() -> None:
     app = _create_test_app()
 
     fake_audit_service = AsyncMock()
@@ -95,7 +97,7 @@ def test_report_audit_logs():
     assert logs_resp.status_code == 200
 
 
-def test_report_comments():
+def test_report_comments() -> None:
     app = _create_test_app()
 
     now = datetime.now(UTC)
@@ -108,7 +110,7 @@ def test_report_comments():
         author_name="testuser",
         content="测试评论",
         parent_id=None,
-        created_at=now.isoformat(),
+        created_at=now,
     )
     fake_comment_service.list_comments.return_value = []
     app.dependency_overrides[get_comment_service] = lambda: fake_comment_service

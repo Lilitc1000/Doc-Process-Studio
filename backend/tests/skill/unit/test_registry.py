@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 from doc_process_studio.skill.application.dtos.catalog import SkillToolConfig
-from doc_process_studio.skill.application.dtos.interaction import SkillInteractionConfig
 from doc_process_studio.skill.infrastructure.registry import (
     SKILLS_DIR,
     get_skill_interface,
@@ -12,13 +11,6 @@ from doc_process_studio.skill.infrastructure.registry import (
 
 def _resolve_tools_file(skill_dir: Path) -> Path | None:
     candidate = skill_dir / "tools.json"
-    if candidate.is_file():
-        return candidate
-    return None
-
-
-def _resolve_interaction_file(skill_dir: Path) -> Path | None:
-    candidate = skill_dir / "agents" / "interaction.json"
     if candidate.is_file():
         return candidate
     return None
@@ -60,8 +52,3 @@ def test_all_skill_declared_configs_are_valid() -> None:
             assert isinstance(raw_tools, list), f"{tools_file} 缺少 tools 数组。"
             for raw_tool in raw_tools:
                 SkillToolConfig.model_validate(raw_tool)
-
-        interaction_file = _resolve_interaction_file(skill_dir)
-        if interaction_file is not None:
-            interaction_payload = json.loads(interaction_file.read_text(encoding="utf-8"))
-            SkillInteractionConfig.model_validate(interaction_payload)

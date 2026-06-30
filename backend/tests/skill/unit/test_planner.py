@@ -1,5 +1,8 @@
 import json
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from doc_process_studio.chat.router.schemas.request import ChatMessageInput
 from doc_process_studio.skill.application.dtos.catalog import SkillInterfaceConfig
@@ -95,7 +98,7 @@ async def test_plan_skill_activation_skips_explicit_skills() -> None:
     assert plan.primary_skill_id == "incident-report"
 
 
-async def test_plan_skill_activation_fallback_to_lexical(monkeypatch) -> None:
+async def test_plan_skill_activation_fallback_to_lexical(monkeypatch: pytest.MonkeyPatch) -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -109,7 +112,7 @@ async def test_plan_skill_activation_fallback_to_lexical(monkeypatch) -> None:
         ),
     ]
 
-    async def fake_post_chat_completion(**_kwargs):
+    async def fake_post_chat_completion(**_kwargs: Any) -> None:
         raise RuntimeError("remote down")
 
     monkeypatch.setattr(
@@ -130,7 +133,7 @@ async def test_plan_skill_activation_fallback_to_lexical(monkeypatch) -> None:
     assert plan.optional_skill_ids == ["resume-transport-review"]
 
 
-async def test_plan_skill_activation_prefers_rerank_result(monkeypatch) -> None:
+async def test_plan_skill_activation_prefers_rerank_result(monkeypatch: pytest.MonkeyPatch) -> None:
     skills = [
         _build_skill(
             skill_id="document-assistant",
@@ -149,7 +152,7 @@ async def test_plan_skill_activation_prefers_rerank_result(monkeypatch) -> None:
         ),
     ]
 
-    async def fake_post_chat_completion(**_kwargs):
+    async def fake_post_chat_completion(**_kwargs: Any) -> dict[str, Any]:
         return {
             "message": {
                 "role": "assistant",

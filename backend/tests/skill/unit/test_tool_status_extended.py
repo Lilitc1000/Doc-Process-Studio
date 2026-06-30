@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from doc_process_studio.chat.application.dtos.attachment import ChatAttachment
@@ -10,8 +12,8 @@ from doc_process_studio.skill.infrastructure.tool_loop.tool_status import (
 )
 
 
-def _make_attachment(**overrides) -> ChatAttachment:
-    defaults = dict(
+def _make_attachment(**overrides: Any) -> ChatAttachment:
+    defaults: dict[str, Any] = dict(
         attachment_id="att-1",
         name="report.docx",
         source="generated",
@@ -19,13 +21,13 @@ def _make_attachment(**overrides) -> ChatAttachment:
         size_bytes=10240,
         download_url="/api/attachments/att-1/download",
         mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        expires_at="2026-12-31T00:00:00Z",
+        expires_at=datetime(2026, 12, 31, tzinfo=UTC),
     )
     defaults.update(overrides)
     return ChatAttachment(**defaults)
 
 
-def _make_tool_call(function_name="list_skill_directory", arguments=None):
+def _make_tool_call(function_name: Any = "list_skill_directory", arguments: Any = None) -> dict[str, Any]:
     return {
         "function": {
             "name": function_name,
@@ -34,7 +36,7 @@ def _make_tool_call(function_name="list_skill_directory", arguments=None):
     }
 
 
-def test_build_tool_status_start_list_directory():
+def test_build_tool_status_start_list_directory() -> None:
     tool_call = _make_tool_call("list_skill_directory", '{"relative_path": "references/"}')
     result = build_tool_status_start(skill_id="test-skill", tool_call=tool_call)
     assert "label" in result
@@ -42,25 +44,25 @@ def test_build_tool_status_start_list_directory():
     assert "查看" in result["label"]
 
 
-def test_build_tool_status_start_read_file():
+def test_build_tool_status_start_read_file() -> None:
     tool_call = _make_tool_call("read_skill_file", '{"relative_path": "README.md"}')
     result = build_tool_status_start(skill_id="test-skill", tool_call=tool_call)
     assert "读取" in result["label"]
 
 
-def test_build_tool_status_start_search_context():
+def test_build_tool_status_start_search_context() -> None:
     tool_call = _make_tool_call("search_skill_context", '{"query": "test"}')
     result = build_tool_status_start(skill_id="test-skill", tool_call=tool_call)
     assert "检索" in result["label"]
 
 
-def test_build_tool_status_start_search_context_with_source():
+def test_build_tool_status_start_search_context_with_source() -> None:
     tool_call = _make_tool_call("search_skill_context", '{"query": "test", "source_path": "references/"}')
     result = build_tool_status_start(skill_id="test-skill", tool_call=tool_call)
     assert "检索" in result["label"]
 
 
-def test_build_tool_status_start_read_context():
+def test_build_tool_status_start_read_context() -> None:
     tool_call = _make_tool_call("read_skill_context", '{"chunk_ids": ["c1", "c2"]}')
     with patch(
         "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_context_chunks_by_ids",
@@ -70,7 +72,7 @@ def test_build_tool_status_start_read_context():
     assert "载入" in result["label"]
 
 
-def test_build_tool_status_start_declared_tool():
+def test_build_tool_status_start_declared_tool() -> None:
     mock_tool_config = MagicMock()
     mock_tool_config.status = MagicMock()
     mock_tool_config.status.label = "自定义标签"
@@ -87,7 +89,7 @@ def test_build_tool_status_start_declared_tool():
     assert result["message"] == "正在执行自定义操作"
 
 
-def test_build_tool_status_start_declared_tool_no_status():
+def test_build_tool_status_start_declared_tool_no_status() -> None:
     mock_tool_config = MagicMock()
     mock_tool_config.status = None
     mock_tool_config.description = "无状态工具"
@@ -101,7 +103,7 @@ def test_build_tool_status_start_declared_tool_no_status():
     assert "无状态工具" in result["label"]
 
 
-def test_build_tool_status_start_unknown_tool():
+def test_build_tool_status_start_unknown_tool() -> None:
     tool_call = _make_tool_call("unknown_tool", "{}")
     with patch(
         "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
@@ -111,7 +113,7 @@ def test_build_tool_status_start_unknown_tool():
     assert "执行工具" in result["label"]
 
 
-def test_build_reused_tool_status_list_directory():
+def test_build_reused_tool_status_list_directory() -> None:
     result = _build_reused_tool_status(
         tool_name="list_skill_directory",
         arguments={"relative_path": "references/"},
@@ -121,7 +123,7 @@ def test_build_reused_tool_status_list_directory():
     assert "不再重复" in result["message"]
 
 
-def test_build_reused_tool_status_read_file():
+def test_build_reused_tool_status_read_file() -> None:
     result = _build_reused_tool_status(
         tool_name="read_skill_file",
         arguments={"relative_path": "README.md"},
@@ -131,7 +133,7 @@ def test_build_reused_tool_status_read_file():
     assert "不再重复" in result["message"]
 
 
-def test_build_reused_tool_status_search():
+def test_build_reused_tool_status_search() -> None:
     result = _build_reused_tool_status(
         tool_name="search_skill_context",
         arguments={"source_path": "references/"},
@@ -141,7 +143,7 @@ def test_build_reused_tool_status_search():
     assert "不再重复" in result["message"]
 
 
-def test_build_reused_tool_status_read_context():
+def test_build_reused_tool_status_read_context() -> None:
     result = _build_reused_tool_status(
         tool_name="read_skill_context",
         arguments={"chunk_ids": ["c1"]},
@@ -151,7 +153,7 @@ def test_build_reused_tool_status_read_context():
     assert "不再重复" in result["message"]
 
 
-def test_build_reused_tool_status_not_reused():
+def test_build_reused_tool_status_not_reused() -> None:
     result = _build_reused_tool_status(
         tool_name="list_skill_directory",
         arguments={},
@@ -160,7 +162,7 @@ def test_build_reused_tool_status_not_reused():
     assert result is None
 
 
-def test_build_reused_tool_status_other_tool():
+def test_build_reused_tool_status_other_tool() -> None:
     result = _build_reused_tool_status(
         tool_name="custom_tool",
         arguments={},
@@ -169,7 +171,7 @@ def test_build_reused_tool_status_other_tool():
     assert result is None
 
 
-def test_build_builtin_tool_status_list_directory():
+def test_build_builtin_tool_status_list_directory() -> None:
     result = _build_builtin_tool_status(
         tool_name="list_skill_directory",
         arguments={"relative_path": "references/"},
@@ -179,7 +181,7 @@ def test_build_builtin_tool_status_list_directory():
     assert "列出" in result["message"]
 
 
-def test_build_builtin_tool_status_read_file():
+def test_build_builtin_tool_status_read_file() -> None:
     result = _build_builtin_tool_status(
         tool_name="read_skill_file",
         arguments={"relative_path": "README.md"},
@@ -189,7 +191,7 @@ def test_build_builtin_tool_status_read_file():
     assert "已读取" in result["message"]
 
 
-def test_build_builtin_tool_status_search():
+def test_build_builtin_tool_status_search() -> None:
     result = _build_builtin_tool_status(
         tool_name="search_skill_context",
         arguments={"source_path": "references/"},
@@ -199,7 +201,7 @@ def test_build_builtin_tool_status_search():
     assert "2" in result["message"]
 
 
-def test_build_builtin_tool_status_search_no_source():
+def test_build_builtin_tool_status_search_no_source() -> None:
     result = _build_builtin_tool_status(
         tool_name="search_skill_context",
         arguments={},
@@ -209,7 +211,7 @@ def test_build_builtin_tool_status_search_no_source():
     assert "1" in result["message"]
 
 
-def test_build_builtin_tool_status_read_context():
+def test_build_builtin_tool_status_read_context() -> None:
     result = _build_builtin_tool_status(
         tool_name="read_skill_context",
         arguments={"chunk_ids": ["c1"]},
@@ -219,7 +221,7 @@ def test_build_builtin_tool_status_read_context():
     assert "1" in result["message"]
 
 
-def test_build_builtin_tool_status_other():
+def test_build_builtin_tool_status_other() -> None:
     result = _build_builtin_tool_status(
         tool_name="custom_tool",
         arguments={},
@@ -228,7 +230,7 @@ def test_build_builtin_tool_status_other():
     assert result is None
 
 
-def test_build_declared_tool_status_success():
+def test_build_declared_tool_status_success() -> None:
     mock_tool_config = MagicMock()
     mock_tool_config.status = MagicMock()
     mock_tool_config.status.label = "生成报告"
@@ -248,7 +250,7 @@ def test_build_declared_tool_status_success():
     assert result["message"] == "报告已生成"
 
 
-def test_build_declared_tool_status_failure():
+def test_build_declared_tool_status_failure() -> None:
     mock_tool_config = MagicMock()
     mock_tool_config.status = MagicMock()
     mock_tool_config.status.label = "生成报告"
@@ -269,7 +271,7 @@ def test_build_declared_tool_status_failure():
     assert "权限不足" in result["message"]
 
 
-def test_build_declared_tool_status_reused():
+def test_build_declared_tool_status_reused() -> None:
     mock_tool_config = MagicMock()
     mock_tool_config.status = MagicMock()
     mock_tool_config.status.label = "生成报告"
@@ -288,7 +290,7 @@ def test_build_declared_tool_status_reused():
     assert "不再重复" in result["message"]
 
 
-def test_build_declared_tool_status_with_single_attachment():
+def test_build_declared_tool_status_with_single_attachment() -> None:
     mock_tool_config = MagicMock()
     mock_tool_config.status = None
     mock_tool_config.description = "生成工具"
@@ -306,7 +308,7 @@ def test_build_declared_tool_status_with_single_attachment():
     assert "report.docx" in result["message"]
 
 
-def test_build_declared_tool_status_with_multiple_attachments():
+def test_build_declared_tool_status_with_multiple_attachments() -> None:
     mock_tool_config = MagicMock()
     mock_tool_config.status = None
     mock_tool_config.description = "生成工具"
@@ -324,7 +326,7 @@ def test_build_declared_tool_status_with_multiple_attachments():
     assert "2" in result["message"]
 
 
-def test_build_declared_tool_status_no_attachments():
+def test_build_declared_tool_status_no_attachments() -> None:
     mock_tool_config = MagicMock()
     mock_tool_config.status = None
     mock_tool_config.description = "通用工具"
@@ -342,7 +344,7 @@ def test_build_declared_tool_status_no_attachments():
     assert "完成" in result["message"]
 
 
-def test_build_declared_tool_status_unknown_tool():
+def test_build_declared_tool_status_unknown_tool() -> None:
     with patch(
         "doc_process_studio.skill.infrastructure.tool_loop.tool_status.get_skill_tool_config",
         side_effect=ValueError("not found"),
@@ -356,7 +358,7 @@ def test_build_declared_tool_status_unknown_tool():
     assert "失败" in result["message"]
 
 
-def test_build_tool_status_finish_reused():
+def test_build_tool_status_finish_reused() -> None:
     from doc_process_studio.chat.router.schemas.request import ChatStreamRequest
     from doc_process_studio.skill.application.dtos.runtime import SkillConversationState
 
@@ -375,7 +377,7 @@ def test_build_tool_status_finish_reused():
     assert "不再重复" in result["message"]
 
 
-def test_build_tool_status_finish_builtin():
+def test_build_tool_status_finish_builtin() -> None:
     from doc_process_studio.chat.router.schemas.request import ChatStreamRequest
     from doc_process_studio.skill.application.dtos.runtime import SkillConversationState
 
@@ -394,7 +396,7 @@ def test_build_tool_status_finish_builtin():
     assert "列出" in result["message"]
 
 
-def test_build_tool_status_finish_declared():
+def test_build_tool_status_finish_declared() -> None:
     from doc_process_studio.chat.router.schemas.request import ChatStreamRequest
     from doc_process_studio.skill.application.dtos.runtime import SkillConversationState
 

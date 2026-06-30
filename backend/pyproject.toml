@@ -25,6 +25,7 @@ dependencies = [
   "bcrypt>=4.0.1,<5.0.0",
   "qdrant-client>=1.12.0",
   "rarfile>=4.2",
+  "py7zr>=0.21",
 ]
 
 [dependency-groups]
@@ -49,13 +50,13 @@ where = ["src"]
 [tool.mypy]
 python_version = "3.13"
 ignore_missing_imports = true
-ignore_without_code = true
 warn_return_any = true
 warn_unused_configs = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
+enable_error_code = "ignore-without-code"
 plugins = ["sqlalchemy.ext.mypy.plugin"]
 
 [tool.ruff]
@@ -82,15 +83,9 @@ extend-immutable-calls = [
 
 [tool.vulture]
 exclude = ["skills"]
-ignore_decorators = ["@router.*", "@app.*", "@lru_cache*"]
-ignore_names = [
-  "model_config",
-  "dispatch",
-  "validate_*",
-  "*ServiceContract",
-  "*Contract",
-]
-min_confidence = 60
+ignore_decorators = ["@router.*", "@app.*", "@lru_cache*", "@pytest.*"]
+ignore_names = ["*ServiceContract", "*Contract"]
+min_confidence = 80
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

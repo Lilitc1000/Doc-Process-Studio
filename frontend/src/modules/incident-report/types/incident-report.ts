@@ -17,7 +17,6 @@ export interface IncidentReportPreviewResponse {
   source: 'draft' | 'version';
   version?: number | null;
   label: string;
-  html: string;
   docxBase64?: string | null;
   docxFileName?: string | null;
   pdfBase64?: string | null;

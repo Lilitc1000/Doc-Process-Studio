@@ -72,9 +72,9 @@ cd frontend && npm install && npm run dev -- --host --port 5173
 
 | 变更文件 | 执行命令 | 检查内容 |
 |---------|---------|---------|
-| `backend/{src,tests}/**/*.py` | `ruff check --select F,ARG src/ tests/` | 未使用 import（F401）、未使用变量（F841）、未使用函数参数（ARG） |
-| `backend/{src,tests}/**/*.py` | `vulture src/` | 死代码检测（仅扫描 src/，测试目录允许有"死"代码） |
-| `backend/{src,tests}/**/*.py` | `mypy src/doc_process_studio` | 静态类型检查（仅扫描 src/，测试目录不做类型检查） |
+| `backend/{src,tests}/**/*.py` | `ruff check --ignore-noqa --select F,ARG src/ tests/` | 未使用 import（F401）、未使用变量（F841）、未使用函数参数（ARG） |
+| `backend/{src,tests}/**/*.py` | `vulture src/` | 死代码检测 |
+| `backend/{src,tests}/**/*.py` | `mypy src/doc_process_studio` | 静态类型检查 |
 | `frontend/{src,tests}/**/*.{ts,vue}` | `vue-tsc --noEmit` | 未使用变量/参数（`noUnusedLocals`/`noUnusedParameters`）+ 静态类型检查 |
 | `frontend/{src,tests}/**/*.{ts,vue}` | `knip` | 未使用导出/依赖检测 |
 

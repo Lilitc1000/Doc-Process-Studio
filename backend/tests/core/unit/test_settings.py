@@ -1,7 +1,9 @@
+import pytest
+
 from doc_process_studio.common.infrastructure.config import resolve_env_file_path, resolve_runtime_env
 
 
-def test_resolve_runtime_env_defaults_to_dev(monkeypatch) -> None:
+def test_resolve_runtime_env_defaults_to_dev(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ENV", raising=False)
 
     assert resolve_runtime_env() == "dev"

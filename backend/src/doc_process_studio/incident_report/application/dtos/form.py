@@ -15,20 +15,6 @@ class IncidentFormAnswer(BaseModel):
         default=None,
         description="步骤值。支持字符串、列表、对象等结构。",
     )
-    custom_value: str | None = Field(
-        default=None,
-        description="当步骤支持自定义输入时的补充值。",
-    )
-
-
-class IncidentGeneratedVersion(BaseModel):
-    version: int = Field(..., description="版本号，从 1 开始递增。")
-    label: str = Field(..., description="用于前端展示的版本标签。")
-    generated_at: datetime = Field(..., description="该版本生成时间。")
-    report_data: dict[str, Any] = Field(
-        default_factory=dict,
-        description="该版本生成时使用的 report_data 快照。",
-    )
 
 
 class IncidentFormSnapshot(BaseModel):

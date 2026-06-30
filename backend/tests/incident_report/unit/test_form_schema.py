@@ -6,17 +6,17 @@ from doc_process_studio.incident_report.domain.values.form_schema import (
 )
 
 
-def test_form_schema_definition_structure():
+def test_form_schema_definition_structure() -> None:
     assert INCIDENT_REPORT_FORM_SCHEMA.version == 1
     assert len(INCIDENT_REPORT_FORM_SCHEMA.steps) == 4
 
 
-def test_form_schema_steps_have_ids():
+def test_form_schema_steps_have_ids() -> None:
     step_ids = [step.step_id for step in INCIDENT_REPORT_FORM_SCHEMA.steps]
     assert step_ids == ["basic_info", "description", "timeline", "appendix"]
 
 
-def test_form_schema_basic_info_step():
+def test_form_schema_basic_info_step() -> None:
     step = INCIDENT_REPORT_FORM_SCHEMA.steps[0]
     assert step.title == "基本信息"
     assert step.description is not None
@@ -24,7 +24,7 @@ def test_form_schema_basic_info_step():
     assert len(required_fields) >= 5
 
 
-def test_form_schema_description_step():
+def test_form_schema_description_step() -> None:
     step = INCIDENT_REPORT_FORM_SCHEMA.steps[1]
     assert step.step_id == "description"
     field_ids = [f.field_id for f in step.fields]
@@ -32,14 +32,14 @@ def test_form_schema_description_step():
     assert "body_description" in field_ids
 
 
-def test_form_schema_timeline_step():
+def test_form_schema_timeline_step() -> None:
     step = INCIDENT_REPORT_FORM_SCHEMA.steps[2]
     assert step.step_id == "timeline"
     field_ids = [f.field_id for f in step.fields]
     assert "body_timeline" in field_ids
 
 
-def test_form_schema_appendix_step():
+def test_form_schema_appendix_step() -> None:
     step = INCIDENT_REPORT_FORM_SCHEMA.steps[3]
     assert step.step_id == "appendix"
     field_ids = [f.field_id for f in step.fields]
@@ -47,7 +47,7 @@ def test_form_schema_appendix_step():
     assert "appendix_attachments" in field_ids
 
 
-def test_form_field_schema_creation():
+def test_form_field_schema_creation() -> None:
     field = FormFieldSchema(
         field_id="test_field",
         label="测试字段",
@@ -60,7 +60,7 @@ def test_form_field_schema_creation():
     assert field.options is None
 
 
-def test_form_step_schema_creation():
+def test_form_step_schema_creation() -> None:
     step = FormStepSchema(
         step_id="test_step",
         title="测试步骤",
@@ -70,13 +70,13 @@ def test_form_step_schema_creation():
     assert step.fields == []
 
 
-def test_form_schema_definition_creation():
+def test_form_schema_definition_creation() -> None:
     schema = FormSchemaDefinition(version=2, steps=[])
     assert schema.version == 2
     assert schema.steps == []
 
 
-def test_basic_info_has_severity_options():
+def test_basic_info_has_severity_options() -> None:
     step = INCIDENT_REPORT_FORM_SCHEMA.steps[0]
     severity_field = next(f for f in step.fields if f.field_id == "manual_severity")
     assert severity_field.options is not None
@@ -86,7 +86,7 @@ def test_basic_info_has_severity_options():
     assert "P3" in values
 
 
-def test_basic_info_has_status_options():
+def test_basic_info_has_status_options() -> None:
     step = INCIDENT_REPORT_FORM_SCHEMA.steps[0]
     status_field = next(f for f in step.fields if f.field_id == "manual_status")
     assert status_field.options is not None

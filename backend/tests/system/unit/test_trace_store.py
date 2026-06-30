@@ -1,3 +1,9 @@
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
 import doc_process_studio.system.infrastructure.trace_store as trace_store_module
 from doc_process_studio.system.infrastructure.trace_store import (
     AgentTraceRecorder,
@@ -12,26 +18,26 @@ from doc_process_studio.system.infrastructure.trace_store import (
 
 
 class _FakeRedis:
-    def __init__(self):
-        self._store = {}
-        self._sets = {}
+    def __init__(self) -> None:
+        self._store: dict[str, Any] = {}
+        self._sets: dict[str, set[str]] = {}
 
-    async def get(self, key):
+    async def get(self, key: str) -> str | None:
         return self._store.get(key)
 
-    async def set(self, key, value, **_kwargs):
+    async def set_value(self, key: str, value: str, **_kwargs: Any) -> None:
         self._store[key] = value
 
-    async def sadd(self, key, *members):
+    async def sadd(self, key: str, *members: str) -> int:
         if key not in self._sets:
             self._sets[key] = set()
         self._sets[key].update(members)
         return len(members)
 
-    async def smembers(self, key):
+    async def smembers(self, key: str) -> set[str]:
         return self._sets.get(key, set())
 
-    async def delete(self, *keys):
+    async def delete(self, *keys: str) -> int:
         count = 0
         for k in keys:
             if k in self._store:
@@ -42,37 +48,38 @@ class _FakeRedis:
                 count += 1
         return count
 
-    async def expire(self, _key, _seconds):
+    async def expire(self, _key: str, _seconds: int) -> bool:
         return True
 
 
-def test_build_agent_trace_key():
+def test_build_agent_trace_key() -> None:
     key = build_agent_trace_key(tenant_id="tenant-1", trace_id="trace-abc")
     assert "tenant-1" in key
     assert "trace-abc" in key
 
 
-def test_build_agent_trace_conversation_index_key():
+def test_build_agent_trace_conversation_index_key() -> None:
     key = build_agent_trace_conversation_index_key(conversation_id="conv-1")
     assert "conv-1" in key
 
 
-def test_encode_decode_trace_index_member():
+def test_encode_decode_trace_index_member() -> None:
     encoded = _encode_trace_index_member(tenant_id="t1", trace_id="tr1")
     decoded = _decode_trace_index_member(encoded)
     assert decoded == ("t1", "tr1")
 
 
-def test_decode_trace_index_member_invalid():
+def test_decode_trace_index_member_invalid() -> None:
     assert _decode_trace_index_member("not json") is None
     assert _decode_trace_index_member('["only_one"]') is None
     assert _decode_trace_index_member('["", ""]') is None
 
 
-async def test_save_and_load_agent_trace(monkeypatch):
+async def test_save_and_load_agent_trace(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _FakeRedis()
+    fake_set = fake.set_value
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
-    monkeypatch.setattr(trace_store_module, "set_json", fake.set)
+    monkeypatch.setattr(trace_store_module, "set_json", fake_set)
     monkeypatch.setattr(trace_store_module, "get_json", fake.get)
 
     payload = {"trace_id": "tr1", "events": []}
@@ -88,7 +95,7 @@ async def test_save_and_load_agent_trace(monkeypatch):
     assert result["trace_id"] == "tr1"
 
 
-async def test_load_agent_trace_missing(monkeypatch):
+async def test_load_agent_trace_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_json", fake.get)
 
@@ -96,7 +103,7 @@ async def test_load_agent_trace_missing(monkeypatch):
     assert result is None
 
 
-async def test_save_agent_trace_skips_when_disabled(monkeypatch):
+async def test_save_agent_trace_skips_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(trace_store_module.settings, "agent_trace_store_enabled", False)
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
@@ -110,7 +117,7 @@ async def test_save_agent_trace_skips_when_disabled(monkeypatch):
     assert len(fake._store) == 0
 
 
-async def test_save_agent_trace_skips_empty_ids(monkeypatch):
+async def test_save_agent_trace_skips_empty_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(trace_store_module.settings, "agent_trace_store_enabled", True)
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
@@ -124,10 +131,11 @@ async def test_save_agent_trace_skips_empty_ids(monkeypatch):
     assert len(fake._store) == 0
 
 
-async def test_delete_agent_traces_for_conversation(monkeypatch):
+async def test_delete_agent_traces_for_conversation(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
-    monkeypatch.setattr(trace_store_module, "set_json", fake.set)
+    fake_set = fake.set_value
+    monkeypatch.setattr(trace_store_module, "set_json", fake_set)
     monkeypatch.setattr(trace_store_module, "get_json", fake.get)
 
     await save_agent_trace(
@@ -141,7 +149,7 @@ async def test_delete_agent_traces_for_conversation(monkeypatch):
     assert count >= 1
 
 
-async def test_delete_agent_traces_for_empty_conversation(monkeypatch):
+async def test_delete_agent_traces_for_empty_conversation(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
 
@@ -149,7 +157,7 @@ async def test_delete_agent_traces_for_empty_conversation(monkeypatch):
     assert count == 0
 
 
-def test_agent_trace_recorder():
+def test_agent_trace_recorder() -> None:
     recorder = AgentTraceRecorder(
         trace_id="tr1",
         tenant_id="t1",
@@ -170,10 +178,11 @@ def test_agent_trace_recorder():
     assert recorder.payload["final"]["done_reason"] == "stop"
 
 
-async def test_agent_trace_recorder_flush(monkeypatch):
+async def test_agent_trace_recorder_flush(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _FakeRedis()
     monkeypatch.setattr(trace_store_module, "get_redis_client", lambda: fake)
-    monkeypatch.setattr(trace_store_module, "set_json", fake.set)
+    fake_set = fake.set_value
+    monkeypatch.setattr(trace_store_module, "set_json", fake_set)
     monkeypatch.setattr(trace_store_module, "get_json", fake.get)
 
     recorder = AgentTraceRecorder(

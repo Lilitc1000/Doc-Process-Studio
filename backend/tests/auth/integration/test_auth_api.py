@@ -1,5 +1,6 @@
-from collections.abc import Awaitable, Callable
-from typing import Any
+from collections.abc import Awaitable, Callable, Generator
+from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -39,27 +40,33 @@ class FakeAuthService(AuthServiceContract):
             raise exc
         if self.register_fn is not None:
             return await self.register_fn(username=username, password=password)
-        return self.responses["register"]
+        return cast(RegisterResponse, self.responses["register"])
 
     async def authenticate(self, *, username: str, password: str) -> TokenResponse:
         self._record("authenticate", username, password)
         if exc := self.errors.get("authenticate"):
             raise exc
-        return self.responses["authenticate"]
+        return cast(TokenResponse, self.responses["authenticate"])
 
     async def refresh_token(self, refresh_token: str) -> TokenResponse:
         self._record("refresh_token", refresh_token)
         if exc := self.errors.get("refresh_token"):
             raise exc
-        return self.responses["refresh_token"]
+        return cast(TokenResponse, self.responses["refresh_token"])
 
     async def get_current_user_info(self, user_id: str) -> UserInfoResponse:
         self._record("get_current_user_info", user_id)
         if exc := self.errors.get("get_current_user_info"):
             raise exc
-        return self.responses["get_current_user_info"]
+        return cast(UserInfoResponse, self.responses["get_current_user_info"])
 
-    async def update_profile(self, user_id: str, *, username: str | None = None, avatar_color: str | None = None):
+    async def update_profile(
+        self,
+        user_id: str,
+        *,
+        username: str | None = None,
+        avatar_color: str | None = None,
+    ) -> Any:
         self._record("update_profile", user_id, username, avatar_color)
         if exc := self.errors.get("update_profile"):
             raise exc
@@ -77,18 +84,18 @@ class FakeAuthService(AuthServiceContract):
         self._record("delete_user", user_id)
         if exc := self.errors.get("delete_user"):
             raise exc
-        return self.responses.get("delete_user", True)
+        return bool(self.responses.get("delete_user", True))
 
     async def delete_users_by_prefix(self, prefix: str) -> int:
         self._record("delete_users_by_prefix", prefix)
-        return self.responses.get("delete_users_by_prefix", 0)
+        return int(self.responses.get("delete_users_by_prefix", 0))
 
     async def ensure_admin_user(self, *, admin_username: str, admin_password: str) -> None:
         self._record("ensure_admin_user", admin_username, admin_password)
 
 
 @pytest.fixture()
-def fake_auth_service():
+def fake_auth_service() -> Generator[FakeAuthService]:
     service = FakeAuthService()
     main_module.app.dependency_overrides[get_auth_service] = lambda: service
     yield service
@@ -99,7 +106,7 @@ def test_api_auth_register_success(fake_auth_service: FakeAuthService) -> None:
     fake_auth_service.responses["register"] = RegisterResponse(
         user_id="usr_test123",
         username="newuser",
-        created_at="2026-01-01T00:00:00Z",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
     client = TestClient(main_module.app)
@@ -131,7 +138,6 @@ def test_api_auth_login_success(fake_auth_service: FakeAuthService) -> None:
     fake_auth_service.responses["authenticate"] = TokenResponse(
         access_token="fake_access_token",
         refresh_token="fake_refresh_token",
-        token_type="bearer",
     )
 
     client = TestClient(main_module.app)
@@ -145,7 +151,6 @@ def test_api_auth_login_success(fake_auth_service: FakeAuthService) -> None:
     data = response.json()
     assert data["access_token"] == "fake_access_token"
     assert data["refresh_token"] == "fake_refresh_token"
-    assert data["token_type"] == "bearer"
 
 
 def test_api_auth_login_wrong_password(fake_auth_service: FakeAuthService) -> None:
@@ -165,7 +170,6 @@ def test_api_auth_refresh_success(fake_auth_service: FakeAuthService) -> None:
     fake_auth_service.responses["refresh_token"] = TokenResponse(
         access_token="new_access_token",
         refresh_token="new_refresh_token",
-        token_type="bearer",
     )
 
     client = TestClient(main_module.app)
@@ -191,12 +195,12 @@ def test_api_auth_refresh_invalid_token(fake_auth_service: FakeAuthService) -> N
     assert response.status_code == 401
 
 
-def test_api_auth_me_with_valid_token(fake_auth_service: FakeAuthService, auth_headers) -> None:
+def test_api_auth_me_with_valid_token(fake_auth_service: FakeAuthService, auth_headers: dict[str, str]) -> None:
     fake_auth_service.responses["get_current_user_info"] = UserInfoResponse(
         user_id="usr_test_user",
         username="testuser",
         avatar_color="#4f46e5",
-        created_at="2026-01-01T00:00:00Z",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
     client = TestClient(main_module.app)
@@ -229,7 +233,7 @@ def test_api_auth_rate_limit(fake_auth_service: FakeAuthService) -> None:
         return RegisterResponse(
             user_id=f"usr_{call_count}",
             username=username,
-            created_at="2026-01-01T00:00:00Z",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
 
     async def fake_register(*, username: str, password: str) -> RegisterResponse:
@@ -254,7 +258,7 @@ def test_api_auth_rate_limit(fake_auth_service: FakeAuthService) -> None:
     assert response.status_code == 429
 
 
-def test_api_auth_delete_own_account(fake_auth_service: FakeAuthService, auth_headers) -> None:
+def test_api_auth_delete_own_account(fake_auth_service: FakeAuthService, auth_headers: dict[str, str]) -> None:
     fake_auth_service.responses["delete_user"] = True
 
     client = TestClient(main_module.app)
@@ -264,14 +268,14 @@ def test_api_auth_delete_own_account(fake_auth_service: FakeAuthService, auth_he
     assert fake_auth_service.calls.get("delete_user") == [("usr_test_user",)]
 
 
-def test_api_auth_delete_other_account_forbidden(auth_headers) -> None:
+def test_api_auth_delete_other_account_forbidden(auth_headers: dict[str, str]) -> None:
     client = TestClient(main_module.app)
     response = client.delete("/api/auth/users/usr_other_user", headers=auth_headers)
 
     assert response.status_code == 403
 
 
-def test_api_auth_delete_user_not_found(fake_auth_service: FakeAuthService, auth_headers) -> None:
+def test_api_auth_delete_user_not_found(fake_auth_service: FakeAuthService, auth_headers: dict[str, str]) -> None:
     fake_auth_service.errors["delete_user"] = UserNotFoundError("User not found")
 
     client = TestClient(main_module.app)
@@ -280,7 +284,7 @@ def test_api_auth_delete_user_not_found(fake_auth_service: FakeAuthService, auth
     assert response.status_code == 404
 
 
-def test_api_auth_change_password_incorrect(fake_auth_service: FakeAuthService, auth_headers) -> None:
+def test_api_auth_change_password_incorrect(fake_auth_service: FakeAuthService, auth_headers: dict[str, str]) -> None:
     fake_auth_service.errors["change_password"] = IncorrectPasswordError("Current password is incorrect")
 
     client = TestClient(main_module.app)

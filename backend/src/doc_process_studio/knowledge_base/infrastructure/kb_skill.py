@@ -24,18 +24,3 @@ KNOWLEDGE_BASE_RAG_PROMPT = """你是一个知识库问答助手。用户选择�
 - location: 位置描述（如"第3页, 表格"）
 - content_type: 内容类型（text/table/ocr/mixed）
 """
-
-KNOWLEDGE_BASE_SEARCH_TOOL = {
-    "name": "search_knowledge_base",
-    "description": "在项目知识库中检索与查询相关的文档片段",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "检索查询文本",
-            },
-        },
-        "required": ["query"],
-    },
-}

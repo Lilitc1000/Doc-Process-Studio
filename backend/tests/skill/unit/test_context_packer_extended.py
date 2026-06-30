@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import patch
 
 from doc_process_studio.skill.application.dtos.runtime import SkillContextChunk, SkillConversationState
@@ -10,8 +11,8 @@ from doc_process_studio.skill.infrastructure.context_packer import (
 )
 
 
-def _make_chunk(**overrides) -> SkillContextChunk:
-    defaults = dict(
+def _make_chunk(**overrides: Any) -> SkillContextChunk:
+    defaults: dict[str, Any] = dict(
         id="chunk-1",
         skill_id="test-skill",
         source_path="references/doc.md",
@@ -23,8 +24,8 @@ def _make_chunk(**overrides) -> SkillContextChunk:
     return SkillContextChunk(**defaults)
 
 
-def _make_state(**overrides) -> SkillConversationState:
-    defaults = dict(
+def _make_state(**overrides: Any) -> SkillConversationState:
+    defaults: dict[str, Any] = dict(
         conversation_id="conv-1",
         skill_id="test-skill",
         system_prompt="系统提示词",
@@ -37,12 +38,12 @@ def _make_state(**overrides) -> SkillConversationState:
     return SkillConversationState(**defaults)
 
 
-def test_build_local_summary_from_chunks_empty():
+def test_build_local_summary_from_chunks_empty() -> None:
     result = _build_local_summary_from_chunks(chunks=[], title="标题", max_characters=500)
     assert result == ""
 
 
-def test_build_local_summary_from_chunks_basic():
+def test_build_local_summary_from_chunks_basic() -> None:
     chunks = [_make_chunk()]
     result = _build_local_summary_from_chunks(chunks=chunks, title="摘要：", max_characters=500)
     assert "摘要：" in result
@@ -50,13 +51,13 @@ def test_build_local_summary_from_chunks_basic():
     assert "测试文档" in result
 
 
-def test_build_local_summary_from_chunks_truncation():
+def test_build_local_summary_from_chunks_truncation() -> None:
     chunks = [_make_chunk(content="x" * 200)]
     result = _build_local_summary_from_chunks(chunks=chunks, title="标题：", max_characters=50)
     assert len(result) <= 50
 
 
-def test_build_local_summary_from_chunks_multiple():
+def test_build_local_summary_from_chunks_multiple() -> None:
     chunks = [
         _make_chunk(id="c1", source_path="a.md", title="A", content="内容A"),
         _make_chunk(id="c2", source_path="b.md", title="B", content="内容B"),
@@ -66,38 +67,38 @@ def test_build_local_summary_from_chunks_multiple():
     assert "b.md" in result
 
 
-def test_build_local_summary_from_text_empty():
+def test_build_local_summary_from_text_empty() -> None:
     result = _build_local_summary_from_text(text="", title="标题：", max_characters=500)
     assert result == ""
 
 
-def test_build_local_summary_from_text_whitespace_only():
+def test_build_local_summary_from_text_whitespace_only() -> None:
     result = _build_local_summary_from_text(text="   \n\t  ", title="标题：", max_characters=500)
     assert result == ""
 
 
-def test_build_local_summary_from_text_basic():
+def test_build_local_summary_from_text_basic() -> None:
     result = _build_local_summary_from_text(text="这是测试文本内容", title="摘要：", max_characters=500)
     assert "摘要：" in result
     assert "测试文本" in result
 
 
-def test_build_local_summary_from_text_truncation():
+def test_build_local_summary_from_text_truncation() -> None:
     result = _build_local_summary_from_text(text="x" * 200, title="标题：", max_characters=50)
     assert len(result) <= 50
 
 
-async def test_request_summary_empty_prompt():
+async def test_request_summary_empty_prompt() -> None:
     result = await _request_summary(model="test", system_prompt="sys", user_prompt="", max_characters=500)
     assert result == ""
 
 
-async def test_request_summary_whitespace_prompt():
+async def test_request_summary_whitespace_prompt() -> None:
     result = await _request_summary(model="test", system_prompt="sys", user_prompt="   ", max_characters=500)
     assert result == ""
 
 
-async def test_request_summary_llm_error():
+async def test_request_summary_llm_error() -> None:
     with patch(
         "doc_process_studio.skill.infrastructure.context_packer.post_chat_completion",
         side_effect=ValueError("LLM error"),
@@ -106,7 +107,7 @@ async def test_request_summary_llm_error():
     assert result == ""
 
 
-async def test_request_summary_ollama_not_configured():
+async def test_request_summary_ollama_not_configured() -> None:
     from doc_process_studio.common.infrastructure.exceptions import OllamaNotConfiguredError
 
     with patch(
@@ -117,7 +118,7 @@ async def test_request_summary_ollama_not_configured():
     assert result == ""
 
 
-async def test_request_summary_http_error():
+async def test_request_summary_http_error() -> None:
     import httpx
 
     with patch(
@@ -128,7 +129,7 @@ async def test_request_summary_http_error():
     assert result == ""
 
 
-async def test_request_summary_empty_content():
+async def test_request_summary_empty_content() -> None:
     with (
         patch(
             "doc_process_studio.skill.infrastructure.context_packer.post_chat_completion",
@@ -143,21 +144,21 @@ async def test_request_summary_empty_content():
     assert result == ""
 
 
-async def test_ensure_hierarchical_memory_empty_chunks():
+async def test_ensure_hierarchical_memory_empty_chunks() -> None:
     state = _make_state()
     await ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=[])
     assert state.short_term_memory == ""
     assert state.compacted_chunk_ids == []
 
 
-async def test_ensure_hierarchical_memory_same_chunks_cached():
+async def test_ensure_hierarchical_memory_same_chunks_cached() -> None:
     state = _make_state(short_term_memory="已有摘要", compacted_chunk_ids=["chunk-1"])
     chunks = [_make_chunk()]
     await ensure_hierarchical_memory(model="test", state=state, chunks_to_compact=chunks, force=False)
     assert state.short_term_memory == "已有摘要"
 
 
-async def test_ensure_hierarchical_memory_force_refresh():
+async def test_ensure_hierarchical_memory_force_refresh() -> None:
     state = _make_state(short_term_memory="旧摘要", compacted_chunk_ids=["chunk-1"])
     chunks = [_make_chunk()]
 
@@ -169,7 +170,7 @@ async def test_ensure_hierarchical_memory_force_refresh():
     assert state.short_term_memory == "新摘要"
 
 
-async def test_ensure_hierarchical_memory_fallback_to_local():
+async def test_ensure_hierarchical_memory_fallback_to_local() -> None:
     state = _make_state()
     chunks = [_make_chunk()]
 
@@ -181,13 +182,13 @@ async def test_ensure_hierarchical_memory_fallback_to_local():
     assert "测试文档" in state.short_term_memory or len(state.short_term_memory) > 0
 
 
-def test_build_skill_context_budget_text_empty():
+def test_build_skill_context_budget_text_empty() -> None:
     state = _make_state()
     result = build_skill_context_budget_text(state, [])
     assert result is None
 
 
-def test_build_skill_context_budget_text_with_memory():
+def test_build_skill_context_budget_text_with_memory() -> None:
     state = _make_state(skill_memory="长期记忆内容", episodic_memory="情节记忆内容", short_term_memory="短期记忆内容")
     result = build_skill_context_budget_text(state, [])
     assert result is not None
@@ -196,7 +197,7 @@ def test_build_skill_context_budget_text_with_memory():
     assert "短期记忆" in result
 
 
-def test_build_skill_context_budget_text_with_chunks():
+def test_build_skill_context_budget_text_with_chunks() -> None:
     state = _make_state()
     chunks = [_make_chunk()]
     result = build_skill_context_budget_text(state, chunks)
@@ -204,14 +205,14 @@ def test_build_skill_context_budget_text_with_chunks():
     assert "doc.md" in result
 
 
-def test_build_skill_context_budget_text_compacted_chunks_excluded():
+def test_build_skill_context_budget_text_compacted_chunks_excluded() -> None:
     state = _make_state(compacted_chunk_ids=["chunk-1"])
     chunks = [_make_chunk()]
     result = build_skill_context_budget_text(state, chunks)
     assert result is None
 
 
-def test_build_skill_context_budget_text_mixed():
+def test_build_skill_context_budget_text_mixed() -> None:
     state = _make_state(short_term_memory="短期记忆", compacted_chunk_ids=["chunk-1"])
     chunks = [
         _make_chunk(),

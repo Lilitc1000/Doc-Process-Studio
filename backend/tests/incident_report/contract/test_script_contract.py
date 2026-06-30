@@ -1,8 +1,9 @@
 import importlib.util
 from pathlib import Path
+from typing import Any
 
 
-def _load_incident_report_module():
+def _load_incident_report_module() -> Any:
     backend_root = Path(__file__).resolve().parents[3]
     script_path = backend_root / "src/doc_process_studio/skills/incident-report/scripts/generate_incident_report.py"
     spec = importlib.util.spec_from_file_location("incident_report_script", script_path)
@@ -13,7 +14,7 @@ def _load_incident_report_module():
     return module
 
 
-def test_normalize_incident_data_handles_string_structures():
+def test_normalize_incident_data_handles_string_structures() -> None:
     module = _load_incident_report_module()
     payload = {
         "reference_no": "TEST-INCIDENT-001",
@@ -54,7 +55,7 @@ def test_normalize_incident_data_handles_string_structures():
     assert normalized["root_cause_evidence"] == "Release checklist missing DBA review"
 
 
-def test_generate_form_accepts_mixed_payload_without_crash():
+def test_generate_form_accepts_mixed_payload_without_crash() -> None:
     module = _load_incident_report_module()
     payload = {
         "reference_no": "TEST-INCIDENT-002",

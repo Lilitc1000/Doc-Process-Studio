@@ -25,21 +25,21 @@ def _auth_headers(user_id: str = "usr_test", username: str = "testuser") -> dict
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_analytics_overview_requires_auth():
+def test_analytics_overview_requires_auth() -> None:
     app = _create_test_app()
     client = TestClient(app)
     resp = client.get("/api/incident-report/analytics/overview")
     assert resp.status_code in (401, 403)
 
 
-def test_analytics_trend_requires_auth():
+def test_analytics_trend_requires_auth() -> None:
     app = _create_test_app()
     client = TestClient(app)
     resp = client.get("/api/incident-report/analytics/trend")
     assert resp.status_code in (401, 403)
 
 
-def test_analytics_overview_returns_structure():
+def test_analytics_overview_returns_structure() -> None:
     app = _create_test_app()
 
     fake_service = AsyncMock()
@@ -71,7 +71,7 @@ def test_analytics_overview_returns_structure():
     assert "closed_count" in data
 
 
-def test_analytics_trend_returns_list():
+def test_analytics_trend_returns_list() -> None:
     app = _create_test_app()
 
     fake_service = AsyncMock()

@@ -1,4 +1,7 @@
 from datetime import UTC, datetime
+from typing import Any
+
+import pytest
 
 import doc_process_studio.chat.infrastructure.stream as chat_stream_module
 from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
@@ -21,7 +24,7 @@ def _build_skill(
     )
 
 
-async def test_resolve_skill_plan_filters_non_chat_skill_types(monkeypatch) -> None:
+async def test_resolve_skill_plan_filters_non_chat_skill_types(monkeypatch: pytest.MonkeyPatch) -> Any:
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(
@@ -34,7 +37,7 @@ async def test_resolve_skill_plan_filters_non_chat_skill_types(monkeypatch) -> N
         ],
     )
 
-    async def fake_select_for_chat_skills(**kwargs):
+    async def fake_select_for_chat_skills(**kwargs: Any) -> Any:
         captured["available_skill_ids"] = [skill.id for skill in kwargs["available_skills"]]
         captured["explicit_skill_ids"] = kwargs["explicit_skill_ids"]
         captured["missing_explicit_skill_ids"] = kwargs["missing_explicit_skill_ids"]

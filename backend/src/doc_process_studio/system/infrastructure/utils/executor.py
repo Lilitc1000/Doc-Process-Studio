@@ -34,16 +34,6 @@ class ExecutionBudget:
 
 
 @dataclass
-class ExecutionStateDiff:
-    loaded_chunk_ids_added: dict[str, list[str]] = field(default_factory=dict)
-    tool_history_added: int = 0
-    attachment_count_added: int = 0
-    reused_tool_calls: int = 0
-    budget_converged: bool = False
-    budget_reason: str | None = None
-
-
-@dataclass
 class ExecutionResult:
     status_events: list[dict[str, Any]] = field(default_factory=list)
     tool_trace_messages: list[dict[str, Any]] = field(default_factory=list)
@@ -53,7 +43,6 @@ class ExecutionResult:
     round_made_progress: bool = False
     disable_tools: bool = False
     executed_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
-    state_diff: ExecutionStateDiff = field(default_factory=ExecutionStateDiff)
     tool_calls_consumed: int = 0
 
 
@@ -319,8 +308,6 @@ def _build_budget_converged_result(reason: str) -> ExecutionResult:
     result = ExecutionResult(
         disable_tools=True,
     )
-    result.state_diff.budget_converged = True
-    result.state_diff.budget_reason = reason
     result.tool_trace_messages.append(
         {
             "role": "system",
@@ -328,20 +315,6 @@ def _build_budget_converged_result(reason: str) -> ExecutionResult:
         }
     )
     return result
-
-
-def _build_loaded_chunk_diff(
-    *,
-    before_states: dict[str, set[str]],
-    after_states: dict[str, SkillConversationState],
-) -> dict[str, list[str]]:
-    diff: dict[str, list[str]] = {}
-    for skill_id, state in after_states.items():
-        before_chunk_ids = before_states.get(skill_id, set())
-        added = [chunk_id for chunk_id in state.loaded_chunk_ids if chunk_id not in before_chunk_ids]
-        if added:
-            diff[skill_id] = added
-    return diff
 
 
 async def _execute_single_node(
@@ -463,10 +436,6 @@ def _collect_outcome(
                     ),
                 }
             )
-            result.state_diff.attachment_count_added += 1
-
-    if tool_result.get("reused"):
-        result.state_diff.reused_tool_calls += 1
 
     if made_progress or attachments:
         result.round_made_progress = True
@@ -514,7 +483,6 @@ def _collect_outcome(
             created_at=to_utc8(datetime.now(UTC)) or datetime.now(UTC),
         ),
     )
-    result.state_diff.tool_history_added += 1
 
 
 async def execute_tool_graph(
@@ -535,9 +503,6 @@ async def execute_tool_graph(
     if budget.used_tool_calls >= budget.max_tool_calls:
         return _build_budget_converged_result("本次工具执行已达到调用次数预算上限。")
 
-    before_loaded_states = {
-        skill_id: set(state.loaded_chunk_ids) for skill_id, state in execution_input.states_by_skill.items()
-    }
     result = ExecutionResult(executed_tool_calls=execution_input.executed_tool_calls)
     inflight_tool_calls: dict[
         str,
@@ -625,11 +590,6 @@ async def execute_tool_graph(
             )
             completed_indexes.add(node.index)
             pending_by_index.pop(node.index, None)
-
-    result.state_diff.loaded_chunk_ids_added = _build_loaded_chunk_diff(
-        before_states=before_loaded_states,
-        after_states=execution_input.states_by_skill,
-    )
 
     if not result.round_made_progress:
         result.disable_tools = True

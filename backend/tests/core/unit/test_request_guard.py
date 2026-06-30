@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from doc_process_studio.common.middleware import request_guard as guard_module
+import doc_process_studio.common.middleware.request_guard as guard_module
 
 
 def _reset_guard_state() -> None:
@@ -11,7 +11,7 @@ def _reset_guard_state() -> None:
     guard_module._tenant_rate_windows.clear()
 
 
-async def test_request_guard_rejects_when_rate_limit_exceeded(monkeypatch) -> None:
+async def test_request_guard_rejects_when_rate_limit_exceeded(monkeypatch: pytest.MonkeyPatch) -> None:
     _reset_guard_state()
     monkeypatch.setattr(
         guard_module.settings,
@@ -36,7 +36,7 @@ async def test_request_guard_rejects_when_rate_limit_exceeded(monkeypatch) -> No
             pass
 
 
-async def test_request_guard_rejects_when_queue_wait_timeout(monkeypatch) -> None:
+async def test_request_guard_rejects_when_queue_wait_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     _reset_guard_state()
     monkeypatch.setattr(
         guard_module.settings,

@@ -26,7 +26,7 @@ backend/src/doc_process_studio/incident_report/
 │   └── __init__.py               # re-export 所有公开名称
 ├── application/                  # 应用层：用例编排 + DTO + 端口抽象
 │   ├── dtos/                     # 应用层数据传输对象（端口返回类型、跨层共享结构）
-│   │   ├── form.py               # IncidentFormAnswer/IncidentFormSnapshot/IncidentGeneratedVersion
+│   │   ├── form.py               # IncidentFormAnswer/IncidentFormSnapshot
 │   │   ├── report.py             # IncidentReportSummary/Detail/AuditLogEntry/CommentEntry/ListResponse
 │   │   ├── analytics.py          # IncidentAnalyticsOverview/IncidentAnalyticsTrend
 │   │   └── role.py               # IncidentRoleEntry/RoleDefinitionEntry/PermissionEntry + 列表响应
@@ -306,7 +306,7 @@ AI 生成固定输出英文。系统提示词中明确要求所有输出使用�
 
 ### 关键数据模型
 
-- `IncidentFormAnswer` — 单个表单步骤的答案（value + custom_value），定义在 `application/dtos/form.py`
+- `IncidentFormAnswer` — 单个表单步骤的答案（value），定义在 `application/dtos/form.py`
 - `IncidentFormSnapshot` — 完整表单快照（form_answers + report_data + trace 信息），定义在 `application/dtos/form.py`
 - `IncidentBodyGenerateResponse` — 生成响应（report_id + form_answers + trace_id），定义在 `application/dtos/form.py`
 

@@ -8,8 +8,6 @@ from doc_process_studio.incident_report.domain.values.constants import (
     BODY_ROOT_CAUSE,
     BODY_TIMELINE,
     BODY_TRIGGER,
-    INCIDENT_REPORT_DOCX_MIME_TYPE,
-    INCIDENT_REPORT_SKILL_ID,
     MANUAL_FAULT_DATE,
     MANUAL_FAULT_TIME,
     MANUAL_REPORTING_PERSON,
@@ -31,15 +29,7 @@ from doc_process_studio.incident_report.domain.values.constants import (
 )
 
 
-def test_incident_report_skill_id():
-    assert INCIDENT_REPORT_SKILL_ID == "incident-report"
-
-
-def test_docx_mime_type():
-    assert INCIDENT_REPORT_DOCX_MIME_TYPE == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-
-def test_manual_field_constants():
+def test_manual_field_constants() -> None:
     assert MANUAL_FAULT_DATE == "manual_fault_date"
     assert MANUAL_FAULT_TIME == "manual_fault_time"
     assert MANUAL_REPORTING_PERSON == "manual_reporting_person"
@@ -48,7 +38,7 @@ def test_manual_field_constants():
     assert MANUAL_SEVERITY == "manual_severity"
 
 
-def test_body_field_constants():
+def test_body_field_constants() -> None:
     assert BODY_DESCRIPTION == "body_description"
     assert BODY_AFFECTED_DATE == "body_affected_date_summary"
     assert BODY_TIMELINE == "body_timeline"
@@ -60,7 +50,7 @@ def test_body_field_constants():
     assert BODY_FOLLOW_UP == "body_follow_up"
 
 
-def test_quick_field_constants():
+def test_quick_field_constants() -> None:
     assert QUICK_NARRATIVE == "quick_narrative"
     assert QUICK_TIMELINE == "quick_timeline"
     assert QUICK_IMPACT_SCOPE == "quick_impact_scope"
@@ -69,13 +59,13 @@ def test_quick_field_constants():
     assert QUICK_FOLLOW_UP_ACTION == "quick_follow_up_action"
 
 
-def test_status_options():
+def test_status_options() -> None:
     assert STATUS_OPTION_FAULT_CLEARED == "fault_cleared"
     assert STATUS_OPTION_TEMPORARILY_FIXED == "temporarily_fixed"
     assert STATUS_OPTION_FOLLOW_UP_ACTION_REQUIRED == "follow_up_action_required"
 
 
-def test_severity_options():
+def test_severity_options() -> None:
     assert SEVERITY_OPTION_NOT_APPLICABLE == "not_applicable"
     assert SEVERITY_OPTION_MINOR == "minor"
     assert SEVERITY_OPTION_MAJOR == "major"

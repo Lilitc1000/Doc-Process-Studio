@@ -1,4 +1,7 @@
 from datetime import UTC, datetime
+from typing import Any
+
+import pytest
 
 import doc_process_studio.incident_report.infrastructure.adapters.reference_context as reference_module
 import doc_process_studio.incident_report.infrastructure.utils.report_data as report_data_module
@@ -10,8 +13,8 @@ from doc_process_studio.incident_report.infrastructure.adapters.reference_contex
 from doc_process_studio.skill.application.dtos.runtime import SkillPlanDecision
 
 
-async def test_reference_selector_chooses_section_reference(monkeypatch) -> None:
-    async def fake_select_for_workspace_reference(**kwargs):
+async def test_reference_selector_chooses_section_reference(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def fake_select_for_workspace_reference(**kwargs: Any) -> Any:
         planner_messages = kwargs["messages"]
         assert planner_messages
         first_content = (
@@ -74,7 +77,6 @@ def test_build_report_data_supports_rich_text_appendix() -> None:
                     "<p>Appendix note line 1</p><p>Appendix note line 2</p>"
                     "<p><img alt='chart.png' src='data:image/png;base64,AAAA' /></p>"
                 ),
-                custom_value="",
             ),
         }
     )
@@ -99,7 +101,6 @@ def test_build_report_data_rich_text_appendix_image_only_does_not_fallback_raw_h
         form_answers={
             "appendix_notes": IncidentFormAnswer(
                 value="<p><img alt='photo.png' src='data:image/png;base64,BBBB' /></p>",
-                custom_value="",
             ),
         }
     )

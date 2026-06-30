@@ -1,7 +1,5 @@
 from pathlib import Path
 
-INCIDENT_REPORT_SKILL_ID = "incident-report"
-INCIDENT_REPORT_DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 INCIDENT_REPORT_SCRIPT_PATH = (
     Path(__file__).resolve().parents[3] / "skills" / "incident-report" / "scripts" / "generate_incident_report.py"
 )
@@ -57,7 +55,6 @@ BODY_FOLLOW_UP = "body_follow_up"
 APPENDIX_NOTES = "appendix_notes"
 APPENDIX_IMAGES = "appendix_images"
 
-INCIDENT_REPORT_SCHEMA_INTRO = "欢迎使用事故报告专区。支持快填生成正文、完整分段润色、附录富文本编辑与多版本附件历史。"
 SYSTEM_DOCUMENT_SKILL_ID = "document-assistant"
 
 STATUS_OPTION_FAULT_CLEARED = "fault_cleared"

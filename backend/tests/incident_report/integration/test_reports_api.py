@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
@@ -29,8 +31,9 @@ def _auth_headers(user_id: str = "usr_test", username: str = "testuser") -> dict
     return {"Authorization": f"Bearer {token}"}
 
 
-def _mock_report(**overrides) -> IncidentReportDetail:
-    defaults = dict(
+def _mock_report(**overrides: Any) -> IncidentReportDetail:
+    now = datetime.now(UTC)
+    defaults: dict[str, Any] = dict(
         id="rep-1",
         ref_no="DAS-001",
         title="测试报告",
@@ -43,8 +46,8 @@ def _mock_report(**overrides) -> IncidentReportDetail:
         verifier_id=None,
         verifier_name=None,
         fault_date=None,
-        created_at="2026-04-20T00:00:00Z",
-        updated_at="2026-04-20T00:00:00Z",
+        created_at=now,
+        updated_at=now,
     )
     defaults.update(overrides)
     return IncidentReportDetail(**defaults)
@@ -55,7 +58,7 @@ def _override_service(app: FastAPI, service: AsyncMock) -> None:
     app.dependency_overrides[get_report_application_service] = lambda: service
 
 
-def test_list_reports_returns_structure():
+def test_list_reports_returns_structure() -> None:
     app = _create_test_app()
 
     fake_service = AsyncMock()
@@ -70,7 +73,7 @@ def test_list_reports_returns_structure():
     assert "items" in data
 
 
-def test_get_report_detail_not_found():
+def test_get_report_detail_not_found() -> None:
     app = _create_test_app()
 
     fake_service = AsyncMock()
@@ -85,14 +88,14 @@ def test_get_report_detail_not_found():
     assert resp.status_code == 404
 
 
-def test_submit_report_requires_auth():
+def test_submit_report_requires_auth() -> None:
     app = _create_test_app()
     client = TestClient(app)
     resp = client.post("/api/incident-report/reports/test-id/submit")
     assert resp.status_code in (401, 403)
 
 
-def test_get_my_roles():
+def test_get_my_roles() -> None:
     app = _create_test_app()
 
     from doc_process_studio.incident_report.application.dtos import (
@@ -114,7 +117,7 @@ def test_get_my_roles():
     assert "roles" in data
 
 
-def test_create_report_success():
+def test_create_report_success() -> None:
     app = _create_test_app()
 
     fake_service = AsyncMock()
@@ -133,7 +136,7 @@ def test_create_report_success():
     assert data["status"] == "draft"
 
 
-def test_approve_report_requires_verifier_role():
+def test_approve_report_requires_verifier_role() -> None:
     app = _create_test_app()
 
     fake_service = AsyncMock()

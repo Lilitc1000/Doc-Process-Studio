@@ -1,6 +1,9 @@
 import json
+from pathlib import Path
+from typing import Any
 
-from docx import Document
+import pytest
+from docx.api import Document
 
 from doc_process_studio.chat.infrastructure import attachments as attachments_module
 from doc_process_studio.chat.router.schemas.request import ChatStreamRequest
@@ -8,7 +11,7 @@ from doc_process_studio.skill.application.dtos.runtime import SkillConversationS
 from doc_process_studio.skill.infrastructure.tool_loop import execute_skill_tool_call
 
 
-def _build_tool_call(arguments: dict) -> dict:
+def _build_tool_call(arguments: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": "tool-call-incident-report",
         "type": "function",
@@ -19,21 +22,24 @@ def _build_tool_call(arguments: dict) -> dict:
     }
 
 
-def _read_cell(table, row_index: int, cell_index: int) -> str:
-    return table.rows[row_index].cells[cell_index].text.strip()
+def _read_cell(table: Any, row_index: int, cell_index: int) -> str:
+    return str(table.rows[row_index].cells[cell_index].text.strip())
 
 
-def _find_paragraph_after_heading(document: Document, heading_prefix: str) -> str:
+def _find_paragraph_after_heading(document: Any, heading_prefix: str) -> str:
     target = heading_prefix.strip().lower()
     for index, paragraph in enumerate(document.paragraphs):
         if paragraph.text.strip().lower().startswith(target):
             if index + 1 < len(document.paragraphs):
-                return document.paragraphs[index + 1].text.strip()
+                return str(document.paragraphs[index + 1].text.strip())
             return ""
     return ""
 
 
-async def test_incident_report_tool_chain_generates_non_empty_key_cells(tmp_path, monkeypatch):
+async def test_incident_report_tool_chain_generates_non_empty_key_cells(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         attachments_module.settings,
         "generated_attachments_dir",

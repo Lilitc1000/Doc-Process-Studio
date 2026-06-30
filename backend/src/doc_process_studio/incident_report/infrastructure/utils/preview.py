@@ -7,7 +7,6 @@
   渲染工具 → render_docx_bytes_from_report_data, convert_docx_bytes_to_pdf_bytes
   缓存工具 → preview_cache_get, preview_cache_set, preview_template_token, _stable_payload_hash
   文件名工具 → build_preview_output_name
-  附件工具 → is_docx_attachment
 
 注意：本模块位于 infrastructure 层，可直接调用跨域服务（chat.schemas/chat.service）。
 """
@@ -26,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from ...application.dtos import IncidentReportPreviewResponse
-from ...domain.values.constants import INCIDENT_REPORT_DOCX_MIME_TYPE, INCIDENT_REPORT_SCRIPT_PATH
+from ...domain.values.constants import INCIDENT_REPORT_SCRIPT_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +33,6 @@ _PREVIEW_RESULT_CACHE_MAX_ENTRIES = 12
 _PREVIEW_RESULT_CACHE: OrderedDict[str, IncidentReportPreviewResponse] = OrderedDict()
 
 _incident_generator_module: Any | None = None
-
-
-def is_docx_attachment(attachment: Any) -> bool:
-    """判断附件是否为 DOCX 类型。纯技术函数。"""
-    attachment_name = str(getattr(attachment, "name", "")).strip().lower()
-    attachment_mime = str(getattr(attachment, "mime_type", "")).strip().lower()
-    return attachment_name.endswith(".docx") and (attachment_mime == INCIDENT_REPORT_DOCX_MIME_TYPE)
 
 
 def load_incident_generator_module() -> Any:

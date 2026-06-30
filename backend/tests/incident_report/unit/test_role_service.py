@@ -5,6 +5,7 @@
 """
 
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock
 
 from doc_process_studio.incident_report.application.dtos import (
@@ -45,7 +46,7 @@ def _make_service(
 
 
 # ---- get_my_permissions ----
-async def test_get_my_permissions_returns_sorted_roles_and_permissions():
+async def test_get_my_permissions_returns_sorted_roles_and_permissions() -> None:
     service = _make_service(
         roles={"reporter", "viewer"},
         permissions={Permission.REPORT_VIEW, Permission.REPORT_CREATE},
@@ -56,7 +57,7 @@ async def test_get_my_permissions_returns_sorted_roles_and_permissions():
     assert result.permissions == ["report:create", "report:view"]
 
 
-async def test_get_my_permissions_empty():
+async def test_get_my_permissions_empty() -> None:
     service = _make_service()
     result = await service.get_my_permissions(user_id="usr_1")
     assert result.roles == []
@@ -64,7 +65,7 @@ async def test_get_my_permissions_empty():
 
 
 # ---- list_role_assignments ----
-async def test_list_assignments_resolves_assigned_by_name():
+async def test_list_assignments_resolves_assigned_by_name() -> None:
     now = datetime.now(UTC)
     assignment = IncidentRoleEntry(
         user_id="usr_1",
@@ -83,7 +84,7 @@ async def test_list_assignments_resolves_assigned_by_name():
     assert entry.assigned_by_name == "管理员"
 
 
-async def test_list_assignments_assigned_by_none_keeps_name_none():
+async def test_list_assignments_assigned_by_none_keeps_name_none() -> None:
     assignment = IncidentRoleEntry(
         user_id="usr_1",
         role="reporter",
@@ -96,14 +97,14 @@ async def test_list_assignments_assigned_by_none_keeps_name_none():
     assert result.items[0].assigned_by_name is None
 
 
-async def test_list_assignments_empty():
+async def test_list_assignments_empty() -> None:
     service = _make_service()
     result = await service.list_role_assignments()
     assert result.items == []
 
 
 # ---- list_users_with_roles ----
-async def test_list_users_with_roles_maps_users():
+async def test_list_users_with_roles_maps_users() -> None:
     service = _make_service(
         users_with_roles=[
             {"user_id": "usr_1", "username": "张三", "roles": ["reporter"]},
@@ -116,31 +117,33 @@ async def test_list_users_with_roles_maps_users():
     assert result.items[1].roles == ["viewer", "handler"]
 
 
-async def test_list_users_with_roles_empty():
+async def test_list_users_with_roles_empty() -> None:
     service = _make_service()
     result = await service.list_users_with_roles()
     assert result.items == []
 
 
 # ---- assign_role / revoke_role ----
-async def test_assign_role_delegates_to_repo_and_resolves_name():
+async def test_assign_role_delegates_to_repo_and_resolves_name() -> None:
     service = _make_service(usernames={"usr_admin": "管理员"})
     result = await service.assign_role(user_id="usr_1", role="reporter", assigned_by="usr_admin")
-    service._role_repo.assign_role.assert_awaited_once_with(user_id="usr_1", role="reporter", assigned_by="usr_admin")
+    mock_repo: Any = service._role_repo
+    mock_repo.assign_role.assert_awaited_once_with(user_id="usr_1", role="reporter", assigned_by="usr_admin")
     assert result.user_id == "usr_1"
     assert result.role == "reporter"
     assert result.assigned_by == "usr_admin"
     assert result.assigned_by_name == "管理员"
 
 
-async def test_revoke_role_delegates_to_repo():
+async def test_revoke_role_delegates_to_repo() -> None:
     service = _make_service()
     await service.revoke_role(user_id="usr_1", role="reporter")
-    service._role_repo.revoke_role.assert_awaited_once_with(user_id="usr_1", role="reporter")
+    mock_repo: Any = service._role_repo
+    mock_repo.revoke_role.assert_awaited_once_with(user_id="usr_1", role="reporter")
 
 
 # ---- list_role_definitions / list_permissions ----
-async def test_list_role_definitions_with_permissions_map():
+async def test_list_role_definitions_with_permissions_map() -> None:
     defs = [
         IncidentRoleDefinitionEntry(role_key="reporter", role_name="报告人", description="创建报告", permissions=[]),
         IncidentRoleDefinitionEntry(role_key="viewer", role_name="观察者", description="仅查看", permissions=[]),
@@ -156,7 +159,7 @@ async def test_list_role_definitions_with_permissions_map():
     assert result.items[1].permissions == []
 
 
-async def test_list_permissions_maps_entries():
+async def test_list_permissions_maps_entries() -> None:
     perms = [
         IncidentPermissionEntry(
             permission_key="report:create",

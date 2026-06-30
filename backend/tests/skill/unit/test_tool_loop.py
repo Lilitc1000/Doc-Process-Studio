@@ -1,4 +1,5 @@
 import json
+from typing import Any, cast
 
 import pytest
 
@@ -137,7 +138,7 @@ async def test_builtin_tool_rejects_unknown_arguments() -> None:
     assert "未声明字段" in str(tool_result.get("error"))
 
 
-async def test_declared_tool_honors_sensitive_confirmation_policy(monkeypatch) -> None:
+async def test_declared_tool_honors_sensitive_confirmation_policy(monkeypatch: pytest.MonkeyPatch) -> None:
     request = ChatStreamRequest(
         user_message_id="u1",
         conversation_id="c1",
@@ -233,7 +234,7 @@ async def test_builtin_tool_without_required_field_does_not_raise() -> None:
     assert isinstance(tool_result.get("entries"), list)
 
 
-async def test_search_skill_context_limit_overflow_is_clamped(monkeypatch) -> None:
+async def test_search_skill_context_limit_overflow_is_clamped(monkeypatch: pytest.MonkeyPatch) -> None:
     request = ChatStreamRequest(
         user_message_id="u1",
         conversation_id="c1",
@@ -311,7 +312,7 @@ def test_restructure_doc_plan_splits_flat_heading_outlines() -> None:
             },
         ]
     }
-    result = _restructure_doc_plan(flat)
+    result = cast(dict[str, Any], _restructure_doc_plan(flat))
     ch1 = result["chapters"][0]
     assert ch1["content"] == ""
     assert len(ch1["sections"]) == 3
@@ -335,7 +336,7 @@ def test_restructure_doc_plan_preserves_real_content() -> None:
             }
         ]
     }
-    result = _restructure_doc_plan(good)
+    result = cast(dict[str, Any], _restructure_doc_plan(good))
     ch = result["chapters"][0]
     assert ch["content"] == "本文档描述系统架构设计方案，覆盖核心模块与部署策略。"
     assert len(ch["sections"]) == 1
@@ -351,7 +352,7 @@ def test_restructure_doc_plan_content_list_not_restructured() -> None:
             }
         ]
     }
-    result = _restructure_doc_plan(data)
+    result = cast(dict[str, Any], _restructure_doc_plan(data))
     ch = result["chapters"][0]
     assert ch["content"] == ["段落一", "段落二"]
 
@@ -368,7 +369,7 @@ def test_restructure_doc_plan_content_headings_with_existing_sections() -> None:
             }
         ]
     }
-    result = _restructure_doc_plan(data)
+    result = cast(dict[str, Any], _restructure_doc_plan(data))
     ch = result["chapters"][0]
     assert ch["content"] == ""
     assert len(ch["sections"]) == 3
@@ -392,7 +393,7 @@ def test_restructure_doc_plan_recursive_sections() -> None:
             }
         ]
     }
-    result = _restructure_doc_plan(data)
+    result = cast(dict[str, Any], _restructure_doc_plan(data))
     sub = result["chapters"][0]["sections"][0]
     assert sub["content"] == ""
     assert len(sub["sections"]) == 2
@@ -408,7 +409,7 @@ def test_restructure_doc_plan_mixed_content_and_headings() -> None:
             }
         ]
     }
-    result = _restructure_doc_plan(mixed)
+    result = cast(dict[str, Any], _restructure_doc_plan(mixed))
     ch = result["chapters"][0]
     assert ch["content"] == "系统采用微服务架构。"
     assert len(ch["sections"]) == 2
@@ -424,7 +425,7 @@ def test_restructure_doc_plan_single_heading_not_restructured() -> None:
             }
         ]
     }
-    result = _restructure_doc_plan(single)
+    result = cast(dict[str, Any], _restructure_doc_plan(single))
     ch = result["chapters"][0]
     assert ch["content"] == "1.1 背景"
     assert "sections" not in ch or not ch.get("sections")
@@ -437,7 +438,7 @@ def test_restructure_doc_plan_array_form() -> None:
             "content": "1.1 目的\n1.2 范围",
         }
     ]
-    result = _restructure_doc_plan(flat_array)
+    result = cast(list[Any], _restructure_doc_plan(flat_array))
     assert isinstance(result, list)
     assert len(result[0]["sections"]) == 2
 
@@ -463,7 +464,7 @@ def test_restructure_doc_plan_merges_titleless_chapters() -> None:
             },
         ]
     }
-    result = _restructure_doc_plan(split)
+    result = cast(dict[str, Any], _restructure_doc_plan(split))
     chapters = result["chapters"]
     assert len(chapters) == 3
 
@@ -486,7 +487,7 @@ def test_restructure_doc_plan_merges_titleless_chapter_content_only() -> None:
             {"content": "这是概述的详细正文内容，应该被合并到前一个章节。"},
         ]
     }
-    result = _restructure_doc_plan(data)
+    result = cast(dict[str, Any], _restructure_doc_plan(data))
     chapters = result["chapters"]
     assert len(chapters) == 1
     assert chapters[0]["title"] == "1. 概述"
@@ -501,7 +502,7 @@ def test_restructure_doc_plan_titleless_first_chapter_kept() -> None:
             {"title": "2. 架构", "content": "架构内容。"},
         ]
     }
-    result = _restructure_doc_plan(data)
+    result = cast(dict[str, Any], _restructure_doc_plan(data))
     chapters = result["chapters"]
     assert len(chapters) == 2
     assert chapters[0].get("title", "") == ""

@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from typing import Any
 
 import pytest
@@ -39,14 +40,17 @@ class FakeModelQueryService(ModelQueryServiceContract):
 
 
 @pytest.fixture()
-def fake_model_service():
+def fake_model_service() -> Generator[FakeModelQueryService]:
     service = FakeModelQueryService()
     main_module.app.dependency_overrides[get_model_query_service] = lambda: service
     yield service
     main_module.app.dependency_overrides.pop(get_model_query_service, None)
 
 
-def test_api_models_returns_remote_model_names(fake_model_service: FakeModelQueryService, auth_headers) -> None:
+def test_api_models_returns_remote_model_names(
+    fake_model_service: FakeModelQueryService,
+    auth_headers: dict[str, str],
+) -> None:
     fake_model_service.models = ["qwen2.5:7b", "deepseek-r1:14b"]
 
     client = TestClient(main_module.app)

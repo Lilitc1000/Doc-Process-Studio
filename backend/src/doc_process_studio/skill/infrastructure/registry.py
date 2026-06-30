@@ -4,7 +4,6 @@ from functools import lru_cache
 from pathlib import Path
 
 from ..application.dtos.catalog import SkillInterfaceConfig, SkillToolConfig
-from ..application.dtos.interaction import SkillInteractionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -98,13 +97,6 @@ def _resolve_tools_config_path(skill_dir: Path) -> Path | None:
     return None
 
 
-def _resolve_interaction_config_path(skill_dir: Path) -> Path | None:
-    candidate = skill_dir / "agents" / "interaction.json"
-    if candidate.is_file():
-        return candidate
-    return None
-
-
 def _load_declared_tools(skill_dir: Path) -> list[SkillToolConfig]:
     config_path = _resolve_tools_config_path(skill_dir)
     if config_path is None:
@@ -129,30 +121,6 @@ def _load_declared_tools(skill_dir: Path) -> list[SkillToolConfig]:
             logger.debug("Failed to parse tool config in skill, skipping", exc_info=True)
             continue
     return declared_tools
-
-
-def _load_interaction_config(skill_dir: Path) -> SkillInteractionConfig | None:
-    config_path = _resolve_interaction_config_path(skill_dir)
-    if config_path is None:
-        return None
-
-    try:
-        payload = json.loads(config_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-
-    if not isinstance(payload, dict):
-        return None
-
-    try:
-        config = SkillInteractionConfig.model_validate(payload)
-    except Exception:
-        logger.debug("Failed to parse interaction config", exc_info=True)
-        return None
-
-    if not config.enabled or not config.steps:
-        return None
-    return config
 
 
 def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | None:
@@ -184,14 +152,6 @@ def _build_skill_interface_config(skill_dir: Path) -> SkillInterfaceConfig | Non
         default_prompt=default_prompt,
         tools=_load_declared_tools(skill_dir),
     )
-
-
-@lru_cache(maxsize=32)
-def _load_skill_interaction_config_by_id(skill_id: str) -> SkillInteractionConfig | None:
-    skill_dir = SKILLS_DIR / skill_id
-    if not skill_dir.is_dir():
-        return None
-    return _load_interaction_config(skill_dir)
 
 
 @lru_cache(maxsize=1)

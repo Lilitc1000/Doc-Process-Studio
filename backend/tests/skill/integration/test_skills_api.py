@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 import doc_process_studio.main as main_module
 
 
-def test_api_skills_returns_available_skill_interfaces(auth_headers) -> None:
+def test_api_skills_returns_available_skill_interfaces(auth_headers: dict[str, str]) -> None:
     client = TestClient(main_module.app)
     response = client.get("/api/skills", headers=auth_headers)
 

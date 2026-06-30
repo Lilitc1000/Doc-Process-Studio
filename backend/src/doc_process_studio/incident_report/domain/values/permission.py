@@ -43,19 +43,6 @@ VALID_ROLES: set[str] = {role.value for role in Role}
 VALID_PERMISSIONS: set[str] = {perm.value for perm in Permission}
 INCIDENT_VALID_ROLES: list[str] = sorted(VALID_ROLES)
 
-# 每个领域动作需要的权限（从 service/report.py 散落处收敛）
-# 用于 application 层在调用聚合根方法前做权限校验
-ACTION_PERMISSIONS: dict[str, set[Permission]] = {
-    "create": {Permission.REPORT_CREATE},
-    "submit": {Permission.REPORT_SUBMIT},
-    "approve": {Permission.REPORT_AUDIT},
-    "reject": {Permission.REPORT_AUDIT},
-    "assign": {Permission.REPORT_ASSIGN},
-    "close": {Permission.REPORT_CLOSE_ASSIGNED},
-    "reopen": {Permission.REPORT_REOPEN},
-    "delete": {Permission.REPORT_DELETE},
-}
-
 # 角色 → 权限映射
 ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
     Role.VIEWER: {Permission.REPORT_VIEW, Permission.ANALYTICS_VIEW},

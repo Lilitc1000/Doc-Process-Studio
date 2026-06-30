@@ -131,7 +131,6 @@ describe('useReportEditWizard', () => {
     mockPreview.mockResolvedValue({
       source: 'draft',
       label: 'Preview',
-      html: '<h1>预览</h1>',
       docx_base64: null,
       docx_file_name: null,
       pdf_base64: null,
@@ -144,7 +143,6 @@ describe('useReportEditWizard', () => {
 
     expect(mockPreview).toHaveBeenCalled();
     expect(previewData.value).not.toBeNull();
-    expect(previewData.value?.html).toBe('<h1>预览</h1>');
     expect(previewing.value).toBe(false);
   });
 

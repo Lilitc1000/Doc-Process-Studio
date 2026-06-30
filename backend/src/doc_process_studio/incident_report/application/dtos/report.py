@@ -31,7 +31,6 @@ class IncidentReportPreviewResponse(BaseModel):
     source: Literal["draft", "version"] = Field(..., description="预览来源。")
     version: int | None = Field(default=None, description="历史版本号。")
     label: str = Field(..., description="预览标签。")
-    html: str = Field(default="", description="HTML 预览内容（已弃用，保留兼容）。")
     docx_base64: str | None = Field(
         default=None,
         description="可选 DOCX 文档内容（base64 编码，草稿预览下载使用）。",

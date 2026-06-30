@@ -49,7 +49,7 @@ backend/tests/
 │       ├── test_tool_chain_contract.py
 │       └── test_script_contract.py
 ├── skill/                      # 技能域
-│   ├── conftest.py             # 域级共享 fixture（build_skill、build_plan_decision）
+│   ├── conftest.py             # 域级共享 fixture
 │   ├── unit/
 │   │   ├── test_registry.py               # 技能注册（基础）
 │   │   ├── test_registry_extended.py      # 技能注册（YAML/Markdown 解析 + 接口查询）
@@ -510,19 +510,6 @@ def build_skill():
         }
         defaults.update(overrides)
         return SkillCatalogEntry(**defaults)
-    return _build
-
-
-@pytest.fixture
-def build_plan_decision():
-    def _build(**overrides):
-        defaults = {
-            "skill_id": "test-skill",
-            "reason": "test",
-            "confidence": 0.9,
-        }
-        defaults.update(overrides)
-        return defaults
     return _build
 ```
 

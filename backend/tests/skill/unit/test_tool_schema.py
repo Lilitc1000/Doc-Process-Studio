@@ -1,12 +1,14 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 from doc_process_studio.skill.infrastructure.tool_loop.tool_schema import (
     build_skill_tools,
     build_skill_tools_for_skills,
 )
 
 
-def test_build_skill_tools_includes_builtin(monkeypatch):
+def test_build_skill_tools_includes_builtin(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_interface = MagicMock()
     fake_interface.tools = []
     monkeypatch.setattr(
@@ -21,7 +23,7 @@ def test_build_skill_tools_includes_builtin(monkeypatch):
     assert "read_skill_context" in tool_names
 
 
-def test_build_skill_tools_includes_declared(monkeypatch):
+def test_build_skill_tools_includes_declared(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_tool = MagicMock()
     fake_tool.name = "custom_tool"
     fake_tool.description = "自定义工具"
@@ -38,12 +40,12 @@ def test_build_skill_tools_includes_declared(monkeypatch):
     assert "custom_tool" in tool_names
 
 
-def test_build_skill_tools_for_skills_empty():
+def test_build_skill_tools_for_skills_empty() -> None:
     result = build_skill_tools_for_skills([])
     assert result == []
 
 
-def test_build_skill_tools_for_skills_dedup(monkeypatch):
+def test_build_skill_tools_for_skills_dedup(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_interface = MagicMock()
     fake_interface.tools = []
     monkeypatch.setattr(
@@ -55,7 +57,7 @@ def test_build_skill_tools_for_skills_dedup(monkeypatch):
     assert "list_skill_directory" in tool_names
 
 
-def test_build_skill_tools_for_skills_includes_skill_id_param(monkeypatch):
+def test_build_skill_tools_for_skills_includes_skill_id_param(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_interface = MagicMock()
     fake_interface.tools = []
     monkeypatch.setattr(
@@ -68,7 +70,7 @@ def test_build_skill_tools_for_skills_includes_skill_id_param(monkeypatch):
     assert "skill_id" in props
 
 
-def test_build_skill_tools_for_skills_scoped_declared(monkeypatch):
+def test_build_skill_tools_for_skills_scoped_declared(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_tool = MagicMock()
     fake_tool.name = "custom_tool"
     fake_tool.description = "自定义工具"

@@ -1,5 +1,3 @@
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 
@@ -11,9 +9,7 @@ class FormFieldSchema(BaseModel):
     )
     required: bool = Field(default=False, description="是否必填")
     placeholder: str | None = Field(default=None, description="占位文本")
-    default_value: Any | None = Field(default=None, description="默认值")
     options: list[dict[str, str]] | None = Field(default=None, description="选项列表(select类型)")
-    validation: dict[str, Any] | None = Field(default=None, description="验证规则")
     section: str = Field(default="default", description="所属区块")
 
 

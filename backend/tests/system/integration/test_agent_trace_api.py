@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from typing import Any
 
 import pytest
@@ -26,14 +27,17 @@ class FakeTraceQueryService(TraceQueryServiceContract):
 
 
 @pytest.fixture()
-def fake_trace_service():
+def fake_trace_service() -> Generator[FakeTraceQueryService]:
     service = FakeTraceQueryService()
     main_module.app.dependency_overrides[get_trace_query_service] = lambda: service
     yield service
     main_module.app.dependency_overrides.pop(get_trace_query_service, None)
 
 
-def test_agent_trace_api_returns_trace_payload(fake_trace_service: FakeTraceQueryService, auth_headers) -> None:
+def test_agent_trace_api_returns_trace_payload(
+    fake_trace_service: FakeTraceQueryService,
+    auth_headers: dict[str, str],
+) -> None:
     fake_trace_service.responses["tenant-a:trace-1"] = {
         "trace_id": "trace-1",
         "events": [{"type": "planner"}],
@@ -47,7 +51,10 @@ def test_agent_trace_api_returns_trace_payload(fake_trace_service: FakeTraceQuer
     assert fake_trace_service.calls.get("get_trace") == [("tenant-a", "trace-1")]
 
 
-def test_agent_trace_api_returns_404_when_missing(fake_trace_service: FakeTraceQueryService, auth_headers) -> None:
+def test_agent_trace_api_returns_404_when_missing(
+    fake_trace_service: FakeTraceQueryService,
+    auth_headers: dict[str, str],
+) -> None:
     client = TestClient(main_module.app)
     response = client.get("/api/system/agent-traces/trace-404", headers=auth_headers)
     assert response.status_code == 404

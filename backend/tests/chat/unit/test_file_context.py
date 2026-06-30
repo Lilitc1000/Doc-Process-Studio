@@ -1,6 +1,7 @@
 from io import BytesIO
 from types import SimpleNamespace
 
+import pytest
 from docx import Document
 from openpyxl import Workbook
 
@@ -47,7 +48,7 @@ def test_extract_xlsx_text_reads_sheet_cells() -> None:
     assert "结论 | 通过" in extracted_text
 
 
-def test_extract_pdf_text_reads_page_text(monkeypatch) -> None:
+def test_extract_pdf_text_reads_page_text(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_page = SimpleNamespace(extract_text=lambda: "PDF 正文")
     fake_reader = SimpleNamespace(pages=[fake_page])
 

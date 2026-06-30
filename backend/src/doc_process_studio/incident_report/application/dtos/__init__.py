@@ -2,7 +2,6 @@ from .analytics import IncidentAnalyticsOverview, IncidentAnalyticsTrend
 from .form import (
     IncidentFormAnswer,
     IncidentFormSnapshot,
-    IncidentGeneratedVersion,
     build_empty_form_snapshot,
 )
 from .report import (
@@ -32,7 +31,6 @@ __all__ = [
     "IncidentAnalyticsTrend",
     "IncidentFormAnswer",
     "IncidentFormSnapshot",
-    "IncidentGeneratedVersion",
     "IncidentAuditLogEntry",
     "IncidentBodyGenerateResponse",
     "IncidentCommentEntry",

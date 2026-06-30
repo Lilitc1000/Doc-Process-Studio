@@ -6,6 +6,7 @@
 """
 
 import json
+from typing import Any
 
 from doc_process_studio.chat.infrastructure.stream import stream_remote_chat_completion
 from doc_process_studio.chat.router.schemas.request import ChatMessageInput, ChatStreamRequest
@@ -39,11 +40,11 @@ async def _collect_stream_events(request: ChatStreamRequest) -> list[dict]:
     return events
 
 
-def _get_first_error_message(events: list[dict]) -> str:
+def _get_first_error_message(events: list[dict[str, Any]]) -> str:
     """获取第一个 error 事件的消息。"""
     for e in events:
         if e.get("type") == "error":
-            return e.get("message", "")
+            return str(e.get("message", ""))
     return ""
 
 

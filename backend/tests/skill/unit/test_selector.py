@@ -1,4 +1,7 @@
 from datetime import UTC, datetime
+from typing import Any
+
+import pytest
 
 from doc_process_studio.chat.router.schemas.request import ChatMessageInput
 from doc_process_studio.common.infrastructure.config import settings
@@ -41,10 +44,13 @@ def test_build_selector_skill_interfaces_dedupes_and_fallbacks() -> None:
     assert interfaces[1].default_prompt == "impact ref"
 
 
-async def test_select_skills_with_planner_uses_defaults_and_normalization(monkeypatch, build_skill) -> None:
+async def test_select_skills_with_planner_uses_defaults_and_normalization(
+    monkeypatch: pytest.MonkeyPatch,
+    build_skill: Any,
+) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_plan_skill_activation(**kwargs):
+    async def fake_plan_skill_activation(**kwargs: Any) -> Any:
         captured.update(kwargs)
         return SkillPlanDecision(
             planner_model=kwargs["model"],
@@ -86,10 +92,13 @@ async def test_select_skills_with_planner_uses_defaults_and_normalization(monkey
     assert decision.required_skill_ids == ["document-assistant"]
 
 
-async def test_select_for_chat_skills_uses_chat_template_defaults(monkeypatch, build_skill) -> None:
+async def test_select_for_chat_skills_uses_chat_template_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+    build_skill: Any,
+) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_select_skills_with_planner(**kwargs):
+    async def fake_select_skills_with_planner(**kwargs: Any) -> Any:
         captured.update(kwargs)
         return SkillPlanDecision(
             planner_model=kwargs["model"],
@@ -125,10 +134,13 @@ async def test_select_for_chat_skills_uses_chat_template_defaults(monkeypatch, b
     assert decision.primary_skill_id == "document-assistant"
 
 
-async def test_select_for_workspace_reference_uses_reference_template_defaults(monkeypatch, build_skill) -> None:
+async def test_select_for_workspace_reference_uses_reference_template_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+    build_skill: Any,
+) -> None:
     captured: dict[str, object] = {}
 
-    async def fake_select_skills_with_planner(**kwargs):
+    async def fake_select_skills_with_planner(**kwargs: Any) -> Any:
         captured.update(kwargs)
         return SkillPlanDecision(
             planner_model=kwargs["model"],

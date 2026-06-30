@@ -99,7 +99,6 @@ class PreviewService:
             source="draft",
             version=version,
             label=output_name.replace(".docx", ""),
-            html="",
             docx_base64=base64.b64encode(docx_bytes).decode("ascii"),
             docx_file_name=output_name,
             pdf_base64=pdf_base64,

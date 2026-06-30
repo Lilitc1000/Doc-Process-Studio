@@ -1,5 +1,8 @@
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 import doc_process_studio.chat.infrastructure.stream as chat_stream_module
@@ -8,14 +11,17 @@ from doc_process_studio.chat.application.dtos.attachment import ChatAttachment
 from doc_process_studio.skill.application.dtos.runtime import SkillPlanDecision
 
 
-def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch, auth_headers) -> None:
-    async def fake_prepare_uploaded_files(**_kwargs):
+def test_api_chat_stream_returns_attachment_and_text_events(
+    monkeypatch: pytest.MonkeyPatch,
+    auth_headers: dict[str, str],
+) -> None:
+    async def fake_prepare_uploaded_files(**_kwargs: Any) -> tuple[Any, ...]:
         return [], None
 
-    def fake_build_persisted_uploaded_files_context(_attachment_ids) -> str | None:
+    def fake_build_persisted_uploaded_files_context(_attachment_ids: Any) -> str | None:
         return None
 
-    async def fake_sync_skill_context_state(*, model: str, state) -> str | None:
+    async def fake_sync_skill_context_state(*, model: str, state: Any) -> str | None:
         assert model == "qwen3-coder-next:latest"
         assert state.skill_id in {"project-architecture-docx", "document-assistant"}
         return None
@@ -23,18 +29,23 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch, auth_he
     async def fake_load_conversation_state(
         _conversation_id: str,
         tenant_id: str = "default",
-    ):
+    ) -> None:
         assert tenant_id == "default"
         return None
 
-    async def fake_save_conversation_state(_state, tenant_id: str = "default"):
+    async def fake_save_conversation_state(_state: Any, tenant_id: str = "default") -> None:
         assert tenant_id == "default"
         return None
 
     call_counter = {"value": 0}
     observed_tools: list[object] = []
 
-    async def fake_stream_chat_completion(*, model, messages, tools=None):
+    async def fake_stream_chat_completion(
+        *,
+        model: str,
+        messages: Any,
+        tools: Any = None,
+    ) -> AsyncGenerator[dict[str, Any] | None]:
         _ = messages
         assert model == "qwen3-coder-next:latest"
         observed_tools.append(tools)
@@ -88,11 +99,11 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch, auth_he
         }
         yield None
 
-    def fake_build_skill_tools(skill_id: str):
+    def fake_build_skill_tools(skill_id: str) -> list[Any]:
         assert skill_id == "project-architecture-docx"
         return [{"type": "function", "function": {"name": "generate_document"}}]
 
-    def fake_execute_skill_tool_call(*, request, state, tool_call):
+    def fake_execute_skill_tool_call(*, request: Any, state: Any, tool_call: Any) -> tuple[Any, ...]:
         assert request.selected_skill_ids == ["project-architecture-docx"]
         assert state.skill_id == "project-architecture-docx"
         assert tool_call["function"]["name"] == "generate_document"
@@ -113,7 +124,7 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch, auth_he
                     size_bytes=24 * 1024,
                     download_url="/api/attachments/attachment-1/download",
                     mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    expires_at="2026-04-14T00:00:00Z",
+                    expires_at=datetime(2026, 4, 14, tzinfo=UTC),
                 )
             ],
         )
@@ -154,7 +165,7 @@ def test_api_chat_stream_returns_attachment_and_text_events(monkeypatch, auth_he
         fake_build_skill_tools,
     )
 
-    async def fake_select_for_chat_skills(**_kwargs):
+    async def fake_select_for_chat_skills(**_kwargs: Any) -> Any:
         return SkillPlanDecision(
             planner_model="qwen3-coder-next:latest",
             required_skill_ids=["project-architecture-docx"],

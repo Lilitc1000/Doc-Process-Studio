@@ -9,8 +9,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".xlsx", ".xls"}
-
 
 @dataclass
 class ExtractedFile:

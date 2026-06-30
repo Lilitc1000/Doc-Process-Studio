@@ -1,8 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
+import doc_process_studio.chat.infrastructure.attachments as attachments_module
 from doc_process_studio.chat.application.dtos.attachment import ChatAttachmentMetadata
-from doc_process_studio.chat.infrastructure import attachments as attachments_module
 
 
 def _write_attachment_dir(
@@ -31,7 +33,10 @@ def _write_attachment_dir(
     (attachment_dir / f"{attachment_id}.txt").write_text("abc", encoding="utf-8")
 
 
-def test_delete_attachments_for_conversation_removes_only_target(tmp_path, monkeypatch) -> None:
+def test_delete_attachments_for_conversation_removes_only_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         attachments_module.settings,
         "generated_attachments_dir",
@@ -57,8 +62,8 @@ def test_delete_attachments_for_conversation_removes_only_target(tmp_path, monke
 
 
 def test_save_uploaded_attachment_reuses_same_content_in_same_conversation(
-    tmp_path,
-    monkeypatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         attachments_module.settings,
@@ -89,8 +94,8 @@ def test_save_uploaded_attachment_reuses_same_content_in_same_conversation(
 
 
 def test_save_uploaded_attachment_does_not_reuse_across_conversations(
-    tmp_path,
-    monkeypatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         attachments_module.settings,

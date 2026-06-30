@@ -56,10 +56,10 @@ def _build_snapshot_from_form_data(form_data: dict[str, Any]) -> IncidentFormSna
     for key, raw_value in raw_answers.items():
         if isinstance(raw_value, IncidentFormAnswer):
             form_answers[key] = raw_value
-        elif isinstance(raw_value, dict) and ("value" in raw_value or "custom_value" in raw_value):
+        elif isinstance(raw_value, dict) and "value" in raw_value:
             form_answers[key] = IncidentFormAnswer(**raw_value)
         else:
-            form_answers[key] = IncidentFormAnswer(value=raw_value, custom_value="")
+            form_answers[key] = IncidentFormAnswer(value=raw_value)
     return IncidentFormSnapshot(form_answers=form_answers)
 
 

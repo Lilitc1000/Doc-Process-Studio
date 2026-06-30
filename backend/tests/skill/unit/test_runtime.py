@@ -1,8 +1,17 @@
+from typing import Any
+
+import pytest
+
 import doc_process_studio.skill.infrastructure.runtime as runtime_module
 from doc_process_studio.skill.application.dtos.runtime import SkillContextChunk, SkillConversationState
 
 
-def _make_chunk(chunk_id="c1", content="chunk content", title="Test", source_path="ref.md"):
+def _make_chunk(
+    chunk_id: Any = "c1",
+    content: str = "chunk content",
+    title: str = "Test",
+    source_path: Any = "ref.md",
+) -> Any:
     return SkillContextChunk(
         id=chunk_id,
         skill_id="test-skill",
@@ -13,25 +22,25 @@ def _make_chunk(chunk_id="c1", content="chunk content", title="Test", source_pat
     )
 
 
-async def test_sync_skill_context_state_no_chunks(monkeypatch):
+async def test_sync_skill_context_state_no_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runtime_module, "get_skill_context_chunks_by_ids", lambda _sid, _cids: [])
     state = SkillConversationState(conversation_id="conv-1", skill_id="test-skill", system_prompt="test")
     result = await runtime_module.sync_skill_context_state(model="test", state=state)
     assert result is None
 
 
-async def test_sync_skill_context_state_with_chunks(monkeypatch):
+async def test_sync_skill_context_state_with_chunks(monkeypatch: pytest.MonkeyPatch) -> Any:
     chunks = [_make_chunk(chunk_id="c1", content="a" * 100)]
     call_count = 0
 
-    def _fake_get_chunks(_sid, _cids):
+    def _fake_get_chunks(_sid: Any, _cids: Any) -> Any:
         nonlocal call_count
         call_count += 1
         return chunks
 
     monkeypatch.setattr(runtime_module, "get_skill_context_chunks_by_ids", _fake_get_chunks)
 
-    async def _fake_ensure(*, _model, state, chunks_to_compact, _force=False):
+    async def _fake_ensure(*, _model: Any, state: Any, chunks_to_compact: Any, _force: Any = False) -> None:
         state.short_term_memory = "compressed"
         state.compacted_chunk_ids = [c.id for c in chunks_to_compact]
 
@@ -49,7 +58,7 @@ async def test_sync_skill_context_state_with_chunks(monkeypatch):
     assert result is not None
 
 
-async def test_sync_skill_context_state_clears_stale_memory(monkeypatch):
+async def test_sync_skill_context_state_clears_stale_memory(monkeypatch: pytest.MonkeyPatch) -> None:
     chunk = _make_chunk(chunk_id="c1", content="short")
     monkeypatch.setattr(
         runtime_module,

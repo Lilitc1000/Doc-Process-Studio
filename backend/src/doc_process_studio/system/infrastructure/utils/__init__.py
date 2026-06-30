@@ -3,7 +3,6 @@ from .executor import (
     ExecutionBudget,
     ExecutionInput,
     ExecutionResult,
-    ExecutionStateDiff,
     ExecutorDeps,
     execute_tool_graph,
 )
@@ -13,7 +12,6 @@ __all__ = [
     "ExecutionBudget",
     "ExecutionInput",
     "ExecutionResult",
-    "ExecutionStateDiff",
     "ExecutorDeps",
     "build_exception_detail",
     "execute_tool_graph",

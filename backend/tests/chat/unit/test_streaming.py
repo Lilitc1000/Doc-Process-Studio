@@ -46,7 +46,7 @@ def test_build_upstream_messages_for_skills_prepends_system_prompt() -> None:
         user_message_id="user-1",
         conversation_id="conversation-1",
         model="qwen2.5:7b",
-        skill_id="document-assistant",
+        selected_skill_ids=["document-assistant"],
         messages=[
             ChatMessageInput(role="user", content="请解释这份文档"),
         ],

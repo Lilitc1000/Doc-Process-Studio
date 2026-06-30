@@ -17,7 +17,6 @@ class RegisterResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str = Field(..., description="访问令牌")
     refresh_token: str = Field(..., description="刷新令牌")
-    token_type: str = Field(default="bearer", description="令牌类型")
 
 
 class UserInfoResponse(BaseModel):

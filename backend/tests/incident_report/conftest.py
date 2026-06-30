@@ -8,7 +8,7 @@ from doc_process_studio.incident_report.router.roles import router as roles_rout
 
 
 @pytest.fixture()
-def app():
+def app() -> FastAPI:
     _app = FastAPI()
     _app.include_router(reports_router)
     _app.include_router(roles_router)
@@ -17,5 +17,5 @@ def app():
 
 
 @pytest.fixture()
-def client(app):
+def client(app: FastAPI) -> TestClient:
     return TestClient(app)

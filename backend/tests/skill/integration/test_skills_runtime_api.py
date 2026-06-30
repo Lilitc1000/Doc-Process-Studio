@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 import doc_process_studio.main as main_module
@@ -46,15 +47,11 @@ class _FakeSkillService(SkillServiceContract):
         return self._delete_result or (True, -2)
 
 
-def _install_fake_service(monkeypatch, fake: _FakeSkillService) -> None:
-    monkeypatch.setitem(
-        main_module.app.dependency_overrides,
-        get_skill_service,
-        lambda: fake,
-    )
+def _install_fake_service(fake: _FakeSkillService) -> None:
+    main_module.app.dependency_overrides[get_skill_service] = lambda: fake
 
 
-def test_api_skill_context_search_returns_chunks(monkeypatch, auth_headers) -> None:
+def test_api_skill_context_search_returns_chunks(auth_headers: dict[str, str]) -> None:
     fake = _FakeSkillService(
         chunks=[
             SkillContextChunk(
@@ -67,7 +64,7 @@ def test_api_skill_context_search_returns_chunks(monkeypatch, auth_headers) -> N
             )
         ]
     )
-    _install_fake_service(monkeypatch, fake)
+    _install_fake_service(fake)
 
     client = TestClient(main_module.app)
     response = client.get(
@@ -82,7 +79,10 @@ def test_api_skill_context_search_returns_chunks(monkeypatch, auth_headers) -> N
     assert payload["chunks"]
 
 
-def test_api_skill_cache_status_reports_redis_ping(monkeypatch, auth_headers) -> None:
+def test_api_skill_cache_status_reports_redis_ping(
+    monkeypatch: pytest.MonkeyPatch,
+    auth_headers: dict[str, str],
+) -> None:
     import doc_process_studio.skill.router.routes as routes_module
 
     async def fake_ping_redis() -> bool:
@@ -100,9 +100,9 @@ def test_api_skill_cache_status_reports_redis_ping(monkeypatch, auth_headers) ->
     }
 
 
-def test_api_skill_cache_refresh_reports_ttl(monkeypatch, auth_headers) -> None:
+def test_api_skill_cache_refresh_reports_ttl(auth_headers: dict[str, str]) -> None:
     fake = _FakeSkillService(refresh_result=(True, 3600))
-    _install_fake_service(monkeypatch, fake)
+    _install_fake_service(fake)
 
     client = TestClient(main_module.app)
     response = client.post(
@@ -119,9 +119,9 @@ def test_api_skill_cache_refresh_reports_ttl(monkeypatch, auth_headers) -> None:
     }
 
 
-def test_api_skill_cache_delete_clears_state(monkeypatch, auth_headers) -> None:
+def test_api_skill_cache_delete_clears_state(auth_headers: dict[str, str]) -> None:
     fake = _FakeSkillService(delete_result=(True, -2))
-    _install_fake_service(monkeypatch, fake)
+    _install_fake_service(fake)
 
     client = TestClient(main_module.app)
     response = client.delete(

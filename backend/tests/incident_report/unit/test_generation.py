@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import pytest
 
@@ -6,13 +7,13 @@ import doc_process_studio.incident_report.infrastructure.utils.generation as gen
 from doc_process_studio.incident_report.application.dtos import IncidentFormAnswer, IncidentFormSnapshot
 
 
-def _make_snapshot(**overrides) -> IncidentFormSnapshot:
-    defaults = dict(form_answers={}, report_data=None)
+def _make_snapshot(**overrides: Any) -> IncidentFormSnapshot:
+    defaults: dict[str, Any] = dict(form_answers={}, report_data=None)
     defaults.update(overrides)
     return IncidentFormSnapshot(**defaults)
 
 
-def test_build_quick_generation_context():
+def test_build_quick_generation_context() -> None:
     snapshot = _make_snapshot(
         form_answers={
             "quick_narrative": IncidentFormAnswer(value="Brief description"),
@@ -25,7 +26,7 @@ def test_build_quick_generation_context():
     assert "existing_full_body" in context
 
 
-def test_build_quick_generation_request():
+def test_build_quick_generation_request() -> None:
     snapshot = _make_snapshot(
         form_answers={
             "quick_narrative": IncidentFormAnswer(value="Brief description"),
@@ -38,7 +39,7 @@ def test_build_quick_generation_request():
     assert "quick_inputs" in parsed
 
 
-def test_build_section_generation_prompt_description():
+def test_build_section_generation_prompt_description() -> None:
     snapshot = _make_snapshot(form_answers={})
     prompt, context = generation_module._build_section_generation_prompt(
         snapshot,
@@ -48,7 +49,7 @@ def test_build_section_generation_prompt_description():
     assert "body_description" in prompt
 
 
-def test_build_section_generation_prompt_timeline():
+def test_build_section_generation_prompt_timeline() -> None:
     snapshot = _make_snapshot(form_answers={})
     prompt, context = generation_module._build_section_generation_prompt(
         snapshot,
@@ -58,7 +59,7 @@ def test_build_section_generation_prompt_timeline():
     assert "body_timeline" in prompt
 
 
-def test_build_section_generation_prompt_impact():
+def test_build_section_generation_prompt_impact() -> None:
     snapshot = _make_snapshot(form_answers={})
     prompt, context = generation_module._build_section_generation_prompt(
         snapshot,
@@ -68,7 +69,7 @@ def test_build_section_generation_prompt_impact():
     assert "impact_scope" in prompt
 
 
-def test_build_section_generation_prompt_root_cause():
+def test_build_section_generation_prompt_root_cause() -> None:
     snapshot = _make_snapshot(form_answers={})
     prompt, context = generation_module._build_section_generation_prompt(
         snapshot,
@@ -78,7 +79,7 @@ def test_build_section_generation_prompt_root_cause():
     assert "root_cause" in prompt
 
 
-def test_build_section_generation_prompt_follow_up():
+def test_build_section_generation_prompt_follow_up() -> None:
     snapshot = _make_snapshot(form_answers={})
     prompt, context = generation_module._build_section_generation_prompt(
         snapshot,
@@ -88,7 +89,7 @@ def test_build_section_generation_prompt_follow_up():
     assert "follow_up" in prompt
 
 
-def test_build_section_generation_prompt_timeline_item_invalid_index():
+def test_build_section_generation_prompt_timeline_item_invalid_index() -> None:
     snapshot = _make_snapshot(form_answers={})
     with pytest.raises(ValueError):
         generation_module._build_section_generation_prompt(
@@ -98,7 +99,7 @@ def test_build_section_generation_prompt_timeline_item_invalid_index():
         )
 
 
-def test_build_section_generation_prompt_unsupported():
+def test_build_section_generation_prompt_unsupported() -> None:
     snapshot = _make_snapshot(form_answers={})
     with pytest.raises(ValueError):
         generation_module._build_section_generation_prompt(
@@ -108,7 +109,7 @@ def test_build_section_generation_prompt_unsupported():
         )
 
 
-def test_build_body_generation_messages():
+def test_build_body_generation_messages() -> None:
     messages = generation_module._build_body_generation_messages(
         prompt="Generate description",
         context_json='{"key":"value"}',
@@ -121,8 +122,8 @@ def test_build_body_generation_messages():
     assert "English" in messages[0]["content"]
 
 
-def test_apply_quick_generation_payload():
-    form_answers = {}
+def test_apply_quick_generation_payload() -> None:
+    form_answers: dict[str, Any] = {}
     payload = {
         "description": "AI-generated description",
         "affected_date_summary": "08/04/2026 09:10 - 10:30",
@@ -142,8 +143,8 @@ def test_apply_quick_generation_payload():
     assert form_answers["body_impact_scope"].value == "Impact scope"
 
 
-def test_apply_section_payload_description():
-    form_answers = {}
+def test_apply_section_payload_description() -> None:
+    form_answers: dict[str, Any] = {}
     generation_module._apply_section_payload(
         form_answers=form_answers,
         section_id="description",
@@ -153,8 +154,8 @@ def test_apply_section_payload_description():
     assert form_answers["body_description"].value == "New description"
 
 
-def test_apply_section_payload_timeline():
-    form_answers = {}
+def test_apply_section_payload_timeline() -> None:
+    form_answers: dict[str, Any] = {}
     generation_module._apply_section_payload(
         form_answers=form_answers,
         section_id="timeline",
@@ -167,8 +168,8 @@ def test_apply_section_payload_timeline():
     assert "body_timeline" in form_answers
 
 
-def test_apply_section_payload_impact():
-    form_answers = {}
+def test_apply_section_payload_impact() -> None:
+    form_answers: dict[str, Any] = {}
     generation_module._apply_section_payload(
         form_answers=form_answers,
         section_id="impact",
@@ -182,8 +183,8 @@ def test_apply_section_payload_impact():
     assert form_answers["body_impact_scope"].value == "Impact scope"
 
 
-def test_apply_section_payload_root_cause():
-    form_answers = {}
+def test_apply_section_payload_root_cause() -> None:
+    form_answers: dict[str, Any] = {}
     generation_module._apply_section_payload(
         form_answers=form_answers,
         section_id="root_cause",
@@ -196,8 +197,8 @@ def test_apply_section_payload_root_cause():
     assert form_answers["body_trigger"].value == "Trigger cause"
 
 
-def test_apply_section_payload_follow_up():
-    form_answers = {}
+def test_apply_section_payload_follow_up() -> None:
+    form_answers: dict[str, Any] = {}
     generation_module._apply_section_payload(
         form_answers=form_answers,
         section_id="follow_up",
@@ -207,8 +208,8 @@ def test_apply_section_payload_follow_up():
     assert form_answers["body_follow_up"].value == "Follow-up actions"
 
 
-def test_apply_section_payload_unsupported():
-    form_answers = {}
+def test_apply_section_payload_unsupported() -> None:
+    form_answers: dict[str, Any] = {}
     with pytest.raises(ValueError):
         generation_module._apply_section_payload(
             form_answers=form_answers,

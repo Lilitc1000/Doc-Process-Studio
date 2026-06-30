@@ -72,7 +72,6 @@ class AuthService:
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer",
         )
 
     async def refresh_token(self, refresh_token: str) -> TokenResponse:
@@ -99,7 +98,6 @@ class AuthService:
         return TokenResponse(
             access_token=new_access_token,
             refresh_token=new_refresh_token,
-            token_type="bearer",
         )
 
     async def get_current_user_info(self, user_id: str) -> UserInfoResponse:

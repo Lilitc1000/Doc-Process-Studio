@@ -93,7 +93,7 @@ def set_answer(
     key: str,
     value: Any,
 ) -> None:
-    form_answers[key] = IncidentFormAnswer(value=value, custom_value="")
+    form_answers[key] = IncidentFormAnswer(value=value)
 
 
 def set_answer_if_non_empty(

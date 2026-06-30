@@ -1,4 +1,6 @@
-from doc_process_studio.common.infrastructure import model_context as model_context_module
+import pytest
+
+import doc_process_studio.common.infrastructure.model_context as model_context_module
 
 
 def test_estimate_prompt_tokens_returns_positive_value() -> None:
@@ -119,7 +121,9 @@ async def test_set_cached_context_length() -> None:
     model_context_module._CONTEXT_CACHE.clear()
 
 
-async def test_warmup_model_context_cache_skips_when_no_base_url(monkeypatch) -> None:
+async def test_warmup_model_context_cache_skips_when_no_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     model_context_module._WARMED_UP = False
     monkeypatch.setattr(model_context_module.settings, "ollama_base_url", None)
     await model_context_module.warmup_model_context_cache()

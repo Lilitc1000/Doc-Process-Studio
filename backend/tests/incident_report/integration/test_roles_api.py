@@ -17,10 +17,10 @@ def _auth_headers(user_id: str = "usr_test", username: str = "testuser") -> dict
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_list_roles_requires_admin():
+def test_list_roles_requires_admin() -> None:
     app = _create_test_app()
 
-    async def _reject_admin():
+    async def _reject_admin() -> None:
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     app.dependency_overrides[require_admin] = _reject_admin
@@ -30,10 +30,10 @@ def test_list_roles_requires_admin():
     assert resp.status_code == 403
 
 
-def test_assign_role_requires_admin():
+def test_assign_role_requires_admin() -> None:
     app = _create_test_app()
 
-    async def _reject_admin():
+    async def _reject_admin() -> None:
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     app.dependency_overrides[require_admin] = _reject_admin
@@ -47,10 +47,10 @@ def test_assign_role_requires_admin():
     assert resp.status_code == 403
 
 
-def test_revoke_role_requires_admin():
+def test_revoke_role_requires_admin() -> None:
     app = _create_test_app()
 
-    async def _reject_admin():
+    async def _reject_admin() -> None:
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     app.dependency_overrides[require_admin] = _reject_admin
@@ -63,24 +63,24 @@ def test_revoke_role_requires_admin():
     assert resp.status_code == 403
 
 
-def test_role_definitions_requires_auth():
+def test_role_definitions_requires_auth() -> None:
     app = _create_test_app()
     client = TestClient(app)
     resp = client.get("/api/incident-report/role-definitions")
     assert resp.status_code in (401, 403)
 
 
-def test_permissions_requires_auth():
+def test_permissions_requires_auth() -> None:
     app = _create_test_app()
     client = TestClient(app)
     resp = client.get("/api/incident-report/permissions")
     assert resp.status_code in (401, 403)
 
 
-def test_users_with_roles_requires_admin():
+def test_users_with_roles_requires_admin() -> None:
     app = _create_test_app()
 
-    async def _reject_admin():
+    async def _reject_admin() -> None:
         raise HTTPException(status_code=403, detail="需要管理员权限")
 
     app.dependency_overrides[require_admin] = _reject_admin

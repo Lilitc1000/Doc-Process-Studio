@@ -2,7 +2,6 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ....common.infrastructure.database import Base
@@ -83,5 +82,4 @@ class KBDocument(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     is_indexed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_latest: Mapped[bool] = mapped_column(Boolean, default=True)
-    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

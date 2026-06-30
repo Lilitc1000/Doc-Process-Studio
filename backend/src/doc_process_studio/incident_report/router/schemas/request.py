@@ -73,10 +73,6 @@ class IncidentRoleAssignRequest(BaseModel):
         return v
 
 
-class IncidentRolePermissionUpdateRequest(BaseModel):
-    permission_keys: list[str] = Field(..., min_length=1, description="权限标识列表")
-
-
 class IncidentCommentCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, description="评论内容")
     parent_id: str | None = Field(default=None, description="父评论ID")
@@ -115,7 +111,6 @@ __all__ = [
     "IncidentReportReopenRequest",
     "IncidentReportRejectRequest",
     "IncidentRoleAssignRequest",
-    "IncidentRolePermissionUpdateRequest",
     "IncidentReportSubmitRequest",
     "IncidentReportUpdateRequest",
 ]
