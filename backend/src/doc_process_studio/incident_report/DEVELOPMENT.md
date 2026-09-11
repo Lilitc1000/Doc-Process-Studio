@@ -19,7 +19,7 @@ backend/src/doc_process_studio/incident_report/
 │   ├── values/                   # 值对象/常量/规则
 │   │   ├── constants.py          # 领域常量（生成字段 key、文件路径、选项枚举等）
 │   │   ├── errors.py             # 领域异常（DomainError/PermissionDeniedError/...）
-│   │   ├── form_schema.py        # 表单 Schema 定义（4 步骤，INCIDENT_REPORT_FORM_SCHEMA）
+│   │   ├── form_schema.py        # 表单 Schema 定义（6 步骤：basic_info/description/timeline/appendix/clearance/closeout，33 字段）
 │   │   ├── form_validation.py    # 表单字段校验规则
 │   │   ├── permission.py         # Permission/Role 枚举 + 角色-权限映射 + 角色定义/权限定义常量
 │   │   └── status_types.py       # IncidentReportStatus/IncidentSeverity 类型别名 + 校验集合
@@ -263,6 +263,14 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 ### 语言策略
 
 AI 生成固定输出英文。系统提示词中明确要求所有输出使用英文，无需语言检测、校验或翻译步骤。生成结果直接用于文档输出。
+
+### 参考文档与生成质量规范
+
+生成参考文档位于 `skills/incident-report/references/`：
+- `body-sections/`：按段落组织的写作规范（含好/坏例子、禁止表达清单、证据强度分层标注），由 `skill` 域参考文档选择器注入对应段落提示词。
+- `golden-samples/`：完整范例（CHT-20260312.md），当前需显式接入提示词链路（默认不被选择器自动加载）。
+
+生成兜底模型由 `ollama_default_model` 配置项控制（默认 `gemma4:e4b-mlx`），不再硬编码，避免模型名不存在导致 404。
 
 ### API 端点
 

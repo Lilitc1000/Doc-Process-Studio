@@ -48,6 +48,50 @@ from .report_data import answer_text, answer_value, answer_value_from_answers, s
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# 证据意识约束（提示词片段）
+#
+# 背景：生成 prompt 的 context_json 只含用户表单字段，模型缺少系统知识，
+#       实际表现是"写套话"与"编造数字"两头冒。以下约束只作为文本片段拼接到
+#       既有 prompt，不改变生成链路结构、函数签名与返回结构。
+#
+# 适用范围：通用规则进 system prompt（全章节生效）；
+#           Impact / Root Cause / Follow-Up 的分段规则只进对应 section prompt。
+# ---------------------------------------------------------------------------
+
+_EVIDENCE_RULES_COMMON = (
+    "Evidence rules: never use vague intensifiers "
+    "(significantly, severely, considerably, substantially, 'to some extent', 'a period of time', recently). "
+    "If an exact number, time range, device name or reference number is not present in the context, "
+    "write N/A - never fabricate it."
+)
+
+_EVIDENCE_RULES_IMPACT = (
+    "Impact rules: name the specific device or component, give the exact timestamp (DD/MM/YYYY HH:MM), "
+    "and state the affected business action - what stopped or degraded, not 'the system was impacted'. "
+    "Back quantities with figures or a markdown table; write N/A when data is unavailable."
+)
+
+_EVIDENCE_RULES_ROOT_CAUSE = (
+    "Root cause rules: write a causal chain where each link is a concrete technical action "
+    "(A caused B, which caused C), ending at an observable event "
+    "(auto-shutdown, failover loop, replication failed, data inconsistent). "
+    "The chain must have at least 3 links; one or two sentences is not an analysis. "
+    "Never stop at black-box labels such as 'hardware issue', 'system error' or 'unknown reason'. "
+    "When the context lacks a middle link, still write the technically plausible link and mark it "
+    "'(inferred)'; reserve 'N/A (pending: <needed log>)' for cases where even inference is impossible."
+)
+
+_EVIDENCE_RULES_FOLLOW_UP = (
+    "Follow-up rules: every action must start with a verb and be ordered and executable "
+    "(e.g. 'Upgrade NAS1 DSM to 7.3.2', 'Rebuild HA cluster', 'Add alert on NFS latency'). "
+    "Output at least 4 actions and cover BOTH short-term recovery (restore service, stop the bleeding) "
+    "and long-term prevention (upgrade, rebuild, add monitoring, change process); "
+    "missing either type is a failure. Include vendor version or patch numbers when available. "
+    "Write N/A for unknown owner or due date instead of dropping the action. "
+    "Never output 'will follow up', 'monitor the situation' or 'improve stability'."
+)
+
 
 def _build_snapshot_from_form_data(form_data: dict[str, Any]) -> IncidentFormSnapshot:
     """从数据库 form_data 构建领域快照。纯数据转换，无业务逻辑。"""
@@ -107,6 +151,10 @@ def _build_quick_generation_request(
         "Expand the quick-fill inputs into complete mode fields according to the reference documentation. "
         "Do not fabricate facts not present in the context; "
         "use conservative but actionable expressions when information is insufficient. "
+        f"{_EVIDENCE_RULES_COMMON} "
+        f"{_EVIDENCE_RULES_IMPACT} "
+        f"{_EVIDENCE_RULES_ROOT_CAUSE} "
+        f"{_EVIDENCE_RULES_FOLLOW_UP} "
         "Output JSON only, no explanations. "
         "JSON keys must be: description, affected_date_summary, timeline, impact_scope, impact_severity, "
         "business_impact, trigger, root_cause, follow_up_actions. "
@@ -152,6 +200,8 @@ def _build_section_generation_prompt(
     if section_key == "impact":
         return (
             "Generate impact scope, severity, and business impact only. "
+            f"{_EVIDENCE_RULES_COMMON} "
+            f"{_EVIDENCE_RULES_IMPACT} "
             'Output JSON: {"body_impact_scope":"...",'
             '"body_impact_severity":"...","body_business_impact":"separated by newlines"}. '
             "Do not modify other sections.",
@@ -160,6 +210,8 @@ def _build_section_generation_prompt(
     if section_key == "root_cause":
         return (
             "Generate trigger and root cause only. "
+            f"{_EVIDENCE_RULES_COMMON} "
+            f"{_EVIDENCE_RULES_ROOT_CAUSE} "
             'Output JSON: {"body_trigger":"...","body_root_cause":"..."}. '
             "Do not modify other sections.",
             json.dumps(body_context, ensure_ascii=False),
@@ -167,6 +219,8 @@ def _build_section_generation_prompt(
     if section_key == "follow_up":
         return (
             "Generate follow-up actions only. "
+            f"{_EVIDENCE_RULES_COMMON} "
+            f"{_EVIDENCE_RULES_FOLLOW_UP} "
             'Output JSON: {"body_follow_up":"separated by newlines"}. Do not modify other sections.',
             json.dumps(body_context, ensure_ascii=False),
         )
@@ -212,6 +266,7 @@ def _build_body_generation_messages(
                 "You are an incident report body assistant. "
                 "Follow the reference documentation first, then generate content based on the current context. "
                 "All output must be in English. "
+                f"{_EVIDENCE_RULES_COMMON} "
                 "Output JSON only, no code blocks, no fabricated facts."
             ),
         },

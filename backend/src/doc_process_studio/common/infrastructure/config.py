@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     app_name: str = "doc-process-studio-service"
     env: str = resolve_runtime_env()
     ollama_base_url: str | None = None
+    # 未显式传 model 时的兜底模型。必须填 Ollama 上真实存在的模型名，
+    # 否则未传参会直接 404。可用 `GET /api/tags` 核对。
+    ollama_default_model: str = "gemma4:e4b-mlx"
     ollama_timeout_seconds: float = 120.0
     ollama_stream_idle_timeout_seconds: float = 180.0
     redis_url: str | None = None

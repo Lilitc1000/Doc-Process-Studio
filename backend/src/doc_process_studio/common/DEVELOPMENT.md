@@ -56,6 +56,7 @@ backend/src/doc_process_studio/common/
 | `REFRESH_TOKEN_EXPIRE_DAYS` | refresh_token 有效期 | `7` |
 | `QDRANT_HOST` | Qdrant 服务地址 | `localhost` |
 | `QDRANT_PORT` | Qdrant 服务端口 | `6333` |
+| `OLLAMA_DEFAULT_MODEL` | 生成兜底模型（避免硬编码导致 404） | `gemma4:e4b-mlx` |
 
 ### security.py
 

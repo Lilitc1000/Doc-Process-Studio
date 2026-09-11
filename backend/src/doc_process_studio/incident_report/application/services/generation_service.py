@@ -65,7 +65,7 @@ class GenerationService:
         from ...infrastructure.utils.generation import _build_quick_generation_request, _build_snapshot_from_form_data
 
         snapshot = _build_snapshot_from_form_data(report.form_data)
-        effective_model = model or "gemma4:e4b"
+        effective_model = model or settings.ollama_default_model
         prompt, context_json = _build_quick_generation_request(snapshot)
 
         from ...infrastructure.utils.generation import _apply_quick_generation_payload
@@ -100,7 +100,7 @@ class GenerationService:
         from ...infrastructure.utils.generation import _build_section_generation_prompt, _build_snapshot_from_form_data
 
         snapshot = _build_snapshot_from_form_data(report.form_data)
-        effective_model = model or "gemma4:e4b"
+        effective_model = model or settings.ollama_default_model
         prompt, context_json = _build_section_generation_prompt(
             snapshot,
             section_id=section_id,

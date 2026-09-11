@@ -40,7 +40,19 @@ INCIDENT_REPORT_FORM_SCHEMA = FormSchemaDefinition(
                     placeholder="如：DAS-001，留空自动生成",
                 ),
                 FormFieldSchema(field_id="manual_fault_date", label="故障日期", field_type="datetime", required=True),
+                FormFieldSchema(
+                    field_id="manual_fault_time",
+                    label="故障时间",
+                    field_type="text",
+                    placeholder="如：17:07（无 time 类型，按文本填写）",
+                ),
                 FormFieldSchema(field_id="manual_reporting_person", label="报告人", field_type="text", required=True),
+                FormFieldSchema(
+                    field_id="manual_verified_by",
+                    label="审核人",
+                    field_type="text",
+                    placeholder="如：Eric Leung",
+                ),
                 FormFieldSchema(
                     field_id="manual_site_id",
                     label="站点编号",
@@ -80,6 +92,83 @@ INCIDENT_REPORT_FORM_SCHEMA = FormSchemaDefinition(
                         {"value": "P3", "label": "P3 - 轻微"},
                     ],
                 ),
+            ],
+        ),
+        FormStepSchema(
+            step_id="clearance",
+            title="故障清除",
+            description="Section B：由承建商（Contractor）在故障清除后填写",
+            fields=[
+                FormFieldSchema(
+                    field_id="manual_arrival_datetime",
+                    label="到场时间",
+                    field_type="datetime",
+                    placeholder="如：12/03/2026 17:50",
+                ),
+                FormFieldSchema(
+                    field_id="manual_clearance_datetime",
+                    label="故障清除时间",
+                    field_type="datetime",
+                    placeholder="如：13/03/2026 11:30",
+                ),
+                FormFieldSchema(
+                    field_id="manual_service_person",
+                    label="维修人员",
+                    field_type="text",
+                    placeholder="如：Fai Chi Chan",
+                ),
+                FormFieldSchema(
+                    field_id="manual_fault_cause",
+                    label="故障原因归属",
+                    field_type="text",
+                    placeholder="如：Synology Data Storage",
+                ),
+                FormFieldSchema(
+                    field_id="manual_materials_used",
+                    label="使用的物料",
+                    field_type="text",
+                    placeholder="如：Nil（无则填 Nil）",
+                ),
+                FormFieldSchema(
+                    field_id="manual_repair_details",
+                    label="维修与验证详情",
+                    field_type="textarea",
+                    placeholder="逐条描述维修动作与验证结果",
+                ),
+                FormFieldSchema(
+                    field_id="manual_contractor_staff",
+                    label="承建商人员",
+                    field_type="text",
+                    placeholder="如：Eric Leung, IT Project Manager",
+                ),
+                FormFieldSchema(
+                    field_id="manual_contractor_signature",
+                    label="承建商签署",
+                    field_type="text",
+                ),
+                FormFieldSchema(field_id="manual_contractor_date", label="承建商日期", field_type="date"),
+            ],
+        ),
+        FormStepSchema(
+            step_id="closeout",
+            title="报告关闭",
+            description="Section C：由业主代表（Employer）在关闭报告时填写",
+            fields=[
+                FormFieldSchema(
+                    field_id="manual_status_ref_no",
+                    label="跟进事项编号",
+                    field_type="text",
+                    placeholder="如：DAS2-FAULT-016",
+                ),
+                FormFieldSchema(
+                    field_id="manual_comments",
+                    label="意见",
+                    field_type="textarea",
+                    placeholder="关闭意见（可留空）",
+                ),
+                FormFieldSchema(field_id="manual_employer_rep", label="业主代表", field_type="text"),
+                FormFieldSchema(field_id="manual_employer_signature", label="业主签署", field_type="text"),
+                FormFieldSchema(field_id="manual_closeout_date", label="关闭日期", field_type="date"),
             ],
         ),
         FormStepSchema(
