@@ -35,13 +35,13 @@ export const useSkillMentionSelector = (
     return options.selectedSkillIds.value
       .map((skillId) => {
         if (skillId.startsWith('kb:')) {
-          const projectName = skillId.slice(3);
+          const datasetId = skillId.slice(3);
           const project = options.kbProjects.value.find(
-            (p) => p.name === projectName,
+            (p) => p.id === datasetId,
           );
           return {
             id: skillId,
-            displayName: project ? `📚 ${project.name}` : `📚 ${projectName}`,
+            displayName: project ? `📚 ${project.name}` : `📚 ${datasetId}`,
           } as SkillOption;
         }
         return (
@@ -107,14 +107,14 @@ export const useSkillMentionSelector = (
 
     const kbSuggestions: GroupedSuggestion[] = options.kbProjects.value
       .filter((project) => {
-        const kbId = `kb:${project.name}`;
+        const kbId = `kb:${project.id}`;
         if (selectedSet.has(kbId)) return false;
         if (!normalizedQuery) return true;
         return project.name.toLowerCase().includes(normalizedQuery);
       })
       .map((project) => ({
         type: 'kb' as const,
-        id: `kb:${project.name}`,
+        id: `kb:${project.id}`,
         displayName: `📚 ${project.name}`,
         shortDescription: '知识库',
       }));

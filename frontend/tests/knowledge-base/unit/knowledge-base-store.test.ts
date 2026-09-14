@@ -4,28 +4,30 @@ import { useKnowledgeBaseStore } from '@modules/knowledge-base';
 import * as kbApi from '@modules/knowledge-base';
 import type { KBProject, KBTreeResponse } from '@modules/knowledge-base';
 
-vi.mock('@modules/knowledge-base', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@modules/knowledge-base')>();
-  return {
-    ...original,
-    listKBProjects: vi.fn(),
-    createKBProject: vi.fn(),
-    renameKBProject: vi.fn(),
-    deleteKBProject: vi.fn(),
-    getKBTree: vi.fn(),
-  };
-});
+vi.mock(
+  '@modules/knowledge-base/api/knowledge-base',
+  async (importOriginal) => {
+    const original =
+      await importOriginal<
+        typeof import('@modules/knowledge-base/api/knowledge-base')
+      >();
+    return {
+      ...original,
+      listKBProjects: vi.fn(),
+      createKBProject: vi.fn(),
+      renameKBProject: vi.fn(),
+      deleteKBProject: vi.fn(),
+      getKBTree: vi.fn(),
+    };
+  },
+);
 
 function makeProject(overrides: Partial<KBProject> = {}): KBProject {
   return {
     id: 'proj-001',
     name: 'Test Project',
     description: null,
-    folderCount: 0,
     documentCount: 0,
-    isUpdating: false,
-    lastUpdatedAt: null,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,

@@ -8,6 +8,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 from ....common.utils.error_utils import summarize_exception
 from ....skill.application.dtos.runtime import SkillPlanDecision
@@ -16,7 +17,7 @@ from ....skill.infrastructure.selector import (
     build_selector_skill_interfaces,
     select_for_workspace_reference,
 )
-from ...application.ports import ReferenceContextPort
+from ...application.ports import KnowledgeRetrieverPort, ReferenceContextPort
 from ...domain.values.constants import (
     INCIDENT_REPORT_BODY_REFERENCE_DIR,
     INCIDENT_REPORT_REFERENCE_DIR,
@@ -255,3 +256,124 @@ class SkillReferenceContext(ReferenceContextPort):
         if not blocks:
             return "[fallback]\n参考文档为空，按上下文生成。", selected_files, selection_reason
         return "\n\n".join(blocks), selected_files, selection_reason
+
+
+def _build_retrieval_query(*, section_id: str, context_json: str) -> str:
+    """从 context_json 构造英文检索 query。
+
+    设计约束（来自交接文档）：
+    - query 必须是英文短语，不要直接把用户填的中文丢进去；
+    - 仅抽取 ASCII 实体（设备号 / 系统名等），中文内容不参与；
+    - 叠加 section 维度的英文主题词，引导检索命中对应素材块。
+    """
+    section = (section_id or "").strip().lower()
+    topic_map = {
+        "quick": "incident report overview summary key facts",
+        "impact": "incident impact affected service business disruption transaction data loss",
+        "root_cause": "root cause failure NAS storage HA failover NFS IO overload",
+        "follow_up": "remediation recovery action fix recommendation preventive measure",
+    }
+    query = topic_map.get(section, "incident report accident analysis")
+
+    try:
+        data = json.loads(context_json) if isinstance(context_json, str) else context_json
+    except Exception:
+        return query
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+        elif isinstance(node, str):
+            for token in re.findall(r"[A-Za-z][A-Za-z0-9][A-Za-z0-9_/.\-]*", node):
+                low = token.lower()
+                if low in {"none", "n/a", "na", "null", "true", "false"}:
+                    continue
+                tokens.append(token)
+
+    tokens: list[str] = []
+    try:
+        walk(data)
+    except Exception:
+        return query
+
+    seen: set[str] = set()
+    picked: list[str] = []
+    for token in tokens:
+        if token in seen:
+            continue
+        seen.add(token)
+        picked.append(token)
+        if len(picked) >= 8:
+            break
+    if picked:
+        query = f"{query} " + " ".join(picked)
+    return query
+
+
+class CompositeReferenceContext(ReferenceContextPort):
+    """本地规范(Standard) + RAGFlow 素材(Material) 组合参考上下文。
+
+    对外契约与 SkillReferenceContext 完全一致（返回 (text, files, reason)）。
+    仅在 quick/impact/root_cause/follow_up 四个 section 启用知识增强；
+    description 和 timeline 是纯事实章节，注入素材会诱导编造，必须跳过。
+    任何异常 → 降级返回 base 的结果，绝不阻断报告生成。
+    """
+
+    def __init__(
+        self,
+        *,
+        base: ReferenceContextPort,
+        retriever: KnowledgeRetrieverPort,
+        ragflow_enabled_sections: str = "quick,impact,root_cause,follow_up",
+        ragflow_top_k: int = 3,
+    ) -> None:
+        self._base = base
+        self._retriever = retriever
+        self._enabled_sections = {s.strip().lower() for s in (ragflow_enabled_sections or "").split(",") if s.strip()}
+        self._top_k = ragflow_top_k
+
+    async def resolve(
+        self,
+        *,
+        model: str,
+        section_id: str,
+        timeline_index: int | None,
+        prompt: str,
+        context_json: str,
+    ) -> tuple[str, list[str], str]:
+        base_text = "[fallback]\nReference documentation unavailable, generate from context."
+        base_files: list[str] = []
+        base_reason = "fallback:init"
+        try:
+            base_text, base_files, base_reason = await self._base.resolve(
+                model=model,
+                section_id=section_id,
+                timeline_index=timeline_index,
+                prompt=prompt,
+                context_json=context_json,
+            )
+        except Exception as exc:
+            logger.warning("Base reference resolve failed, use empty base: %s", exc)
+
+        section_key = (section_id or "").strip().lower()
+        if section_key not in self._enabled_sections:
+            return base_text, base_files, base_reason
+
+        try:
+            query = _build_retrieval_query(section_id=section_id, context_json=context_json)
+            chunks = await self._retriever.retrieve(query=query, scope="history", top_k=self._top_k)
+        except Exception as exc:
+            logger.warning("Knowledge retrieval failed, degrade to base: %s", exc)
+            return base_text, base_files, f"{base_reason} | ragflow:error:{type(exc).__name__}"
+
+        if not chunks:
+            return base_text, base_files, f"{base_reason} | ragflow:no_hits"
+
+        material_blocks = [f"[RAGFlow {chunk.source}]\n{chunk.content}" for chunk in chunks]
+        combined = base_text + "\n\n" + "\n\n".join(material_blocks)
+        reason = f"{base_reason} | ragflow:{len(chunks)} chunks (scope=history)"
+        return combined, base_files, reason

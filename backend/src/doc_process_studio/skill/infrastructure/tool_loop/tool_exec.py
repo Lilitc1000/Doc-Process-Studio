@@ -811,78 +811,38 @@ async def _execute_builtin_tool(
             }, []
 
         primary_id = _primary_skill_id(request)
-        project_name = ""
-        if primary_id.startswith("kb:"):
-            project_name = primary_id[3:]
+        project_id = primary_id[3:] if primary_id.startswith("kb:") else ""
 
-        if not project_name:
+        if not project_id:
             return {
                 "ok": False,
                 "error": "未指定知识库项目。",
             }, []
 
         from ....common.infrastructure.config import settings as app_settings
-        from ....knowledge_base.infrastructure.embedding import embed_texts
-        from ....knowledge_base.infrastructure.qdrant_service import search_knowledge_base as kb_search
+        from ....knowledge_base.infrastructure.dependencies import get_kb_service
 
-        vectors = await embed_texts([query])
-        if not vectors or not vectors[0]:
-            return {
-                "ok": False,
-                "error": "向量化查询失败。",
-            }, []
-
-        results = kb_search(project_name, vectors[0], top_k=app_settings.kb_search_top_k)
-        kb_chunks: list[dict[str, Any]] = []
-        for hit in results:
-            payload = hit.get("payload", {})
-            page_number = payload.get("page_number")
-            section_title = payload.get("section_title")
-            sheet_name = payload.get("sheet_name")
-            file_name = payload.get("file_name", "")
-            file_path = payload.get("file_path", "")
-            content_type = payload.get("content_type", "text")
-
-            source_parts: list[str] = []
-            if file_path:
-                source_parts.append(file_path)
-            if file_name:
-                source_parts.append(file_name)
-            source_label = "/".join(source_parts) if source_parts else "未知文档"
-
-            location_parts: list[str] = []
-            if page_number is not None:
-                location_parts.append(f"第{page_number}页")
-            if section_title:
-                location_parts.append(section_title)
-            if sheet_name:
-                location_parts.append(f"Sheet: {sheet_name}")
-            if content_type == "table":
-                location_parts.append("表格")
-            elif content_type == "ocr":
-                location_parts.append("扫描页")
-            elif content_type == "mixed":
-                location_parts.append("混合内容页")
-            location_label = ", ".join(location_parts)
-
-            kb_chunks.append(
-                {
-                    "content": payload.get("content", ""),
-                    "source": source_label,
-                    "location": location_label,
-                    "page_number": page_number,
-                    "section_title": section_title,
-                    "sheet_name": sheet_name,
-                    "file_name": file_name,
-                    "file_path": file_path,
-                    "content_type": content_type,
-                    "score": hit.get("score", 0.0),
-                }
-            )
+        # ``$`` 提及里携带的是 RAGFlow dataset id，直接按 dataset 粒度检索，
+        # 不再经过"项目名 -> dataset"的映射。
+        hits = await get_kb_service().search_knowledge(
+            project_id=project_id,
+            query=query,
+            top_k=app_settings.kb_search_top_k,
+        )
+        kb_chunks: list[dict[str, Any]] = [
+            {
+                "content": hit.content,
+                "source": hit.source,
+                "file_name": hit.file_name,
+                "score": hit.score,
+                "document_id": hit.document_id,
+            }
+            for hit in hits
+        ]
 
         return {
             "ok": True,
-            "project_name": project_name,
+            "project_id": project_id,
             "query": query,
             "chunks": kb_chunks,
         }, []

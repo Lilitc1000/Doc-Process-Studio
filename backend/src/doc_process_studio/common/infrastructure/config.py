@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_ENV = "dev"
@@ -96,19 +96,35 @@ class Settings(BaseSettings):
     generated_attachments_dir: str = str(BACKEND_DIR / "generated-attachments")
     generated_attachment_ttl_seconds: int = 60 * 60 * 24 * 7
     database_url: str = "postgresql+asyncpg://admin:postgres_password@db:5432/master"
+    test_database_url: str = Field(
+        default="postgresql+asyncpg://admin:postgres_password@db:5432/dps_test",
+        validation_alias=AliasChoices("DPS_TEST_DATABASE_URL", "TEST_DATABASE_URL"),
+    )
+    auto_create_schema: bool = False
     jwt_secret_key: str = "your-super-secret-key-change-in-production-min-32-chars"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
     admin_username: str = "admin"
     admin_password: str = "admin123"
-    qdrant_url: str = "http://qdrant:6333"
-    kb_collection_name: str = "knowledge_base"
     kb_max_upload_size_bytes: int = 100 * 1024 * 1024
-    kb_chunk_max_characters: int = 1_800
-    kb_embedding_model: str = "nomic-embed-text"
     kb_search_top_k: int = 6
-    kb_embedding_batch_size: int = 16
+    kb_cache_ttl_seconds: int = 300
+    # RAGFlow 知识增强。默认关闭，开启时需提供 base_url 与 api_key，
+    # 切勿将 api_key 硬编码进代码。
+    ragflow_base_url: str | None = None
+    ragflow_api_key: str | None = None
+    ragflow_enabled: bool = False
+    ragflow_timeout_seconds: float = 15.0
+    # 实测最高相似度 0.72，默认 0.70 余量偏小，暂取 0.55 观测召回。
+    ragflow_similarity_threshold: float = 0.55
+    ragflow_top_k: int = 3
+    ragflow_datasets_json: str = '{"history":["f05e5a4aadac11f1b9211b18c23af0c8"]}'
+    ragflow_enabled_sections: str = "quick,impact,root_cause,follow_up"
+    # 知识库项目 → RAGFlow dataset 映射，形如 {"项目名": ["dataset_id"]}，值也允许是单个字符串。
+    # 项目未命中映射时的兜底 dataset（直接按现有 dataset 读，不改语言标注）。
+    # 触发服务端解析的超时（解析是异步的，只等触发动作本身）。
+    ragflow_parse_timeout_seconds: float = 60.0
 
     model_config = SettingsConfigDict(
         extra="ignore",

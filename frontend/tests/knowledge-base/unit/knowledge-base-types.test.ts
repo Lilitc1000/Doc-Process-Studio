@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
   KBProject,
-  KBFolder,
   KBDocument,
   KBTreeNode,
   KBTreeNodeFolder,
@@ -15,24 +14,7 @@ function makeKBProject(overrides: Partial<KBProject> = {}): KBProject {
     id: 'proj-001',
     name: 'Test Project',
     description: null,
-    folderCount: 0,
     documentCount: 0,
-    isUpdating: false,
-    lastUpdatedAt: null,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
-}
-
-function makeKBFolder(overrides: Partial<KBFolder> = {}): KBFolder {
-  return {
-    id: 'folder-001',
-    projectId: 'proj-001',
-    parentId: null,
-    name: 'Test Folder',
-    path: 'Test Folder',
-    sortOrder: 0,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -42,15 +24,11 @@ function makeKBFolder(overrides: Partial<KBFolder> = {}): KBFolder {
 function makeKBDocument(overrides: Partial<KBDocument> = {}): KBDocument {
   return {
     id: 'doc-001',
-    projectId: 'proj-001',
-    folderId: null,
     fileName: 'test.pdf',
     fileType: 'pdf',
     fileSize: 1024,
     chunkCount: 5,
-    version: 1,
     isIndexed: true,
-    isLatest: true,
     uploadedAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
@@ -62,9 +40,9 @@ describe('KBProject', () => {
     expect(project.id).toBe('proj-001');
     expect(project.name).toBe('Test Project');
     expect(project.description).toBeNull();
-    expect(project.folderCount).toBe(0);
     expect(project.documentCount).toBe(0);
-    expect(project.isUpdating).toBe(false);
+    expect(project.createdAt).toBe('2026-01-01T00:00:00Z');
+    expect(project.updatedAt).toBe('2026-01-01T00:00:00Z');
   });
 
   it('支持覆盖字段', () => {
@@ -74,37 +52,18 @@ describe('KBProject', () => {
   });
 });
 
-describe('KBFolder', () => {
-  it('创建包含所有必填字段', () => {
-    const folder = makeKBFolder();
-    expect(folder.id).toBe('folder-001');
-    expect(folder.projectId).toBe('proj-001');
-    expect(folder.parentId).toBeNull();
-    expect(folder.name).toBe('Test Folder');
-    expect(folder.sortOrder).toBe(0);
-  });
-
-  it('支持嵌套文件夹', () => {
-    const child = makeKBFolder({ parentId: 'folder-001', name: 'Child' });
-    expect(child.parentId).toBe('folder-001');
-  });
-});
-
 describe('KBDocument', () => {
   it('创建包含所有必填字段', () => {
     const doc = makeKBDocument();
     expect(doc.id).toBe('doc-001');
     expect(doc.fileName).toBe('test.pdf');
     expect(doc.fileType).toBe('pdf');
-    expect(doc.version).toBe(1);
     expect(doc.isIndexed).toBe(true);
-    expect(doc.isLatest).toBe(true);
   });
 
-  it('支持多版本文档', () => {
-    const doc = makeKBDocument({ version: 3, isLatest: false });
-    expect(doc.version).toBe(3);
-    expect(doc.isLatest).toBe(false);
+  it('支持未索引文档', () => {
+    const doc = makeKBDocument({ isIndexed: false });
+    expect(doc.isIndexed).toBe(false);
   });
 });
 
@@ -117,7 +76,6 @@ describe('KBTreeNode', () => {
       fileType: 'pdf',
       fileSize: 1024,
       chunkCount: 5,
-      version: 1,
       isIndexed: true,
       uploadedAt: '2026-01-01T00:00:00Z',
     };
@@ -125,8 +83,6 @@ describe('KBTreeNode', () => {
       type: 'folder',
       id: 'folder-001',
       name: 'Root',
-      path: 'Root',
-      sortOrder: 0,
       children: [docNode],
     };
     expect(folderNode.type).toBe('folder');
@@ -142,7 +98,6 @@ describe('KBTreeNode', () => {
       fileType: 'docx',
       fileSize: 2048,
       chunkCount: 10,
-      version: 2,
       isIndexed: false,
       uploadedAt: '2026-01-01T00:00:00Z',
     };
@@ -155,8 +110,6 @@ describe('KBTreeNode', () => {
       type: 'folder',
       id: 'f1',
       name: 'F',
-      path: 'F',
-      sortOrder: 0,
       children: [],
     };
     const doc: KBTreeNode = {
@@ -166,7 +119,6 @@ describe('KBTreeNode', () => {
       fileType: 'pdf',
       fileSize: 100,
       chunkCount: 1,
-      version: 1,
       isIndexed: true,
       uploadedAt: '2026-01-01T00:00:00Z',
     };

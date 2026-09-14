@@ -67,7 +67,7 @@ env ENV=dev uv run --no-sync pytest tests/auth/ -q
 backend/src/doc_process_studio/
 ├── main.py                     # FastAPI 应用入口
 ├── common/                     # 共享内核（跨域通用基础设施）
-│   ├── infrastructure/         #   配置、数据库、缓存、Ollama、Qdrant、异常
+│   ├── infrastructure/         #   配置、数据库、缓存、Ollama、异常
 │   ├── security/               #   JWT、密码哈希、认证
 │   ├── middleware/             #   请求日志、请求ID、请求防护
 │   └── utils/                  #   日期工具、文本工具、错误工具、参数工具

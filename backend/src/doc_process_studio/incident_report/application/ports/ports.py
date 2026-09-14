@@ -5,6 +5,7 @@
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -184,6 +185,35 @@ class ReferenceContextPort(ABC):
         context_json: str,
     ) -> tuple[str, list[str], str]:
         """选择参考文档上下文，返回 (context_text, selected_files, selection_reason)。"""
+
+
+@dataclass(frozen=True)
+class KnowledgeChunk:
+    """从外部知识库检索到的一块素材。"""
+
+    content: str
+    scope: str  # "history" | "specs" 等，对应配置中的 dataset 分区
+    source: str  # 文件名 / 文档关键字，用于引用标注
+    document_id: str
+    score: float
+
+
+class KnowledgeRetrieverPort(ABC):
+    """外部知识素材检索端口。
+
+    实现方负责对接具体检索后端（如 RAGFlow），并对失败做降级。
+    返回空列表等价于“本次无可用素材”，调用方不应因此中断报告生成。
+    """
+
+    @abstractmethod
+    async def retrieve(
+        self,
+        *,
+        query: str,
+        scope: str,
+        top_k: int,
+    ) -> list[KnowledgeChunk]:
+        """检索与 query 相关的素材块；未配置 / 超时 / 异常时返回空列表。"""
 
 
 class DocumentAssistantPort(ABC):

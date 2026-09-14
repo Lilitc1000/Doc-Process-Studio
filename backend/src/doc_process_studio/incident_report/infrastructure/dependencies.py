@@ -5,6 +5,7 @@
 
 from functools import lru_cache
 
+from ...common.infrastructure.config import settings
 from ..application.services.analytics_service import AnalyticsService
 from ..application.services.audit_query_service import AuditQueryService
 from ..application.services.comment_service import CommentService
@@ -15,7 +16,7 @@ from ..application.services.role_service import RoleService
 from .adapters.attachment_store import ChatAttachmentStore
 from .adapters.document_assistant import SkillDocumentAssistant
 from .adapters.llm_streaming import OllamaLLMStreaming
-from .adapters.reference_context import SkillReferenceContext
+from .adapters.reference_context import CompositeReferenceContext, SkillReferenceContext
 from .adapters.trace_recorder import SystemTraceRecorder
 from .permission_checker import RbacPermissionChecker
 from .repositories.analytics_repository import SqlAnalyticsRepository
@@ -89,8 +90,32 @@ def get_trace_recorder() -> SystemTraceRecorder:
 
 
 @lru_cache(maxsize=1)
-def get_reference_context() -> SkillReferenceContext:
-    return SkillReferenceContext()
+def get_reference_context() -> CompositeReferenceContext | SkillReferenceContext:
+    """装配参考文档上下文。
+
+    ragflow_enabled=False → 仅返回 SkillReferenceContext，行为与改动前完全一致（零风险）。
+    ragflow_enabled=True  → 返回 CompositeReferenceContext（本地规范 + RAGFlow 素材组合）。
+    """
+    base = SkillReferenceContext()
+    if not settings.ragflow_enabled:
+        return base
+
+    from .adapters.ragflow_knowledge import RagflowKnowledgeRetriever
+
+    retriever = RagflowKnowledgeRetriever(
+        base_url=settings.ragflow_base_url,
+        api_key=settings.ragflow_api_key,
+        timeout_seconds=settings.ragflow_timeout_seconds,
+        similarity_threshold=settings.ragflow_similarity_threshold,
+        top_k=settings.ragflow_top_k,
+        datasets_json=settings.ragflow_datasets_json,
+    )
+    return CompositeReferenceContext(
+        base=base,
+        retriever=retriever,
+        ragflow_enabled_sections=settings.ragflow_enabled_sections,
+        ragflow_top_k=settings.ragflow_top_k,
+    )
 
 
 @lru_cache(maxsize=1)

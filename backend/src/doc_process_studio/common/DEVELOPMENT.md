@@ -16,7 +16,6 @@ backend/src/doc_process_studio/common/
 │   ├── ollama.py                # Ollama HTTP 客户端（流式/非流式聊天、模型发现）
 │   ├── ollama_models.py         # UpstreamOllamaModelRecord 数据模型
 │   ├── model_context.py         # LLM 上下文窗口估算与缓存
-│   ├── qdrant.py                # Qdrant 向量数据库客户端
 │   └── exceptions.py            # 通用异常基类（AppError/ValidationError/...）
 ├── security/                    # 安全
 │   └── security.py              # JWT 令牌生成/验证、密码哈希/校验、get_current_user_id 依赖
@@ -54,9 +53,13 @@ backend/src/doc_process_studio/common/
 | `JWT_ALGORITHM` | JWT 算法 | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | access_token 有效期 | `15` |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | refresh_token 有效期 | `7` |
-| `QDRANT_HOST` | Qdrant 服务地址 | `localhost` |
-| `QDRANT_PORT` | Qdrant 服务端口 | `6333` |
 | `OLLAMA_DEFAULT_MODEL` | 生成兜底模型（避免硬编码导致 404） | `gemma4:e4b-mlx` |
+| `RAGFLOW_ENABLED` | 是否启用 RAGFlow 知识增强（默认关闭，开启需配 base_url/api_key） | `False` |
+| `RAGFLOW_BASE_URL` | RAGFlow 服务地址（如 `http://s.gdautotoll.com.cn:10108`） | - |
+| `RAGFLOW_API_KEY` | RAGFlow API Key（务必走环境变量，勿入库） | - |
+| `RAGFLOW_SIMILARITY_THRESHOLD` | 检索相似度阈值 | `0.70` |
+| `RAGFLOW_TOP_K` | 每次检索返回的素材块数 | `3` |
+| `RAGFLOW_DATASETS_JSON` | scope→dataset_id 映射 JSON | `{"history":["f05e5a4aadac11f1b9211b18c23af0c8"]}` |
 
 ### security.py
 

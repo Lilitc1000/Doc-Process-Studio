@@ -157,6 +157,7 @@ test.describe('知识库 Skill 对话 - 端到端场景', () => {
   let accessToken: string;
   let ollamaAvailable = false;
   let availableModel = '';
+  let kbProjectId = '';
 
   test.beforeAll(async ({ request }, testInfo) => {
     workerPrefix = getWorkerPrefix(testInfo.workerIndex);
@@ -198,10 +199,14 @@ test.describe('知识库 Skill 对话 - 端到端场景', () => {
     // 创建知识库项目供 skill 测试使用
     try {
       if (accessToken) {
-        await request.post('/api/knowledge-base/projects', {
+        const createResp = await request.post('/api/knowledge-base/projects', {
           headers: { Authorization: `Bearer ${accessToken}` },
           data: { name: `${workerPrefix}KB项目`, description: 'E2E测试项目' },
         });
+        if (createResp.ok()) {
+          const created = (await createResp.json()) as { id: string };
+          kbProjectId = created.id;
+        }
       }
     } catch {
       // ignore
@@ -291,14 +296,16 @@ test.describe('知识库 Skill 对话 - 端到端场景', () => {
     });
     if (await kbSuggestion.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await kbSuggestion.click();
-    } else {
+    } else if (kbProjectId) {
       // 如果没有可见的 kb 建议，通过 API 直接设置 selectedSkillIds
+      // 注意：skill id 现在为 kb:<datasetId>（即项目 id），不再使用项目名称；
+      // 若未拿到 datasetId 则跳过，避免产生无效的 `kb:` id
       await page.evaluate((skillId) => {
         const raw = localStorage.getItem('app');
         const parsed = raw ? JSON.parse(raw) : {};
         parsed.selectedSkillIds = [skillId];
         localStorage.setItem('app', JSON.stringify(parsed));
-      }, `kb:${workerPrefix}KB项目`);
+      }, `kb:${kbProjectId}`);
       await page.reload();
       await page.waitForResponse(
         (resp) =>

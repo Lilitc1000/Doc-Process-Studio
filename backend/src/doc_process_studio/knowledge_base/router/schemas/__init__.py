@@ -1,12 +1,9 @@
 from .request import (
-    KBFolderCreateRequest,
-    KBFolderRenameRequest,
     KBProjectCreateRequest,
     KBProjectRenameRequest,
 )
 from .response import (
     KBDocumentResponse,
-    KBFolderResponse,
     KBProjectListResponse,
     KBProjectListSimpleResponse,
     KBProjectResponse,
@@ -19,9 +16,6 @@ from .response import (
 
 __all__ = [
     "KBDocumentResponse",
-    "KBFolderCreateRequest",
-    "KBFolderRenameRequest",
-    "KBFolderResponse",
     "KBProjectCreateRequest",
     "KBProjectListResponse",
     "KBProjectListSimpleResponse",

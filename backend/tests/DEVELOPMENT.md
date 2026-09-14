@@ -8,6 +8,12 @@
 backend/tests/
 ├── DEVELOPMENT.md              # 本文档
 ├── conftest.py                 # 全局 autouse fixture（Redis/PostgreSQL/速率限制重置、auth_headers）
+├── persistence/                # 真实数据库持久化测试（直连仓储，验证 ORM 与约束）
+│   ├── conftest.py             # 仓储绑定夹具 + 造数夹具
+│   └── test_report_persistence.py
+├── integration_db/             # 真实数据库集成测试（HTTP → service → 仓储 → PostgreSQL）
+│   ├── conftest.py             # ASGI 客户端、RBAC seed、token/计数夹具
+│   └── test_reports_api_db.py
 ├── auth/                       # 认证域
 │   ├── unit/
 │   │   └── test_security.py
@@ -31,7 +37,6 @@ backend/tests/
 │   │   ├── test_report_store_extended.py   # DB 操作（create/load/update/delete/list/comment）
 │   │   ├── test_report_data.py             # 表单数据读写工具函数（infrastructure/utils/report_data）
 │   │   ├── test_role_service.py            # 角色管理（基础）
-│   │   ├── test_form_schema.py             # 表单 Schema 结构（domain/values/form_schema）
 │   │   ├── test_generation.py              # 正文生成（prompt 构建 + payload 应用，infrastructure/utils/generation）
 │   │   ├── test_generation_extended.py     # 正文生成（reference/report_data 直通）
 │   │   ├── test_normalization.py           # 文本归一化（日期/时间/状态/严重级别，infrastructure/utils/normalization）
@@ -109,7 +114,7 @@ backend/tests/
 | `skill/` | `doc_process_studio/skill/` | 技能系统（注册、选择、规划、工具循环、会话存储） |
 | `system/` | `doc_process_studio/system/` | 系统服务（执行器、特性开关、错误详情、链路追踪、模型管理） |
 | `core/` | `doc_process_studio/common/` | 共享内核（配置、请求防护、模型上下文、安全、缓存、数据库） |
-| `knowledge_base/` | `doc_process_studio/knowledge_base/` | 知识库（项目/文件夹/文档管理、分块、向量化、Skill 集成） |
+| `knowledge_base/` | `doc_process_studio/knowledge_base/` | 知识库（RAGFlow dataset 映射、缓存、检索、Skill 集成） |
 
 ## 测试分层
 
@@ -118,6 +123,8 @@ backend/tests/
 | 单元测试 | `<domain>/unit/` | 纯逻辑函数、service 层方法 | monkeypatch 替换外部依赖 |
 | 集成测试 | `<domain>/integration/` | API 端点 HTTP 测试 | FastAPI TestClient + monkeypatch |
 | 契约测试 | `<domain>/contract/` | Skill 工具链端到端验证 | 真实文件系统（tmp_path） |
+| 持久化测试 | `persistence/` | ORM 映射、约束、级联、时间戳是否真的生效 | 真实 PostgreSQL（事务回滚） |
+| 真实库集成测试 | `integration_db/` | HTTP → service → 仓储 → 数据库整条链路：SQL 过滤是否下推、级联是否生效、状态流转是否写库 | 真实 PostgreSQL（ASGI 客户端 + 事务回滚） |
 
 **注意**：后端测试不包含 E2E 测试。需要启动完整后端服务并通过真实 HTTP 调用验证的端到端流程测试属于前端 E2E 测试范畴，应在前端项目中编写。
 
@@ -136,6 +143,17 @@ env ENV=dev uv run --no-sync pytest tests/incident_report/contract/ -q
 
 # 只跑某个文件
 env ENV=dev uv run --no-sync pytest tests/auth/unit/test_security.py -q
+
+# 真实数据库测试（持久化 + 真实库集成）
+# 测试库 DSN 依次从 --db-dsn > 环境变量 DPS_TEST_DATABASE_URL > settings.test_database_url 解析；
+# 开发环境 .env.dev 已配好 DPS_TEST_DATABASE_URL，直接跑即可，无需额外传环境变量。
+uv run python scripts/init_test_db.py                                   # 首次：建 dps_test 库
+env ENV=dev uv run --no-sync pytest tests/persistence/ -m db -q
+env ENV=dev uv run --no-sync pytest tests/integration_db/ -m db -q
+env ENV=dev uv run --no-sync pytest -m db -q                            # 两组一起跑
+
+# 想覆盖默认 DSN 时再显式指定（显式配置却连不上会 fail，不会静默跳过）
+env ENV=dev uv run --no-sync pytest --db-dsn postgresql+asyncpg://admin:postgres_password@db:5432/dps_test -m db -q
 
 # 语法与代码规范检查
 env ENV=dev uv run --no-sync ruff check src/doc_process_studio
@@ -490,6 +508,72 @@ def test_tool_chain_generates_docx(tmp_path, monkeypatch):
 
 ---
 
+## 真实数据库测试
+
+有两组测试会真正连 PostgreSQL，分工不同：
+
+| 目录 | 入口 | 验证什么 |
+|------|------|----------|
+| `tests/persistence/` | 直接调用仓储 | ORM 映射、约束、级联、时间戳是否真的生效 |
+| `tests/integration_db/` | HTTP → application service → 仓储 | 列表过滤是否真下推到 SQL WHERE、删除是否真级联、状态流转是否真写库写审计、RBAC 过滤在真实数据上是否成立、**表单保存进 JSONB 后能否被还原并渲染进 DOCX/PDF** |
+
+`tests/integration_db/test_report_preview_save_db.py` 专门覆盖「保存 + 预览导出」这条链。
+在此之前这两块只有半程覆盖：预览用例用内存假仓储直接给 `PreviewService` 喂 dict（链路在仓储处截断），
+而 HTTP 集成用例把 `ReportApplicationService` 整个换成 `AsyncMock`（跳过状态守卫与必填校验）。
+真库版本把这些都跑实了，并固化了两个容易误解的行为：
+
+* **PUT 的 `form_data` 是整体替换而非按 key 合并**（路由过滤 None 后整体 `setattr`）——前端必须回传完整表单。
+* **`form_data` 是扁平字典**（正文用 `body_*` 前缀），不是嵌套的 `{"body": {...}}`。
+
+两者互补：`integration/` 里那些在 service 层替换成 AsyncMock 的测试验证的是「HTTP 接线与
+DTO 形状」，永远触达不到数据库；这两组补的是「SQL 与数据库约束」这一层。业务编排逻辑仍由
+mock 测试负责，不必全部改接数据库。
+
+### 隔离策略（三重保障，保证不留测试数据）
+
+| 手段 | 做法 | 解决什么问题 |
+|------|------|--------------|
+| 独立库 | 只连测试库（默认 dps_test），与开发库 master 物理隔离 | 误删/污染开发数据 |
+| 建表一次 | session 级 engine，会话开始 create_all、结束 drop_all | 每个用例重复建表导致慢 |
+| 事务回滚 | 用例跑在外层事务里，仓储 commit() 只释放 savepoint，用例结束一律 rollback | 用例互相污染、库里堆积脏数据 |
+
+### DSN 解析与跳过策略
+
+DSN 依次从 `--db-dsn` > 环境变量 `DPS_TEST_DATABASE_URL` > `settings.test_database_url`
+解析，开发环境 `.env.dev` 已配好 `DPS_TEST_DATABASE_URL`，直接 `pytest` 即可跑。
+
+| 情况 | 行为 |
+|------|------|
+| 无DSN、无可连库（走默认约定） | skip，保证无数据库环境全绿 |
+| 显式配置了 DSN 却连不上 | pytest.fail，不允许"静默没跑到" |
+
+### 无侵入接入仓储
+
+项目内仓储直接引用模块级 async_session_factory（common/infrastructure/database.py），
+没有构造函数注入。`_bind_repositories_to_test_session` 这个 autouse fixture 会扫描所有
+`doc_process_studio.*` 模块，把该工厂替换成「复用当前用例会话」的包装器：
+
+- 进入 `async with async_session_factory() as session` 时返回共享会话
+- 退出时不提交、不关闭；异常时回滚到 savepoint
+- 生产代码零改动
+
+### 跳过与失败策略
+
+见上文「DSN 解析与跳过策略」。
+
+### 事件循环
+
+DB 夹具声明 `loop_scope="session"`，用例侧必须同步声明
+`pytestmark = [pytest.mark.db, pytest.mark.asyncio(loop_scope="session")]`，
+否则 asyncpg 连接会跨事件循环报错。
+
+`integration_db/` 额外有个坑：**不要用 `TestClient`**。TestClient 会在独立线程里再起一个
+事件循环执行路由，而数据库会话绑定在 pytest-asyncio 的 session loop 上，asyncpg 连接跨 loop
+使用会直接报错。改用 `httpx.AsyncClient(transport=ASGITransport(app))` 在当前 loop 内 await
+请求，保证整条链路与事务会话同处一个 loop。
+
+---
+
 ## 域级 Fixture
 
 当同一业务域内多个测试文件共享构造数据的逻辑时，提取为域级 `conftest.py`：
@@ -539,6 +623,21 @@ def build_skill():
 - [ ] service 层使用 `monkeypatch` 替换，避免依赖真实数据库
 - [ ] Pydantic 响应模型字段使用 snake_case
 - [ ] 桩服务类继承对应的应用服务契约（`application/contracts.py`），未使用的方法用 `raise NotImplementedError` 实现
+
+### 新增真实数据库集成测试
+
+- [ ] 放在 `tests/integration_db/`，并加 `pytestmark = [pytest.mark.db, pytest.mark.asyncio(loop_scope="session")]`
+- [ ] 用 `httpx.AsyncClient(ASGITransport)`，**不要**用 `TestClient`（会跨事件循环）
+- [ ] 不 override application service，让链路保持真实；需要 RBAC 数据时依赖 `role_repository` fixture
+- [ ] 用 `register_user` 造用户并赋角色，不要复用开发库已有数据
+- [ ] 断言落到数据库：用 `count_rows_helper` / `select` 直接查表校验，而非只看响应体
+
+### 新增持久化测试
+
+- [ ] 放在 `tests/persistence/`，并加 `pytestmark = [pytest.mark.db, pytest.mark.asyncio(loop_scope="session")]`
+- [ ] 只验证「mock 测不出来」的部分：约束、级联、JSONB、时间戳默认值、SQL 正确性
+- [ ] 不手写 truncate / delete 清理，依赖事务回滚
+- [ ] 需要关联数据时用 `user_factory` 造用户，不要复用开发库已有数据
 
 ### 新增契约测试
 

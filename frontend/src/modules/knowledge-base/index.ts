@@ -9,9 +9,6 @@ export {
   createKBProject,
   renameKBProject,
   deleteKBProject,
-  createKBFolder,
-  renameKBFolder,
-  deleteKBFolder,
   getKBTree,
   uploadKBDocument,
   deleteKBDocument,
@@ -21,7 +18,6 @@ export {
 // --- Types ---
 export type {
   KBProject,
-  KBFolder,
   KBDocument,
   KBTreeNodeFolder,
   KBTreeNodeDocument,

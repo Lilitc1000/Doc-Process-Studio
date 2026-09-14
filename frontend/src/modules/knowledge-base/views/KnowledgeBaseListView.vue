@@ -27,9 +27,6 @@
         </div>
         <div class="kb-project-card-meta">
           <span>{{ project.documentCount }} 文档</span>
-          <span v-if="project.lastUpdatedAt">
-            · 更新于 {{ formatDate(project.lastUpdatedAt) }}
-          </span>
         </div>
         <div class="kb-project-card-actions" @click.stop>
           <base-button variant="ghost" size="sm" @click="onRename(project)">
@@ -126,11 +123,6 @@ const renamingProject = ref<KBProject | null>(null);
 onMounted(() => {
   store.fetchProjects();
 });
-
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
 
 const onProjectClick = (projectId: string) => {
   router.push({ name: 'knowledge-base-detail', params: { id: projectId } });

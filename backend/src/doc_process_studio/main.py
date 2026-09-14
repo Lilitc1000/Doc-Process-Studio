@@ -34,8 +34,13 @@ _logger = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if settings.auto_create_schema:
+        _logger.warning(
+            "AUTO_CREATE_SCHEMA is on: using Base.metadata.create_all as fallback. "
+            "Schema should be managed by alembic migrations instead."
+        )
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     await get_auth_service().ensure_admin_user(
         admin_username=settings.admin_username,
@@ -46,10 +51,6 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     await role_repo.ensure_admin_role()
     cleanup_expired_attachments()
     await warmup_model_context_cache()
-
-    from .common.infrastructure.qdrant import ensure_knowledge_base_collection
-
-    ensure_knowledge_base_collection()
 
     yield
 

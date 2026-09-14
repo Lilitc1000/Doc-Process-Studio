@@ -19,7 +19,6 @@ backend/src/doc_process_studio/incident_report/
 │   ├── values/                   # 值对象/常量/规则
 │   │   ├── constants.py          # 领域常量（生成字段 key、文件路径、选项枚举等）
 │   │   ├── errors.py             # 领域异常（DomainError/PermissionDeniedError/...）
-│   │   ├── form_schema.py        # 表单 Schema 定义（6 步骤：basic_info/description/timeline/appendix/clearance/closeout，33 字段）
 │   │   ├── form_validation.py    # 表单字段校验规则
 │   │   ├── permission.py         # Permission/Role 枚举 + 角色-权限映射 + 角色定义/权限定义常量
 │   │   └── status_types.py       # IncidentReportStatus/IncidentSeverity 类型别名 + 校验集合
@@ -62,6 +61,7 @@ backend/src/doc_process_studio/incident_report/
 │   │   ├── trace_recorder.py     # SystemTraceRecorder（追踪记录器端口实现）
 │   │   ├── reference_context.py  # SkillReferenceContext（参考文档选择端口实现）
 │   │   ├── document_assistant.py # SkillDocumentAssistant（文档助手端口实现）
+│   │   ├── ragflow_knowledge.py  # RagflowKnowledgeRetriever（知识素材检索端口实现，对接 RAGFlow /api/v1/retrieval）
 │   │   └── attachment_store.py   # ChatAttachmentStore（附件存储端口实现）
 │   ├── utils/                    # 纯技术工具函数（无业务逻辑，无状态）
 │   │   ├── normalization.py      # 文本归一化工具
@@ -362,6 +362,17 @@ AI 生成固定输出英文。系统提示词中明确要求所有输出使用�
 - `chat.infrastructure.attachments` — 附件管理（供 infrastructure/utils/preview.py 使用）
 - `common.infrastructure.config` — 配置（含 BACKEND_DIR）
 - `common.security.security` — JWT 认证 + 用户 ID 提取
+
+## RAGFlow 知识增强（默认关闭）
+
+事故报告正文生成支持从 RAGFlow 知识库检索素材，拼接到 `quick` / `impact` / `root_cause` / `follow_up` 四个章节的参考上下文中；`description` / `timeline` 为纯事实章节，强制跳过检索以避免诱导编造。
+
+- 端口：`KnowledgeRetrieverPort`（`application/ports/ports.py` 中的 ABC）+ `KnowledgeChunk`（frozen dataclass）；实现 `RagflowKnowledgeRetriever`（`infrastructure/adapters/ragflow_knowledge.py`），对接 RAGFlow `/api/v1/retrieval`。
+- 组合上下文：`CompositeReferenceContext`（`infrastructure/adapters/reference_context.py`）包裹原 `SkillReferenceContext`；启用时在四个章节拼接检索素材，任意异常降级到原本地规范，绝不阻断报告生成。
+- 装配：`infrastructure/dependencies.py` 的 `get_reference_context()` 按 `settings.ragflow_enabled` 返回——`False` 时仅返回 `SkillReferenceContext`（与改造前行为完全一致），`True` 时返回 `CompositeReferenceContext`。
+- 调用约定（实测，务必遵守）：`top_k = 请求数 × 4`、`vector_similarity_weight = 1.0`、`similarity_threshold = 配置值`、不传 `cross_languages`；响应校验 `code == 0`，否则视为失败；后处理做 HTML 清洗 / 碎片过滤 / 去重 / 阈值过滤。
+- 配置（`common/infrastructure/config.py`，**默认全部关闭**）：`ragflow_enabled` / `ragflow_base_url` / `ragflow_api_key` / `ragflow_similarity_threshold`(0.70) / `ragflow_top_k`(3) / `ragflow_datasets_json`（scope→dataset_id 映射，默认 `{"history":["f05e5a4aadac11f1b9211b18c23af0c8"]}`）/ `ragflow_enabled_sections`（默认 `quick,impact,root_cause,follow_up`）。
+- 现状：`ragflow_enabled=False` 时整条链路零生效；启用前需确认服务端 dataset 已灌数据且密钥走环境变量。
 
 ## 开发注意
 

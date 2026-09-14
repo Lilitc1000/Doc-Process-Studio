@@ -15,21 +15,28 @@ def is_kb_skill_id(skill_id: str) -> bool:
     return skill_id.startswith(KB_SKILL_ID_PREFIX)
 
 
-def extract_kb_project_name(skill_id: str) -> str:
+def extract_kb_project_id(skill_id: str) -> str:
+    """取出 KB 技能 id 中的项目标识（即 RAGFlow dataset id）。"""
+
     if skill_id.startswith(KB_SKILL_ID_PREFIX):
         return skill_id[len(KB_SKILL_ID_PREFIX) :]
     return ""
 
 
-def build_kb_skill_interface(project_name: str) -> SkillInterfaceConfig:
+def build_kb_skill_interface(project_id: str) -> SkillInterfaceConfig:
+    """构造虚拟 KB 技能的接口配置。
+
+    ``$`` 提及里携带的是 RAGFlow dataset id，直接用它作为技能标识，
+    省掉"项目名 -> dataset"的映射环节。
+    """
     from ....knowledge_base.infrastructure.kb_skill import KNOWLEDGE_BASE_RAG_PROMPT
 
-    prompt = KNOWLEDGE_BASE_RAG_PROMPT.format(project_name=project_name)
+    prompt = KNOWLEDGE_BASE_RAG_PROMPT.format(project_id=project_id)
     return SkillInterfaceConfig(
-        id=f"kb:{project_name}",
-        display_name=f"📚 {project_name}",
+        id=f"kb:{project_id}",
+        display_name=f"📚 知识库 {project_id[:8]}",
         skill_type="chat",
-        short_description=f"知识库：{project_name}",
+        short_description="知识库问答（数据源：RAGFlow dataset）",
         default_prompt=prompt,
         tools=[],
     )
@@ -37,7 +44,7 @@ def build_kb_skill_interface(project_name: str) -> SkillInterfaceConfig:
 
 def build_skill_prompt(skill_id: str) -> str:
     if is_kb_skill_id(skill_id):
-        return build_kb_skill_interface(extract_kb_project_name(skill_id)).default_prompt
+        return build_kb_skill_interface(extract_kb_project_id(skill_id)).default_prompt
     return get_skill_interface(skill_id).default_prompt
 
 
@@ -47,7 +54,7 @@ def _build_skills_catalog_lines(active_skill_ids: list[str]) -> list[str]:
     for skill_id in active_skill_ids:
         skill = interfaces.get(skill_id)
         if skill is None and is_kb_skill_id(skill_id):
-            skill = build_kb_skill_interface(extract_kb_project_name(skill_id))
+            skill = build_kb_skill_interface(extract_kb_project_id(skill_id))
         if skill is None:
             continue
         if is_kb_skill_id(skill_id):

@@ -8,7 +8,7 @@ def build_skill_tools(skill_id: str) -> list[dict[str, Any]]:
     """构造当前 skill 对模型暴露的全部工具。"""
 
     if skill_id.startswith("kb:"):
-        return _build_kb_skill_tools(skill_id)
+        return _build_kb_skill_tools()
 
     skill_interface = get_skill_interface(skill_id)
     _, max_search_limit = _resolve_search_limit_bounds()
@@ -131,8 +131,8 @@ def build_skill_tools_for_skills(skill_ids: list[str]) -> list[dict[str, Any]]:
     regular_skill_ids = [sid for sid in normalized_skill_ids if not sid.startswith("kb:")]
 
     kb_tools: list[dict[str, Any]] = []
-    for kb_sid in kb_skill_ids:
-        kb_tools.extend(_build_kb_skill_tools(kb_sid))
+    for _ in kb_skill_ids:
+        kb_tools.extend(_build_kb_skill_tools())
 
     if not regular_skill_ids:
         return kb_tools
@@ -257,17 +257,15 @@ def build_skill_tools_for_skills(skill_ids: list[str]) -> list[dict[str, Any]]:
     return [*kb_tools, *builtin_tools, *declared_tools]
 
 
-def _build_kb_skill_tools(skill_id: str) -> list[dict[str, Any]]:
+def _build_kb_skill_tools() -> list[dict[str, Any]]:
     """构造知识库虚拟 Skill 的工具集。"""
-    project_name = skill_id[3:] if skill_id.startswith("kb:") else ""
     return [
         {
             "type": "function",
             "function": {
                 "name": "search_knowledge_base",
                 "description": (
-                    f"在项目「{project_name}」的知识库中检索与查询"
-                    "相关的文档片段，返回文档内容、文件名、页码、章节等信息。"
+                    "在所选知识库（对话 $ 提及的项目）中检索与查询相关的文档片段，返回文档内容、文件名与相似度。"
                 ),
                 "parameters": {
                     "type": "object",

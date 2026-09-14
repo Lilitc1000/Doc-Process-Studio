@@ -1,9 +1,12 @@
 import json
+import logging
 from collections.abc import Awaitable
 from typing import Any, cast
 
 from .cache_client import get_redis_client
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def build_cache_key(*parts: str) -> str:
@@ -12,7 +15,11 @@ def build_cache_key(*parts: str) -> str:
 
 
 async def get_json(key: str) -> dict[str, Any] | list[Any] | None:
-    raw_value: str | None = await get_redis_client().get(key)
+    try:
+        raw_value: str | None = await get_redis_client().get(key)
+    except Exception as exc:  # noqa: BLE001 - Redis 不可用时降级为未命中，不阻断业务
+        logger.debug("cache get failed (key=%s): %s", key, exc)
+        return None
     if raw_value is None:
         return None
     loaded: dict[str, Any] | list[Any] = json.loads(raw_value)
@@ -27,11 +34,14 @@ async def set_json(
     kwargs: dict[str, Any] = {}
     if ttl_seconds is not None:
         kwargs["ex"] = ttl_seconds
-    await get_redis_client().set(
-        key,
-        json.dumps(payload, ensure_ascii=False),
-        **kwargs,
-    )
+    try:
+        await get_redis_client().set(
+            key,
+            json.dumps(payload, ensure_ascii=False),
+            **kwargs,
+        )
+    except Exception as exc:  # noqa: BLE001 - 写缓存失败不应影响主流程
+        logger.debug("cache set failed (key=%s): %s", key, exc)
 
 
 async def ping_redis() -> bool:
@@ -39,7 +49,11 @@ async def ping_redis() -> bool:
 
 
 async def delete_key(key: str) -> int:
-    return int(await cast(Awaitable[int], get_redis_client().delete(key)))
+    try:
+        return int(await cast(Awaitable[int], get_redis_client().delete(key)))
+    except Exception as exc:  # noqa: BLE001 - 缓存失效失败只降级不影响一致性
+        logger.debug("cache delete failed (key=%s): %s", key, exc)
+        return 0
 
 
 async def get_ttl_seconds(key: str) -> int:

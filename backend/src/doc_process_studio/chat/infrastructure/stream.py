@@ -66,7 +66,7 @@ from .streaming import (
 )
 from .streaming.context import (
     build_kb_skill_interface,
-    extract_kb_project_name,
+    extract_kb_project_id,
     is_kb_skill_id,
 )
 
@@ -104,15 +104,15 @@ def _register_kb_skills_from_messages(
         if getattr(message, "role", None) != "user":
             continue
         content = str(getattr(message, "content", "") or "")
-        for project_name in _KB_PRESCAN_PATTERN.findall(content):
-            kb_sid = f"kb:{project_name}"
+        for project_id in _KB_PRESCAN_PATTERN.findall(content):
+            kb_sid = f"kb:{project_id}"
             if kb_sid not in kb_skill_ids:
                 kb_skill_ids.append(kb_sid)
 
     for kb_sid in kb_skill_ids:
-        project_name = extract_kb_project_name(kb_sid)
-        if project_name and kb_sid not in available_skill_ids:
-            kb_interface = build_kb_skill_interface(project_name)
+        project_id = extract_kb_project_id(kb_sid)
+        if project_id and kb_sid not in available_skill_ids:
+            kb_interface = build_kb_skill_interface(project_id)
             available_skills.append(kb_interface)
             if isinstance(available_skill_ids, set):
                 available_skill_ids.add(kb_sid)
@@ -393,8 +393,8 @@ async def _prepare_skill_context(
     states_by_skill: dict[str, SkillConversationState] = {}
     for skill_id in active_skill_ids:
         if is_kb_skill_id(skill_id):
-            project_name = extract_kb_project_name(skill_id)
-            skill_interface = build_kb_skill_interface(project_name)
+            project_id = extract_kb_project_id(skill_id)
+            skill_interface = build_kb_skill_interface(project_id)
         else:
             skill_interface = get_skill_interface(skill_id)
         state = agent_state.skills_state.get(skill_id)

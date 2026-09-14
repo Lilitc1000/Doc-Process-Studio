@@ -12,10 +12,6 @@ class ProjectNotFoundError(KnowledgeBaseError):
     """知识库项目不存在。"""
 
 
-class FolderNotFoundError(KnowledgeBaseError):
-    """文件夹不存在。"""
-
-
 class DocumentNotFoundError(KnowledgeBaseError):
     """文档不存在。"""
 

@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -5,12 +6,16 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from doc_process_studio.core.database import Base
-import doc_process_studio.auth.infrastructure.persistence
-import doc_process_studio.chat.models
-import doc_process_studio.incident_report.infrastructure.persistence
+from doc_process_studio.common.infrastructure.database import Base
+import doc_process_studio.auth.infrastructure.persistence  # noqa: F401
+import doc_process_studio.chat.infrastructure.persistence  # noqa: F401
+import doc_process_studio.incident_report.infrastructure.persistence  # noqa: F401
 
 config = context.config
+
+# 允许用环境变量覆盖 alembic.ini 里硬编码的连接串（迁移到测试库时必需）
+if os.getenv("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

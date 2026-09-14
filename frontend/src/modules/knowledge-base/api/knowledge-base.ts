@@ -1,7 +1,6 @@
 import { apiClient } from '@shared/api/request';
 import type {
   KBProject,
-  KBFolder,
   KBDocument,
   KBTreeResponse,
   KBProjectSimple,
@@ -40,36 +39,6 @@ export const deleteKBProject = async (projectId: string): Promise<void> => {
   await apiClient.delete(`/knowledge-base/projects/${projectId}`);
 };
 
-export const createKBFolder = async (
-  projectId: string,
-  name: string,
-  parentId?: string,
-): Promise<KBFolder> => {
-  const response = await apiClient.post<KBFolder>(
-    `/knowledge-base/projects/${projectId}/folders`,
-    {
-      name,
-      parentId: parentId || null,
-    },
-  );
-  return response.data;
-};
-
-export const renameKBFolder = async (
-  folderId: string,
-  name: string,
-): Promise<KBFolder> => {
-  const response = await apiClient.put<KBFolder>(
-    `/knowledge-base/folders/${folderId}/rename`,
-    { name },
-  );
-  return response.data;
-};
-
-export const deleteKBFolder = async (folderId: string): Promise<void> => {
-  await apiClient.delete(`/knowledge-base/folders/${folderId}`);
-};
-
 export const getKBTree = async (projectId: string): Promise<KBTreeResponse> => {
   const response = await apiClient.get<KBTreeResponse>(
     `/knowledge-base/projects/${projectId}/tree`,
@@ -80,13 +49,9 @@ export const getKBTree = async (projectId: string): Promise<KBTreeResponse> => {
 export const uploadKBDocument = async (
   projectId: string,
   file: File,
-  folderId?: string,
 ): Promise<KBDocument> => {
   const formData = new FormData();
   formData.append('file', file);
-  if (folderId) {
-    formData.append('folder_id', folderId);
-  }
   const response = await apiClient.post<KBDocument>(
     `/knowledge-base/projects/${projectId}/documents/upload`,
     formData,

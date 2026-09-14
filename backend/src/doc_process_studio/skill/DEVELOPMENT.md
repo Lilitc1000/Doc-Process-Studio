@@ -87,7 +87,7 @@ router 将领域异常映射为 HTTP 状态码：`SkillNotFoundError`→404。
 
 ## 开发注意
 
-- `tool_loop/` 子包拆分为 tool_exec、tool_schema、tool_status、skill_files、tool_args 五个模块，修改时注意不要引入循环导入
+- `tool_loop/` 子包拆分为 tool_exec、tool_schema、tool_status、skill_files、tool_args 五个模块，修改时注意不要引入循环导入；其中 `tool_exec.py` 的 `search_knowledge_base` 内置工具经 `get_kb_service().search_knowledge(project_id=..., query=...)` 检索：project_id 就是 RAGFlow dataset id（来自对话 `$` 提及的 `kb:{dataset_id}`），直接按 dataset 粒度检索，不再本地向量化，也不再经过"项目名 -> dataset"的映射；不直接 import 索引实现模块（统一经 `KnowledgeBaseRepository` 端口）
 - Skill 定义目录是 `backend/skills/`，每个 Skill 至少包含 `agents/config.yaml`
 - 工具执行支持 DAG 依赖，由 `system/infrastructure/utils/executor.py` 处理
 - 会话状态存储在 Redis，使用 `conversation_store.py`

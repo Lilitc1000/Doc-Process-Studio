@@ -1,119 +1,86 @@
 """知识库应用层端口。
 
-定义数据访问和外部服务抽象，由 infrastructure 层实现。
+知识库以 **RAGFlow 为唯一真相源**：应用里的"项目"就是 RAGFlow 的 dataset，
+文件夹与文档全部由 RAGFlow 派生，本机不再保存任何知识库业务数据。
+
+因此本端口既是"结构网关"（项目 / 文件夹 / 文档），也是"检索网关"（``search``），
+二者共用同一份 RAGFlow 事实，不再各自维护一套目录。
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
-from typing import Any
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..router.schemas import (
     KBDocumentResponse,
-    KBFolderResponse,
     KBProjectResponse,
     KBTreeNode,
 )
-from .dtos import KBChunkPayload
+from .dtos import KBIndexHit
 
 
 class KnowledgeBaseRepository(ABC):
-    """知识库数据访问端口。
+    """知识库网关端口。
 
-    封装项目/文件夹/文档的 CRUD、树构建、统计更新、文档上传与索引编排。
-    所有写操作仅 flush 不 commit，由调用方控制事务边界。
+    纪律：
+    - 读路径遇到未配置 / 网络异常 / 资源不存在时返回空容器，**不抛异常**，
+      由调用方转成 404 或空列表；
+    - 写路径失败返回 ``None`` / ``False``，由调用方转成对应错误码；
+    - 实现方不得在本机持久化知识库业务数据（全部落在 RAGFlow）。
     """
 
     @abstractmethod
-    async def list_projects(self, db: AsyncSession) -> list[KBProjectResponse]: ...
+    async def list_projects(self) -> list[KBProjectResponse]:
+        """列出全部项目（= RAGFlow dataset）。"""
 
     @abstractmethod
-    async def get_project(self, db: AsyncSession, project_id: str) -> KBProjectResponse | None: ...
+    async def get_project(self, project_id: str) -> KBProjectResponse | None:
+        """按 dataset id 取项目；不存在返回 ``None``。"""
 
     @abstractmethod
-    async def create_project(self, db: AsyncSession, name: str, description: str) -> KBProjectResponse: ...
+    async def create_project(self, name: str, description: str = "") -> KBProjectResponse:
+        """新建项目（在 RAGFlow 建 dataset）。"""
 
     @abstractmethod
-    async def rename_project(self, db: AsyncSession, project_id: str, new_name: str) -> KBProjectResponse | None: ...
+    async def rename_project(self, project_id: str, new_name: str) -> KBProjectResponse | None:
+        """重命名项目；不存在返回 ``None``。"""
 
     @abstractmethod
-    async def delete_project(self, db: AsyncSession, project_id: str) -> bool: ...
+    async def delete_project(self, project_id: str) -> bool:
+        """删除项目（连同 RAGFlow dataset）；不存在返回 ``False``。"""
 
     @abstractmethod
-    async def list_simple_projects(self, db: AsyncSession) -> list[dict[str, str]]: ...
+    async def list_simple_projects(self) -> list[dict[str, str]]:
+        """供对话 ``$`` 提及使用的轻量列表 ``[{"id","name"}]``。"""
 
     @abstractmethod
-    async def create_folder(
-        self,
-        db: AsyncSession,
-        project_id: str,
-        name: str,
-        parent_id: str | None = None,
-    ) -> KBFolderResponse | None: ...
+    async def build_tree(self, project_id: str) -> list[KBTreeNode]:
+        """构建项目内的文件夹 / 文档树。
 
-    @abstractmethod
-    async def rename_folder(self, db: AsyncSession, folder_id: str, new_name: str) -> KBFolderResponse | None: ...
-
-    @abstractmethod
-    async def delete_folder(self, db: AsyncSession, folder_id: str) -> bool: ...
-
-    @abstractmethod
-    async def build_tree(self, db: AsyncSession, project_id: str) -> list[KBTreeNode]: ...
-
-    @abstractmethod
-    async def update_project_stats(self, db: AsyncSession, project_id: str) -> None: ...
+        dataset 无文件夹时返回扁平文档列表，有文件夹时返回层级树——由实现方
+        依据 RAGFlow 返回的文件夹数据派生，调用方无需感知。
+        """
 
     @abstractmethod
     async def upload_document(
         self,
-        db: AsyncSession,
         project_id: str,
-        folder_id: str | None,
         file_name: str,
         file_bytes: bytes,
-    ) -> KBDocumentResponse | None: ...
+    ) -> KBDocumentResponse | None:
+        """上传文档并在 RAGFlow 侧触发解析 / 切块。
+
+        压缩包会先在本地解包，逐个成员上传；返回最后一份文档的元数据。
+        """
 
     @abstractmethod
-    async def index_document(
+    async def delete_document(self, document_id: str) -> bool:
+        """删除文档；不存在返回 ``False``。"""
+
+    @abstractmethod
+    async def search(
         self,
-        db: AsyncSession,
-        document_id: str,
-        project_name: str,
-        file_bytes: bytes,
-    ) -> int: ...
-
-    @abstractmethod
-    async def delete_document(self, db: AsyncSession, document_id: str) -> bool: ...
-
-
-class VectorStore(ABC):
-    """向量存储端口。"""
-
-    @abstractmethod
-    def delete_project_vectors(self, project_name: str) -> int: ...
-
-    @abstractmethod
-    def delete_document_vectors(self, document_id: str) -> int: ...
-
-    @abstractmethod
-    def upsert_chunks(
-        self,
-        chunks: Sequence[KBChunkPayload],
-        vectors: Sequence[list[float]],
-    ) -> int: ...
-
-    @abstractmethod
-    def search(
-        self,
-        project_name: str,
-        query_vector: list[float],
+        *,
+        project_id: str,
+        query: str,
         top_k: int | None = None,
-    ) -> list[dict[str, Any]]: ...
-
-
-class EmbeddingService(ABC):
-    """文本向量化端口。"""
-
-    @abstractmethod
-    async def embed_texts(self, texts: Sequence[str], model: str | None = None) -> list[list[float]]: ...
+    ) -> list[KBIndexHit]:
+        """在单个 dataset 内检索；未配置 / 异常时返回空列表。"""

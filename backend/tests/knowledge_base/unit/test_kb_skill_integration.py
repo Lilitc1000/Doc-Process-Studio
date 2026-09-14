@@ -176,12 +176,12 @@ def test_context_is_kb_skill_id() -> None:
     assert is_kb_skill_id("document-assistant") is False
 
 
-def test_context_extract_kb_project_name() -> None:
-    from doc_process_studio.chat.infrastructure.streaming.context import extract_kb_project_name
+def test_context_extract_kb_project_id() -> None:
+    from doc_process_studio.chat.infrastructure.streaming.context import extract_kb_project_id
 
-    assert extract_kb_project_name("kb:出租车平台") == "出租车平台"
-    assert extract_kb_project_name("kb:") == ""
-    assert extract_kb_project_name("other") == ""
+    assert extract_kb_project_id("kb:出租车平台") == "出租车平台"
+    assert extract_kb_project_id("kb:") == ""
+    assert extract_kb_project_id("other") == ""
 
 
 def test_context_build_kb_skill_interface() -> None:

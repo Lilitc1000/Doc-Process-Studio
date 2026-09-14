@@ -1,3 +1,9 @@
+"""知识库 API 接口层的鉴权契约测试。
+
+知识库已不依赖本地数据库，这里只校验"未登录时一律拒绝"这一契约，
+不涉及具体后端实现。
+"""
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -16,97 +22,73 @@ def _auth_headers(user_id: str = "usr_test") -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+# ── 项目 ──
+
+
 def test_list_projects_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.get("/api/knowledge-base/projects")
-    assert resp.status_code == 401 or resp.status_code == 403
+    resp = TestClient(_create_test_app()).get("/api/knowledge-base/projects")
+    assert resp.status_code in (401, 403)
 
 
 def test_create_project_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.post(
+    resp = TestClient(_create_test_app()).post(
         "/api/knowledge-base/projects",
         json={"name": "test", "description": ""},
     )
-    assert resp.status_code == 401 or resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 def test_get_project_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.get("/api/knowledge-base/projects/proj-123")
-    assert resp.status_code == 401 or resp.status_code == 403
+    resp = TestClient(_create_test_app()).get("/api/knowledge-base/projects/ds-123")
+    assert resp.status_code in (401, 403)
 
 
 def test_rename_project_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.put(
-        "/api/knowledge-base/projects/proj-123/rename",
+    resp = TestClient(_create_test_app()).put(
+        "/api/knowledge-base/projects/ds-123/rename",
         json={"name": "new-name"},
     )
-    assert resp.status_code == 401 or resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 def test_delete_project_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.delete("/api/knowledge-base/projects/proj-123")
-    assert resp.status_code == 401 or resp.status_code == 403
-
-
-def test_create_folder_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.post(
-        "/api/knowledge-base/projects/proj-123/folders",
-        json={"name": "folder1"},
-    )
-    assert resp.status_code == 401 or resp.status_code == 403
-
-
-def test_rename_folder_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.put(
-        "/api/knowledge-base/folders/folder-123/rename",
-        json={"name": "new-name"},
-    )
-    assert resp.status_code == 401 or resp.status_code == 403
-
-
-def test_delete_folder_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.delete("/api/knowledge-base/folders/folder-123")
-    assert resp.status_code == 401 or resp.status_code == 403
+    resp = TestClient(_create_test_app()).delete("/api/knowledge-base/projects/ds-123")
+    assert resp.status_code in (401, 403)
 
 
 def test_get_tree_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.get("/api/knowledge-base/projects/proj-123/tree")
-    assert resp.status_code == 401 or resp.status_code == 403
+    resp = TestClient(_create_test_app()).get("/api/knowledge-base/projects/ds-123/tree")
+    assert resp.status_code in (401, 403)
+
+
+# ── 文档 ──
 
 
 def test_upload_document_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.post("/api/knowledge-base/projects/proj-123/documents/upload")
-    assert resp.status_code == 401 or resp.status_code == 403
+    resp = TestClient(_create_test_app()).post("/api/knowledge-base/projects/ds-123/documents/upload")
+    assert resp.status_code in (401, 403)
 
 
 def test_delete_document_requires_auth() -> None:
-    app = _create_test_app()
-    client = TestClient(app)
-    resp = client.delete("/api/knowledge-base/documents/doc-123")
-    assert resp.status_code == 401 or resp.status_code == 403
+    resp = TestClient(_create_test_app()).delete("/api/knowledge-base/documents/doc-123")
+    assert resp.status_code in (401, 403)
+
+
+# ── $ 提及列表 ──
 
 
 def test_projects_simple_requires_auth() -> None:
+    resp = TestClient(_create_test_app()).get("/api/knowledge-base/projects-simple")
+    assert resp.status_code in (401, 403)
+
+
+def test_folder_endpoints_are_removed() -> None:
+    """文件夹由 RAGFlow 派生，本服务不再提供文件夹写接口。"""
+
     app = _create_test_app()
-    client = TestClient(app)
-    resp = client.get("/api/knowledge-base/projects-simple")
-    assert resp.status_code == 401 or resp.status_code == 403
+    resp = TestClient(app).post(
+        "/api/knowledge-base/projects/ds-123/folders",
+        json={"name": "folder1"},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 404

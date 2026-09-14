@@ -23,7 +23,6 @@ dependencies = [
   "alembic>=1.13.0",
   "python-jose[cryptography]>=3.3.0",
   "bcrypt>=4.0.1,<5.0.0",
-  "qdrant-client>=1.12.0",
   "rarfile>=4.2",
   "py7zr>=0.21",
 ]
@@ -89,3 +88,6 @@ min_confidence = 80
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+  "db: 需要真实 PostgreSQL 的持久化测试（未配置 DPS_TEST_DATABASE_URL 时自动跳过）",
+]
