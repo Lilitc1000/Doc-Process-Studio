@@ -3,7 +3,6 @@ from .errors import (
     PermissionDeniedError,
     ReportNotFoundError,
 )
-from .form_schema import INCIDENT_REPORT_FORM_SCHEMA
 from .form_validation import find_missing_submit_fields
 from .permission import (
     INCIDENT_VALID_ROLES,
@@ -25,7 +24,6 @@ __all__ = [
     "DomainError",
     "PermissionDeniedError",
     "ReportNotFoundError",
-    "INCIDENT_REPORT_FORM_SCHEMA",
     "INCIDENT_VALID_ROLES",
     "ROLE_DEFINITIONS",
     "ROLE_PERMISSIONS_MAP",

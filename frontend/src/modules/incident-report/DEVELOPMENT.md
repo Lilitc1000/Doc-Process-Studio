@@ -48,9 +48,7 @@ frontend/src/views/incident-report/
 │   └── RoleManagementView.vue
 ├── components/                    # 共享组件
 │   ├── ReportStatusBadge.vue
-│   ├── SchemaFormRenderer.vue
-│   ├── RichTextEditor.vue
-│   └── TimelineEditor.vue
+│   └── RichTextEditor.vue
 ├── composables/                   # 共享 composables
 │   ├── useReportGeneration.ts     # AI 生成共享逻辑（快填、分段生成、预览、结果应用）
 │   └── useReportForm.ts           # 表单工具函数（severityOptions/statusOptions 从 constants.ts 导入，defaultFormAnswers/buildFormPayload/validateTimelineTimeOrder 独立导出）
@@ -248,4 +246,3 @@ frontend/src/views/incident-report/
 - 样式文件放在 `styles/` 目录下，通过 `<style scoped src="./styles/xxx.css">` 引入
 - 不要在业务组件中直接写原生 `<button>`/`<input>`，应使用 `components/base/` 中的基础组件
 - 状态徽章组件 `ReportStatusBadge` 使用 `status.replace(/_/g, '-')` 生成 CSS 类名
-- Schema 表单渲染器 `SchemaFormRenderer` 根据 `form_schema.py` 返回的 Schema 动态渲染表单

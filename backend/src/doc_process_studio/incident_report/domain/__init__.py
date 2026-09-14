@@ -16,7 +16,6 @@ from .events import (
     ReportSubmitted,
 )
 from .values import (
-    INCIDENT_REPORT_FORM_SCHEMA,
     INCIDENT_VALID_ROLES,
     ROLE_DEFINITIONS,
     ROLE_PERMISSIONS_MAP,
@@ -48,7 +47,6 @@ __all__ = [
     "DomainError",
     "PermissionDeniedError",
     "ReportNotFoundError",
-    "INCIDENT_REPORT_FORM_SCHEMA",
     "INCIDENT_VALID_ROLES",
     "ROLE_DEFINITIONS",
     "ROLE_PERMISSIONS_MAP",

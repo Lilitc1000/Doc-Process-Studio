@@ -4,7 +4,6 @@
 """
 
 from datetime import datetime
-from typing import Any
 from uuid import uuid4
 
 from ....common.utils.dtutils import to_utc8
@@ -54,14 +53,6 @@ class ReportApplicationService:
         self._audit = audit_sink
         self._users = user_dir
         self._ref_no_gen = ref_no_gen
-
-    # ---- 表单 Schema ----
-    @staticmethod
-    def get_form_schema() -> dict[str, Any]:
-        """返回事故报告表单 Schema（4 步骤结构）。"""
-        from ...domain.values.form_schema import INCIDENT_REPORT_FORM_SCHEMA
-
-        return INCIDENT_REPORT_FORM_SCHEMA.model_dump()
 
     # ---- 创建 ----
     async def create(self, cmd: CreateReportCommand) -> IncidentReportDetail:

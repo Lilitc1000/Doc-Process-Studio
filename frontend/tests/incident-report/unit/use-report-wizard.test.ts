@@ -3,19 +3,24 @@ import { setActivePinia, createPinia } from 'pinia';
 import { useReportWizard } from '@modules/incident-report/views/create/composables/useReportWizard';
 import * as incidentApi from '@modules/incident-report';
 
-vi.mock('@modules/incident-report', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@modules/incident-report')>();
-  return {
-    ...original,
-    createIncidentReport: vi.fn(),
-    submitIncidentReport: vi.fn(),
-    updateIncidentReport: vi.fn(),
-    quickGenerateIncidentReportBody: vi.fn(),
-    generateIncidentReportBodySection: vi.fn(),
-    previewIncidentReport: vi.fn(),
-  };
-});
+vi.mock(
+  '@modules/incident-report/api/incident-report',
+  async (importOriginal) => {
+    const original =
+      await importOriginal<
+        typeof import('@modules/incident-report/api/incident-report')
+      >();
+    return {
+      ...original,
+      createIncidentReport: vi.fn(),
+      submitIncidentReport: vi.fn(),
+      updateIncidentReport: vi.fn(),
+      quickGenerateIncidentReportBody: vi.fn(),
+      generateIncidentReportBodySection: vi.fn(),
+      previewIncidentReport: vi.fn(),
+    };
+  },
+);
 
 describe('useReportWizard', () => {
   beforeEach(() => {
@@ -229,6 +234,7 @@ describe('useReportWizard', () => {
 
     const wizard = useReportWizard();
     wizard.reportId.value = 'report-7';
+    await wizard.generatePreview();
 
     expect(mockPreview).toHaveBeenCalledWith(
       'report-7',

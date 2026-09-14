@@ -171,10 +171,14 @@ describe('parseStreamEvents', () => {
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useAuthStore } from '@modules/auth';
-import * as authApi from '@modules/auth';
+import * as authApi from '@modules/auth/api/auth';
 
-vi.mock('@modules/auth', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@modules/auth')>();
+// ⚠️ 必须 mock **api 子模块**，不能 mock 桶文件 `@modules/auth`：
+// store/composable 内部是 `import { loginUser } from '../api/auth'` 直连 api 模块，
+// mock 桶文件拦不到内部直连，请求会真的发出去（happy-dom 下报 fetch() 失败）。
+vi.mock('@modules/auth/api/auth', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@modules/auth/api/auth')>();
   return {
     ...original,
     loginUser: vi.fn(),
@@ -222,6 +226,7 @@ describe('useAuthStore', () => {
 **要点**：
 
 - `vi.mock()` 放在 `describe` 顶层，对所有测试生效
+- **mock 目标是 api 子模块（`@modules/<domain>/api/<file>`），不是模块桶文件**——桶 mock 拦不住 store 内部对 api 模块的直连 import
 - `beforeEach` 中必须 `vi.clearAllMocks()` + `localStorage.clear()` + `setActivePinia(createPinia())`
 - 通过 `as ReturnType<typeof vi.fn>` 获取 mock 函数的类型安全引用
 - 测试成功路径和失败路径
@@ -304,15 +309,22 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useReportList } from '@modules/incident-report/views/list/composables/useReportList';
 
-vi.mock('@modules/incident-report', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@modules/incident-report')>();
-  return {
-    ...original,
-    fetchIncidentReportList: vi.fn().mockResolvedValue({ total: 0, items: [] }),
-    fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
-  };
-});
+vi.mock(
+  '@modules/incident-report/api/incident-report',
+  async (importOriginal) => {
+    const original =
+      await importOriginal<
+        typeof import('@modules/incident-report/api/incident-report')
+      >();
+    return {
+      ...original,
+      fetchIncidentReportList: vi
+        .fn()
+        .mockResolvedValue({ total: 0, items: [] }),
+      fetchUserIncidentRoles: vi.fn().mockResolvedValue(['reporter']),
+    };
+  },
+);
 
 describe('useReportList', () => {
   beforeEach(() => {
@@ -331,7 +343,7 @@ describe('useReportList', () => {
 **要点**：
 
 - composable 内部调用 `useXxxStore()` 时，必须先 `setActivePinia(createPinia())`
-- mock 所有 API 调用，避免真实网络请求
+- mock 所有 API 调用（同样要 mock 到 api 子模块），避免真实网络请求
 - 不要创建无效的 `createMockStore()` 普通对象——它不会被 Pinia 识别
 
 #### 3. 页面级组件测试
@@ -636,7 +648,7 @@ test.describe('功能名称', () => {
 
 - [ ] 纯函数测试覆盖边界情况
 - [ ] Store 测试在 `beforeEach` 中初始化 Pinia
-- [ ] API 调用使用 `vi.mock()` mock
+- [ ] API 调用使用 `vi.mock()` mock，且目标是 `@modules/<domain>/api/<file>`（**不是模块桶文件**）
 
 ### 集成测试
 

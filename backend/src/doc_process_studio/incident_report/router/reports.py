@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime as dt
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -79,13 +78,6 @@ def _handle_service_error(exc: ValueError | DomainError) -> HTTPException:
         return _handle_domain_error(exc)
     _logger.warning("Service error (400): %s", exc)
     return HTTPException(status_code=400, detail=str(exc))
-
-
-@router.get("/reports/schema")
-async def get_report_form_schema(
-    service: ReportApplicationService = Depends(get_report_application_service),
-) -> dict[str, Any]:
-    return service.get_form_schema()
 
 
 @router.get("/reports", response_model=IncidentReportListResponse)

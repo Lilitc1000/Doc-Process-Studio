@@ -2,15 +2,20 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useReportAnalytics } from '@modules/incident-report/views/analytics/composables/useReportAnalytics';
 import * as api from '@modules/incident-report';
 
-vi.mock('@modules/incident-report', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@modules/incident-report')>();
-  return {
-    ...original,
-    fetchIncidentAnalyticsOverview: vi.fn(),
-    fetchIncidentAnalyticsTrend: vi.fn(),
-  };
-});
+vi.mock(
+  '@modules/incident-report/api/incident-report',
+  async (importOriginal) => {
+    const original =
+      await importOriginal<
+        typeof import('@modules/incident-report/api/incident-report')
+      >();
+    return {
+      ...original,
+      fetchIncidentAnalyticsOverview: vi.fn(),
+      fetchIncidentAnalyticsTrend: vi.fn(),
+    };
+  },
+);
 
 describe('useReportAnalytics', () => {
   beforeEach(() => {

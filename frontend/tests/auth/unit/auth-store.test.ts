@@ -3,8 +3,9 @@ import { setActivePinia, createPinia } from 'pinia';
 import { useAuthStore } from '@modules/auth';
 import * as authApi from '@modules/auth';
 
-vi.mock('@modules/auth', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@modules/auth')>();
+vi.mock('@modules/auth/api/auth', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@modules/auth/api/auth')>();
   return {
     ...original,
     loginUser: vi.fn(),

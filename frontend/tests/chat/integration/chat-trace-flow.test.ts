@@ -37,7 +37,6 @@ vi.mock('@modules/chat/api/chat-sessions', () => ({
 }));
 
 vi.mock('@modules/chat/api/incident', () => ({
-  fetchIncidentFormSchema: vi.fn(),
   fetchIncidentSessionSummaries: vi.fn(),
   createIncidentSession: vi.fn(),
   fetchIncidentSessionDetail: vi.fn(),
