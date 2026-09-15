@@ -8,6 +8,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
+  // 兜底清理：整轮结束后按 e2e_w* 前缀再扫一遍，避免中断导致的数据残留
+  globalTeardown: './tests/global-teardown.ts',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',

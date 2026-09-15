@@ -344,7 +344,7 @@ async def preview_report_attachment(
             model=payload.model,
             reranker_model=payload.reranker_model,
         )
-    except ValueError as exc:
+    except (ValueError, DomainError) as exc:
         raise _handle_service_error(exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

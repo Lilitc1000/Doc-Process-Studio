@@ -401,6 +401,27 @@ export async function deleteChatSessionsByUser(
   return resp.ok();
 }
 
+export async function deleteKbProjectsByPrefix(
+  request: APIRequestContext,
+  token: string,
+  prefix: string,
+) {
+  const resp = await request.get('/api/knowledge-base/projects', {
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 10_000,
+  });
+  if (!resp.ok()) return;
+  const data = await resp.json();
+  const projects: { id: string; name: string }[] = data.projects ?? [];
+  for (const project of projects) {
+    if (project.name?.startsWith(prefix)) {
+      await request.delete(`/api/knowledge-base/projects/${project.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+  }
+}
+
 export async function cleanupWorkerData(
   request: APIRequestContext,
   workerPrefix: string,
@@ -408,6 +429,7 @@ export async function cleanupWorkerData(
   const token = await loginViaApi(request);
   if (token) {
     await deleteReportsByPrefix(request, token, workerPrefix);
+    await deleteKbProjectsByPrefix(request, token, workerPrefix);
     await deleteChatSessionsByTitlePrefix(request, token, workerPrefix);
   }
   await deleteTestUsersByPrefix(request, workerPrefix);
