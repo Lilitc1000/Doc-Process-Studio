@@ -1,8 +1,12 @@
 """会话仓储实现：委托 sessions 与 db_session_store 工具层。"""
 
-from ..application.dtos.session import ChatSessionSnapshot, ChatSessionSummary
+from ..application.dtos.session import (
+    ChatSessionDetail,
+    ChatSessionList,
+    ChatSessionSnapshot,
+    ChatSessionSummary,
+)
 from ..application.ports import SessionRepository, TitleGenerator
-from ..router.schemas.response import ChatSessionDetail, ChatSessionListResponse
 from .db_session_store import (
     delete_chat_sessions_by_title_prefix,
     delete_chat_sessions_by_user,
@@ -22,7 +26,7 @@ from .sessions import (
 class SqlSessionRepository(SessionRepository):
     """基于 SQLAlchemy 的会话仓储。"""
 
-    async def list_sessions(self, user_id: str) -> ChatSessionListResponse:
+    async def list_sessions(self, user_id: str) -> ChatSessionList:
         return await list_chat_sessions(user_id)
 
     async def get_session(self, session_id: str) -> ChatSessionDetail | None:

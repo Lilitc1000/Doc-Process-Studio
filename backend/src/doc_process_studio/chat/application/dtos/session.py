@@ -91,3 +91,48 @@ class ChatSessionSummary(BaseModel):
         default=None,
         description="当前重排序模型名称",
     )
+
+
+class ChatSessionList(BaseModel):
+    """历史会话列表（应用层形状）。
+
+    原 ``router.schemas.response.ChatSessionListResponse`` 的下沉版本，去掉
+    ``Response`` 后缀；路由层以 ``ChatSessionListResponse = ChatSessionList`` 再导出。
+    """
+
+    sessions: list[ChatSessionSummary] = Field(
+        default_factory=list,
+        description="历史会话列表",
+    )
+
+
+class ChatSessionDetail(ChatSessionSummary):
+    """会话详情（应用层形状）= 摘要 + 快照。
+
+    原 ``router.schemas.response.ChatSessionDetail`` 的下沉版本。
+    """
+
+    snapshot: ChatSessionSnapshot = Field(..., description="会话快照")
+
+
+class ChatSessionUpsert(BaseModel):
+    """会话 upsert 入参形状（应用层）。
+
+    原 ``router.schemas.request.ChatSessionUpsertRequest``，去掉 ``Request`` 后缀。
+    """
+
+    title: str = Field(default="", description="会话标题")
+    title_source_messages: list[str] = Field(
+        default_factory=list,
+        description="用于自动生成标题的消息片段",
+    )
+    snapshot: ChatSessionSnapshot = Field(..., description="会话快照")
+
+
+class ChatSessionTitleUpdate(BaseModel):
+    """会话标题更新入参形状（应用层）。
+
+    原 ``router.schemas.request.ChatSessionTitleUpdateRequest``，去掉 ``Request`` 后缀。
+    """
+
+    title: str = Field(..., min_length=1, description="新的会话标题")

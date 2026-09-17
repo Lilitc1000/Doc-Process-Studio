@@ -10,9 +10,9 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from ....chat.application.dtos import ChatStreamOptions
 from ....chat.application.dtos.attachment import ChatAttachment
 from ....chat.infrastructure.attachments import save_generated_attachment
-from ....chat.router.schemas.request import ChatStreamRequest
 from ....common.infrastructure.config import BACKEND_DIR, settings
 from ....common.utils.tool_args import parse_tool_arguments
 from ...application.dtos.catalog import SkillToolConfig
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 def _enforce_declared_tool_security_policy(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     tool: SkillToolConfig,
 ) -> None:
     security = tool.security
@@ -532,7 +532,7 @@ def _restructure_section(section: dict[str, Any]) -> dict[str, Any]:
 
 def _build_declared_tool_command(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     tool: SkillToolConfig,
     arguments: dict[str, Any],
     temp_dir_path: Path,
@@ -613,7 +613,7 @@ def _build_declared_tool_command(
 
 def _execute_declared_script_tool(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     tool: SkillToolConfig,
     arguments: dict[str, Any],
 ) -> tuple[dict[str, Any], list[ChatAttachment]]:
@@ -699,7 +699,7 @@ def _execute_declared_script_tool(
 
 async def _execute_builtin_tool(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     state: SkillConversationState,
     tool_name: str,
     arguments: dict[str, Any],
@@ -852,7 +852,7 @@ async def _execute_builtin_tool(
 
 async def execute_skill_tool_call(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     state: SkillConversationState,
     tool_call: dict[str, Any],
 ) -> tuple[dict[str, Any], list[ChatAttachment]]:
@@ -912,7 +912,7 @@ async def execute_skill_tool_call(
 
 async def execute_scoped_skill_tool_call(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     states_by_skill: dict[str, SkillConversationState],
     tool_call: dict[str, Any],
 ) -> tuple[dict[str, Any], list[Any]]:

@@ -7,20 +7,18 @@
 """
 
 from ...common.infrastructure.config import settings
-from ..application.dtos import KBIndexHit
 from ..domain.errors import (
     DocumentNotFoundError,
     FileTooLargeError,
     ProjectNotFoundError,
     UnsupportedFileTypeError,
 )
-from ..router.schemas import (
-    KBDocumentResponse,
-    KBProjectListResponse,
-    KBProjectListSimpleResponse,
-    KBProjectResponse,
+from .dtos import (
+    KBDocument,
+    KBIndexHit,
+    KBProject,
     KBProjectSimpleItem,
-    KBTreeResponse,
+    KBProjectTree,
 )
 from .ports import KnowledgeBaseRepository
 
@@ -31,20 +29,19 @@ class KnowledgeBaseService:
     def __init__(self, *, repository: KnowledgeBaseRepository) -> None:
         self._repo = repository
 
-    async def list_projects(self) -> KBProjectListResponse:
-        projects = await self._repo.list_projects()
-        return KBProjectListResponse(projects=projects)
+    async def list_projects(self) -> list[KBProject]:
+        return await self._repo.list_projects()
 
-    async def create_project(self, name: str, description: str = "") -> KBProjectResponse:
+    async def create_project(self, name: str, description: str = "") -> KBProject:
         return await self._repo.create_project(name, description)
 
-    async def get_project(self, project_id: str) -> KBProjectResponse:
+    async def get_project(self, project_id: str) -> KBProject:
         project = await self._repo.get_project(project_id)
         if project is None:
             raise ProjectNotFoundError("Project not found")
         return project
 
-    async def rename_project(self, project_id: str, new_name: str) -> KBProjectResponse:
+    async def rename_project(self, project_id: str, new_name: str) -> KBProject:
         project = await self._repo.rename_project(project_id, new_name)
         if project is None:
             raise ProjectNotFoundError("Project not found")
@@ -55,17 +52,16 @@ class KnowledgeBaseService:
         if not success:
             raise ProjectNotFoundError("Project not found")
 
-    async def list_simple_projects(self) -> KBProjectListSimpleResponse:
+    async def list_simple_projects(self) -> list[KBProjectSimpleItem]:
         rows = await self._repo.list_simple_projects()
-        projects = [KBProjectSimpleItem(id=row["id"], name=row["name"]) for row in rows]
-        return KBProjectListSimpleResponse(projects=projects)
+        return [KBProjectSimpleItem(id=row["id"], name=row["name"]) for row in rows]
 
-    async def build_tree(self, project_id: str) -> KBTreeResponse:
+    async def build_tree(self, project_id: str) -> KBProjectTree:
         project = await self._repo.get_project(project_id)
         if project is None:
             raise ProjectNotFoundError("Project not found")
         tree = await self._repo.build_tree(project_id)
-        return KBTreeResponse(
+        return KBProjectTree(
             project_id=project.id,
             project_name=project.name,
             tree=tree,
@@ -76,7 +72,7 @@ class KnowledgeBaseService:
         project_id: str,
         file_name: str,
         file_bytes: bytes,
-    ) -> KBDocumentResponse:
+    ) -> KBDocument:
         if len(file_bytes) > settings.kb_max_upload_size_bytes:
             raise FileTooLargeError("File size exceeds the configured upload limit")
 

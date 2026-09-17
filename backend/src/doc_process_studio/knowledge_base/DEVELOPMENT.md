@@ -69,18 +69,40 @@ knowledge_base/
 返回 `code=102 "The dataset not own the document folders."` 表示没有——
 仓储把它翻译成空列表，调用方只管渲染：有文件夹就是树，没有就是扁平文档列表。
 
-## 缓存
+## 缓存与双向一致性
 
-dataset / folder / document 三类列表缓存到 Redis，键由 `build_cache_key` 生成：
+RAGFlow 是**外部真相源**：用户在 RAGFlow 网页端新建 / 删除 dataset 或文档时不会通知
+本服务，缓存会让应用与 RAGFlow 短暂不一致。因此策略是：
+
+- **dataset 列表（= 项目清单）永不缓存**。它决定"有哪些项目"，是路由与选择的依据，
+  必须每次直连 RAGFlow（`RagflowKnowledgeBaseRepository._datasets()`）。
+  这样 RAGFlow 侧的增删在下一次请求即可见。
+- **folder / document 列表**可按 `KB_CACHE_TTL_SECONDS` 缓存，**默认 `0`（不缓存）**
+  以保证强一致；需要减轻 RAGFlow 压力时可设为 10~60 秒。
 
 | 缓存键 | 内容 | 失效时机 |
 |---|---|---|
-| `kb:datasets` | dataset 列表 | 建 / 改名 / 删项目 |
 | `kb:ds:{id}:folders` | 该 dataset 的文件夹 | 上传 / 删除文档 |
-| `kb:ds:{id}:docs` | 该 dataset 的文档 | 上传 / 删除文档 |
+| `kb:ds:{id}:documents` | 该 dataset 的文档 | 上传 / 删除文档 |
 
-默认 TTL 300 秒（`KB_CACHE_TTL_SECONDS`）。**Redis 不可用时自动降级为直连 RAGFlow**——
-`common/infrastructure/cache.py` 会吞掉缓存异常，不让它打断业务。
+本服务自己的写操作（建 / 改名 / 删项目、上传 / 删文档）成功后会立即失效对应键；
+**Redis 不可用时自动降级为直连 RAGFlow**——`common/infrastructure/cache.py`
+会吞掉缓存异常，不让它打断业务。
+
+> 取舍：若把 TTL 调大，RAGFlow 侧的改动最多会延迟 TTL 秒才可见。需要"即时一致"
+> 就保持 `KB_CACHE_TTL_SECONDS=0`。
+
+## 分层纪律
+
+结构形状（项目 / 文档 / 树节点）定义在**应用层** `application/dtos/`：
+`KBProject`、`KBDocument`、`KBTreeNodeFolder/Document`、`KBProjectSimpleItem`、`KBProjectTree`。
+
+- `application/` 与 `infrastructure/` **只依赖 `application.dtos`**，
+  **不得**反向 import `router.schemas`——否则会形成
+  `ports -> router -> kb_service -> ports` 的循环导入（曾因此导致单独 import 仓储即报错）。
+- `router/schemas/response.py` 只做 API 包装（`KBProjectListResponse`、`KBTreeResponse` 等）
+  并把应用层类型以旧名再导出（`KBProjectResponse = KBProject`），API 契约保持不变。
+- 服务层返回应用层形状，由路由层包装成响应模型。
 
 ## API 路由
 
@@ -123,7 +145,7 @@ dataset / folder / document 三类列表缓存到 Redis，键由 `build_cache_ke
 | `RAGFLOW_TIMEOUT_SECONDS` | `15.0` | 常规请求超时 |
 | `RAGFLOW_PARSE_TIMEOUT_SECONDS` | `60.0` | 触发服务端解析的超时 |
 | `KB_SEARCH_TOP_K` | `6` | 检索返回条数 |
-| `KB_CACHE_TTL_SECONDS` | `300` | 列表缓存 TTL |
+| `KB_CACHE_TTL_SECONDS` | `0` | 文档/目录列表缓存 TTL；`0` = 不缓存（强一致）。项目清单永不缓存 |
 | `KB_MAX_UPLOAD_SIZE_BYTES` | 100MB | 上传大小限制 |
 | `REDIS_URL` / `REDIS_PASSWORD` | — | 缓存后端；未配置时缓存降级为直连 |
 

@@ -52,7 +52,7 @@ def _handle_kb_error(exc: KnowledgeBaseError) -> HTTPException:
 async def list_kb_projects(
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectListResponse:
-    return await service.list_projects()
+    return KBProjectListResponse(projects=await service.list_projects())
 
 
 @router.post("/projects", response_model=KBProjectResponse, status_code=201)
@@ -67,7 +67,7 @@ async def create_kb_project(
 async def list_kb_projects_simple(
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBProjectListSimpleResponse:
-    return await service.list_simple_projects()
+    return KBProjectListSimpleResponse(projects=await service.list_simple_projects())
 
 
 @router.get("/projects/{project_id}", response_model=KBProjectResponse)
@@ -110,9 +110,10 @@ async def get_kb_tree(
     service: KnowledgeBaseService = Depends(get_kb_service),
 ) -> KBTreeResponse:
     try:
-        return await service.build_tree(project_id)
+        tree = await service.build_tree(project_id)
     except KnowledgeBaseError as exc:
         raise _handle_kb_error(exc) from exc
+    return KBTreeResponse(project_id=tree.project_id, project_name=tree.project_name, tree=tree.tree)
 
 
 @router.post("/projects/{project_id}/documents/upload", response_model=KBDocumentResponse, status_code=201)

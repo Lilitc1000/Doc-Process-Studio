@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from ....chat.router.schemas.request import ChatStreamRequest
+from ....chat.application.dtos import ChatStreamOptions
 from ....common.infrastructure.config import settings
 from ....common.utils.dtutils import to_utc8
 from ....common.utils.tool_args import parse_tool_arguments
@@ -48,8 +48,8 @@ class ExecutionResult:
 
 @dataclass
 class ExecutionInput:
-    request: ChatStreamRequest
-    primary_request: ChatStreamRequest
+    request: ChatStreamOptions
+    primary_request: ChatStreamOptions
     plan_decision: SkillPlanDecision
     agent_state: ConversationAgentState
     states_by_skill: dict[str, SkillConversationState]

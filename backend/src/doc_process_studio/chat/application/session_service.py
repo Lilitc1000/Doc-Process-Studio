@@ -1,8 +1,12 @@
 """会话用例服务。"""
 
 from ..domain.errors import SessionAccessDeniedError, SessionNotFoundError
-from ..router.schemas.response import ChatSessionDetail, ChatSessionListResponse
-from .dtos.session import ChatSessionSnapshot, ChatSessionSummary
+from .dtos.session import (
+    ChatSessionDetail,
+    ChatSessionList,
+    ChatSessionSnapshot,
+    ChatSessionSummary,
+)
 from .ports import ConversationStateStore, SessionRepository, TitleGenerator
 
 
@@ -20,7 +24,7 @@ class SessionService:
         self._titles = title_generator
         self._states = state_store
 
-    async def list_sessions(self, user_id: str) -> ChatSessionListResponse:
+    async def list_sessions(self, user_id: str) -> ChatSessionList:
         return await self._repo.list_sessions(user_id)
 
     async def get_session(self, session_id: str, user_id: str) -> ChatSessionDetail:

@@ -109,7 +109,10 @@ class Settings(BaseSettings):
     admin_password: str = "admin123"
     kb_max_upload_size_bytes: int = 100 * 1024 * 1024
     kb_search_top_k: int = 6
-    kb_cache_ttl_seconds: int = 300
+    # 知识库列表缓存秒数。RAGFlow 是外部真相源，其侧变更不会通知本服务，
+    # 缓存会让应用与 RAGFlow 短暂不一致；默认 0（不缓存）保证强一致，
+    # 需要减轻 RAGFlow 压力时可设为 10~60。
+    kb_cache_ttl_seconds: int = 0
     # RAGFlow 知识增强。默认关闭，开启时需提供 base_url 与 api_key，
     # 切勿将 api_key 硬编码进代码。
     ragflow_base_url: str | None = None

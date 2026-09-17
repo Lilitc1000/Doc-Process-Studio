@@ -1,76 +1,39 @@
 """知识库 API 请求与响应 Schema。
 
-形状与 RAGFlow 的数据模型对齐：项目 = dataset，文档 = dataset 内的 document。
-本机不保存知识库业务数据，因此不存在"版本 / 是否最新 / 文件夹归属"这类本地概念。
+结构形状（项目 / 文档 / 树节点 / 轻量项）定义在应用层 ``application.dtos``，
+本模块只做 API 包装与**再导出**：既避免同一份结构维护两遍，也避免应用层
+反向依赖路由层造成循环导入。
 """
 
-from datetime import datetime
+from pydantic import BaseModel
 
-from pydantic import BaseModel, ConfigDict, Field
+from ...application.dtos import (
+    KBDocument,
+    KBProject,
+    KBProjectSimpleItem,
+    KBTreeNodeDocument,
+    KBTreeNodeFolder,
+)
+from ...application.dtos import KBTreeNode as _KBTreeNode
 
-
-class KBProjectResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    name: str
-    description: str | None = None
-    document_count: int = 0
-    created_at: datetime
-    updated_at: datetime
+# API 契约沿用旧名，既有导入方无需改动
+KBProjectResponse = KBProject
+KBDocumentResponse = KBDocument
+KBTreeNode = _KBTreeNode
 
 
 class KBProjectListResponse(BaseModel):
     projects: list[KBProjectResponse]
 
 
-class KBDocumentResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    project_id: str
-    file_name: str
-    file_type: str
-    file_size: int = 0
-    chunk_count: int = 0
-    is_indexed: bool = False
-    uploaded_at: datetime
-
-
-class KBTreeNodeFolder(BaseModel):
-    type: str = "folder"
-    id: str
-    name: str
-    children: list["KBTreeNode"] = Field(default_factory=list)
-
-
-class KBTreeNodeDocument(BaseModel):
-    type: str = "document"
-    id: str
-    name: str
-    file_type: str
-    file_size: int = 0
-    chunk_count: int = 0
-    is_indexed: bool = False
-    uploaded_at: datetime
-
-
-KBTreeNode = KBTreeNodeFolder | KBTreeNodeDocument
+class KBProjectListSimpleResponse(BaseModel):
+    projects: list[KBProjectSimpleItem]
 
 
 class KBTreeResponse(BaseModel):
     project_id: str
     project_name: str
     tree: list[KBTreeNode]
-
-
-class KBProjectSimpleItem(BaseModel):
-    id: str
-    name: str
-
-
-class KBProjectListSimpleResponse(BaseModel):
-    projects: list[KBProjectSimpleItem]
 
 
 __all__ = [

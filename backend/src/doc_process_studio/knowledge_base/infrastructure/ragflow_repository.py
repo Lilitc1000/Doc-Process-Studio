@@ -4,15 +4,17 @@
 
 | 应用侧 | RAGFlow |
 |---|---|
-| 项目（``KBProjectResponse``） | dataset |
+| 项目（``KBProject``） | dataset |
 | 文件夹（``KBTreeNodeFolder``） | dataset 内的 folder |
-| 文档（``KBDocumentResponse``） | dataset 内的 document |
+| 文档（``KBDocument``） | dataset 内的 document |
 
 要点：
 - **文件夹只读**：本实例的 dataset 接口不支持新建 / 删除文件夹，因此本仓储只提供
   读：无 folder 时返回扁平文档列表，有 folder 时返回层级树。将来 RAGFlow 支持了
   或用户在网页端建了文件夹，这里无需改代码即可显示树。
-- **缓存**：dataset / folder / document 三类列表缓存在 Redis（可整体关闭），
+- **缓存（默认关闭）**：RAGFlow 是外部真相源，用户在 RAGFlow 网页端的增删我们
+  收不到通知，因此 **dataset 列表永不缓存**，保证"有哪些项目"始终与 RAGFlow 一致；
+  folder / document 列表可按 ``kb_cache_ttl_seconds`` 缓存（``<=0`` 表示不缓存，默认 0）。
   任何写操作成功后立即失效对应键；Redis 不可用时自动降级为直连 RAGFlow。
 - **读路径不抛异常**：未配置 / 网络失败 / 资源不存在一律返回空容器。
 """
@@ -26,15 +28,15 @@ from functools import partial
 from typing import Any
 
 from ...common.infrastructure.cache import build_cache_key, delete_key, get_json, set_json
-from ..application.dtos import KBIndexHit
-from ..application.ports import KnowledgeBaseRepository
-from ..router.schemas import (
-    KBDocumentResponse,
-    KBProjectResponse,
+from ..application.dtos import (
+    KBDocument,
+    KBIndexHit,
+    KBProject,
     KBTreeNode,
     KBTreeNodeDocument,
     KBTreeNodeFolder,
 )
+from ..application.ports import KnowledgeBaseRepository
 from .parser import extract_archive
 from .parsing import detect_file_type, is_archive
 from .ragflow_client import RagflowClient
@@ -103,6 +105,8 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
         key: str,
         loader: Callable[[], Awaitable[list[dict[str, Any]]]],
     ) -> list[dict[str, Any]]:
+        if self._cache_ttl <= 0:
+            return list(await loader())
         cached = await self._read_cache(key)
         if cached is not None:
             return cached
@@ -110,11 +114,19 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
         await self._write_cache(key, payload)
         return payload
 
+    async def _datasets(self) -> list[dict[str, Any]]:
+        """dataset 列表（= 项目清单）。
+
+        RAGFlow 侧的增删（用户在网页端建/删 dataset）不会通知本服务，缓存会让
+        "有哪些项目"与真相源脱节，因此这里**永不缓存**，每次都直连 RAGFlow。
+        """
+        return await self._client.list_datasets()
+
     # ------------------------------------------------------------------ 结构映射
 
     @staticmethod
-    def _project_from_dataset(dataset: dict[str, Any]) -> KBProjectResponse:
-        return KBProjectResponse(
+    def _project_from_dataset(dataset: dict[str, Any]) -> KBProject:
+        return KBProject(
             id=str(dataset.get("id", "") or ""),
             name=str(dataset.get("name", "") or ""),
             description=dataset.get("description") or None,
@@ -124,10 +136,10 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
         )
 
     @staticmethod
-    def _document_from_payload(dataset_id: str, document: dict[str, Any]) -> KBDocumentResponse:
+    def _document_from_payload(dataset_id: str, document: dict[str, Any]) -> KBDocument:
         file_name = str(document.get("name", "") or "")
         chunk_count = int(document.get("chunk_count", 0) or 0)
-        return KBDocumentResponse(
+        return KBDocument(
             id=str(document.get("id", "") or ""),
             project_id=dataset_id,
             file_name=file_name,
@@ -196,22 +208,22 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
 
     # ------------------------------------------------------------------ 端口实现
 
-    async def list_projects(self) -> list[KBProjectResponse]:
-        datasets = await self._cached_list(_datasets_key(), self._client.list_datasets)
+    async def list_projects(self) -> list[KBProject]:
+        datasets = await self._datasets()
         return [self._project_from_dataset(dataset) for dataset in datasets if dataset.get("id")]
 
-    async def get_project(self, project_id: str) -> KBProjectResponse | None:
+    async def get_project(self, project_id: str) -> KBProject | None:
         dataset = await self._client.get_dataset(project_id)
         if not dataset:
             return None
         return self._project_from_dataset(dataset)
 
-    async def create_project(self, name: str, description: str = "") -> KBProjectResponse:
+    async def create_project(self, name: str, description: str = "") -> KBProject:
         created = await self._client.create_dataset(name, description)
         await self._drop_cache(_datasets_key())
         return self._project_from_dataset(created or {"name": name, "description": description or None})
 
-    async def rename_project(self, project_id: str, new_name: str) -> KBProjectResponse | None:
+    async def rename_project(self, project_id: str, new_name: str) -> KBProject | None:
         updated = await self._client.update_dataset(project_id, new_name)
         await self._drop_cache(_datasets_key())
         return self._project_from_dataset(updated) if updated else None
@@ -223,7 +235,7 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
         return deleted
 
     async def list_simple_projects(self) -> list[dict[str, str]]:
-        datasets = await self._cached_list(_datasets_key(), self._client.list_datasets)
+        datasets = await self._datasets()
         return [
             {"id": str(d.get("id", "") or ""), "name": str(d.get("name", "") or "")} for d in datasets if d.get("id")
         ]
@@ -238,7 +250,7 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
         project_id: str,
         file_name: str,
         file_bytes: bytes,
-    ) -> KBDocumentResponse | None:
+    ) -> KBDocument | None:
         if is_archive(file_name):
             return await self._upload_archive(project_id, file_name, file_bytes)
 
@@ -265,14 +277,14 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
         project_id: str,
         archive_name: str,
         file_bytes: bytes,
-    ) -> KBDocumentResponse | None:
+    ) -> KBDocument | None:
         extracted_files = extract_archive(file_bytes, archive_name)
         if not extracted_files:
             logger.info("No supported files found in archive: %s", archive_name)
             return None
 
         # 压缩包本身不落成文档，只上传其中的成员；返回首份文档作为代表。
-        representative: KBDocumentResponse | None = None
+        representative: KBDocument | None = None
         for extracted in extracted_files:
             document = await self.upload_document(project_id, extracted.file_name, extracted.file_bytes)
             if document and representative is None:
@@ -296,7 +308,7 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
         RAGFlow 的删除接口要求 dataset id，但 UI 只持有文档 id，因此先扫描各
         dataset 的文档列表（走缓存）定位归属。
         """
-        datasets = await self._cached_list(_datasets_key(), self._client.list_datasets)
+        datasets = await self._datasets()
         for dataset in datasets:
             dataset_id = str(dataset.get("id", "") or "")
             if not dataset_id:

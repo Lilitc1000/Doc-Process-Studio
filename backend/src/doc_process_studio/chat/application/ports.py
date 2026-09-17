@@ -3,9 +3,13 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from ..router.schemas.response import ChatSessionDetail, ChatSessionListResponse
 from .dtos.attachment import ChatAttachment, ChatAttachmentMetadata
-from .dtos.session import ChatSessionSnapshot, ChatSessionSummary
+from .dtos.session import (
+    ChatSessionDetail,
+    ChatSessionList,
+    ChatSessionSnapshot,
+    ChatSessionSummary,
+)
 
 
 class SessionRepository(ABC):
@@ -15,7 +19,7 @@ class SessionRepository(ABC):
     """
 
     @abstractmethod
-    async def list_sessions(self, user_id: str) -> ChatSessionListResponse: ...
+    async def list_sessions(self, user_id: str) -> ChatSessionList: ...
 
     @abstractmethod
     async def get_session(self, session_id: str) -> ChatSessionDetail | None: ...

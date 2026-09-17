@@ -5,12 +5,8 @@ import httpx
 from ...common.infrastructure.config import settings
 from ...common.infrastructure.ollama import extract_first_message_content, post_chat_completion
 from ...system.infrastructure.trace_store import delete_agent_traces_for_conversation
-from ..application.dtos.session import ChatSessionSummary
-from ..router.schemas.request import ChatMessageInput
-from ..router.schemas.response import (
-    ChatSessionDetail,
-    ChatSessionListResponse,
-)
+from ..application.dtos.message import ChatMessage
+from ..application.dtos.session import ChatSessionDetail, ChatSessionList, ChatSessionSummary
 from .attachments import delete_attachments_for_conversation
 from .db_session_store import (
     delete_chat_session_records,
@@ -61,8 +57,8 @@ async def generate_session_title(
         response_payload = await post_chat_completion(
             model=model,
             messages=[
-                ChatMessageInput(role="system", content=system_prompt),
-                ChatMessageInput(role="user", content=user_prompt),
+                ChatMessage(role="system", content=system_prompt),
+                ChatMessage(role="user", content=user_prompt),
             ],
         )
     except httpx.HTTPError:
@@ -73,7 +69,7 @@ async def generate_session_title(
     return content or fallback_title
 
 
-async def list_chat_sessions(user_id: str) -> ChatSessionListResponse:
+async def list_chat_sessions(user_id: str) -> ChatSessionList:
     session_ids = await list_chat_session_ids_by_user(user_id)
     sessions: list[ChatSessionSummary] = []
 
@@ -82,7 +78,7 @@ async def list_chat_sessions(user_id: str) -> ChatSessionListResponse:
         if summary is not None:
             sessions.append(summary)
 
-    return ChatSessionListResponse(sessions=sessions)
+    return ChatSessionList(sessions=sessions)
 
 
 async def get_chat_session(session_id: str) -> ChatSessionDetail | None:

@@ -48,7 +48,8 @@ from ...system.infrastructure.utils.executor import (
 )
 from ...system.infrastructure.utils.feature_flags import is_feature_enabled_for_key
 from ..application.dtos.file_context import PreparedUploadedFile
-from ..router.schemas.request import ChatMessageInput, ChatStreamRequest
+from ..application.dtos.message import ChatMessage
+from ..application.dtos.stream import ChatStreamOptions
 from .file_context import build_persisted_uploaded_files_context, prepare_uploaded_files
 from .streaming import (
     build_ollama_assistant_chunk,
@@ -187,7 +188,7 @@ def _normalize_skill_ids(raw_skill_ids: list[str]) -> list[str]:
 
 def _extract_skill_ids_from_messages(
     *,
-    messages: list[ChatMessageInput],
+    messages: list[ChatMessage],
     available_skills: list[SkillInterfaceConfig],
 ) -> tuple[list[str], list[str]]:
     mentioned_skill_ids: list[str] = []
@@ -213,7 +214,7 @@ def _extract_skill_ids_from_messages(
 
 
 async def _resolve_skill_plan(
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
 ) -> SkillPlanDecision:
     available_skills = _list_chat_skill_interfaces()
     available_skill_ids = {skill.id for skill in available_skills}
@@ -252,7 +253,7 @@ async def _resolve_skill_plan(
 
 def _build_direct_skill_plan(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
 ) -> SkillPlanDecision:
     available_skills = _list_chat_skill_interfaces()
     available_skill_ids = [skill.id for skill in available_skills]
@@ -328,7 +329,7 @@ class _SkillContext:
     skill_plan: SkillPlanDecision
     active_skill_ids: list[str]
     primary_skill_id: str
-    primary_request: ChatStreamRequest
+    primary_request: ChatStreamOptions
     agent_state: ConversationAgentState
     states_by_skill: dict[str, SkillConversationState]
     primary_state: SkillConversationState
@@ -339,7 +340,7 @@ class _SkillContext:
 
 
 async def _prepare_skill_context(
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     trace_recorder: AgentTraceRecorder,
     upload_files: list[UploadFile] | None,
     tenant_id: str,
@@ -431,7 +432,7 @@ async def _prepare_skill_context(
 
 def _build_skill_upstream_messages(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     skill_ctx: _SkillContext,
     skill_context_by_skill: dict[str, str],
     extra_messages: list[dict[str, Any]],
@@ -457,7 +458,7 @@ class _RoundMessages:
 
 async def _build_round_upstream_messages(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     skill_ctx: _SkillContext,
     tool_trace_messages: list[dict[str, Any]],
     execution_budget: ExecutionBudget,
@@ -551,7 +552,7 @@ def _build_executor_deps() -> ExecutorDeps:
 
 
 async def stream_remote_chat_completion(
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     upload_files: list[UploadFile] | None = None,
 ) -> AsyncIterator[str]:
     started_monotonic = time.monotonic()

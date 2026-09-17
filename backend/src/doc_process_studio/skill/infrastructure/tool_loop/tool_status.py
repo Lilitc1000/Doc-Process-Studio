@@ -1,7 +1,7 @@
 from typing import Any
 
+from ....chat.application.dtos import ChatStreamOptions
 from ....chat.application.dtos.attachment import ChatAttachment
-from ....chat.router.schemas.request import ChatStreamRequest
 from ....common.utils.tool_args import parse_tool_arguments
 from ...application.dtos.runtime import SkillConversationState
 from ..context import get_skill_context_chunks_by_ids
@@ -9,7 +9,7 @@ from ..registry import get_skill_tool_config
 from .skill_files import _categorize_relative_path, _normalize_relative_path, _resolve_tool_scope
 
 
-def _primary_skill_id(request: ChatStreamRequest) -> str:
+def _primary_skill_id(request: ChatStreamOptions) -> str:
     if request.selected_skill_ids:
         return request.selected_skill_ids[0]
     return ""
@@ -318,7 +318,7 @@ def _build_declared_tool_status(
 
 def build_tool_status_finish(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     state: SkillConversationState,
     tool_call: dict[str, Any],
     tool_result: dict[str, Any],

@@ -6,7 +6,8 @@ from ....skill.infrastructure.registry import (
     get_skill_interface,
     list_skill_interfaces,
 )
-from ...router.schemas.request import ChatMessageInput, ChatStreamRequest
+from ...application.dtos.message import ChatMessage
+from ...application.dtos.stream import ChatStreamOptions
 
 KB_SKILL_ID_PREFIX = "kb:"
 
@@ -113,7 +114,7 @@ def build_multi_skill_runtime_instructions(
 
 def build_upstream_messages_for_skills(
     *,
-    request: ChatStreamRequest,
+    request: ChatStreamOptions,
     active_skill_ids: list[str],
     explicit_skill_ids: list[str],
     implicit_skill_ids: list[str] | None = None,
@@ -124,10 +125,10 @@ def build_upstream_messages_for_skills(
 ) -> list[dict[str, Any]]:
     primary_skill_id = active_skill_ids[0] if active_skill_ids else "document-assistant"
     primary_prompt = build_skill_prompt(primary_skill_id)
-    system_message = ChatMessageInput(role="system", content=primary_prompt)
+    system_message = ChatMessage(role="system", content=primary_prompt)
     upstream_messages: list[dict[str, Any]] = [system_message.model_dump()]
     upstream_messages.append(
-        ChatMessageInput(
+        ChatMessage(
             role="system",
             content=build_multi_skill_runtime_instructions(
                 active_skill_ids=active_skill_ids,
@@ -144,7 +145,7 @@ def build_upstream_messages_for_skills(
             if not skill_context:
                 continue
             upstream_messages.append(
-                ChatMessageInput(
+                ChatMessage(
                     role="system",
                     content=f"[{skill_id}] 上下文：\n{skill_context}",
                 ).model_dump()
@@ -152,7 +153,7 @@ def build_upstream_messages_for_skills(
 
     if uploaded_files_context:
         upstream_messages.append(
-            ChatMessageInput(
+            ChatMessage(
                 role="user",
                 content=uploaded_files_context,
             ).model_dump()

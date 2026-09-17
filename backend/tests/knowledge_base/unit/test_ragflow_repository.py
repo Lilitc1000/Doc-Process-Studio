@@ -10,11 +10,11 @@ from typing import Any, cast
 
 import pytest
 
+from doc_process_studio.knowledge_base.application.dtos import KBTreeNodeFolder
 from doc_process_studio.knowledge_base.infrastructure.ragflow_client import RagflowClient
 from doc_process_studio.knowledge_base.infrastructure.ragflow_repository import (
     RagflowKnowledgeBaseRepository,
 )
-from doc_process_studio.knowledge_base.router.schemas.response import KBTreeNodeFolder
 
 _FAKE_REDIS: dict[str, Any] = {}
 _FAKE_TTL: dict[str, int | None] = {}
@@ -148,13 +148,26 @@ async def test_list_projects_maps_dataset_fields() -> None:
     assert projects[0].created_at.year == 2026
 
 
-async def test_list_projects_uses_cache_on_second_call() -> None:
+async def test_list_projects_always_reflects_ragflow() -> None:
+    """dataset 列表不缓存：RAGFlow 侧新增后，下一次读取必须能看到。"""
+    client = FakeClient(datasets=_DATASETS)
+    repo = RagflowKnowledgeBaseRepository(cast(RagflowClient, client))
+    first = await repo.list_projects()
+    client.datasets = [*client.datasets, {"id": "ds-3", "name": "新库", "document_count": 0}]
+    second = await repo.list_projects()
+    assert [p.id for p in first] == ["ds-1", "ds-2"]
+    assert [p.id for p in second] == ["ds-1", "ds-2", "ds-3"]
+    assert client.calls.count("list_datasets") == 2
+
+
+async def test_list_projects_reflects_deletion_in_ragflow() -> None:
+    """RAGFlow 侧删除 dataset 后，应用侧必须同步消失（回归用例）。"""
     client = FakeClient(datasets=_DATASETS)
     repo = RagflowKnowledgeBaseRepository(cast(RagflowClient, client))
     await repo.list_projects()
-    await repo.list_projects()
-    assert client.calls.count("list_datasets") == 1
-    assert any(ttl is not None and ttl > 0 for ttl in _FAKE_TTL.values())
+    client.datasets = [d for d in client.datasets if d["id"] != "ds-1"]
+    projects = await repo.list_projects()
+    assert [p.id for p in projects] == ["ds-2"]
 
 
 async def test_get_project_returns_none_when_missing() -> None:

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any
 
-from ....chat.router.schemas.request import ChatStreamRequest
+from ....chat.application.dtos import ChatStreamOptions
 from ....common.infrastructure.config import settings
 from ....common.utils.tool_args import parse_tool_arguments
 from ..registry import SKILLS_DIR
@@ -36,7 +36,7 @@ DEFAULT_STRUCTURED_TEXT_TITLE = "文档内容"
 SCOPED_TOOL_SEPARATOR = "::"
 
 
-def _primary_skill_id(request: ChatStreamRequest) -> str:
+def _primary_skill_id(request: ChatStreamOptions) -> str:
     if request.selected_skill_ids:
         return request.selected_skill_ids[0]
     return ""

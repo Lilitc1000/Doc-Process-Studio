@@ -1,5 +1,4 @@
-from ....chat.application.dtos.attachment import ChatAttachment
-from ....chat.router.schemas.request import ChatStreamRequest
+from ....chat.application.dtos import ChatAttachment, ChatStreamOptions
 from ....common.infrastructure.config import settings
 from ....common.utils.tool_args import parse_tool_arguments
 from ..context import get_skill_context_chunks_by_ids, search_skill_context_chunks
@@ -24,6 +23,9 @@ from .tool_status import (
     build_tool_status_finish,
     build_tool_status_start,
 )
+
+# 历史命名再导出（API 契约沿用旧名）
+ChatStreamRequest = ChatStreamOptions
 
 __all__ = [
     "ChatAttachment",

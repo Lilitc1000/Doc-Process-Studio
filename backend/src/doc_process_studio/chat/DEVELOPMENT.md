@@ -15,10 +15,12 @@ backend/src/doc_process_studio/chat/
 ├── application/                 # 应用层：用例编排 + 端口 + DTO
 │   ├── ports.py                 # SessionRepository / TitleGenerator / ConversationStateStore / AttachmentStore 端口
 │   ├── contracts.py             # SessionServiceContract / AttachmentServiceContract 应用服务契约
-│   ├── dtos/                    # 应用层 DTO
+│   ├── dtos/                    # 应用层 DTO（结构形状下沉到此，router 仅做包装/再导出）
 │   │   ├── attachment.py        # ChatAttachment, ChatAttachmentMetadata
 │   │   ├── file_context.py      # UploadedFileContext, PreparedUploadedFile
-│   │   └── session.py           # ChatSessionSummary, ChatSessionSnapshot
+│   │   ├── message.py           # ChatMessage（原 router 层 ChatMessageInput）
+│   │   ├── stream.py            # ChatStreamOptions（原 router 层 ChatStreamRequest）
+│   │   └── session.py           # ChatSessionSummary, ChatSessionSnapshot, ChatSessionList, ChatSessionDetail, ChatSessionUpsert, ChatSessionTitleUpdate
 │   ├── session_service.py       # SessionService（会话 CRUD、归属校验、标题生成、状态清理）
 │   └── attachment_service.py    # AttachmentService（附件下载响应、上传/生成保存）
 ├── infrastructure/              # 基础设施层：端口实现 + 依赖装配 + 技术工具
@@ -42,8 +44,8 @@ backend/src/doc_process_studio/chat/
     ├── sessions.py              # 会话 API（依赖注入 SessionService）
     ├── attachments.py           # 附件下载 API（依赖注入 AttachmentService）
     └── schemas/                 # HTTP DTO
-        ├── request.py           # ChatStreamRequest, ChatMessageInput 等
-        └── response.py          # ChatSessionListResponse, ChatSessionDetail
+        ├── request.py           # 仅再导出 ChatMessageInput / ChatStreamRequest / ChatSessionUpsertRequest / ChatSessionTitleUpdateRequest
+        └── response.py          # 仅再导出 ChatSessionListResponse / ChatSessionDetail
 ```
 
 ### 分层依赖规则
@@ -52,6 +54,19 @@ backend/src/doc_process_studio/chat/
 - **application** 依赖 domain + 端口抽象，不依赖 infrastructure 实现
 - **infrastructure** 实现 application 端口，包含技术工具函数和跨域调用适配
 - **router** 通过 `Depends(get_session_service)` / `Depends(get_attachment_service)` 注入应用服务，将领域异常映射为 HTTP 状态码
+
+### 分层纪律（结构形状下沉）
+
+结构形状（消息、流式选项、会话列表 / 详情 / upsert / 标题更新）定义在**应用层** `application/dtos/`，
+由 `application` 与 `infrastructure` 共用；`router/schemas/` 只做 API 包装与**再导出**，沿用历史命名
+（如 `ChatStreamRequest = ChatStreamOptions`、`ChatSessionListResponse = ChatSessionList`），保证既有
+导入方与 API 契约不变。
+
+- `application/` 与 `infrastructure/`（含 `system`、`skill` 跨域调用方）**只依赖 `application.dtos`**，
+  **不得**反向 `import router.schemas`——否则会形成 `application.ports -> router.schemas` 的依赖倒挂并引发循环导入。
+- `router/schemas/request.py` 与 `response.py` 中的 `Response` / `Request` 属 API 词汇；应用层类型使用
+  无 `Response`/`Request` 后缀的语义化命名（如 `ChatStreamOptions`、`ChatSessionList`、`ChatMessage`）。
+- 服务层返回应用层形状，由 `router/*.py` 包装成 HTTP 响应模型。
 
 ### 依赖注入
 

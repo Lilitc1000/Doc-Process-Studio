@@ -1,10 +1,83 @@
 """知识库应用层数据结构。
 
-仅保留检索相关的形状；项目 / 文件夹 / 文档的统一形状由 ``router.schemas``
-定义（那里同时承担 API 契约），避免同一份结构维护两遍。
+这里定义知识库的**结构形状**（项目 / 文档 / 树节点）与**检索形状**（命中片段），
+供 application 与 infrastructure 共用；router 层只做 API 包装与再导出。
+
+分层纪律：application / infrastructure 只依赖本模块，**不得**反向依赖
+``router.schemas``——否则会形成循环导入（ports -> router -> kb_service -> ports）。
 """
 
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class KBProject(BaseModel):
+    """知识库项目（= RAGFlow dataset）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    description: str | None = None
+    document_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class KBDocument(BaseModel):
+    """知识库文档（= RAGFlow dataset 内的 document）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    file_name: str
+    file_type: str
+    file_size: int = 0
+    chunk_count: int = 0
+    is_indexed: bool = False
+    uploaded_at: datetime
+
+
+class KBTreeNodeFolder(BaseModel):
+    """树节点：文件夹。RAGFlow 侧 folder 只读，前端不提供写入口。"""
+
+    type: str = "folder"
+    id: str
+    name: str
+    children: list["KBTreeNode"] = Field(default_factory=list)
+
+
+class KBTreeNodeDocument(BaseModel):
+    """树节点：文档。"""
+
+    type: str = "document"
+    id: str
+    name: str
+    file_type: str
+    file_size: int = 0
+    chunk_count: int = 0
+    is_indexed: bool = False
+    uploaded_at: datetime
+
+
+KBTreeNode = KBTreeNodeFolder | KBTreeNodeDocument
+
+
+class KBProjectSimpleItem(BaseModel):
+    """对话 ``$`` 提及用的轻量项目项。"""
+
+    id: str
+    name: str
+
+
+class KBProjectTree(BaseModel):
+    """某个项目的目录树（应用层形状，router 层再包装成 API 响应）。"""
+
+    project_id: str
+    project_name: str
+    tree: list[KBTreeNode]
 
 
 class KBIndexHit(BaseModel):
@@ -31,6 +104,13 @@ class KBIndexResult(BaseModel):
 
 
 __all__ = [
+    "KBDocument",
     "KBIndexHit",
     "KBIndexResult",
+    "KBProject",
+    "KBProjectSimpleItem",
+    "KBProjectTree",
+    "KBTreeNode",
+    "KBTreeNodeDocument",
+    "KBTreeNodeFolder",
 ]

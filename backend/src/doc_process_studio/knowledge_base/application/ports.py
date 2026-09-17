@@ -9,12 +9,12 @@
 
 from abc import ABC, abstractmethod
 
-from ..router.schemas import (
-    KBDocumentResponse,
-    KBProjectResponse,
+from .dtos import (
+    KBDocument,
+    KBIndexHit,
+    KBProject,
     KBTreeNode,
 )
-from .dtos import KBIndexHit
 
 
 class KnowledgeBaseRepository(ABC):
@@ -28,19 +28,19 @@ class KnowledgeBaseRepository(ABC):
     """
 
     @abstractmethod
-    async def list_projects(self) -> list[KBProjectResponse]:
+    async def list_projects(self) -> list[KBProject]:
         """列出全部项目（= RAGFlow dataset）。"""
 
     @abstractmethod
-    async def get_project(self, project_id: str) -> KBProjectResponse | None:
+    async def get_project(self, project_id: str) -> KBProject | None:
         """按 dataset id 取项目；不存在返回 ``None``。"""
 
     @abstractmethod
-    async def create_project(self, name: str, description: str = "") -> KBProjectResponse:
+    async def create_project(self, name: str, description: str = "") -> KBProject:
         """新建项目（在 RAGFlow 建 dataset）。"""
 
     @abstractmethod
-    async def rename_project(self, project_id: str, new_name: str) -> KBProjectResponse | None:
+    async def rename_project(self, project_id: str, new_name: str) -> KBProject | None:
         """重命名项目；不存在返回 ``None``。"""
 
     @abstractmethod
@@ -65,7 +65,7 @@ class KnowledgeBaseRepository(ABC):
         project_id: str,
         file_name: str,
         file_bytes: bytes,
-    ) -> KBDocumentResponse | None:
+    ) -> KBDocument | None:
         """上传文档并在 RAGFlow 侧触发解析 / 切块。
 
         压缩包会先在本地解包，逐个成员上传；返回最后一份文档的元数据。
