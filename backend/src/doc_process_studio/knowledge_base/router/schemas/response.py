@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from ...application.dtos import (
     KBDocument,
+    KBDocumentParseDetail,
     KBProject,
     KBProjectSimpleItem,
     KBTreeNodeDocument,
@@ -19,6 +20,7 @@ from ...application.dtos import KBTreeNode as _KBTreeNode
 # API 契约沿用旧名，既有导入方无需改动
 KBProjectResponse = KBProject
 KBDocumentResponse = KBDocument
+KBDocumentParseDetailResponse = KBDocumentParseDetail
 KBTreeNode = _KBTreeNode
 
 
@@ -37,6 +39,7 @@ class KBTreeResponse(BaseModel):
 
 
 __all__ = [
+    "KBDocumentParseDetailResponse",
     "KBDocumentResponse",
     "KBProjectListResponse",
     "KBProjectListSimpleResponse",

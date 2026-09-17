@@ -88,6 +88,7 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--space-sm);
+  margin-top: var(--space-lg);
 }
 
 .kb-updating-spinner {
@@ -109,4 +110,71 @@
 .kb-updating-text {
   font-size: var(--text-base);
   color: var(--color-text-secondary);
+}
+
+/* --- 解析详情弹窗 --- */
+.kb-parse-dialog {
+  max-width: 520px;
+  width: 90vw;
+}
+
+.kb-parse-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.kb-parse-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  font-size: var(--text-sm);
+}
+
+.kb-parse-label {
+  flex-shrink: 0;
+  width: 72px;
+  color: var(--color-text-tertiary);
+  text-align: right;
+}
+
+.kb-parse-value {
+  flex: 1;
+  color: var(--color-text-primary);
+  word-break: break-all;
+}
+
+.kb-parse-status--done {
+  color: var(--color-success);
+}
+
+.kb-parse-status--fail {
+  color: var(--color-danger);
+}
+
+.kb-parse-status--pending {
+  color: var(--color-warning);
+}
+
+.kb-parse-msg-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+}
+
+.kb-parse-msg {
+  max-height: 200px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-sm);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }

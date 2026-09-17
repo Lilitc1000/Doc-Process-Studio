@@ -22,6 +22,7 @@
         :project-id="projectId"
         :depth="(depth ?? 0) + 1"
         @delete-document="(id: string) => $emit('deleteDocument', id)"
+        @show-parse-detail="(id: string) => $emit('showParseDetail', id)"
       />
     </div>
 
@@ -33,7 +34,19 @@
       <div class="kb-tree-item-row">
         <span class="kb-tree-icon">{{ fileIcon }}</span>
         <span class="kb-tree-name">{{ node.name }}</span>
-        <span v-if="!node.isIndexed" class="kb-tree-badge">未索引</span>
+        <span
+          v-if="parseLabel"
+          class="kb-tree-badge"
+          :class="
+            node.parseStatus === 'FAIL'
+              ? 'kb-tree-badge--fail'
+              : node.parseStatus === 'DONE'
+                ? 'kb-tree-badge--done'
+                : 'kb-tree-badge--pending'
+          "
+          @click.stop="$emit('showParseDetail', node.id)"
+          >{{ parseLabel }}</span
+        >
       </div>
       <div class="kb-tree-item-actions">
         <base-button
@@ -60,6 +73,7 @@ const props = defineProps<{
 
 defineEmits<{
   deleteDocument: [documentId: string];
+  showParseDetail: [documentId: string];
 }>();
 
 const isExpanded = ref(true);
@@ -75,6 +89,16 @@ const fileIcon = computed(() => {
   if (ext === 'docx') return '📘';
   if (ext === 'xlsx') return '📗';
   return '📄';
+});
+
+// 解析状态徽章文案（简洁）：未索引 / 解析中 / 解析失败 / 解析成功；无状态时不显示。
+const parseLabel = computed(() => {
+  const s = props.node.type === 'document' ? props.node.parseStatus : null;
+  if (s === 'UNSTART') return '未索引';
+  if (s === 'RUNNING') return '解析中';
+  if (s === 'FAIL') return '解析失败';
+  if (s === 'DONE') return '解析成功';
+  return '';
 });
 </script>
 

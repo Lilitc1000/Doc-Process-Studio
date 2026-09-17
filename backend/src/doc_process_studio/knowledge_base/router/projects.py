@@ -13,6 +13,7 @@ from ..domain.errors import (
 )
 from ..infrastructure.dependencies import get_kb_service
 from .schemas import (
+    KBDocumentParseDetailResponse,
     KBDocumentResponse,
     KBProjectCreateRequest,
     KBProjectListResponse,
@@ -136,5 +137,33 @@ async def delete_kb_document(
 ) -> None:
     try:
         await service.delete_document(document_id)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
+
+
+@router.post("/documents/{document_id}/parse", status_code=202)
+async def reparse_kb_document(
+    document_id: str,
+    service: KnowledgeBaseService = Depends(get_kb_service),
+) -> None:
+    """对已上传文档（重新）触发解析 / 切片。
+
+    解析在 RAGFlow 侧异步执行，本接口只负责触发；进度与失败原因看
+    ``GET /documents/{id}/parse-detail``。
+    """
+    try:
+        await service.reparse_document(document_id)
+    except KnowledgeBaseError as exc:
+        raise _handle_kb_error(exc) from exc
+
+
+@router.get("/documents/{document_id}/parse-detail", response_model=KBDocumentParseDetailResponse)
+async def get_kb_document_parse_detail(
+    document_id: str,
+    service: KnowledgeBaseService = Depends(get_kb_service),
+) -> KBDocumentParseDetailResponse:
+    """取单个文档的解析详情（状态、进度、分块数、完整日志）。"""
+    try:
+        return await service.get_parse_detail(document_id)
     except KnowledgeBaseError as exc:
         raise _handle_kb_error(exc) from exc

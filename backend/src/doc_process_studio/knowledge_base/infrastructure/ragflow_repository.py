@@ -17,6 +17,8 @@
   folder / document 列表可按 ``kb_cache_ttl_seconds`` 缓存（``<=0`` 表示不缓存，默认 0）。
   任何写操作成功后立即失效对应键；Redis 不可用时自动降级为直连 RAGFlow。
 - **读路径不抛异常**：未配置 / 网络失败 / 资源不存在一律返回空容器。
+- **解析状态**：列表 / 树只返回精简的 ``parse_status``；完整日志（``progress_msg``，
+  含 ``[ERROR]`` 原因）由 ``get_document_parse_detail`` 单独提供，避免列表响应膨胀。
 """
 
 from __future__ import annotations
@@ -29,7 +31,10 @@ from typing import Any
 
 from ...common.infrastructure.cache import build_cache_key, delete_key, get_json, set_json
 from ..application.dtos import (
+    PARSE_DONE,
+    PARSE_UNSTART,
     KBDocument,
+    KBDocumentParseDetail,
     KBIndexHit,
     KBProject,
     KBTreeNode,
@@ -51,6 +56,14 @@ def _timestamp(value: Any) -> datetime:
     if isinstance(value, (int, float)) and value > 0:
         return datetime.fromtimestamp(value / 1000, tz=UTC)
     return datetime.now(UTC)
+
+
+def _parse_status(document: dict[str, Any]) -> str:
+    """取 RAGFlow 文档的解析状态（run），缺失时按 chunk_count 兜底。"""
+    run = str(document.get("run", "") or "").strip().upper()
+    if run:
+        return run
+    return PARSE_DONE if int(document.get("chunk_count", 0) or 0) > 0 else PARSE_UNSTART
 
 
 def _datasets_key() -> str:
@@ -147,6 +160,7 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
             file_size=int(document.get("size", 0) or 0),
             chunk_count=chunk_count,
             is_indexed=chunk_count > 0,
+            parse_status=_parse_status(document),
             uploaded_at=_timestamp(document.get("create_time")),
         )
 
@@ -161,6 +175,7 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
             file_size=int(document.get("size", 0) or 0),
             chunk_count=chunk_count,
             is_indexed=chunk_count > 0,
+            parse_status=_parse_status(document),
             uploaded_at=_timestamp(document.get("create_time")),
         )
 
@@ -320,6 +335,39 @@ class RagflowKnowledgeBaseRepository(KnowledgeBaseRepository):
             if any(str(doc.get("id", "") or "") == document_id for doc in documents):
                 return dataset_id
         return ""
+
+    async def get_document_parse_detail(self, document_id: str) -> KBDocumentParseDetail | None:
+        dataset_id = await self._resolve_dataset_for_document(document_id)
+        if not dataset_id:
+            logger.warning("Cannot locate dataset for document %s", document_id)
+            return None
+        document = await self._client.get_document(dataset_id, document_id)
+        if not document:
+            return None
+        chunk_count = int(document.get("chunk_count", 0) or 0)
+        duration = document.get("process_duration")
+        return KBDocumentParseDetail(
+            document_id=document_id,
+            file_name=str(document.get("name", "") or ""),
+            parse_status=_parse_status(document),
+            is_indexed=chunk_count > 0,
+            progress=float(document.get("progress", 0.0) or 0.0),
+            chunk_count=chunk_count,
+            token_count=int(document.get("token_count", 0) or 0),
+            process_duration=float(duration) if isinstance(duration, (int, float)) else None,
+            message=str(document.get("progress_msg", "") or ""),
+            updated_at=_timestamp(document.get("update_time")) if document.get("update_time") else None,
+        )
+
+    async def trigger_document_parse(self, document_id: str) -> bool:
+        dataset_id = await self._resolve_dataset_for_document(document_id)
+        if not dataset_id:
+            logger.warning("Cannot locate dataset for document %s", document_id)
+            return False
+        triggered = await self._client.trigger_parse(dataset_id, [document_id])
+        if triggered:
+            await self._drop_cache(_documents_key(dataset_id), _folders_key(dataset_id))
+        return triggered
 
     async def search(
         self,

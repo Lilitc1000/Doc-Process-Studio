@@ -15,6 +15,7 @@ from ..domain.errors import (
 )
 from .dtos import (
     KBDocument,
+    KBDocumentParseDetail,
     KBIndexHit,
     KBProject,
     KBProjectSimpleItem,
@@ -83,6 +84,17 @@ class KnowledgeBaseService:
 
     async def delete_document(self, document_id: str) -> None:
         success = await self._repo.delete_document(document_id)
+        if not success:
+            raise DocumentNotFoundError("Document not found")
+
+    async def get_parse_detail(self, document_id: str) -> KBDocumentParseDetail:
+        detail = await self._repo.get_document_parse_detail(document_id)
+        if detail is None:
+            raise DocumentNotFoundError("Document not found")
+        return detail
+
+    async def reparse_document(self, document_id: str) -> None:
+        success = await self._repo.trigger_document_parse(document_id)
         if not success:
             raise DocumentNotFoundError("Document not found")
 

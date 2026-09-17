@@ -1,8 +1,13 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useKnowledgeBaseStore } from '@modules/knowledge-base';
 import * as kbApi from '@modules/knowledge-base';
-import type { KBProject, KBTreeResponse } from '@modules/knowledge-base';
+import type {
+  KBProject,
+  KBTreeResponse,
+  KBTreeNodeDocument,
+  KBDocumentParseDetail,
+} from '@modules/knowledge-base';
 
 vi.mock(
   '@modules/knowledge-base/api/knowledge-base',
@@ -18,6 +23,8 @@ vi.mock(
       renameKBProject: vi.fn(),
       deleteKBProject: vi.fn(),
       getKBTree: vi.fn(),
+      getDocumentParseDetail: vi.fn(),
+      reparseDocument: vi.fn(),
     };
   },
 );
@@ -39,6 +46,41 @@ function makeTree(overrides: Partial<KBTreeResponse> = {}): KBTreeResponse {
     projectId: 'proj-001',
     projectName: 'Test Project',
     tree: [],
+    ...overrides,
+  };
+}
+
+function makeParseDetail(
+  overrides: Partial<KBDocumentParseDetail> = {},
+): KBDocumentParseDetail {
+  return {
+    documentId: 'doc-001',
+    fileName: 'test.pdf',
+    parseStatus: 'RUNNING',
+    isIndexed: false,
+    progress: 0.5,
+    chunkCount: 0,
+    tokenCount: 1200,
+    processDuration: null,
+    message: '解析进度 50%',
+    updatedAt: null,
+    ...overrides,
+  };
+}
+
+function makeDoc(
+  overrides: Partial<KBTreeNodeDocument> = {},
+): KBTreeNodeDocument {
+  return {
+    type: 'document',
+    id: 'doc-001',
+    name: 'report.pdf',
+    fileType: 'pdf',
+    fileSize: 1024,
+    chunkCount: 5,
+    isIndexed: false,
+    parseStatus: 'UNSTART',
+    uploadedAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }
@@ -68,6 +110,12 @@ describe('useKnowledgeBaseStore', () => {
     it('isLoading 为 false', () => {
       const store = useKnowledgeBaseStore();
       expect(store.isLoading).toBe(false);
+    });
+
+    it('parseDetail 为 null 且 isReparsing 为 false', () => {
+      const store = useKnowledgeBaseStore();
+      expect(store.parseDetail).toBeNull();
+      expect(store.isReparsing).toBe(false);
     });
   });
 
@@ -279,6 +327,153 @@ describe('useKnowledgeBaseStore', () => {
       store.reset();
 
       expect(store.projects).toHaveLength(1);
+    });
+  });
+
+  describe('fetchParseDetail', () => {
+    it('将返回的解析详情写入 parseDetail', async () => {
+      const detail = makeParseDetail();
+      (
+        kbApi.getDocumentParseDetail as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(detail);
+
+      const store = useKnowledgeBaseStore();
+      await store.fetchParseDetail('doc-001');
+
+      expect(kbApi.getDocumentParseDetail).toHaveBeenCalledWith('doc-001');
+      expect(store.parseDetail).toEqual(detail);
+    });
+  });
+
+  describe('reparseDocument', () => {
+    it('调用 api 的 reparseDocument', async () => {
+      (kbApi.reparseDocument as ReturnType<typeof vi.fn>).mockResolvedValue(
+        undefined,
+      );
+
+      const store = useKnowledgeBaseStore();
+      await store.reparseDocument('doc-001');
+
+      expect(kbApi.reparseDocument).toHaveBeenCalledWith('doc-001');
+    });
+
+    it('执行期间 isReparsing 为 true，结束后恢复 false', async () => {
+      let resolvePromise: () => void;
+      const promise = new Promise<void>((resolve) => {
+        resolvePromise = resolve;
+      });
+      (kbApi.reparseDocument as ReturnType<typeof vi.fn>).mockReturnValue(
+        promise,
+      );
+
+      const store = useKnowledgeBaseStore();
+      const reparsePromise = store.reparseDocument('doc-001');
+
+      expect(store.isReparsing).toBe(true);
+      resolvePromise!();
+      await reparsePromise;
+      expect(store.isReparsing).toBe(false);
+    });
+
+    it('即使请求失败也恢复 isReparsing 为 false', async () => {
+      (kbApi.reparseDocument as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('reparse failed'),
+      );
+
+      const store = useKnowledgeBaseStore();
+      await expect(store.reparseDocument('doc-001')).rejects.toThrow(
+        'reparse failed',
+      );
+      expect(store.isReparsing).toBe(false);
+    });
+  });
+
+  describe('startStatusPolling / stopStatusPolling', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('全部为终态时启动后不轮询（isPolling 保持 false，仅拉取一次树）', async () => {
+      const tree = makeTree({
+        tree: [makeDoc({ parseStatus: 'DONE', isIndexed: true })],
+      });
+      (kbApi.getKBTree as ReturnType<typeof vi.fn>).mockResolvedValue(tree);
+
+      const store = useKnowledgeBaseStore();
+      await store.startStatusPolling('proj-001');
+
+      expect(store.isPolling).toBe(false);
+      expect(kbApi.getKBTree).toHaveBeenCalledTimes(1);
+      expect(store.currentTree).toEqual(tree);
+    });
+
+    it('存在 UNSTART/RUNNING 时启动轮询并设置 isPolling 为 true', async () => {
+      const tree = makeTree({ tree: [makeDoc({ parseStatus: 'UNSTART' })] });
+      (kbApi.getKBTree as ReturnType<typeof vi.fn>).mockResolvedValue(tree);
+
+      const store = useKnowledgeBaseStore();
+      await store.startStatusPolling('proj-001');
+
+      expect(store.isPolling).toBe(true);
+      expect(kbApi.getKBTree).toHaveBeenCalledTimes(1);
+    });
+
+    it('轮询到全部终态后自动停止', async () => {
+      const runningTree = makeTree({
+        tree: [makeDoc({ parseStatus: 'RUNNING' })],
+      });
+      const doneTree = makeTree({
+        tree: [makeDoc({ parseStatus: 'DONE', isIndexed: true })],
+      });
+      (kbApi.getKBTree as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(runningTree)
+        .mockResolvedValueOnce(doneTree);
+
+      const store = useKnowledgeBaseStore();
+      await store.startStatusPolling('proj-001');
+      expect(store.isPolling).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(store.isPolling).toBe(false);
+      expect(kbApi.getKBTree).toHaveBeenCalledTimes(2);
+      expect(store.currentTree).toEqual(doneTree);
+    });
+
+    it('stopStatusPolling 清除计时器并复位 isPolling', async () => {
+      const tree = makeTree({ tree: [makeDoc({ parseStatus: 'RUNNING' })] });
+      (kbApi.getKBTree as ReturnType<typeof vi.fn>).mockResolvedValue(tree);
+
+      const store = useKnowledgeBaseStore();
+      await store.startStatusPolling('proj-001');
+      expect(store.isPolling).toBe(true);
+
+      store.stopStatusPolling();
+      expect(store.isPolling).toBe(false);
+
+      const callsBefore = (kbApi.getKBTree as ReturnType<typeof vi.fn>).mock
+        .calls.length;
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(
+        (kbApi.getKBTree as ReturnType<typeof vi.fn>).mock.calls.length,
+      ).toBe(callsBefore);
+    });
+
+    it('reset 会停止正在进行的轮询', async () => {
+      const tree = makeTree({ tree: [makeDoc({ parseStatus: 'RUNNING' })] });
+      (kbApi.getKBTree as ReturnType<typeof vi.fn>).mockResolvedValue(tree);
+
+      const store = useKnowledgeBaseStore();
+      await store.startStatusPolling('proj-001');
+      expect(store.isPolling).toBe(true);
+
+      store.reset();
+      expect(store.isPolling).toBe(false);
+      expect(store.currentTree).toBeNull();
     });
   });
 });

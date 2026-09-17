@@ -13,6 +13,8 @@ export {
   uploadKBDocument,
   deleteKBDocument,
   listKBProjectsSimple,
+  getDocumentParseDetail,
+  reparseDocument,
 } from './api/knowledge-base';
 
 // --- Types ---
@@ -24,4 +26,6 @@ export type {
   KBTreeNode,
   KBTreeResponse,
   KBProjectSimple,
+  ParseStatus,
+  KBDocumentParseDetail,
 } from './types/knowledge-base';

@@ -4,6 +4,7 @@ import type {
   KBDocument,
   KBTreeResponse,
   KBProjectSimple,
+  KBDocumentParseDetail,
 } from '../types/knowledge-base';
 
 export const listKBProjects = async (): Promise<KBProject[]> => {
@@ -69,4 +70,19 @@ export const listKBProjectsSimple = async (): Promise<KBProjectSimple[]> => {
     '/knowledge-base/projects-simple',
   );
   return response.data.projects;
+};
+
+// 获取单个文档的解析详情（camelCase 由 axios 拦截器转换）。
+export const getDocumentParseDetail = async (
+  documentId: string,
+): Promise<KBDocumentParseDetail> => {
+  const response = await apiClient.get<KBDocumentParseDetail>(
+    `/knowledge-base/documents/${documentId}/parse-detail`,
+  );
+  return response.data;
+};
+
+// 触发文档重新解析（异步，RAGFlow 后台执行；后端返回 202）。
+export const reparseDocument = async (documentId: string): Promise<void> => {
+  await apiClient.post(`/knowledge-base/documents/${documentId}/parse`);
 };

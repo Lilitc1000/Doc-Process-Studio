@@ -266,3 +266,90 @@ async def test_list_simple_projects_contains_dataset_ids() -> None:
     repo = _repository(datasets=_DATASETS)
     rows = await repo.list_simple_projects()
     assert rows[0] == {"id": "ds-1", "name": "事故库"}
+
+
+# ── 解析状态（parse_status）──
+
+
+async def test_parse_status_helper_maps_run_field() -> None:
+    from doc_process_studio.knowledge_base.infrastructure.ragflow_repository import _parse_status
+
+    assert _parse_status({"run": "RUNNING"}) == "RUNNING"
+    assert _parse_status({"run": "fail"}) == "FAIL"
+    assert _parse_status({"chunk_count": 0}) == "UNSTART"
+    assert _parse_status({"chunk_count": 5}) == "DONE"
+
+
+async def test_get_document_parse_detail_returns_dto() -> None:
+    client = FakeClient(datasets=_DATASETS, documents={"ds-1": [{"id": "doc-1", "name": "a.pdf"}]})
+    repo = RagflowKnowledgeBaseRepository(cast(RagflowClient, client))
+
+    async def _fake_get_document(_dataset_id: str, document_id: str) -> dict[str, Any] | None:
+        return {"id": document_id, "name": "a.pdf", "run": "DONE", "chunk_count": 3, "token_count": 7}
+
+    client.get_document = _fake_get_document  # type: ignore[method-assign]
+    detail = await repo.get_document_parse_detail("doc-1")
+    assert detail is not None
+    assert detail.document_id == "doc-1"
+    assert detail.parse_status == "DONE"
+    assert detail.chunk_count == 3
+    assert detail.token_count == 7
+    assert detail.is_indexed is True
+    assert detail.message == ""
+
+
+async def test_get_document_parse_detail_captures_error_message() -> None:
+    client = FakeClient(
+        datasets=_DATASETS,
+        documents={"ds-1": [{"id": "doc-1", "name": "x.pdf", "run": "DONE"}]},
+    )
+    repo = RagflowKnowledgeBaseRepository(cast(RagflowClient, client))
+
+    async def _fake_get_document(_dataset_id: str, document_id: str) -> dict[str, Any] | None:
+        return {
+            "id": document_id,
+            "name": "x.pdf",
+            "run": "FAIL",
+            "progress": -1,
+            "progress_msg": "[ERROR] Fail to bind embedding model: bge-m3 not found",
+            "chunk_count": 0,
+            "token_count": 0,
+        }
+
+    client.get_document = _fake_get_document  # type: ignore[method-assign]
+    detail = await repo.get_document_parse_detail("doc-1")
+    assert detail is not None
+    assert detail.parse_status == "FAIL"
+    assert "[ERROR]" in detail.message
+
+
+async def test_get_document_parse_detail_returns_none_when_document_missing() -> None:
+    client = FakeClient(datasets=_DATASETS, documents={"ds-1": []})
+
+    async def _missing(_dataset_id: str, document_id: str) -> dict[str, Any] | None:
+        del document_id  # param name kept for FakeClient.get_document signature compatibility
+        return None
+
+    client.get_document = _missing  # type: ignore[method-assign]
+    repo = RagflowKnowledgeBaseRepository(cast(RagflowClient, client))
+    assert await repo.get_document_parse_detail("doc-404") is None
+
+
+async def test_trigger_document_parse_calls_client_and_drops_cache() -> None:
+    from doc_process_studio.knowledge_base.infrastructure.ragflow_repository import _documents_key
+
+    client = FakeClient(datasets=_DATASETS, documents={"ds-1": [{"id": "doc-1", "name": "a.pdf"}]})
+    repo = RagflowKnowledgeBaseRepository(cast(RagflowClient, client))
+    await repo.build_tree("ds-1")  # 填充文档缓存
+    assert _documents_key("ds-1") in _FAKE_REDIS
+    ok = await repo.trigger_document_parse("doc-1")
+    assert ok is True
+    assert "trigger_parse" in client.calls
+    assert _documents_key("ds-1") not in _FAKE_REDIS  # 触发后文档缓存被清
+
+
+async def test_trigger_document_parse_returns_false_when_unresolved() -> None:
+    client = FakeClient(datasets=_DATASETS, documents={"ds-1": []})
+    repo = RagflowKnowledgeBaseRepository(cast(RagflowClient, client))
+    assert await repo.trigger_document_parse("doc-404") is False
+    assert "trigger_parse" not in client.calls

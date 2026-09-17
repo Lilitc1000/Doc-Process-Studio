@@ -25,6 +25,13 @@ class KBProject(BaseModel):
     updated_at: datetime
 
 
+# RAGFlow 文档 run 字段的取值
+PARSE_UNSTART = "UNSTART"
+PARSE_RUNNING = "RUNNING"
+PARSE_DONE = "DONE"
+PARSE_FAIL = "FAIL"
+
+
 class KBDocument(BaseModel):
     """知识库文档（= RAGFlow dataset 内的 document）。"""
 
@@ -37,6 +44,7 @@ class KBDocument(BaseModel):
     file_size: int = 0
     chunk_count: int = 0
     is_indexed: bool = False
+    parse_status: str = PARSE_UNSTART
     uploaded_at: datetime
 
 
@@ -59,6 +67,7 @@ class KBTreeNodeDocument(BaseModel):
     file_size: int = 0
     chunk_count: int = 0
     is_indexed: bool = False
+    parse_status: str = PARSE_UNSTART
     uploaded_at: datetime
 
 
@@ -78,6 +87,25 @@ class KBProjectTree(BaseModel):
     project_id: str
     project_name: str
     tree: list[KBTreeNode]
+
+
+class KBDocumentParseDetail(BaseModel):
+    """单个文档的解析详情（供前端弹窗按需拉取）。
+
+    ``message`` 是 RAGFlow 的 ``progress_msg``，包含分阶段日志与 ``[ERROR]`` 原因，
+    可能很长，因此不随列表/树返回。
+    """
+
+    document_id: str
+    file_name: str
+    parse_status: str = PARSE_UNSTART
+    is_indexed: bool = False
+    progress: float = 0.0
+    chunk_count: int = 0
+    token_count: int = 0
+    process_duration: float | None = None
+    message: str = ""
+    updated_at: datetime | None = None
 
 
 class KBIndexHit(BaseModel):
@@ -105,6 +133,7 @@ class KBIndexResult(BaseModel):
 
 __all__ = [
     "KBDocument",
+    "KBDocumentParseDetail",
     "KBIndexHit",
     "KBIndexResult",
     "KBProject",

@@ -57,6 +57,28 @@
   border-radius: var(--radius-sm);
   margin-left: var(--space-sm);
   border: 1px solid var(--color-warning-border);
+  cursor: pointer;
+}
+
+/* 解析中 / 未索引：中性提示色 */
+.kb-tree-badge--pending {
+  background: var(--color-warning-light);
+  color: var(--color-warning);
+  border-color: var(--color-warning-border);
+}
+
+/* 解析失败：红色警示 */
+.kb-tree-badge--fail {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+}
+
+/* 解析成功：绿色 */
+.kb-tree-badge--done {
+  background: var(--color-success-light);
+  color: var(--color-success);
+  border-color: var(--color-success-border);
 }
 
 .kb-tree-item-actions {

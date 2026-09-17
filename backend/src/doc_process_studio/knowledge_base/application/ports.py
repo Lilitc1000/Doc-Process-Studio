@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 
 from .dtos import (
     KBDocument,
+    KBDocumentParseDetail,
     KBIndexHit,
     KBProject,
     KBTreeNode,
@@ -74,6 +75,14 @@ class KnowledgeBaseRepository(ABC):
     @abstractmethod
     async def delete_document(self, document_id: str) -> bool:
         """删除文档；不存在返回 ``False``。"""
+
+    @abstractmethod
+    async def get_document_parse_detail(self, document_id: str) -> KBDocumentParseDetail | None:
+        """取单个文档的解析详情；不存在返回 ``None``。"""
+
+    @abstractmethod
+    async def trigger_document_parse(self, document_id: str) -> bool:
+        """对已上传文档（重新）触发解析 / 切片；定位不到文档返回 ``False``。"""
 
     @abstractmethod
     async def search(

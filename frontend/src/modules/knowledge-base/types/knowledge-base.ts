@@ -4,6 +4,9 @@
 // RAGFlow 这版不支持在 dataset 内写操作文件夹（接口仅 GET/PUT/PATCH），
 // 故前端只消费文件夹（只读、可展开）与文档，不提供任何文件夹写入口。
 
+// 文档解析状态（来自 RAGFlow 的文档解析进度）。
+export type ParseStatus = 'UNSTART' | 'RUNNING' | 'DONE' | 'FAIL';
+
 export interface KBProject {
   id: string;
   name: string;
@@ -20,6 +23,7 @@ export interface KBDocument {
   fileSize: number;
   chunkCount: number;
   isIndexed: boolean;
+  parseStatus: ParseStatus;
   uploadedAt: string;
 }
 
@@ -38,6 +42,7 @@ export interface KBTreeNodeDocument {
   fileSize: number;
   chunkCount: number;
   isIndexed: boolean;
+  parseStatus: ParseStatus;
   uploadedAt: string;
 }
 
@@ -52,4 +57,19 @@ export interface KBTreeResponse {
 export interface KBProjectSimple {
   id: string;
   name: string;
+}
+
+// 文档解析详情（GET /knowledge-base/documents/{id}/parse-detail）。
+// 后端为 snake_case，经 axios 拦截器 humps.camelizeKeys 自动转为 camelCase。
+export interface KBDocumentParseDetail {
+  documentId: string;
+  fileName: string;
+  parseStatus: ParseStatus;
+  isIndexed: boolean;
+  progress: number;
+  chunkCount: number;
+  tokenCount: number;
+  processDuration: number | null;
+  message: string;
+  updatedAt: string | null;
 }

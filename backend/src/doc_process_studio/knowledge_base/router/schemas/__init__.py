@@ -3,6 +3,7 @@ from .request import (
     KBProjectRenameRequest,
 )
 from .response import (
+    KBDocumentParseDetailResponse,
     KBDocumentResponse,
     KBProjectListResponse,
     KBProjectListSimpleResponse,
@@ -15,6 +16,7 @@ from .response import (
 )
 
 __all__ = [
+    "KBDocumentParseDetailResponse",
     "KBDocumentResponse",
     "KBProjectCreateRequest",
     "KBProjectListResponse",
