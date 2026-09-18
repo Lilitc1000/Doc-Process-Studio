@@ -130,6 +130,7 @@ describe('useAuthStore', () => {
       userId: 'usr_test',
       username: 'testuser',
       avatarColor: '#4f46e5',
+      role: 'member',
       createdAt: '2026-01-01T00:00:00Z',
     };
 
@@ -153,6 +154,7 @@ describe('useAuthStore', () => {
       userId: 'usr_test',
       username: 'testuser',
       avatarColor: '#4f46e5',
+      role: 'member',
       createdAt: '2026-01-01T00:00:00Z',
     };
 
@@ -170,6 +172,7 @@ describe('useAuthStore', () => {
       userId: 'usr_abc',
       username: 'admin',
       avatarColor: '#ef4444',
+      role: 'admin',
       createdAt: '2026-01-01T00:00:00Z',
     };
 
@@ -185,5 +188,38 @@ describe('useAuthStore', () => {
     expect(store.userId).toBe('');
     expect(store.username).toBe('');
     expect(store.avatarColor).toBe('#4f46e5');
+  });
+
+  // isGlobalAdmin 决定能否修改全系统共享设置（如 RAGFlow 凭据），
+  // 所以这里必须覆盖"未知角色一律 false"这条 fail-closed 规则。
+  describe('isGlobalAdmin', () => {
+    const withRole = (role: string) => {
+      const store = useAuthStore();
+      store.userInfo = {
+        userId: 'usr_role_test',
+        username: 'role-tester',
+        avatarColor: '#4f46e5',
+        role,
+        createdAt: '2026-01-01T00:00:00Z',
+      };
+      return store;
+    };
+
+    it("role 为 'admin' 时为 true", () => {
+      expect(withRole('admin').isGlobalAdmin).toBe(true);
+    });
+
+    it.each(['member', '', 'Admin', 'administrator', 'root'])(
+      'role 为 %p 时为 false（fail closed）',
+      (role) => {
+        expect(withRole(role).isGlobalAdmin).toBe(false);
+      },
+    );
+
+    it('无用户信息时为 false', () => {
+      const store = useAuthStore();
+      store.userInfo = null;
+      expect(store.isGlobalAdmin).toBe(false);
+    });
   });
 });

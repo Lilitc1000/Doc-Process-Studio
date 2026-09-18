@@ -22,6 +22,15 @@ export const useAuthStore = defineStore('auth', () => {
   const username = computed(() => userInfo.value?.username ?? '');
   const avatarColor = computed(() => userInfo.value?.avatarColor ?? '#4f46e5');
 
+  /**
+   * 全局管理员。用于判定能否查看/修改全系统共享设置（如 RAGFlow 连接信息与密钥）。
+   *
+   * 命名刻意与事故报告模块的 `isAdmin` 区分开：那个是**模块级**角色
+   * （`incident_report_user_roles` 里的 `admin`），只在该模块内生效，
+   * 拿来守全局设置会把"给某人分配报告审核人"变成"能改全局密钥"。
+   */
+  const isGlobalAdmin = computed(() => userInfo.value?.role === 'admin');
+
   async function login(usernameVal: string, password: string) {
     const response = await loginUser({ username: usernameVal, password });
     accessToken.value = response.accessToken;
@@ -93,6 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
     userId,
     username,
     avatarColor,
+    isGlobalAdmin,
     login,
     register,
     refreshAccessToken,

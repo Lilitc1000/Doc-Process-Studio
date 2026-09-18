@@ -12,6 +12,7 @@ frontend/src/components/
 │   ├── BaseModal.vue       # 模态对话框（header/default/footer 插槽）
 │   ├── BaseInput.vue       # 文本输入框（label/required/invalid/errorMessage）
 │   ├── PasswordInput.vue   # 密码输入框（基于 BaseInput + 可见性切换）
+│   ├── BaseSwitch.vue      # 开关（role="switch" + aria-checked，v-model 双向绑定）
 │   ├── BaseTextarea.vue    # 多行输入框（暴露 getTextareaEl()）
 │   ├── BaseFileUpload.vue  # 文件上传触发器（slot 自定义 UI）
 │   └── BaseDateTimePicker.vue # 日期/时间选择器（datetime/date/time）

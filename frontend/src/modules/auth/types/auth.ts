@@ -17,6 +17,13 @@ export interface UserInfoResponse {
   userId: string;
   username: string;
   avatarColor: string;
+  /**
+   * 全局角色：`admin` / `member`。
+   *
+   * ⚠️ 这是**全局**角色，用于判定能否修改全系统共享设置（如 RAGFlow 凭据）。
+   * 与事故报告模块的角色（`GET /api/incident-report/roles/me`）是两套东西。
+   */
+  role: string;
   createdAt: string;
 }
 

@@ -42,13 +42,14 @@ export const useAppStore = defineStore(
   },
   {
     persist: {
-      pick: [
-        'selectedModel',
-        'selectedRerankerModel',
-        'activePageId',
-        'availableModels',
-        'processingModes',
-      ],
+      // 只持久化"与账号无关的设备级缓存"。
+      //
+      // `selectedModel` / `selectedRerankerModel` **刻意不在其中**：
+      // 它们是"跟着用户走"的偏好，真相源在后端（`user_settings` 表），
+      // 由 `useUserSettingsStore` 在应用启动时拉取并回填到本 store。
+      // 继续写 localStorage 会导致同一浏览器下多个账号共用一份模型选择，
+      // 而且改了服务端也不会生效 —— 典型的双真相源。
+      pick: ['activePageId', 'availableModels', 'processingModes'],
     },
   },
 );
