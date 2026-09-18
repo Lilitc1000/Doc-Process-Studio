@@ -6,6 +6,7 @@
 from functools import lru_cache
 
 from ...common.infrastructure.config import settings
+from ...settings.infrastructure.dependencies import get_ragflow_config_provider
 from ..application.services.analytics_service import AnalyticsService
 from ..application.services.audit_query_service import AuditQueryService
 from ..application.services.comment_service import CommentService
@@ -90,28 +91,38 @@ def get_trace_recorder() -> SystemTraceRecorder:
 
 
 @lru_cache(maxsize=1)
-def get_reference_context() -> CompositeReferenceContext | SkillReferenceContext:
-    """装配参考文档上下文。
+def get_reference_context() -> CompositeReferenceContext:
+    """装配参考文档上下文（本地规范 + RAGFlow 素材）。
 
-    ragflow_enabled=False → 仅返回 SkillReferenceContext，行为与改动前完全一致（零风险）。
-    ragflow_enabled=True  → 返回 CompositeReferenceContext（本地规范 + RAGFlow 素材组合）。
+    **装配形状恒定**：永远返回 ``CompositeReferenceContext``，不再有「按开关决定要不要
+    把 RAGFlow 装进来」这一层。"当下是否真的用 RAGFlow" 由运行期解析出的
+    ``ragflow.enabled`` 决定 —— 与知识库模块完全一致：
+
+    - 停用 / 未配置 → ``RagflowKnowledgeRetriever`` 返回 ``[]``；
+    - ``CompositeReferenceContext`` 在这种情况下返回的文本与文件列表与纯
+      ``SkillReferenceContext`` **完全一致**，只在 ``reason`` 尾部多一个
+      ``| ragflow:no_hits`` 标记，反而更便于排查。
+
+    **为什么去掉了 ``settings.ragflow_enabled`` 那道结构门禁**：它和库里的
+    ``ragflow.enabled`` 构成两套语义，导致同一个操作在两条链路上结果不同 ——
+    env 为 ``false`` 时管理员在设置页打开开关，知识库模块生效、报告侧检索却不生效，
+    而页面文案承诺的是"保存后立即生效，无需重启服务"。
+    装配成本可以忽略：``CompositeReferenceContext.__init__`` 只有字段赋值，无任何 I/O。
+
+    保留 ``@lru_cache`` 是安全的：它缓存的是"装配形状"，凭据在每次 ``retrieve()``
+    时按库里的系统设置解析，所以管理员改完密钥立即生效。
     """
-    base = SkillReferenceContext()
-    if not settings.ragflow_enabled:
-        return base
-
     from .adapters.ragflow_knowledge import RagflowKnowledgeRetriever
 
     retriever = RagflowKnowledgeRetriever(
-        base_url=settings.ragflow_base_url,
-        api_key=settings.ragflow_api_key,
+        config_provider=get_ragflow_config_provider(),
         timeout_seconds=settings.ragflow_timeout_seconds,
         similarity_threshold=settings.ragflow_similarity_threshold,
         top_k=settings.ragflow_top_k,
         datasets_json=settings.ragflow_datasets_json,
     )
     return CompositeReferenceContext(
-        base=base,
+        base=SkillReferenceContext(),
         retriever=retriever,
         ragflow_enabled_sections=settings.ragflow_enabled_sections,
         ragflow_top_k=settings.ragflow_top_k,

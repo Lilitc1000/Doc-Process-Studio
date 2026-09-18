@@ -3,6 +3,8 @@
 用例编排：注册、登录、令牌刷新、用户信息、资料更新、密码修改、登出、删除、管理员初始化。
 """
 
+import logging
+
 from ...common.security.security import (
     create_access_token,
     create_refresh_token,
@@ -19,6 +21,7 @@ from ..domain.errors import (
     UserAlreadyExistsError,
     UserNotFoundError,
 )
+from ..domain.roles import ROLE_ADMIN, is_admin_role
 from .dtos import (
     RegisterResponse,
     TokenResponse,
@@ -28,6 +31,8 @@ from .dtos import (
 from .ports import TokenBlacklist, UserRepository
 
 _DEFAULT_AVATAR_COLOR = "#4f46e5"
+
+_logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -104,11 +109,16 @@ class AuthService:
         record = await self._users.get_by_user_id(user_id)
         if record is None:
             raise UserNotFoundError("User not found")
-        uid, username, avatar_color, created_at = record[0], record[1], record[3], record[4]
+        uid = record[0]
+        username = record[1]
+        avatar_color = record[3]
+        created_at = record[4]
+        role = record[5]
         return UserInfoResponse(
             user_id=uid,
             username=username,
             avatar_color=avatar_color,
+            role=role,
             created_at=to_utc8(created_at),
         )
 
@@ -151,7 +161,7 @@ class AuthService:
         record = await self._users.get_by_user_id(user_id)
         if record is None:
             raise UserNotFoundError("User not found")
-        _, _, hashed_password, _, _ = record
+        _, _, hashed_password, _, _, _ = record
         if not verify_password(current_password, hashed_password):
             raise IncorrectPasswordError("Current password is incorrect")
         await self._users.update_password(user_id, hash_password(new_password))
@@ -170,13 +180,49 @@ class AuthService:
         return await self._users.delete_by_username_prefix(prefix)
 
     async def ensure_admin_user(self, *, admin_username: str, admin_password: str) -> None:
-        if await self._users.count_users() > 0:
+        """保证存在一个全局管理员（幂等）。
+
+        1. **账号已存在** → 只确保它的全局 ``role='admin'``，**不动密码**。
+           这是幂等兜底：即使有人手工把 role 改回 member，启动也会纠回来。
+        2. **账号不存在且库为空** → 保持原有「空库初始化」语义，按
+           ``ADMIN_USERNAME`` / ``ADMIN_PASSWORD`` 创建，并授予事故报告全部角色。
+        3. **账号不存在但库中已有用户** → **不擅自创建**（避免 env 写错就凭空多出
+           一个高权限账号），只打 ERROR 并给出可执行的修复 SQL。
+
+        为什么不再沿用 ``count_users() > 0 就直接 return``：那个早退意味着
+        「已有数据的库在启动时完全不保证存在管理员」。而系统级共享设置只能由
+        管理员修改（见 ``auth.infrastructure.dependencies.require_admin``），
+        一旦没有管理员就彻底没人能配密钥 —— 这是个会把人卡死的隐形状态。
+        """
+        existing = await self._users.get_by_username(admin_username)
+        if existing is not None:
+            user_id = existing[0]
+            role = existing[5]
+            if not is_admin_role(role):
+                await self._users.set_role(user_id, ROLE_ADMIN)
+                _logger.warning(
+                    "已将账号 %s(user_id=%s) 的全局角色修正为 admin（原值=%r）",
+                    admin_username,
+                    user_id,
+                    role,
+                )
             return
+
+        if await self._users.count_users() > 0:
+            _logger.error(
+                "未找到管理员账号 %r，但库中已有用户，因此不自动创建。"
+                "请手工提权：UPDATE users SET role='admin' WHERE username='<管理员账号>';",
+                admin_username,
+            )
+            return
+
         user_id = generate_user_id()
         await self._users.create(
             user_id=user_id,
             username=admin_username,
             hashed_password=hash_password(admin_password),
             avatar_color=_DEFAULT_AVATAR_COLOR,
+            role=ROLE_ADMIN,
         )
         await self._users.assign_all_roles_to_admin(user_id)
+        _logger.info("已创建初始管理员账号 %s(user_id=%s)", admin_username, user_id)

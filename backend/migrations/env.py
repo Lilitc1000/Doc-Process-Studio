@@ -10,6 +10,9 @@ from doc_process_studio.common.infrastructure.database import Base
 import doc_process_studio.auth.infrastructure.persistence  # noqa: F401
 import doc_process_studio.chat.infrastructure.persistence  # noqa: F401
 import doc_process_studio.incident_report.infrastructure.persistence  # noqa: F401
+# settings 模块：system_settings / system_secrets / user_settings 三张表。
+# 少了这一行，autogenerate 看不到它们，会误判成库里多出来的表并生成 drop。
+import doc_process_studio.settings.infrastructure.persistence  # noqa: F401
 
 config = context.config
 

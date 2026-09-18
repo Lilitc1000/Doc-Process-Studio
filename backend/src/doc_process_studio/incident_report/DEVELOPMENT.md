@@ -369,10 +369,14 @@ AI 生成固定输出英文。系统提示词中明确要求所有输出使用�
 
 - 端口：`KnowledgeRetrieverPort`（`application/ports/ports.py` 中的 ABC）+ `KnowledgeChunk`（frozen dataclass）；实现 `RagflowKnowledgeRetriever`（`infrastructure/adapters/ragflow_knowledge.py`），对接 RAGFlow `/api/v1/retrieval`。
 - 组合上下文：`CompositeReferenceContext`（`infrastructure/adapters/reference_context.py`）包裹原 `SkillReferenceContext`；启用时在四个章节拼接检索素材，任意异常降级到原本地规范，绝不阻断报告生成。
-- 装配：`infrastructure/dependencies.py` 的 `get_reference_context()` 按 `settings.ragflow_enabled` 返回——`False` 时仅返回 `SkillReferenceContext`（与改造前行为完全一致），`True` 时返回 `CompositeReferenceContext`。
+- 装配：`infrastructure/dependencies.py` 的 `get_reference_context()` **形状恒定**，永远返回 `CompositeReferenceContext`（不再有"按开关决定要不要装进来"这一层）。"当下是否真的用 RAGFlow" 由运行期解析出的 `system_settings.ragflow.enabled` 决定 —— 与知识库模块口径一致。
 - 调用约定（实测，务必遵守）：`top_k = 请求数 × 4`、`vector_similarity_weight = 1.0`、`similarity_threshold = 配置值`、不传 `cross_languages`；响应校验 `code == 0`，否则视为失败；后处理做 HTML 清洗 / 碎片过滤 / 去重 / 阈值过滤。
-- 配置（`common/infrastructure/config.py`，**默认全部关闭**）：`ragflow_enabled` / `ragflow_base_url` / `ragflow_api_key` / `ragflow_similarity_threshold`(0.70) / `ragflow_top_k`(3) / `ragflow_datasets_json`（scope→dataset_id 映射，默认 `{"history":["f05e5a4aadac11f1b9211b18c23af0c8"]}`）/ `ragflow_enabled_sections`（默认 `quick,impact,root_cause,follow_up`）。
-- 现状：`ragflow_enabled=False` 时整条链路零生效；启用前需确认服务端 dataset 已灌数据且密钥走环境变量。
+- 配置：`ragflow_similarity_threshold`(0.55) / `ragflow_top_k`(3) / `ragflow_datasets_json`（scope→dataset_id 映射）/ `ragflow_enabled_sections`（默认 `quick,impact,root_cause,follow_up`）。**启用状态不在这里** —— 见上一条，它归 `system_settings`。
+- **凭据不再从 `settings` 直读**：`RagflowKnowledgeRetriever` 接收 `RagflowConfigProvider`，在每次 `retrieve()` 时按库里的系统设置解析 base_url / api_key / enabled。因此 `get_reference_context()` 可以继续保留 `@lru_cache` —— 它缓存的是"装配形状"，不再缓存凭据，管理员改完密钥下一次报告生成即生效。
+- `ragflow_datasets_json` 只接受**数组**值（字符串值被 `_parse_datasets_json` 静默忽略，这一点由 `tests/incident_report/unit/test_ragflow_knowledge.py` 固化为预期行为）。注意当前调用点把 `scope` 写死为 `"history"`（`reference_context.py` 的 `CompositeReferenceContext.resolve`），所以多 scope 能力**配了但没接线**，实际等价于"一个 dataset 列表"。
+- 现状：停用 / 未配置时 `RagflowKnowledgeRetriever` 返回 `[]`，`CompositeReferenceContext` 的输出与纯 `SkillReferenceContext` 完全一致，只在 `reason` 尾部多一个 `| ragflow:no_hits` 标记（便于排查）。启用前需确认服务端 dataset 已灌数据。
+
+> **历史坑，别退回旧写法**：`get_reference_context()` 曾经按 `settings.ragflow_enabled`（env）决定返回 `CompositeReferenceContext` 还是 `SkillReferenceContext`。那道"结构门禁"与库里的 `ragflow.enabled` 构成两套语义：env 为 `false` 时管理员在设置页打开开关，知识库模块生效、这里却不生效。装配成本为零（`CompositeReferenceContext.__init__` 只有字段赋值，无 I/O），所以已统一到运行期解析，回归由 `tests/incident_report/unit/test_reference_wiring.py` 保证。
 
 ## 开发注意
 

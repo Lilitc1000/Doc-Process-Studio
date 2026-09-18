@@ -154,6 +154,31 @@ class RagflowClient:
         )
         return self._items(body, "datasets", "kbs", "docs")
 
+    async def probe_connection(self) -> tuple[bool, str, int]:
+        """连通性自检：返回 ``(是否可用, 说明, 可访问 dataset 数量)``。
+
+        与读路径一样坚持"不抛异常"：任何失败都翻译成 ``(False, 原因, 0)``，
+        方便设置页的"测试连接"直接展示具体原因（401 / DNS / 超时各自不同）。
+        """
+        if not self.enabled:
+            return False, "未配置 base_url 或 api_key", 0
+
+        body = await self._request(
+            "GET",
+            "/api/v1/datasets",
+            params={"page": 1, "page_size": self._page_size},
+        )
+        if body is None:
+            return False, "无法连接 RAGFlow（网络不通或地址错误），详见服务端日志", 0
+
+        code = body.get("code", -1)
+        if code != 0:
+            message = str(body.get("message") or "无附加消息")
+            return False, f"RAGFlow 返回 code={code}：{message}", 0
+
+        items = self._items(body, "datasets", "kbs", "docs")
+        return True, f"连接成功，可访问 {len(items)} 个知识库", len(items)
+
     async def get_dataset(self, dataset_id: str) -> dict[str, Any] | None:
         body = await self._request("GET", f"/api/v1/datasets/{dataset_id}")
         return body.get("data") if isinstance(body, dict) and body.get("code", -1) == 0 else None

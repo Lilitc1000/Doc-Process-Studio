@@ -10,15 +10,19 @@ from datetime import datetime
 class UserRepository(ABC):
     """用户仓储端口。
 
-    元组返回顺序：(user_id, username, hashed_password, avatar_color, created_at)
+    元组返回顺序：(user_id, username, hashed_password, avatar_color, created_at, role)
+
+    末尾追加 ``role`` 而不是重排字段，是为了不动既有调用点 —— 全部调用方都是
+    下标访问（``record[0]`` / ``record[2]``）或定长解包，没有星号解包，
+    所以尾部追加是安全的。
     """
 
     @abstractmethod
-    async def get_by_username(self, username: str) -> tuple[str, str, str, str, datetime] | None:
+    async def get_by_username(self, username: str) -> tuple[str, str, str, str, datetime, str] | None:
         """按用户名查询用户记录。"""
 
     @abstractmethod
-    async def get_by_user_id(self, user_id: str) -> tuple[str, str, str, str, datetime] | None:
+    async def get_by_user_id(self, user_id: str) -> tuple[str, str, str, str, datetime, str] | None:
         """按 user_id 查询用户记录。"""
 
     @abstractmethod
@@ -26,7 +30,15 @@ class UserRepository(ABC):
         """判断用户名是否已存在。"""
 
     @abstractmethod
-    async def create(self, *, user_id: str, username: str, hashed_password: str, avatar_color: str) -> datetime:
+    async def create(
+        self,
+        *,
+        user_id: str,
+        username: str,
+        hashed_password: str,
+        avatar_color: str,
+        role: str = "member",
+    ) -> datetime:
         """创建用户，返回 created_at。"""
 
     @abstractmethod
@@ -62,6 +74,14 @@ class UserRepository(ABC):
     @abstractmethod
     async def assign_all_roles_to_admin(self, user_id: str) -> None:
         """为管理员用户分配事故报告全部角色（跨域初始化）。"""
+
+    @abstractmethod
+    async def get_role(self, user_id: str) -> str | None:
+        """读取全局角色；用户不存在时返回 None。"""
+
+    @abstractmethod
+    async def set_role(self, user_id: str, role: str) -> bool:
+        """设置全局角色，返回用户是否存在。"""
 
 
 class TokenBlacklist(ABC):

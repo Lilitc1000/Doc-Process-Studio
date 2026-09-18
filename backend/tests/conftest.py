@@ -42,6 +42,8 @@ _ORM_MODULE_NAMES = (
     "doc_process_studio.auth.infrastructure.persistence",
     "doc_process_studio.chat.infrastructure.persistence",
     "doc_process_studio.incident_report.infrastructure.persistence",
+    # settings 模块：system_settings / system_secrets / user_settings 三张表
+    "doc_process_studio.settings.infrastructure.persistence",
 )
 
 

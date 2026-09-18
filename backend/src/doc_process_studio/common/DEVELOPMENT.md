@@ -54,12 +54,42 @@ backend/src/doc_process_studio/common/
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | access_token 有效期 | `15` |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | refresh_token 有效期 | `7` |
 | `OLLAMA_DEFAULT_MODEL` | 生成兜底模型（避免硬编码导致 404） | `gemma4:e4b-mlx` |
-| `RAGFLOW_ENABLED` | 是否启用 RAGFlow 知识增强（默认关闭，开启需配 base_url/api_key） | `False` |
-| `RAGFLOW_BASE_URL` | RAGFlow 服务地址（如 `http://s.gdautotoll.com.cn:10108`） | - |
-| `RAGFLOW_API_KEY` | RAGFlow API Key（务必走环境变量，勿入库） | - |
-| `RAGFLOW_SIMILARITY_THRESHOLD` | 检索相似度阈值 | `0.70` |
+| `RAGFLOW_ENABLED` | RAGFlow 的**首次兜底启用状态**（见下方「RAGFlow 的配置优先级」） | `False` |
+| `RAGFLOW_BASE_URL` | RAGFlow 服务地址。**开发期兜底**，生产应由管理员在设置页写入 `system_settings` | - |
+| `RAGFLOW_API_KEY` | RAGFlow API Key。**开发期兜底**，优先级低于 `system_secrets` 里的密文。**切勿提交进版本库，用 `.env.<env>.local`** | - |
+| `RAGFLOW_SIMILARITY_THRESHOLD` | 检索相似度阈值 | `0.55` |
 | `RAGFLOW_TOP_K` | 每次检索返回的素材块数 | `3` |
-| `RAGFLOW_DATASETS_JSON` | scope→dataset_id 映射 JSON | `{"history":["f05e5a4aadac11f1b9211b18c23af0c8"]}` |
+| `RAGFLOW_DATASETS_JSON` | scope→dataset_id 映射 JSON。**只接受数组值**（字符串值会被静默忽略）；当前唯一调用点把 scope 写死为 `"history"`，故实际等价于「一个 dataset 列表」 | `{"history":["f05e5a4aadac11f1b9211b18c23af0c8"]}` |
+| `SETTINGS_ENCRYPTION_KEY` | 敏感凭据加密主密钥（base64 的 32 字节或 64 位 hex）。`ENV=prod` 未配置则**启动失败** | - |
+| `SETTINGS_ENCRYPTION_KEY_ID` | 主密钥标识，为轮换预留 | `k1` |
+| `SETTINGS_ENCRYPTION_ALLOW_DEV_KDF` | 非生产环境允许从 `JWT_SECRET_KEY` 派生主密钥（生产忽略此开关） | `True` |
+| `SYSTEM_SETTINGS_CACHE_TTL_SECONDS` | 系统级配置（含密文）的进程内缓存秒数 | `60` |
+
+### 配置文件加载与敏感值
+
+`.env.{env}` 与 `.env.{env}.local` 是**两段式加载**，后者覆盖前者、且被 `.gitignore`
+的 `.env*.local` 忽略。所以：
+
+- 需要覆盖配置的人自己建 `backend/.env.dev.local`；**不要把密钥写进入库的 `.env.dev` / `.env.prod`**；
+- 生产用环境变量注入，或在部署机上放 `.env.prod.local`。
+
+### RAGFlow 的配置优先级（只有一个开关）
+
+**启用开关只有一个**：`system_settings` 表里的 `ragflow.enabled`。知识库模块与报告侧检索
+都读它，管理员在设置页改完**立即生效**（≤ `SYSTEM_SETTINGS_CACHE_TTL_SECONDS`）。
+
+`RAGFLOW_ENABLED` 环境变量**只是库里没有这一行时的兜底值**；一旦管理员在页面上保存过，
+env 就不再参与。
+
+> **历史坑，别退回旧写法**：这里曾经有一道 `settings.ragflow_enabled` 的「结构门禁」，
+> 在装配期决定要不要把 RAGFlow 检索引擎装进报告侧参考上下文。它和库里的 `ragflow.enabled`
+> 构成两套语义 —— env 为 `false` 时管理员在设置页打开开关，**知识库模块生效、报告侧检索却不生效**，
+> 而页面文案承诺的是"保存后立即生效，无需重启服务"。
+> 现在 `get_reference_context()` 的装配形状恒定（永远 Composite），启停一律由运行期解析决定。
+
+凭据本身（`base_url` / `api_key`）由
+`settings/infrastructure/ragflow_config_provider.py` 按「系统级配置 → env 兜底 → 不可用」
+三级解析，**不再由消费方直接从 `settings` 读取**。详见 `settings/DEVELOPMENT.md`。
 
 ### security.py
 

@@ -12,13 +12,14 @@ from sqlalchemy.engine import CursorResult
 from ...common.infrastructure.database import async_session_factory
 from ...common.security.security import generate_user_id
 from ..application.ports import UserRepository
+from ..domain.roles import ROLE_MEMBER
 from .persistence.user import User
 
 
 class SqlUserRepository(UserRepository):
     """基于 SQLAlchemy 的用户仓储。"""
 
-    async def get_by_username(self, username: str) -> tuple[str, str, str, str, datetime] | None:
+    async def get_by_username(self, username: str) -> tuple[str, str, str, str, datetime, str] | None:
         async with async_session_factory() as session:
             result = await session.execute(select(User).where(User.username == username))
             user = result.scalar_one_or_none()
@@ -30,9 +31,10 @@ class SqlUserRepository(UserRepository):
                 user.hashed_password,
                 user.avatar_color,
                 user.created_at,
+                user.role or ROLE_MEMBER,
             )
 
-    async def get_by_user_id(self, user_id: str) -> tuple[str, str, str, str, datetime] | None:
+    async def get_by_user_id(self, user_id: str) -> tuple[str, str, str, str, datetime, str] | None:
         async with async_session_factory() as session:
             result = await session.execute(select(User).where(User.user_id == user_id))
             user = result.scalar_one_or_none()
@@ -44,6 +46,7 @@ class SqlUserRepository(UserRepository):
                 user.hashed_password,
                 user.avatar_color,
                 user.created_at,
+                user.role or ROLE_MEMBER,
             )
 
     async def username_exists(self, username: str) -> bool:
@@ -58,6 +61,7 @@ class SqlUserRepository(UserRepository):
         username: str,
         hashed_password: str,
         avatar_color: str,
+        role: str = ROLE_MEMBER,
     ) -> datetime:
         async with async_session_factory() as session:
             user = User(
@@ -65,6 +69,7 @@ class SqlUserRepository(UserRepository):
                 username=username,
                 hashed_password=hashed_password,
                 avatar_color=avatar_color,
+                role=role,
             )
             session.add(user)
             await session.commit()
@@ -180,3 +185,22 @@ class SqlUserRepository(UserRepository):
                     )
                 )
             await session.commit()
+
+    async def get_role(self, user_id: str) -> str | None:
+        async with async_session_factory() as session:
+            result = await session.execute(select(User.role).where(User.user_id == user_id))
+            row = result.first()
+            if row is None:
+                return None
+            return row[0] or ROLE_MEMBER
+
+    async def set_role(self, user_id: str, role: str) -> bool:
+        async with async_session_factory() as session:
+            result = await session.execute(select(User).where(User.user_id == user_id))
+            user = result.scalar_one_or_none()
+            if user is None:
+                return False
+            user.role = role
+            user.updated_at = datetime.now(UTC)
+            await session.commit()
+            return True

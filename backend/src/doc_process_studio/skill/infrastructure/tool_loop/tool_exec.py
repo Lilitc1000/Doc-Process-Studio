@@ -824,7 +824,10 @@ async def _execute_builtin_tool(
 
         # ``$`` 提及里携带的是 RAGFlow dataset id，直接按 dataset 粒度检索，
         # 不再经过"项目名 -> dataset"的映射。
-        hits = await get_kb_service().search_knowledge(
+        # get_kb_service 现在是异步的：凭据在运行期按系统设置解析，
+        # 管理员在设置页改完密钥后，下一次工具调用即生效。
+        kb_service = await get_kb_service()
+        hits = await kb_service.search_knowledge(
             project_id=project_id,
             query=query,
             top_k=app_settings.kb_search_top_k,

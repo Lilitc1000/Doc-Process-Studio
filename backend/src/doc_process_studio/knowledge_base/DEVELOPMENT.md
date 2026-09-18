@@ -52,9 +52,20 @@ knowledge_base/
 
 ### 依赖注入
 
-`infrastructure/dependencies.py` 用 `@lru_cache(maxsize=1)` 装配单例：
-`RagflowClient` → `RagflowKnowledgeBaseRepository`（带缓存 TTL）→ `KnowledgeBaseService`。
-测试时用 `app.dependency_overrides[get_kb_service]` 替换即可。
+`infrastructure/dependencies.py` 的装配链路：
+`RagflowConfigProvider`（解析系统级凭据）→ `RagflowClient` → `RagflowKnowledgeBaseRepository`
+（带缓存 TTL）→ `KnowledgeBaseService`。
+
+**这三个工厂都是 `async` 且刻意不加 `@lru_cache`**：凭据存在数据库里、管理员可随时修改，
+用 `@lru_cache` 会把第一次构造时的 base_url / api_key 钉死到进程结束，变成
+"改完密钥不重启不生效"。`RagflowClient` 只是一层参数容器（真正的 `httpx.AsyncClient`
+在每次调用时才创建），所以按请求构造的开销可以忽略。
+
+FastAPI 的 `Depends` 原生支持 async 依赖，所以 `router/projects.py` 里的
+`Depends(get_kb_service)` 无需改动。测试时用 `app.dependency_overrides[get_kb_service]` 替换即可。
+
+> ⚠️ 如果哪天要给这个仓储加缓存，**缓存键必须带上隔离维度** —— 凭据一旦变成按用户解析，
+> `kb:datasets` 这种不带维度的键会让不同用户互相读到对方的列表。
 
 ## 数据映射
 
@@ -139,8 +150,9 @@ RAGFlow 是**外部真相源**：用户在 RAGFlow 网页端新建 / 删除 data
 
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
-| `RAGFLOW_BASE_URL` | — | RAGFlow 服务地址 |
-| `RAGFLOW_API_KEY` | — | API Key（生产须走环境变量注入） |
+| `RAGFLOW_ENABLED` | `False` | 运行期启停；库里 `ragflow.enabled` 优先。停用时凭据传空，所有调用走"返回空容器"降级 |
+| `RAGFLOW_BASE_URL` | — | RAGFlow 服务地址。**开发期兜底**，优先级低于 `system_settings` 里的库内配置 |
+| `RAGFLOW_API_KEY` | — | API Key。**开发期兜底**，优先级低于 `system_secrets` 里的密文；切勿提交进版本库，用 `.env.<env>.local` |
 | `RAGFLOW_SIMILARITY_THRESHOLD` | `0.55` | 检索相似度阈值 |
 | `RAGFLOW_TIMEOUT_SECONDS` | `15.0` | 常规请求超时 |
 | `RAGFLOW_PARSE_TIMEOUT_SECONDS` | `60.0` | 触发服务端解析的超时 |

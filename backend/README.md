@@ -18,6 +18,14 @@ ENV=dev uv run uvicorn doc_process_studio.main:app --reload --host 0.0.0.0 --por
 
 配置按环境分文件读取（`ENV=dev` → `.env.dev`，`ENV=prod` → `.env.prod`），未设置时默认 `dev`。
 
+**两段式加载**：`.env.{env}` 之后还会叠加 `.env.{env}.local`（后者覆盖前者），而
+`.env*.local` 已被 `.gitignore` 忽略 —— 所以**密钥类配置放 `.env.{env}.local`**，
+或生产环境用环境变量注入，不要把明文写进入库的 `.env.dev` / `.env.prod`。
+
+敏感凭据（如 RAGFlow API Key）的加密主密钥 `SETTINGS_ENCRYPTION_KEY`：
+`ENV=prod` 必须显式配置，缺失会**启动失败**；开发环境未配置时会从 `JWT_SECRET_KEY`
+经 HKDF 确定性派生并打 WARNING，因此 clone 下来即可运行，**无需手动拷贝任何密钥文件**。
+
 ## 数据库迁移
 
 ```bash

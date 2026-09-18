@@ -17,11 +17,13 @@ from .common.infrastructure.model_context import warmup_model_context_cache
 from .common.middleware.logging_config import setup_logging
 from .common.middleware.request_id import RequestIdMiddleware
 from .common.middleware.request_logging import RequestLoggingMiddleware
+from .common.security.secret_cipher import get_secret_cipher
 from .incident_report.infrastructure.dependencies import get_role_repository
 from .incident_report.router.analytics import router as incident_report_analytics_router
 from .incident_report.router.reports import router as incident_report_reports_router
 from .incident_report.router.roles import router as incident_report_roles_router
 from .knowledge_base.router import router as knowledge_base_router
+from .settings.router.settings import router as settings_router
 from .skill.router.routes import router as skill_routes_router
 from .system.router.agent_traces import router as agent_traces_router
 from .system.router.health import router as health_router
@@ -33,6 +35,10 @@ _logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
+
+    # 敏感凭据加密器：主密钥缺失 / 非法时在这里 fail fast，
+    # 而不是等管理员第一次保存密钥时才发现问题。
+    get_secret_cipher()
 
     if settings.auto_create_schema:
         _logger.warning(
@@ -85,3 +91,4 @@ app.include_router(health_router)
 app.include_router(models_router)
 app.include_router(agent_traces_router)
 app.include_router(knowledge_base_router)
+app.include_router(settings_router)
