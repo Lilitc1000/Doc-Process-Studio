@@ -145,7 +145,10 @@ class Settings(BaseSettings):
     ragflow_timeout_seconds: float = 15.0
     # 实测最高相似度 0.72，默认 0.70 余量偏小，暂取 0.55 观测召回。
     ragflow_similarity_threshold: float = 0.55
-    ragflow_top_k: int = 3
+    ragflow_top_k: int = 6
+    # 同一文档最多取回的片段数。原先按 document_id 整体去重（等于 1），
+    # 语料只有一篇时每次只注入 1 个片段，top_k 形同虚设。
+    ragflow_max_chunks_per_document: int = 2
     # 报告侧参考上下文使用的 dataset 列表，形如 {"scope": ["dataset_id", ...]}。
     # 只接受**数组**值：字符串值会被 _parse_datasets_json 静默忽略
     # （见 incident_report/infrastructure/adapters/ragflow_knowledge.py）。

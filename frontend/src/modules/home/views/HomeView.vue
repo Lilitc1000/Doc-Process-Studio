@@ -105,7 +105,10 @@
           </div>
         </base-button>
 
+        <!-- 知识库只对管理员开放：入口与路由守卫保持一致，
+             避免"入口藏了但直接输 URL 还能进"的不一致。 -->
         <base-button
+          v-if="authStore.isGlobalAdmin"
           type="button"
           class="home-card"
           variant="ghost"
@@ -179,8 +182,10 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 import BaseButton from '@shared/ui/BaseButton.vue';
+import { useAuthStore } from '@modules/auth';
 
 const router = useRouter();
+const authStore = useAuthStore();
 
 const routeMap: Record<string, string> = {
   chat: 'chat',

@@ -43,6 +43,13 @@ class RagflowSettingsDTO(BaseModel):
     credential: RagflowCredentialDTO = Field(..., description="凭据展示信息")
     similarity_threshold: float = Field(..., description="检索相似度阈值（当前为全局配置）")
     top_k: int = Field(..., description="检索条数（当前为全局配置）")
+    datasets_json: str = Field(
+        default="",
+        description=(
+            '报告侧检索使用的 dataset 映射，形如 {"history": ["<dataset_id>"]}。'
+            "库里未配置时返回环境变量兜底值；空串表示未配置任何 dataset"
+        ),
+    )
 
 
 class SettingsOverviewDTO(BaseModel):
@@ -58,6 +65,27 @@ class SettingsOverviewDTO(BaseModel):
         default=None,
         description="RAGFlow 系统设置；非管理员（或未请求系统段）时为 None",
     )
+
+
+class RagflowDatasetSummaryDTO(BaseModel):
+    """设置页下拉用的知识库条目。"""
+
+    id: str = Field(..., description="RAGFlow dataset id")
+    name: str = Field(..., description="知识库名称")
+    document_count: int = Field(default=0, description="文档数")
+    chunk_count: int = Field(default=0, description="片段数")
+
+
+class RagflowDatasetListDTO(BaseModel):
+    """知识库列表视图。
+
+    ``ok=False`` 时 ``message`` 说明原因（未启用 / 未配置凭据 / 连不上 / 无权限），
+    ``datasets`` 一律为已取到的部分，前端据此区分"连接有问题"与"这个连接下确实没有知识库"。
+    """
+
+    ok: bool = Field(..., description="是否成功取到列表")
+    message: str = Field(default="", description="结果说明，失败时给出原因")
+    datasets: list[RagflowDatasetSummaryDTO] = Field(default_factory=list, description="知识库列表")
 
 
 class RagflowConnectionTestDTO(BaseModel):

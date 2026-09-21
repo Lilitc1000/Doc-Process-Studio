@@ -55,3 +55,23 @@ class RagflowSettingsUpdateRequest(BaseModel):
         max_length=MAX_SECRET_LENGTH,
         description="API Key；字段缺失或空串表示不修改。清除请走 DELETE /api/settings/ragflow/api-key",
     )
+    datasets_json: str | None = Field(
+        default=None,
+        max_length=2000,
+        description=(
+            '报告侧检索的 dataset 映射，形如 {"history": ["<dataset_id>"]}；'
+            "传空串或 null 表示撤销库内覆盖，回落环境变量兜底"
+        ),
+    )
+    similarity_threshold: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="检索相似度阈值 0.0~1.0；传 null 表示撤销库内覆盖",
+    )
+    top_k: int | None = Field(
+        default=None,
+        ge=1,
+        le=20,
+        description="检索条数 1~20；传 null 表示撤销库内覆盖",
+    )

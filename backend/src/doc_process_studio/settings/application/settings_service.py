@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -32,13 +33,18 @@ from ..domain.values import (
     MAX_SECRET_LENGTH,
     SECRET_RAGFLOW_API_KEY,
     SETTING_RAGFLOW_BASE_URL,
+    SETTING_RAGFLOW_DATASETS_JSON,
     SETTING_RAGFLOW_ENABLED,
+    SETTING_RAGFLOW_SIMILARITY_THRESHOLD,
+    SETTING_RAGFLOW_TOP_K,
     RagflowConfig,
 )
 from .dtos import (
     ModelPreferencesDTO,
     RagflowConnectionTestDTO,
     RagflowCredentialDTO,
+    RagflowDatasetListDTO,
+    RagflowDatasetSummaryDTO,
     RagflowSettingsDTO,
     SettingsOverviewDTO,
     UserPreferencesDTO,
@@ -46,6 +52,7 @@ from .dtos import (
 from .ports import (
     RagflowConfigProvider,
     RagflowConnectionProbe,
+    RagflowDatasetCatalog,
     SystemSecretRepository,
     SystemSettingRepository,
     UserSettingsRepository,
@@ -94,6 +101,41 @@ def _validate_model_name(raw: str) -> str | None:
     return value
 
 
+def _coerce_threshold(value: float | int | None) -> float:
+    """相似度阈值：库里未配置时回落 env 默认值。"""
+    if value is None:
+        return app_settings.ragflow_similarity_threshold
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return app_settings.ragflow_similarity_threshold
+
+
+def _coerce_top_k(value: float | int | None) -> int:
+    """检索条数：库里未配置时回落 env 默认值。"""
+    if value is None:
+        return app_settings.ragflow_top_k
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return app_settings.ragflow_top_k
+
+
+def _validate_datasets_json(raw: str) -> bool:
+    """校验 dataset 映射：必须是 {"scope": ["<id>", ...]} 且值为数组。
+
+    与 ``ragflow_knowledge._parse_datasets_json`` 保持一致——字符串值会被静默忽略，
+    所以这里直接判为非法，避免管理员配了却"看起来没生效"。
+    """
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    return all(isinstance(value, list) for value in data.values())
+
+
 def _clean_str(raw: Any) -> str | None:
     if not isinstance(raw, str):
         return None
@@ -113,6 +155,7 @@ class SettingsService:
         cipher: SecretCipher,
         config_provider: RagflowConfigProvider,
         connection_probe: RagflowConnectionProbe,
+        dataset_catalog: RagflowDatasetCatalog,
     ) -> None:
         self._secrets = secret_repo
         self._settings = setting_repo
@@ -120,6 +163,39 @@ class SettingsService:
         self._cipher = cipher
         self._provider = config_provider
         self._probe = connection_probe
+        self._catalog = dataset_catalog
+
+    async def list_ragflow_datasets(self) -> RagflowDatasetListDTO:
+        """列出当前生效凭据下可访问的知识库，供设置页选择。
+
+        **每次实时取，不缓存**：换了 Base URL 或密钥之后可访问的集合会变，
+        缓存住只会让管理员选到早已不存在的 dataset。
+        """
+        config = await self._provider.resolve(scope="system")
+        if not config.enabled:
+            return RagflowDatasetListDTO(ok=False, message="RAGFlow 当前处于停用状态，无法读取知识库列表。")
+        if not config.base_url or not config.api_key:
+            return RagflowDatasetListDTO(ok=False, message="尚未配置 Base URL 或 API 密钥，无法读取知识库列表。")
+
+        datasets = await self._catalog.list_datasets(config)
+        if not datasets:
+            return RagflowDatasetListDTO(
+                ok=False,
+                message="已连接但未取到任何知识库，请确认该密钥有访问权限，或服务端日志中的具体原因。",
+            )
+        return RagflowDatasetListDTO(
+            ok=True,
+            message=f"已取到 {len(datasets)} 个知识库",
+            datasets=[
+                RagflowDatasetSummaryDTO(
+                    id=item.id,
+                    name=item.name,
+                    document_count=item.document_count,
+                    chunk_count=item.chunk_count,
+                )
+                for item in datasets
+            ],
+        )
 
     # ------------------------------------------------------------------ 用户级偏好
 
@@ -186,8 +262,9 @@ class SettingsService:
                 source=config.source,
                 updated_at=stored_secret.updated_at if stored_secret else None,
             ),
-            similarity_threshold=app_settings.ragflow_similarity_threshold,
-            top_k=app_settings.ragflow_top_k,
+            similarity_threshold=_coerce_threshold(config.similarity_threshold),
+            top_k=_coerce_top_k(config.top_k),
+            datasets_json=config.datasets_json,
         )
 
     async def update_ragflow_settings(
@@ -199,6 +276,12 @@ class SettingsService:
         enabled: bool | None = None,
         api_key_provided: bool = False,
         api_key: str | None = None,
+        datasets_json_provided: bool = False,
+        datasets_json: str | None = None,
+        similarity_threshold_provided: bool = False,
+        similarity_threshold: float | None = None,
+        top_k_provided: bool = False,
+        top_k: int | None = None,
     ) -> RagflowSettingsDTO:
         """更新系统级 RAGFlow 设置。
 
@@ -244,6 +327,37 @@ class SettingsService:
                 changed = True
                 # 只记事件与掩码，绝不记密钥内容
                 logger.info("系统级 RAGFlow 凭据已更新（key=%s）", SECRET_RAGFLOW_API_KEY)
+
+        if datasets_json_provided:
+            cleaned = (datasets_json or "").strip()
+            if cleaned:
+                if not _validate_datasets_json(cleaned):
+                    raise InvalidSettingValueError(
+                        'datasets_json 必须是 {"scope": ["<dataset_id>", ...]} 形式，且值为数组'
+                    )
+                await self._settings.set(SETTING_RAGFLOW_DATASETS_JSON, cleaned)
+            else:
+                # 空串表示撤销库内覆盖，回落到环境变量兜底
+                await self._settings.delete(SETTING_RAGFLOW_DATASETS_JSON)
+            changed = True
+
+        if similarity_threshold_provided:
+            if similarity_threshold is None:
+                await self._settings.delete(SETTING_RAGFLOW_SIMILARITY_THRESHOLD)
+            else:
+                if not 0.0 <= float(similarity_threshold) <= 1.0:
+                    raise InvalidSettingValueError("similarity_threshold 必须落在 0.0 ~ 1.0")
+                await self._settings.set(SETTING_RAGFLOW_SIMILARITY_THRESHOLD, float(similarity_threshold))
+            changed = True
+
+        if top_k_provided:
+            if top_k is None:
+                await self._settings.delete(SETTING_RAGFLOW_TOP_K)
+            else:
+                if int(top_k) < 1 or int(top_k) > 20:
+                    raise InvalidSettingValueError("top_k 必须落在 1 ~ 20")
+                await self._settings.set(SETTING_RAGFLOW_TOP_K, int(top_k))
+            changed = True
 
         if changed:
             self._provider.invalidate()

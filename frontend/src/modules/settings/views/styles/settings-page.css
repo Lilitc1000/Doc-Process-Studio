@@ -191,9 +191,81 @@
   margin-top: var(--space-xl);
 }
 
+/* 报告检索参数区：dataset 映射是一段 JSON 文本，用等宽字体便于校对 */
+.settings-grid-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.settings-grid-two .selector-group {
+  margin-bottom: 0;
+}
+
+/* 知识库选择：列表项自带滚动，避免连接的 dataset 很多时把页面撑长 */
+.dataset-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.dataset-picker-head .selector-label {
+  margin-bottom: 0;
+}
+
+.dataset-list {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+}
+
+.dataset-item + .dataset-item {
+  border-top: 1px solid var(--color-border);
+}
+
+.dataset-item-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.dataset-item-label:hover {
+  background: var(--color-bg-secondary);
+}
+
+.dataset-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dataset-item-meta {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
 @media (max-width: 640px) {
   .settings-content {
     padding: var(--space-lg) var(--space-md);
+  }
+
+  .settings-grid-two {
+    grid-template-columns: 1fr;
   }
 
   .secret-readonly {

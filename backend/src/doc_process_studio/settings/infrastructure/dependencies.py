@@ -13,12 +13,14 @@ from ...common.security.secret_cipher import get_secret_cipher
 from ..application.ports import (
     RagflowConfigProvider,
     RagflowConnectionProbe,
+    RagflowDatasetCatalog,
     SystemSecretRepository,
     SystemSettingRepository,
     UserSettingsRepository,
 )
 from ..application.settings_service import SettingsService
 from .ragflow_config_provider import SqlRagflowConfigProvider
+from .ragflow_dataset_catalog import RagflowClientDatasetCatalog
 from .ragflow_probe import RagflowClientConnectionProbe
 from .repositories.sql_repositories import (
     SqlSystemSecretRepository,
@@ -53,12 +55,26 @@ def get_ragflow_config_provider() -> RagflowConfigProvider:
         env_base_url=settings.ragflow_base_url,
         env_api_key=settings.ragflow_api_key,
         env_enabled=settings.ragflow_enabled,
+        # 检索参数的 env 兜底：库里没配时保持既有部署行为
+        env_datasets_json=settings.ragflow_datasets_json,
+        env_similarity_threshold=settings.ragflow_similarity_threshold,
+        env_top_k=settings.ragflow_top_k,
     )
 
 
 @lru_cache(maxsize=1)
 def get_ragflow_connection_probe() -> RagflowConnectionProbe:
     return RagflowClientConnectionProbe(timeout_seconds=settings.ragflow_timeout_seconds)
+
+
+@lru_cache(maxsize=1)
+def get_ragflow_dataset_catalog() -> RagflowDatasetCatalog:
+    """知识库列表读取器。
+
+    刻意**不加进程内缓存**：列表要反映当前生效凭据下的真实情况，
+    管理员换连接后必须立刻看到变化。
+    """
+    return RagflowClientDatasetCatalog(timeout_seconds=settings.ragflow_timeout_seconds)
 
 
 @lru_cache(maxsize=1)
@@ -70,4 +86,5 @@ def get_settings_service() -> SettingsService:
         cipher=get_secret_cipher(),
         config_provider=get_ragflow_config_provider(),
         connection_probe=get_ragflow_connection_probe(),
+        dataset_catalog=get_ragflow_dataset_catalog(),
     )

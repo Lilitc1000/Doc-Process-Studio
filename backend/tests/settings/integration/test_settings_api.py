@@ -24,7 +24,12 @@ from doc_process_studio.auth.domain.roles import ROLE_ADMIN, ROLE_MEMBER
 from doc_process_studio.auth.infrastructure.dependencies import get_user_repository
 from doc_process_studio.common.security.secret_cipher import SecretCipher
 from doc_process_studio.common.security.security import create_access_token
-from doc_process_studio.settings.application.ports import RagflowConnectionProbe, StoredSecret
+from doc_process_studio.settings.application.ports import (
+    RagflowConnectionProbe,
+    RagflowDatasetCatalog,
+    RagflowDatasetInfo,
+    StoredSecret,
+)
 from doc_process_studio.settings.application.settings_service import SettingsService
 from doc_process_studio.settings.domain.values import SECRET_RAGFLOW_API_KEY, RagflowConfig, SecretSource
 from doc_process_studio.settings.infrastructure.dependencies import get_settings_service
@@ -116,6 +121,20 @@ class FakeProbe(RagflowConnectionProbe):
         return self.result
 
 
+class FakeCatalog(RagflowDatasetCatalog):
+    """知识库列表桩。"""
+
+    def __init__(self, datasets: list[RagflowDatasetInfo] | None = None) -> None:
+        self.datasets = datasets if datasets is not None else []
+        self.calls = 0
+        self.received_configs: list[RagflowConfig] = []
+
+    async def list_datasets(self, config: RagflowConfig) -> list[RagflowDatasetInfo]:
+        self.calls += 1
+        self.received_configs.append(config)
+        return list(self.datasets)
+
+
 class _FakeUserRepo:
     """只实现 require_admin 用到的那一个方法。"""
 
@@ -139,6 +158,7 @@ def _build_service(
     *,
     probe_result: tuple[bool, str, int] = (True, "连接成功，可访问 3 个知识库", 3),
     config: RagflowConfig | None = None,
+    catalog: FakeCatalog | None = None,
 ) -> SettingsService:
     return SettingsService(
         secret_repo=FakeSecretRepository(),  # type: ignore[arg-type]
@@ -147,6 +167,7 @@ def _build_service(
         cipher=SecretCipher(keys={"k1": os.urandom(32)}, active_key_id="k1"),
         config_provider=FakeProvider(config or _usable_config()),  # type: ignore[arg-type]
         connection_probe=FakeProbe(probe_result),
+        dataset_catalog=catalog or FakeCatalog(),
     )
 
 
@@ -304,6 +325,7 @@ def test_saved_secret_is_stored_encrypted_not_plain() -> None:
         cipher=SecretCipher(keys={"k1": os.urandom(32)}, active_key_id="k1"),
         config_provider=FakeProvider(_usable_config()),  # type: ignore[arg-type]
         connection_probe=FakeProbe((True, "ok", 0)),
+        dataset_catalog=FakeCatalog(),
     )
     TestClient(_app(ROLE_ADMIN, service)).put(
         "/api/settings/ragflow", json={"api_key": SAMPLE_API_KEY}, headers=_headers()
@@ -426,3 +448,43 @@ def test_member_can_save_own_preferences_but_not_system_settings() -> None:
         == 200
     )
     assert client.put("/api/settings/ragflow", json={"api_key": SAMPLE_API_KEY}, headers=headers).status_code == 403
+
+
+# ------------------------------------------------------------------ 知识库列表
+
+
+def test_admin_can_list_datasets_from_current_connection() -> None:
+    """管理员能拿到当前连接下的知识库列表（设置页据此渲染选择项）。"""
+    catalog = FakeCatalog(
+        [
+            RagflowDatasetInfo(
+                id="f05e5a4aadac11f1b9211b18c23af0c8",
+                name="DAS事故报告",
+                document_count=11,
+                chunk_count=27,
+                language="English",
+            )
+        ]
+    )
+    client = TestClient(_app(ROLE_ADMIN, _build_service(catalog=catalog)))
+
+    response = client.get("/api/settings/ragflow/datasets", headers=_headers())
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert catalog.calls == 1
+    assert body["datasets"] == [
+        {
+            "id": "f05e5a4aadac11f1b9211b18c23af0c8",
+            "name": "DAS事故报告",
+            "document_count": 11,
+            "chunk_count": 27,
+        }
+    ]
+
+
+def test_dataset_list_requires_admin() -> None:
+    """知识库列表会暴露连接的可用范围，非管理员一律拒绝。"""
+    response = TestClient(_app(ROLE_MEMBER)).get("/api/settings/ragflow/datasets", headers=_headers())
+    assert response.status_code == 403

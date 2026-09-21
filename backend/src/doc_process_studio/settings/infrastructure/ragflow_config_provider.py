@@ -26,7 +26,10 @@ from ..application.ports import (
 from ..domain.values import (
     SECRET_RAGFLOW_API_KEY,
     SETTING_RAGFLOW_BASE_URL,
+    SETTING_RAGFLOW_DATASETS_JSON,
     SETTING_RAGFLOW_ENABLED,
+    SETTING_RAGFLOW_SIMILARITY_THRESHOLD,
+    SETTING_RAGFLOW_TOP_K,
     RagflowConfig,
     SecretSource,
 )
@@ -47,6 +50,9 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
         env_base_url: str | None,
         env_api_key: str | None,
         env_enabled: bool,
+        env_datasets_json: str = "",
+        env_similarity_threshold: float | None = None,
+        env_top_k: int | None = None,
     ) -> None:
         self._secrets = secret_repo
         self._settings = setting_repo
@@ -55,6 +61,9 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
         self._env_base_url = (env_base_url or "").strip().rstrip("/")
         self._env_api_key = (env_api_key or "").strip()
         self._env_enabled = bool(env_enabled)
+        self._env_datasets_json = (env_datasets_json or "").strip()
+        self._env_similarity_threshold = env_similarity_threshold
+        self._env_top_k = env_top_k
         self._cache: dict[str, tuple[float, int, RagflowConfig]] = {}
         self._epoch = 0
 
@@ -116,4 +125,53 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
             api_key = self._env_api_key
             source = SecretSource.ENV
 
-        return RagflowConfig(base_url=base_url, api_key=api_key, enabled=enabled, source=source)
+        return RagflowConfig(
+            base_url=base_url,
+            api_key=api_key,
+            enabled=enabled,
+            source=source,
+            datasets_json=await self._load_datasets_json(),
+            similarity_threshold=await self._load_float(
+                SETTING_RAGFLOW_SIMILARITY_THRESHOLD, self._env_similarity_threshold
+            ),
+            top_k=await self._load_int(SETTING_RAGFLOW_TOP_K, self._env_top_k),
+        )
+
+    async def _load_datasets_json(self) -> str:
+        """库里配置优先，未配置或不是字符串时回落 env。"""
+        stored = await self._settings.get(SETTING_RAGFLOW_DATASETS_JSON)
+        if isinstance(stored, str) and stored.strip():
+            return stored.strip()
+        return self._env_datasets_json
+
+    async def _load_float(self, key: str, fallback: float | None) -> float | None:
+        """读取浮点型设置；库里没有、非数值或类型不对时回落 env 默认值。"""
+        stored = await self._settings.get(key)
+        if isinstance(stored, bool):
+            return fallback
+        if isinstance(stored, (int, float)):
+            return float(stored)
+        if isinstance(stored, str):
+            try:
+                return float(stored)
+            except ValueError:
+                logger.warning("系统设置 %s 不是合法数值，回落环境变量: %r", key, stored)
+                return fallback
+        return fallback
+
+    async def _load_int(self, key: str, fallback: int | None) -> int | None:
+        """读取整型设置；库里没有、非数值或类型不对时回落 env 默认值。"""
+        stored = await self._settings.get(key)
+        if isinstance(stored, bool):
+            return fallback
+        if isinstance(stored, int):
+            return stored
+        if isinstance(stored, float):
+            return int(stored)
+        if isinstance(stored, str):
+            try:
+                return int(float(stored))
+            except ValueError:
+                logger.warning("系统设置 %s 不是合法数值，回落环境变量: %r", key, stored)
+                return fallback
+        return fallback

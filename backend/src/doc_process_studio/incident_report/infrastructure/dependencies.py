@@ -120,6 +120,7 @@ def get_reference_context() -> CompositeReferenceContext:
         similarity_threshold=settings.ragflow_similarity_threshold,
         top_k=settings.ragflow_top_k,
         datasets_json=settings.ragflow_datasets_json,
+        max_chunks_per_document=settings.ragflow_max_chunks_per_document,
     )
     return CompositeReferenceContext(
         base=SkillReferenceContext(),

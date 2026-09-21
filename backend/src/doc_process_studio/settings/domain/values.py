@@ -9,6 +9,11 @@ SECRET_RAGFLOW_API_KEY = "ragflow.api_key"
 # 非敏感系统配置的键（存在 system_settings，值为 JSON 标量）
 SETTING_RAGFLOW_BASE_URL = "ragflow.base_url"
 SETTING_RAGFLOW_ENABLED = "ragflow.enabled"
+# 检索参数：报告侧检索用的 dataset 映射与召回参数。
+# 放在库里是为了让管理员能在设置页调整并立即生效，而不必改 env 再重启进程。
+SETTING_RAGFLOW_DATASETS_JSON = "ragflow.datasets_json"
+SETTING_RAGFLOW_SIMILARITY_THRESHOLD = "ragflow.similarity_threshold"
+SETTING_RAGFLOW_TOP_K = "ragflow.top_k"
 
 # ---------------------------------------------------------------- 角色
 ROLE_ADMIN = "admin"
@@ -43,6 +48,11 @@ class RagflowConfig:
     api_key: str
     enabled: bool
     source: SecretSource
+    # 检索参数。库里未配置时为 "" / None，由调用方回落到 env 默认值，
+    # 这样既有部署（只配了 env）的行为完全不变。
+    datasets_json: str = ""
+    similarity_threshold: float | None = None
+    top_k: int | None = None
 
     @property
     def usable(self) -> bool:

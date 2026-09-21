@@ -45,9 +45,14 @@ export interface RagflowSettings {
   enabledSource: SettingValueSource;
   baseUrlSource: SettingValueSource;
   credential: RagflowCredential;
-  /** 检索参数当前仍是全局配置，只读展示 */
+  /** 检索参数：库里配置优先，未配置时回落环境变量并在此展示 */
   similarityThreshold: number;
   topK: number;
+  /**
+   * 报告侧检索使用的 dataset 映射，形如 `{"history":["<dataset_id>"]}`。
+   * 空串表示未配置任何 dataset（此时报告侧检索不会命中）。
+   */
+  datasetsJson: string;
 }
 
 /** 设置页一次性拉取的完整视图 */
@@ -89,10 +94,36 @@ export interface UpdateRagflowRequest {
   baseUrl?: string;
   enabled?: boolean;
   apiKey?: string;
+  /** 形如 {"history":["<dataset_id>"]}；空串表示撤销库内覆盖 */
+  datasetsJson?: string;
+  /** 0.0 ~ 1.0 */
+  similarityThreshold?: number;
+  /** 1 ~ 20 */
+  topK?: number;
 }
 
 export interface RagflowConnectionTestResponse {
   ok: boolean;
   message: string;
   datasetCount: number;
+}
+
+/** 当前 RAGFlow 连接下的一个知识库（供设置页选择，不含敏感信息） */
+export interface RagflowDatasetSummary {
+  id: string;
+  name: string;
+  documentCount: number;
+  chunkCount: number;
+}
+
+/**
+ * 知识库列表视图。
+ *
+ * `ok=false` 表示**没取到**列表，`message` 说明原因（未启用 / 未配置凭据 / 连不上 / 无权限）。
+ * 这与"连接正常但确实没有知识库"是两种不同情况，UI 要分开提示。
+ */
+export interface RagflowDatasetListResponse {
+  ok: boolean;
+  message: string;
+  datasets: RagflowDatasetSummary[];
 }

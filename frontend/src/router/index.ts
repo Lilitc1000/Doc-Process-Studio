@@ -83,14 +83,22 @@ const router = createRouter({
           name: 'knowledge-base-list',
           component: () =>
             import('@modules/knowledge-base/views/KnowledgeBaseListView.vue'),
-          meta: { requiresAuth: true, pageTitle: '知识库' },
+          meta: {
+            requiresAuth: true,
+            requiresAdmin: true,
+            pageTitle: '知识库',
+          },
         },
         {
           path: '/knowledge-base/:id',
           name: 'knowledge-base-detail',
           component: () =>
             import('@modules/knowledge-base/views/KnowledgeBaseDetailView.vue'),
-          meta: { requiresAuth: true, pageTitle: '知识库项目' },
+          meta: {
+            requiresAuth: true,
+            requiresAdmin: true,
+            pageTitle: '知识库项目',
+          },
         },
         {
           path: '/:pathMatch(.*)*',
@@ -116,10 +124,14 @@ router.beforeEach(async (to, _from, next) => {
 
   const requiresAuth = to.matched.some((r) => r.meta.requiresAuth);
   const hideForAuth = to.matched.some((r) => r.meta.hideForAuth);
+  const requiresAdmin = to.matched.some((r) => r.meta.requiresAdmin);
 
   if (requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login', query: { redirect: to.fullPath } });
   } else if (hideForAuth && authStore.isAuthenticated) {
+    next({ name: 'home' });
+  } else if (requiresAdmin && !authStore.isGlobalAdmin) {
+    // 隐藏入口只是视觉层面，这里挡住"直接输 URL 进来"的情况
     next({ name: 'home' });
   } else {
     next();

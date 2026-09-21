@@ -106,6 +106,91 @@
             />
           </div>
 
+          <div class="selector-group">
+            <div class="dataset-picker-head">
+              <label id="settings-datasets-label" class="selector-label"
+                >报告检索使用的知识库</label
+              >
+              <base-button
+                size="sm"
+                :disabled="datasetsLoading"
+                @click="loadDatasets"
+              >
+                {{ datasetsLoading ? '读取中…' : '刷新列表' }}
+              </base-button>
+            </div>
+
+            <p class="field-hint">
+              从当前 RAGFlow 连接中选择；勾选的知识库会参与事故报告的检索增强。
+              更换 Base URL 或密钥后，请保存再刷新列表。
+            </p>
+
+            <p v-if="datasetsError" class="field-error">{{ datasetsError }}</p>
+            <p v-else-if="datasetsLoading" class="field-hint">
+              正在读取知识库列表…
+            </p>
+            <p v-else-if="!datasetOptions.length" class="field-hint">
+              当前连接下没有可访问的知识库。
+            </p>
+
+            <ul v-else class="dataset-list">
+              <li
+                v-for="ds in datasetOptions"
+                :key="ds.id"
+                class="dataset-item"
+              >
+                <label class="dataset-item-label">
+                  <input
+                    type="checkbox"
+                    :checked="selectedDatasetIds.includes(ds.id)"
+                    @change="toggleDataset(ds.id)"
+                  />
+                  <span class="dataset-item-name">{{ ds.name }}</span>
+                  <span class="dataset-item-meta">
+                    {{ ds.documentCount }} 文档 · {{ ds.chunkCount }} 片段
+                  </span>
+                </label>
+              </li>
+            </ul>
+
+            <p v-if="missingDatasetIds.length" class="field-error">
+              以下已保存的知识库在当前连接中不存在，请取消勾选或改选：
+              {{ missingDatasetIds.join('、') }}
+            </p>
+          </div>
+
+          <div class="settings-grid-two">
+            <div class="selector-group">
+              <label id="settings-threshold-label" class="selector-label"
+                >相似度阈值</label
+              >
+              <base-input
+                v-model="thresholdDraft"
+                :class="{ invalid: !!thresholdError }"
+                inputmode="decimal"
+                aria-labelledby="settings-threshold-label"
+              />
+              <p v-if="thresholdError" class="field-error">
+                {{ thresholdError }}
+              </p>
+              <p v-else class="field-hint">0.0 ~ 1.0，越高越严格</p>
+            </div>
+
+            <div class="selector-group">
+              <label id="settings-topk-label" class="selector-label"
+                >检索条数 topK</label
+              >
+              <base-input
+                v-model="topKDraft"
+                :class="{ invalid: !!topKError }"
+                inputmode="numeric"
+                aria-labelledby="settings-topk-label"
+              />
+              <p v-if="topKError" class="field-error">{{ topKError }}</p>
+              <p v-else class="field-hint">1 ~ 20，单次注入的素材块上限</p>
+            </div>
+          </div>
+
           <p v-if="fallbackHint" class="settings-hint settings-hint--warn">
             {{ fallbackHint }}
           </p>
@@ -113,7 +198,9 @@
           <div class="settings-actions">
             <base-button
               variant="primary"
-              :disabled="saving || !!baseUrlError"
+              :disabled="
+                saving || !!baseUrlError || !!thresholdError || !!topKError
+              "
               @click="onSave"
             >
               {{ saving ? '保存中…' : '保存' }}
@@ -174,8 +261,12 @@ import BaseInput from '@shared/ui/BaseInput.vue';
 import BaseSwitch from '@shared/ui/BaseSwitch.vue';
 import PasswordInput from '@shared/ui/PasswordInput.vue';
 import { useAuthStore } from '@modules/auth';
+import { fetchRagflowDatasets } from '../api/settings';
 import { useUserSettingsStore } from '../store/user-settings';
-import type { ModelPreferences } from '../types/settings';
+import type {
+  ModelPreferences,
+  RagflowDatasetSummary,
+} from '../types/settings';
 
 const appStore = useAppStore();
 const authStore = useAuthStore();
@@ -198,6 +289,15 @@ const modelOptions = computed(() =>
 const baseUrlDraft = ref('');
 const enabledDraft = ref(false);
 const apiKeyDraft = ref('');
+const thresholdDraft = ref('0.55');
+const topKDraft = ref('3');
+
+/** 当前连接下可访问的知识库（列表随连接变化，不在前端缓存超时） */
+const datasetOptions = ref<RagflowDatasetSummary[]>([]);
+const datasetsLoading = ref(false);
+const datasetsError = ref('');
+/** 勾选中的 dataset id */
+const selectedDatasetIds = ref<string[]>([]);
 const keyEditing = ref(false);
 const confirmClearVisible = ref(false);
 /** 草稿是否已用服务端值初始化过（只做一次，避免覆盖用户编辑） */
@@ -268,9 +368,90 @@ const syncDrafts = () => {
   const ragflow = settingsStore.ragflow;
   baseUrlDraft.value = ragflow?.baseUrl ?? '';
   enabledDraft.value = ragflow?.enabled ?? false;
+  thresholdDraft.value = String(ragflow?.similarityThreshold ?? 0.55);
+  topKDraft.value = String(ragflow?.topK ?? 3);
+  selectedDatasetIds.value = parseHistoryDatasetIds(
+    ragflow?.datasetsJson ?? '',
+  );
   apiKeyDraft.value = '';
   keyEditing.value = false;
 };
+
+/**
+ * 后端存的是 `{"scope": ["id", ...]}`（scope 为多域检索预留）。
+ * 当前报告侧只用 `history`，因此 UI 只暴露这一组勾选，避免让管理员面对 scope 概念。
+ */
+const parseHistoryDatasetIds = (raw: string): string[] => {
+  const text = (raw ?? '').trim();
+  if (!text) return [];
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return [];
+    }
+    const history = (parsed as Record<string, unknown>).history;
+    return Array.isArray(history) ? history.map(String) : [];
+  } catch {
+    return [];
+  }
+};
+
+const buildDatasetsJson = (ids: string[]): string =>
+  ids.length ? JSON.stringify({ history: ids }) : '';
+
+/** 已保存但当前连接里查不到的 dataset（换连接后最容易出现） */
+const missingDatasetIds = computed(() => {
+  if (!datasetOptions.value.length) return [];
+  const known = new Set(datasetOptions.value.map((ds) => ds.id));
+  return selectedDatasetIds.value.filter((id) => !known.has(id));
+});
+
+const loadDatasets = async () => {
+  datasetsLoading.value = true;
+  datasetsError.value = '';
+  try {
+    const result = await fetchRagflowDatasets();
+    datasetOptions.value = result.datasets;
+    if (!result.ok) datasetsError.value = result.message;
+  } catch {
+    datasetOptions.value = [];
+    datasetsError.value = '读取知识库列表失败，请检查连接配置或稍后重试。';
+  } finally {
+    datasetsLoading.value = false;
+  }
+};
+
+const toggleDataset = (id: string) => {
+  const index = selectedDatasetIds.value.indexOf(id);
+  if (index >= 0) {
+    selectedDatasetIds.value = selectedDatasetIds.value.filter(
+      (item) => item !== id,
+    );
+  } else {
+    selectedDatasetIds.value = [...selectedDatasetIds.value, id];
+  }
+};
+
+const thresholdError = computed(() => {
+  const raw = thresholdDraft.value.trim();
+  if (!raw) return '不能为空';
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1)
+    return '需为 0.0 ~ 1.0';
+  return '';
+});
+
+const topKError = computed(() => {
+  const raw = topKDraft.value.trim();
+  if (!raw) return '不能为空';
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 20) return '需为 1 ~ 20';
+  return '';
+});
 
 const startEditKey = () => {
   // 刻意不回填掩码：掩码不是密钥，回填会让用户误以为可以直接保存
@@ -311,7 +492,14 @@ const persistPreferences = async (patch: Partial<ModelPreferences>) => {
 
 const onSave = async () => {
   const ragflow = settingsStore.ragflow;
-  if (!ragflow || baseUrlError.value) return;
+  if (
+    !ragflow ||
+    baseUrlError.value ||
+    thresholdError.value ||
+    topKError.value
+  ) {
+    return;
+  }
 
   const payload: Record<string, unknown> = {};
   const nextBaseUrl = baseUrlDraft.value.trim().replace(/\/+$/, '');
@@ -321,6 +509,16 @@ const onSave = async () => {
   // 四态语义：只有用户真的输入了新密钥才提交明文；空串等于"不变"
   const newKey = apiKeyDraft.value.trim();
   if (keyEditing.value && newKey) payload.apiKey = newKey;
+
+  // 检索参数：只在有改动时提交，空串表示撤销库内覆盖
+  const nextDatasets = buildDatasetsJson(selectedDatasetIds.value);
+  if (nextDatasets !== (ragflow.datasetsJson ?? '').trim())
+    payload.datasetsJson = nextDatasets;
+  const nextThreshold = Number(thresholdDraft.value);
+  if (nextThreshold !== ragflow.similarityThreshold)
+    payload.similarityThreshold = nextThreshold;
+  const nextTopK = Number(topKDraft.value);
+  if (nextTopK !== ragflow.topK) payload.topK = nextTopK;
 
   if (Object.keys(payload).length === 0) {
     actionMessageKind.value = 'info';
@@ -332,6 +530,8 @@ const onSave = async () => {
   try {
     await settingsStore.saveRagflow(payload);
     syncDrafts();
+    // 连接配置可能刚被改过，列表要跟着换成新连接下的知识库
+    if (isGlobalAdmin.value) void loadDatasets();
     actionMessageKind.value = 'info';
     actionMessage.value = '已保存，立即生效。';
   } catch {
@@ -378,6 +578,8 @@ watch(
     if (isLoaded && !draftsInitialized.value) {
       syncDrafts();
       draftsInitialized.value = true;
+      // 只有管理员能读知识库列表（非管理员会拿到 403，静默跳过即可）
+      if (isGlobalAdmin.value) void loadDatasets();
     }
   },
   { immediate: true },

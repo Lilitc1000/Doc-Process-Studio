@@ -1,6 +1,7 @@
 import { apiClient } from '@shared/api/request';
 import type {
   RagflowConnectionTestResponse,
+  RagflowDatasetListResponse,
   RagflowSettings,
   SettingsOverviewResponse,
   UpdatePreferencesRequest,
@@ -47,6 +48,20 @@ export const updateRagflowSettings = async (
  * 刻意不接收草稿值：自检的应该是"实际生效的配置"，否则会出现
  * "测试通过但保存的是别的东西"这种误导。想验证新密钥请先保存再测试。
  */
+/**
+ * 拉取当前连接下可访问的知识库列表（**仅管理员**）。
+ *
+ * 刻意不走缓存：换了 Base URL 或密钥之后可访问的集合会完全不同 ——
+ * 所以保存连接配置后要重新调用，让选择项跟着变。
+ */
+export const fetchRagflowDatasets =
+  async (): Promise<RagflowDatasetListResponse> => {
+    const response = await apiClient.get<RagflowDatasetListResponse>(
+      '/settings/ragflow/datasets',
+    );
+    return response.data;
+  };
+
 export const testRagflowConnection =
   async (): Promise<RagflowConnectionTestResponse> => {
     const response = await apiClient.post<RagflowConnectionTestResponse>(

@@ -93,3 +93,27 @@ class RagflowConnectionProbe(ABC):
     @abstractmethod
     async def probe(self, config: RagflowConfig) -> tuple[bool, str, int]:
         """用给定配置探一次远端，返回 (是否可用, 说明, 可访问 dataset 数量)。"""
+
+
+@dataclass(frozen=True, slots=True)
+class RagflowDatasetInfo:
+    """RAGFlow 侧一个知识库（dataset）的可展示信息。"""
+
+    id: str
+    name: str
+    document_count: int
+    chunk_count: int
+    language: str
+
+
+class RagflowDatasetCatalog(ABC):
+    """RAGFlow 知识库列表端口。
+
+    存在的意义：让管理员在设置页从**当前生效凭据下真实存在**的知识库里挑选，
+    而不是手抄 dataset id。列表必须每次实时取 —— 换了 Base URL 或密钥之后，
+    可访问的知识库集合会完全不同，缓存住只会让人选到早已不存在的 id。
+    """
+
+    @abstractmethod
+    async def list_datasets(self, config: RagflowConfig) -> list[RagflowDatasetInfo]:
+        """列出该配置下可访问的知识库；未配置或连不上时返回空列表（不抛异常）。"""

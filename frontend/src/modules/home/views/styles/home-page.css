@@ -16,7 +16,9 @@
 }
 
 .home-content {
-  width: min(var(--container-md), 100%);
+  /* 用 xl 容器：模块卡片改成一行排完后需要约 1030px，
+     原来的 md(720px) 只放得下两个，会被迫折成 2×2 */
+  width: min(var(--container-xl), 100%);
   padding: var(--space-3xl) var(--space-2xl);
   display: flex;
   flex-direction: column;
@@ -50,7 +52,11 @@
 
 .home-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* 一行排完：卡片取 200~240px 之间的宽度并整体居中。
+     用 auto-fit 而不是固定 4 列，是因为可见入口会随权限变化
+     （非管理员看不到知识库），固定列数会在末尾留一个空档。 */
+  grid-template-columns: repeat(auto-fit, minmax(200px, 240px));
+  justify-content: center;
   gap: var(--space-xl);
   width: 100%;
 }

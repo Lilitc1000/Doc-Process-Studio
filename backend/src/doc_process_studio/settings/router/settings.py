@@ -28,6 +28,7 @@ from ..infrastructure.dependencies import get_settings_service
 from .schemas.request import PreferencesUpdateRequest, RagflowSettingsUpdateRequest
 from .schemas.response import (
     RagflowConnectionTestResponse,
+    RagflowDatasetListResponse,
     RagflowSettingsResponse,
     SettingsOverviewResponse,
     UserPreferencesResponse,
@@ -98,9 +99,31 @@ async def update_ragflow_settings(
             enabled=body.enabled,
             api_key_provided="api_key" in provided,
             api_key=body.api_key,
+            datasets_json_provided="datasets_json" in provided,
+            datasets_json=body.datasets_json,
+            similarity_threshold_provided="similarity_threshold" in provided,
+            similarity_threshold=body.similarity_threshold,
+            top_k_provided="top_k" in provided,
+            top_k=body.top_k,
         )
     except (InvalidBaseUrlError, InvalidSettingValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/ragflow/datasets",
+    response_model=RagflowDatasetListResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def list_ragflow_datasets(
+    service: SettingsService = Depends(get_settings_service),
+) -> RagflowDatasetListResponse:
+    """列出当前生效凭据下可访问的知识库（供设置页选择，仅管理员）。
+
+    刻意每次实时取：换了 Base URL / 密钥后，可访问的集合会完全不同 ——
+    让管理员从"当前连接下真实存在"的列表里选，比让他手抄 dataset id 可靠得多。
+    """
+    return await service.list_ragflow_datasets()
 
 
 @router.post(

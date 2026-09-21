@@ -9,6 +9,7 @@ from ...application.dtos import (
     ModelPreferencesDTO,
     RagflowConnectionTestDTO,
     RagflowCredentialDTO,
+    RagflowDatasetListDTO,
     RagflowSettingsDTO,
     SettingsOverviewDTO,
     UserPreferencesDTO,
@@ -20,11 +21,13 @@ ModelPreferencesResponse = ModelPreferencesDTO
 RagflowSettingsResponse = RagflowSettingsDTO
 RagflowCredentialResponse = RagflowCredentialDTO
 RagflowConnectionTestResponse = RagflowConnectionTestDTO
+RagflowDatasetListResponse = RagflowDatasetListDTO
 
 __all__ = [
     "ModelPreferencesResponse",
     "RagflowConnectionTestResponse",
     "RagflowCredentialResponse",
+    "RagflowDatasetListResponse",
     "RagflowSettingsResponse",
     "SettingsOverviewResponse",
     "UserPreferencesResponse",

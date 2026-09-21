@@ -16,7 +16,12 @@ from typing import Any
 import pytest
 
 from doc_process_studio.common.security.secret_cipher import SecretCipher, build_secret_hint
-from doc_process_studio.settings.application.ports import RagflowConnectionProbe, StoredSecret
+from doc_process_studio.settings.application.ports import (
+    RagflowConnectionProbe,
+    RagflowDatasetCatalog,
+    RagflowDatasetInfo,
+    StoredSecret,
+)
 from doc_process_studio.settings.application.settings_service import ModelPreferencesUpdate, SettingsService
 from doc_process_studio.settings.domain.errors import InvalidBaseUrlError, InvalidSettingValueError
 from doc_process_studio.settings.domain.values import (
@@ -123,13 +128,30 @@ class FakeProbe(RagflowConnectionProbe):
         return self.result
 
 
+class FakeCatalog(RagflowDatasetCatalog):
+    """知识库列表桩：记录被传入的配置，便于断言"列表确实是按当前配置取的"。"""
+
+    def __init__(self, datasets: list[RagflowDatasetInfo] | None = None) -> None:
+        self.datasets = datasets if datasets is not None else []
+        self.calls = 0
+        self.received_configs: list[RagflowConfig] = []
+
+    async def list_datasets(self, config: RagflowConfig) -> list[RagflowDatasetInfo]:
+        self.calls += 1
+        self.received_configs.append(config)
+        return list(self.datasets)
+
+
 def _service(
     *,
     config: RagflowConfig | None = None,
     probe_result: tuple[bool, str, int] = (True, "连接成功", 3),
+    catalog: FakeCatalog | None = None,
 ) -> tuple[
     SettingsService, FakeSecretRepository, FakeSettingRepository, FakeUserSettingsRepository, FakeProvider, FakeProbe
 ]:
+    # catalog 通过关键字注入但不进返回元组：避免改动现有大量测试的解包写法。
+    # 需要断言列表行为的用例自己构造 FakeCatalog 再取回。
     secrets = FakeSecretRepository()
     settings = FakeSettingRepository()
     users = FakeUserSettingsRepository()
@@ -142,6 +164,7 @@ def _service(
         cipher=CIPHER,
         config_provider=provider,  # type: ignore[arg-type]
         connection_probe=probe,
+        dataset_catalog=catalog or FakeCatalog(),
     )
     return service, secrets, settings, users, provider, probe
 
@@ -412,3 +435,59 @@ async def test_write_operations_invalidate_all_scopes() -> None:
     await service.update_ragflow_settings(api_key_provided=True, api_key=SAMPLE_API_KEY)
     await service.clear_ragflow_api_key()
     assert provider.invalidated_scopes == [None, None]
+
+
+# ------------------------------------------------------------------ 知识库列表
+
+
+async def test_dataset_list_uses_current_config_every_time() -> None:
+    """列表必须按**当前生效配置**实时取。
+
+    换 Base URL / 密钥后可访问的知识库集合会完全不同，缓存住会让管理员
+    选到早已不存在的 dataset —— 所以每次调用都要真的走一趟。
+    """
+    catalog = FakeCatalog(
+        [
+            RagflowDatasetInfo(id="ds-b", name="Beta", document_count=2, chunk_count=20, language="English"),
+            RagflowDatasetInfo(id="ds-a", name="Alpha", document_count=5, chunk_count=50, language="Chinese"),
+        ]
+    )
+    service, _, _, _, provider, _ = _service(catalog=catalog)
+
+    first = await service.list_ragflow_datasets()
+    second = await service.list_ragflow_datasets()
+
+    assert first.ok is True
+    assert second.ok is True
+    assert [ds.id for ds in first.datasets] == ["ds-b", "ds-a"]
+    assert second.datasets == first.datasets, "两次调用结果应一致（未被缓存）"
+    assert first.datasets[0].document_count == 2
+    assert first.datasets[1].name == "Alpha"
+    assert catalog.calls == 2, "列表被缓存了，换连接后不会更新"
+    assert catalog.received_configs[0] is provider.config
+
+
+async def test_dataset_list_reports_disabled_state() -> None:
+    service, _, _, _, _, _ = _service(config=RagflowConfig.disabled(), catalog=FakeCatalog())
+    result = await service.list_ragflow_datasets()
+    assert result.ok is False
+    assert result.datasets == []
+    assert "停用" in result.message
+
+
+async def test_dataset_list_reports_missing_credentials() -> None:
+    """只有 enabled 但没有凭据时，要给出"尚未配置"而不是空列表。"""
+    half_config = RagflowConfig(base_url="http://ragflow.local", api_key="", enabled=True, source=SecretSource.NONE)
+    service, _, _, _, _, _ = _service(config=half_config, catalog=FakeCatalog())
+    result = await service.list_ragflow_datasets()
+    assert result.ok is False
+    assert "尚未配置" in result.message
+
+
+async def test_dataset_list_empty_is_explained_not_silent() -> None:
+    """连上了但一个都没有：要能区分于"连接坏了"，让管理员知道该查权限。"""
+    service, _, _, _, _, _ = _service(catalog=FakeCatalog([]))
+    result = await service.list_ragflow_datasets()
+    assert result.ok is False
+    assert result.datasets == []
+    assert "未取到任何知识库" in result.message

@@ -103,6 +103,7 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
         similarity_threshold: float = 0.70,
         top_k: int = 3,
         datasets_json: str = "",
+        max_chunks_per_document: int = 2,
     ) -> None:
         self._provider = config_provider
         self._static_base_url = (base_url or "").rstrip("/")
@@ -112,6 +113,7 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
         self._threshold = similarity_threshold
         self._top_k = top_k
         self._datasets = _parse_datasets_json(datasets_json)
+        self._max_chunks_per_document = max(1, int(max_chunks_per_document or 1))
 
     @property
     def enabled(self) -> bool:
@@ -125,14 +127,43 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
 
     async def _resolve_credentials(self) -> tuple[str, str]:
         """解析出 (base_url, api_key)；不可用时返回两个空串。"""
+        runtime = await self._resolve_runtime()
+        return runtime[0], runtime[1]
+
+    async def _resolve_runtime(
+        self,
+    ) -> tuple[str, str, dict[str, list[str]], float, int]:
+        """解析出 (base_url, api_key, datasets, threshold, top_k)。
+
+        dataset 映射与召回参数支持管理员在设置页调整并立即生效：
+        provider 解析出的值优先于构造时的快照；库里没配则回落构造时传入的
+        env 默认值，保证只配了环境变量的既有部署行为不变。
+        """
+        fallback_datasets = self._datasets
+        fallback_threshold = self._threshold
+        fallback_top_k = self._top_k
+
         if self._has_static:
-            return self._static_base_url, self._static_api_key
+            # 静态凭据（单测 / 特殊场景）优先，参数也一律用构造时快照
+            return (
+                self._static_base_url,
+                self._static_api_key,
+                fallback_datasets,
+                fallback_threshold,
+                fallback_top_k,
+            )
         if self._provider is None:
-            return "", ""
+            return "", "", fallback_datasets, fallback_threshold, fallback_top_k
+
         config = await self._provider.resolve(scope="system")
         if not config.enabled or not config.base_url or not config.api_key:
-            return "", ""
-        return config.base_url, config.api_key
+            return "", "", fallback_datasets, fallback_threshold, fallback_top_k
+
+        datasets = _parse_datasets_json(config.datasets_json) or fallback_datasets
+        # RagflowConfig 上的类型已经收窄为 float | None / int | None，这里只做"未配置则回落"
+        threshold = config.similarity_threshold if config.similarity_threshold is not None else fallback_threshold
+        top_k = config.top_k if config.top_k is not None else fallback_top_k
+        return config.base_url, config.api_key, datasets, threshold, top_k
 
     async def retrieve(
         self,
@@ -141,23 +172,23 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
         scope: str,
         top_k: int,
     ) -> list[KnowledgeChunk]:
-        base_url, api_key = await self._resolve_credentials()
+        base_url, api_key, datasets, threshold, configured_top_k = await self._resolve_runtime()
         if not base_url or not api_key:
             logger.debug("RAGFlow retriever unavailable (no usable credentials), skip retrieval")
             return []
 
-        dataset_ids = self._datasets.get(scope, [])
+        dataset_ids = datasets.get(scope, [])
         if not dataset_ids:
             logger.debug("No RAGFlow dataset configured for scope=%s", scope)
             return []
 
-        requested = max(1, top_k)
+        requested = max(1, top_k or configured_top_k)
         payload = {
             "question": query,
             "dataset_ids": dataset_ids,
             "page": 1,
             "page_size": requested,
-            "similarity_threshold": self._threshold,
+            "similarity_threshold": threshold,
             "vector_similarity_weight": 1.0,
             "top_k": requested * 4,
         }
@@ -186,7 +217,7 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
 
         raw_chunks = _extract_chunks(body)
         chunks: list[KnowledgeChunk] = []
-        seen_doc_ids: set[str] = set()
+        per_document_counts: dict[str, int] = {}
         for item in raw_chunks:
             if not isinstance(item, dict):
                 continue
@@ -194,10 +225,14 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
             if len(content) < _MIN_CHUNK_CHARACTERS:
                 continue
             doc_id = str(item.get("document_id", ""))
-            if doc_id and doc_id in seen_doc_ids:
-                continue
+            # 同一文档最多保留 N 个片段。
+            # 原实现按 document_id 整体去重，导致单文档语料时每次只注入 1 个片段，
+            # top_k 形同虚设；语料铺开后更会让召回内容被头部文档独占。
             if doc_id:
-                seen_doc_ids.add(doc_id)
+                used = per_document_counts.get(doc_id, 0)
+                if used >= self._max_chunks_per_document:
+                    continue
+                per_document_counts[doc_id] = used + 1
             try:
                 score = float(item.get("similarity", 0.0))
             except (TypeError, ValueError):
