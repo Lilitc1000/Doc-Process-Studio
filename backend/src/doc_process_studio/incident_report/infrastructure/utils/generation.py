@@ -69,7 +69,9 @@ _EVIDENCE_RULES_COMMON = (
 _EVIDENCE_RULES_IMPACT = (
     "Impact rules: name the specific device or component, give the exact timestamp (DD/MM/YYYY HH:MM), "
     "and state the affected business action - what stopped or degraded, not 'the system was impacted'. "
-    "Back quantities with figures or a markdown table; write N/A when data is unavailable."
+    "Back quantities with figures or a markdown table; write N/A when data is unavailable. "
+    "Severity must use the standard scale (P0/P1/P2/P3 or Major/Minor/Not Applicable) and stay "
+    "consistent with the form value; never invent levels such as Low, Medium or High."
 )
 
 _EVIDENCE_RULES_ROOT_CAUSE = (
@@ -90,6 +92,44 @@ _EVIDENCE_RULES_FOLLOW_UP = (
     "missing either type is a failure. Include vendor version or patch numbers when available. "
     "Write N/A for unknown owner or due date instead of dropping the action. "
     "Never output 'will follow up', 'monitor the situation' or 'improve stability'."
+)
+
+# ---------------------------------------------------------------------------
+# 知识库素材使用护栏
+#
+# 背景：RAGFlow 检索到的是**历史报告**，描述的是别人的事故。
+# 不加约束时模型会照抄其中的设备编号、时间戳、交易笔数、人名与版本号，
+# 产出"数据翔实但全是假的"报告 —— 在事故复盘场景里，这会导致基于错误数据
+# 做整改决策，比老实写 N/A 危险得多。
+# 这是与 reference_context._MATERIAL_USAGE_NOTICE 配套的第二道护栏：
+# 那条贴在素材上，这条写进 system prompt，对所有章节生效。
+# ---------------------------------------------------------------------------
+_MATERIAL_SAFETY_RULES = (
+    "Retrieved material rules: any block marked as retrieved reference material "
+    "describes OTHER incidents. Use it only for structure, terminology and level of detail. "
+    "Never copy device identifiers, timestamps, counts, personnel names or version numbers from it. "
+    "All facts must originate from the current context only; write N/A when unavailable."
+)
+
+# ---------------------------------------------------------------------------
+# 事实边界护栏（端到端实测后补充）
+#
+# 实测发现两类编造，优先级高于其他文风约束，因此放在 system prompt 最前面：
+# 1. 时间编造：用户只说"大概3點""上午"，模型却产出 15:05 / 09:15 这类
+#    分钟级精确时间戳，把推断伪装成事实；
+# 2. 设备名照抄：模型沿用了检索素材里的 NAS1 / NAS2 等属于其他事故的设备名。
+# ---------------------------------------------------------------------------
+_FACTUAL_BOUNDARY_RULES = (
+    "Factual boundary (highest priority): never invent precise timestamps, device identifiers, "
+    "counts, personnel names or version numbers. "
+    "If the context gives only an approximate time such as 'around 3pm' or 'in the morning', "
+    "write 'approximately <time>' or N/A - do NOT produce minute-level timestamps for events "
+    "that were not described. Device names, node identifiers and version numbers appearing in "
+    "retrieved material belong to other incidents and must never appear in your output. "
+    "Timeline rows are limited to events actually described in the context; do not pad the "
+    "timeline with plausible but unstated steps. "
+    "If the context gives only a part of day such as 'morning' or 'afternoon', keep that wording "
+    "or use 'approximately' - never convert a vague time word into a specific clock time."
 )
 
 
@@ -149,6 +189,8 @@ def _build_quick_generation_request(
     prompt = (
         "You will perform a quick-fill to full-mode generation. "
         "Expand the quick-fill inputs into complete mode fields according to the reference documentation. "
+        # 事实边界前置，与 system prompt 保持一致
+        f"{_FACTUAL_BOUNDARY_RULES} "
         "Do not fabricate facts not present in the context; "
         "use conservative but actionable expressions when information is insufficient. "
         f"{_EVIDENCE_RULES_COMMON} "
@@ -266,6 +308,10 @@ def _build_body_generation_messages(
                 "You are an incident report body assistant. "
                 "Follow the reference documentation first, then generate content based on the current context. "
                 "All output must be in English. "
+                # 事实边界与素材护栏前置：LLM 对 prompt 开头更敏感，
+                # 实测放在中段时会被长上下文稀释，导致时间与设备名编造。
+                f"{_FACTUAL_BOUNDARY_RULES} "
+                f"{_MATERIAL_SAFETY_RULES} "
                 f"{_EVIDENCE_RULES_COMMON} "
                 "Output JSON only, no code blocks, no fabricated facts."
             ),

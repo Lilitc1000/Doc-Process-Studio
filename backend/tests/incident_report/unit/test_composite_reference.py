@@ -104,10 +104,37 @@ async def test_impact_section_appends_material() -> None:
         prompt="p",
         context_json='{"asset":"NAS2"}',
     )
-    assert "[RAGFlow report.md]" in text
+    assert "[RAGFlow · report.md]" in text
     assert "NAS2 shutdown at 20:35 due to I/O overload" in text
     assert "ragflow:1 chunks" in reason
     retriever.retrieve.assert_awaited_once()
+
+
+async def test_material_block_carries_usage_notice() -> None:
+    """注入的素材必须带「仅作写法参考、禁止照抄事实」声明。
+
+    背景：素材描述的是其他事故。没有这条声明时，模型会把历史报告里的
+    设备编号、时间戳、交易笔数照抄进新报告，产出看似翔实但全假的内容。
+    """
+    base = _FakeBase()
+    retriever = AsyncMock()
+    retriever.retrieve = AsyncMock(return_value=[_chunk("NAS2 shutdown at 20:35")])
+    comp = CompositeReferenceContext(
+        base=base,
+        retriever=retriever,
+        ragflow_enabled_sections=ENABLED_SECTIONS,
+        ragflow_top_k=3,
+    )
+    text, _, _ = await comp.resolve(
+        model="m",
+        section_id="impact",
+        timeline_index=None,
+        prompt="p",
+        context_json="{}",
+    )
+    assert "structure and terminology reference only" in text
+    assert "Never copy" in text
+    assert "OTHER incidents" in text
 
 
 async def test_retriever_exception_degrades_to_base() -> None:
@@ -186,3 +213,44 @@ def test_query_builder_uses_english_and_entities() -> None:
 def test_query_builder_bad_json_falls_back_to_topic() -> None:
     q = _build_retrieval_query(section_id="root_cause", context_json="not-json")
     assert "root cause" in q.lower()
+
+
+def test_query_builder_prefers_system_domain() -> None:
+    """表单 system 字段是结构化检索键，应优先于从文本抽取的 token。
+
+    背景：原先只抽 ASCII token，中文口语输入抽不出内容，query 退化为纯主题词，
+    检索结果与本次事故无关，甚至跨域召回存储域因果链。
+    """
+    q_database = _build_retrieval_query(
+        section_id="root_cause",
+        context_json='{"manual_cover_context":{"system":"資料庫"}}',
+    )
+    assert q_database.startswith("database")
+    assert "root cause" in q_database.lower()
+
+    q_storage = _build_retrieval_query(
+        section_id="impact",
+        context_json='{"manual_cover_context":{"system":"Synology Data Storage"}}',
+    )
+    assert q_storage.startswith("storage")
+    assert "impact" in q_storage.lower()
+
+
+def test_query_builder_domains_do_not_cross_contaminate() -> None:
+    """不同系统域必须解析到不同的检索词，避免跨域召回。"""
+    database = _build_retrieval_query(
+        section_id="root_cause",
+        context_json='{"manual_cover_context":{"system":"MySQL"}}',
+    )
+    storage = _build_retrieval_query(
+        section_id="root_cause",
+        context_json='{"manual_cover_context":{"system":"NAS"}}',
+    )
+    network = _build_retrieval_query(
+        section_id="root_cause",
+        context_json='{"manual_cover_context":{"system":"Switch"}}',
+    )
+    assert database.startswith("database")
+    assert storage.startswith("storage")
+    assert network.startswith("network")
+    assert len({database, storage, network}) == 3

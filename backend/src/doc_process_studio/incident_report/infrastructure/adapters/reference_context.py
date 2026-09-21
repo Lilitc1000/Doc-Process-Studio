@@ -20,9 +20,12 @@ from ....skill.infrastructure.selector import (
 from ...application.ports import KnowledgeRetrieverPort, ReferenceContextPort
 from ...domain.values.constants import (
     INCIDENT_REPORT_BODY_REFERENCE_DIR,
+    INCIDENT_REPORT_COMMON_REFERENCE,
     INCIDENT_REPORT_REFERENCE_DIR,
     INCIDENT_REPORT_REFERENCE_SELECT_LIMIT,
+    INCIDENT_REPORT_SECTION_REFERENCE_MAP,
     INCIDENT_REPORT_SKILL_MD_PATH,
+    INCIDENT_SYSTEM_DOMAIN_MAP,
 )
 from ..utils.normalization import normalize_text
 
@@ -177,8 +180,37 @@ def _select_reference_files_from_plan(
     return selected[:INCIDENT_REPORT_REFERENCE_SELECT_LIMIT]
 
 
+def _required_reference_files(
+    *,
+    section_id: str,
+    available_paths: list[str],
+) -> list[str]:
+    """当前 section 必须加载的规范文件。
+
+    写作契约是跨报告通用的硬要求，不能交给规划器概率挑选。
+    实测问题：quick 模式只加载 common.md + quick-mode.md，
+    而 impact.md / root-cause.md / follow-up.md 进不了 prompt。
+    """
+    section_key = (section_id or "").strip().lower()
+    configured = INCIDENT_REPORT_SECTION_REFERENCE_MAP.get(section_key)
+    if not configured:
+        configured = (INCIDENT_REPORT_COMMON_REFERENCE,)
+    available_set = set(available_paths)
+    required = [path for path in configured if path in available_set]
+    if required:
+        return required
+    # 配置未命中任何现有文件时退回启发式，避免返回空清单
+    return _select_references_by_heuristic(section_id=section_id, available_paths=available_paths)
+
+
 class SkillReferenceContext(ReferenceContextPort):
-    """基于 skill.infrastructure.selector 的参考文档上下文选择。"""
+    """基于 skill.infrastructure.selector 的参考文档上下文选择。
+
+    选择策略（2026-09-21 调整）：
+    - **必加载优先**：``INCIDENT_REPORT_SECTION_REFERENCE_MAP`` 定义的写作契约先占位；
+    - **规划器只补充**：规划器的结果只能在剩余预算内追加，不再整体覆盖启发式；
+    - **启发式兜底**：连接规划失败时，用文件名匹配补齐预算。
+    """
 
     async def resolve(
         self,
@@ -195,57 +227,65 @@ class SkillReferenceContext(ReferenceContextPort):
             return "[fallback]\n未找到可用参考文档，按上下文生成。", [], "fallback:no_reference_catalog"
 
         system_reference_skill_id = "__incident_reference_system__"
-        explicit_reference_paths: list[str] = []
-        if "body-sections/common.md" in available_paths:
-            explicit_reference_paths.append("body-sections/common.md")
 
-        selection_reason = "fallback:heuristic"
-        selected_files = _select_references_by_heuristic(
+        required_files = _required_reference_files(
+            section_id=section_id,
+            available_paths=available_paths,
+        )
+        selected_files = list(required_files)
+        selection_reason = f"required:section_contract({len(required_files)})"
+        budget = max(0, INCIDENT_REPORT_REFERENCE_SELECT_LIMIT - len(selected_files))
+
+        heuristic_files = _select_references_by_heuristic(
             section_id=section_id,
             available_paths=available_paths,
         )
 
-        try:
-            planner_query = _build_reference_planner_query(
-                section_id=section_id,
-                timeline_index=timeline_index,
-                prompt=prompt,
-                context_json=context_json,
-                skill_markdown=_load_incident_skill_markdown(),
-            )
-            plan_decision = await select_for_workspace_reference(
-                model=model,
-                messages=[{"role": "user", "content": planner_query}],
-                available_skills=build_selector_skill_interfaces(
-                    options=_build_reference_selector_options(reference_catalog),
-                    skill_type="workspace_incident_reference",
-                ),
-                explicit_skill_ids=explicit_reference_paths,
-                system_skill_id=system_reference_skill_id,
-                reference_select_limit=INCIDENT_REPORT_REFERENCE_SELECT_LIMIT,
-                min_confidence=0.2,
-            )
-            selected_from_plan = _select_reference_files_from_plan(
-                decision=plan_decision,
-                available_paths=available_paths,
-                system_skill_id=system_reference_skill_id,
-            )
-            if selected_from_plan:
-                if len(selected_from_plan) <= len(explicit_reference_paths):
-                    merged_files = list(selected_from_plan)
-                    for path in selected_files:
-                        if path in merged_files:
-                            continue
-                        merged_files.append(path)
-                        if len(merged_files) >= INCIDENT_REPORT_REFERENCE_SELECT_LIMIT:
-                            break
-                    selected_files = merged_files
-                else:
-                    selected_files = selected_from_plan
-            planner_reason = normalize_text(plan_decision.reasons.get("planner"))
-            selection_reason = planner_reason or "planner:select_for_workspace_reference"
-        except Exception as exc:
-            selection_reason = f"fallback:{summarize_exception(exc)}"
+        if budget > 0:
+            try:
+                planner_query = _build_reference_planner_query(
+                    section_id=section_id,
+                    timeline_index=timeline_index,
+                    prompt=prompt,
+                    context_json=context_json,
+                    skill_markdown=_load_incident_skill_markdown(),
+                )
+                plan_decision = await select_for_workspace_reference(
+                    model=model,
+                    messages=[{"role": "user", "content": planner_query}],
+                    available_skills=build_selector_skill_interfaces(
+                        options=_build_reference_selector_options(reference_catalog),
+                        skill_type="workspace_incident_reference",
+                    ),
+                    explicit_skill_ids=required_files,
+                    system_skill_id=system_reference_skill_id,
+                    reference_select_limit=INCIDENT_REPORT_REFERENCE_SELECT_LIMIT,
+                    min_confidence=0.2,
+                )
+                for path in _select_reference_files_from_plan(
+                    decision=plan_decision,
+                    available_paths=available_paths,
+                    system_skill_id=system_reference_skill_id,
+                ):
+                    if budget <= 0:
+                        break
+                    if path not in selected_files:
+                        selected_files.append(path)
+                        budget -= 1
+                planner_reason = normalize_text(plan_decision.reasons.get("planner"))
+                if planner_reason:
+                    selection_reason = f"{selection_reason} | planner:{planner_reason}"
+            except Exception as exc:
+                selection_reason = f"{selection_reason} | planner_fallback:{summarize_exception(exc)}"
+
+        # 剩余预算用启发式补齐，保证确定性匹配不被浪费
+        if budget > 0:
+            for path in heuristic_files:
+                if budget <= 0:
+                    break
+                if path not in selected_files:
+                    selected_files.append(path)
+                    budget -= 1
 
         blocks: list[str] = []
         for relative_path in selected_files:
@@ -258,20 +298,52 @@ class SkillReferenceContext(ReferenceContextPort):
         return "\n\n".join(blocks), selected_files, selection_reason
 
 
-def _build_retrieval_query(*, section_id: str, context_json: str) -> str:
-    """从 context_json 构造英文检索 query。
+def _resolve_system_domain(data: Any) -> str:
+    """从上下文字典里解析事故所属系统域。
 
-    设计约束（来自交接文档）：
-    - query 必须是英文短语，不要直接把用户填的中文丢进去；
-    - 仅抽取 ASCII 实体（设备号 / 系统名等），中文内容不参与；
-    - 叠加 section 维度的英文主题词，引导检索命中对应素材块。
+    表单的 ``manual_system`` 是唯一结构化、可靠的检索键：
+    它比从口语文本里正则抽取 token 稳定得多，且能避免跨域召回
+    （数据库事故不应命中存储域的因果链）。
+    """
+    if not isinstance(data, dict):
+        return ""
+    cover = data.get("manual_cover_context")
+    candidates: list[str] = []
+    if isinstance(cover, dict):
+        for key in ("system", "site_id", "location", "fault_symptom"):
+            value = cover.get(key)
+            if isinstance(value, str) and value.strip():
+                candidates.append(value.strip().lower())
+    system_value = data.get("system")
+    if isinstance(system_value, str) and system_value.strip():
+        candidates.append(system_value.strip().lower())
+
+    for candidate in candidates:
+        for _domain, (query_term, keywords) in INCIDENT_SYSTEM_DOMAIN_MAP.items():
+            for keyword in keywords:
+                if keyword in candidate:
+                    return query_term
+    return ""
+
+
+def _build_retrieval_query(*, section_id: str, context_json: str) -> str:
+    """构造检索 query：系统域 + 章节主题词 + ASCII 实体。
+
+    2026-09-21 调整：原先只从 context_json 正则抽 ASCII token，中文口语输入
+    几乎抽不出内容，query 退化为纯主题词，检索结果与本次事故无关。
+    现在优先用表单 system 字段解析出的系统域定位语料范围。
+
+    设计约束：
+    - query 以英文短语为主，中文内容不直接进 query；
+    - 系统域命中时形如 ``database incident impact quantification``；
+    - 未命中系统域时退回主题词，并保留 ASCII 实体作为补充。
     """
     section = (section_id or "").strip().lower()
     topic_map = {
-        "quick": "incident report overview summary key facts",
-        "impact": "incident impact affected service business disruption transaction data loss",
-        "root_cause": "root cause failure NAS storage HA failover NFS IO overload",
-        "follow_up": "remediation recovery action fix recommendation preventive measure",
+        "quick": "incident report structure overview key facts checklist",
+        "impact": "incident impact affected service business disruption transaction count quantification",
+        "root_cause": "root cause causal chain failure mode analysis",
+        "follow_up": "remediation recovery action preventive measure checklist",
     }
     query = topic_map.get(section, "incident report accident analysis")
 
@@ -279,6 +351,10 @@ def _build_retrieval_query(*, section_id: str, context_json: str) -> str:
         data = json.loads(context_json) if isinstance(context_json, str) else context_json
     except Exception:
         return query
+
+    domain = _resolve_system_domain(data)
+    if domain:
+        query = f"{domain} {query}"
 
     def walk(node: Any) -> None:
         if isinstance(node, dict):
@@ -312,6 +388,22 @@ def _build_retrieval_query(*, section_id: str, context_json: str) -> str:
     if picked:
         query = f"{query} " + " ".join(picked)
     return query
+
+
+# 注入素材时的用途声明。
+#
+# 背景：知识库素材描述的是**其他事故**。不加声明时，模型会把历史报告里的
+# 设备编号、时间戳、交易笔数、人名、版本号直接抄进新报告 —— 产出一份
+# "数据翔实但全是假的"报告，比老实写 N/A 危险得多。
+# 这条声明与 generation.py 的 _MATERIAL_SAFETY_RULES 是同一道护栏的两端：
+# 一段贴在素材上，一段写进 system prompt。
+_MATERIAL_USAGE_NOTICE = (
+    "[RAGFlow reference material — structure and terminology reference only]\n"
+    "The material below comes from OTHER incidents. Use it only as a guide to "
+    "structure, terminology and level of detail. Never copy device identifiers, "
+    "timestamps, counts, personnel names or version numbers from it. "
+    "Every fact must come from the current context; write N/A when unavailable."
+)
 
 
 class CompositeReferenceContext(ReferenceContextPort):
@@ -373,7 +465,8 @@ class CompositeReferenceContext(ReferenceContextPort):
         if not chunks:
             return base_text, base_files, f"{base_reason} | ragflow:no_hits"
 
-        material_blocks = [f"[RAGFlow {chunk.source}]\n{chunk.content}" for chunk in chunks]
-        combined = base_text + "\n\n" + "\n\n".join(material_blocks)
+        material_header = _MATERIAL_USAGE_NOTICE
+        material_blocks = [f"[RAGFlow · {chunk.source}]\n{chunk.content}" for chunk in chunks]
+        combined = base_text + "\n\n" + material_header + "\n\n" + "\n\n".join(material_blocks)
         reason = f"{base_reason} | ragflow:{len(chunks)} chunks (scope=history)"
         return combined, base_files, reason

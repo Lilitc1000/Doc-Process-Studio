@@ -66,7 +66,9 @@ async def test_reference_selector_chooses_section_reference(monkeypatch: pytest.
 
     assert "body-sections/impact.md" in selected_files
     assert "impact.md" in reference_context
-    assert selection_reason.startswith("planner:")
+    # 必加载契约先占位，规划器只在剩余预算内补充（reason 因此带两段）
+    assert selection_reason.startswith("required:section_contract")
+    assert "planner:" in selection_reason
 
 
 def test_build_report_data_supports_rich_text_appendix() -> None:
