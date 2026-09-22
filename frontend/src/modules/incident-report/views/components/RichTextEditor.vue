@@ -4,7 +4,7 @@
       <button
         type="button"
         class="toolbar-btn"
-        :class="{ active: editor.isActive('bold') }"
+        :class="{ active: activeMarks.bold }"
         title="加粗"
         @click="editor.chain().focus().toggleBold().run()"
       >
@@ -13,7 +13,7 @@
       <button
         type="button"
         class="toolbar-btn"
-        :class="{ active: editor.isActive('italic') }"
+        :class="{ active: activeMarks.italic }"
         title="斜体"
         @click="editor.chain().focus().toggleItalic().run()"
       >
@@ -22,7 +22,7 @@
       <button
         type="button"
         class="toolbar-btn"
-        :class="{ active: editor.isActive('underline') }"
+        :class="{ active: activeMarks.underline }"
         title="下划线"
         @click="editor.chain().focus().toggleUnderline().run()"
       >
@@ -32,7 +32,7 @@
       <button
         type="button"
         class="toolbar-btn toolbar-btn-wide"
-        :class="{ active: editor.isActive('bulletList') }"
+        :class="{ active: activeMarks.bulletList }"
         title="无序列表"
         @click="editor.chain().focus().toggleBulletList().run()"
       >
@@ -41,7 +41,7 @@
       <button
         type="button"
         class="toolbar-btn toolbar-btn-wide"
-        :class="{ active: editor.isActive('orderedList') }"
+        :class="{ active: activeMarks.orderedList }"
         title="有序列表"
         @click="editor.chain().focus().toggleOrderedList().run()"
       >
@@ -123,6 +123,35 @@ const emit = defineEmits<{
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
+/**
+ * 工具栏激活态。
+ *
+ * 原先直接在模板里写 `editor.isActive('bold')`：useEditor 返回的是同一个
+ * 编辑器实例引用，引用不变就意味着 Vue 不会重新渲染，于是按钮状态只在
+ * 首次渲染时求值一次并就此卡住 —— 表现为"加粗按钮莫名常亮"，
+ * 看上去像"点一下就自动切换了加粗"，其实文本内容并没有被加粗。
+ * 这里改成用编辑器事件驱动一个响应式对象。
+ */
+const activeMarks = ref({
+  bold: false,
+  italic: false,
+  underline: false,
+  bulletList: false,
+  orderedList: false,
+});
+
+const syncActiveMarks = () => {
+  const ed = editor.value;
+  if (!ed) return;
+  activeMarks.value = {
+    bold: ed.isActive('bold'),
+    italic: ed.isActive('italic'),
+    underline: ed.isActive('underline'),
+    bulletList: ed.isActive('bulletList'),
+    orderedList: ed.isActive('orderedList'),
+  };
+};
+
 const editor = useEditor({
   extensions: [
     StarterKit,
@@ -134,7 +163,12 @@ const editor = useEditor({
   content: props.modelValue,
   onUpdate: ({ editor: ed }) => {
     emit('update:modelValue', ed.getHTML());
+    syncActiveMarks();
   },
+  onTransaction: syncActiveMarks,
+  onSelectionUpdate: syncActiveMarks,
+  onFocus: syncActiveMarks,
+  onBlur: syncActiveMarks,
 });
 
 watch(
@@ -174,6 +208,16 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* 聚焦反馈交给外层容器表达。
+   原先编辑区内部的 contenteditable 会命中全局 `:focus-visible`（蓝色光圈 + 圆角），
+   看起来就像"编辑器莫名多了一圈蓝框"。 */
+.rich-text-editor:focus-within {
+  border-color: var(--color-primary);
 }
 
 .editor-toolbar {
@@ -231,7 +275,7 @@ onBeforeUnmount(() => {
   min-height: 120px;
   max-height: 400px;
   overflow-y: auto;
-  padding: 10px 12px;
+  padding: 12px 14px;
   font-size: 14px;
   line-height: 1.6;
   color: var(--color-text-primary);
@@ -240,6 +284,25 @@ onBeforeUnmount(() => {
 .editor-content :deep(.tiptap) {
   outline: none;
   min-height: 100px;
+  /* contenteditable 上的光标：默认光标会让人以为这里不可编辑 */
+  cursor: text;
+}
+
+/* 显式关掉全局 :focus-visible 的蓝色光圈，由外层容器统一表达聚焦 */
+.editor-content :deep(.tiptap:focus),
+.editor-content :deep(.tiptap:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* 段落默认外边距（约 1em）会让一次 Enter 看起来像"空出了一整行" */
+.editor-content :deep(.tiptap p) {
+  margin: 0;
+}
+
+/* 选中图片等节点时，ProseMirror 默认给一圈亮蓝轮廓，换成主色更协调 */
+.editor-content :deep(.tiptap .ProseMirror-selectednode) {
+  outline: 2px solid var(--color-primary);
 }
 
 .editor-content :deep(.tiptap p.is-editor-empty:first-child::before) {

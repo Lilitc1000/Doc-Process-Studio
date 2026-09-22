@@ -1,6 +1,7 @@
 <template>
   <div ref="rootRef" class="base-dropdown">
     <button
+      ref="triggerRef"
       type="button"
       class="base-dropdown-trigger"
       :class="{ open: isOpen, disabled }"
@@ -36,37 +37,52 @@
       </span>
     </button>
 
-    <transition name="dropdown">
-      <div
-        v-if="isOpen"
-        class="base-dropdown-panel"
-        :style="panelMinWidth ? { minWidth: panelMinWidth } : {}"
-        role="listbox"
-        :aria-labelledby="labelId"
-      >
-        <button
-          v-for="option in options"
-          :key="option.value"
-          type="button"
-          class="base-dropdown-option"
-          :class="{ active: option.value === modelValue }"
-          @click="onSelect(option.value)"
+    <!-- 面板传送到 body：
+         原先面板是 absolute 定位，落在表格单元格内，会被任何设置了
+         overflow: hidden/auto 的祖先（例如内容区容器）裁掉 ——
+         表现为"点开只能看到列表最上面一小段"。传送到 body 后按视口坐标
+         固定定位，就再也不受祖先裁剪与层级叠加的影响。 -->
+    <Teleport to="body">
+      <transition name="dropdown">
+        <div
+          v-if="isOpen"
+          ref="panelRef"
+          class="base-dropdown-panel"
+          :style="panelStyle"
+          role="listbox"
+          :aria-labelledby="labelId"
         >
-          <span>{{ option.label }}</span>
-          <span
-            v-if="option.value === modelValue"
-            class="base-dropdown-option-tag"
+          <button
+            v-for="option in options"
+            :key="option.value"
+            type="button"
+            class="base-dropdown-option"
+            :class="{ active: option.value === modelValue }"
+            @click="onSelect(option.value)"
           >
-            当前
-          </span>
-        </button>
-      </div>
-    </transition>
+            <span>{{ option.label }}</span>
+            <span
+              v-if="option.value === modelValue"
+              class="base-dropdown-option-tag"
+            >
+              当前
+            </span>
+          </button>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 
 export interface DropdownOption {
   label: string;
@@ -95,7 +111,11 @@ const emit = defineEmits<{
 }>();
 
 const rootRef = ref<HTMLElement | null>(null);
+const triggerRef = ref<HTMLElement | null>(null);
+const panelRef = ref<HTMLElement | null>(null);
 const isOpen = ref(false);
+/** 传送到 body 后面板改用 fixed 定位，坐标在打开时按触发器位置计算 */
+const panelStyle = ref<Record<string, string>>({});
 
 const displayLabel = computed(() => {
   const match = props.options.find((o) => o.value === props.modelValue);
@@ -119,11 +139,35 @@ const onSelect = (value: string) => {
   close();
 };
 
+/** 按触发器当前视口位置刷新面板坐标 */
+const syncPanelPosition = () => {
+  if (!isOpen.value) return;
+  const rect = triggerRef.value?.getBoundingClientRect();
+  if (!rect) return;
+
+  const minWidth = props.panelMinWidth ? parseFloat(props.panelMinWidth) : 0;
+  const width = Math.max(rect.width, Number.isFinite(minWidth) ? minWidth : 0);
+  // 距离视口底部不足时向上翻转，避免面板被视口截断
+  const estimatedHeight = Math.min(240, (props.options?.length ?? 0) * 44 + 16);
+  const flipUp = rect.bottom + estimatedHeight + 12 > window.innerHeight;
+
+  panelStyle.value = {
+    top: flipUp
+      ? `${Math.max(8, rect.top - estimatedHeight - 6)}px`
+      : `${rect.bottom + 6}px`,
+    left: `${rect.left}px`,
+    minWidth: `${width}px`,
+    maxWidth: `${Math.max(width, 220)}px`,
+  };
+};
+
 const handleClickOutside = (event: MouseEvent) => {
   const target = event.target as HTMLElement | null;
-  if (target && !rootRef.value?.contains(target)) {
-    close();
-  }
+  if (!target) return;
+  // 面板已传送到 body，不在 rootRef 内部，要单独判断，否则点选项会先被当成"点外面"
+  if (rootRef.value?.contains(target)) return;
+  if (panelRef.value?.contains(target)) return;
+  close();
 };
 
 const handleWindowBlur = () => {
@@ -133,11 +177,20 @@ const handleWindowBlur = () => {
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
   window.addEventListener('blur', handleWindowBlur);
+  // 捕获阶段：内容区自身滚动时也要跟着走
+  window.addEventListener('scroll', syncPanelPosition, true);
+  window.addEventListener('resize', syncPanelPosition);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
   window.removeEventListener('blur', handleWindowBlur);
+  window.removeEventListener('scroll', syncPanelPosition, true);
+  window.removeEventListener('resize', syncPanelPosition);
+});
+
+watch(isOpen, (open) => {
+  if (open) void nextTick(syncPanelPosition);
 });
 
 watch(
@@ -158,12 +211,16 @@ watch(
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 40px;
+  /* 用固定高度而不是 min-height：min-height 会被内部行盒（中文 + 0.9rem 字号）
+     顶到 42px，与并排的 40px 按钮差 2px。内容是单行不换行的文字 + 图标，
+     固定高度不会裁切 */
+  height: 40px;
   padding: var(--space-sm) var(--space-md);
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid #e2e8f0;
   border-radius: var(--radius-md);
   font-size: 0.9rem;
+  line-height: 1.2;
   color: #0f172a;
   cursor: pointer;
   box-shadow:
@@ -243,12 +300,13 @@ watch(
   display: block;
 }
 
+/* 面板传送到 body，因此用 fixed + JS 计算出的视口坐标；
+   z-index 要高于页面里所有固定层（顶栏 / 弹窗遮罩之下但常规内容之上）。 */
 .base-dropdown-panel {
-  position: absolute;
-  top: calc(100% + 0.5rem);
+  position: fixed;
+  top: 0;
   left: 0;
-  z-index: 40;
-  min-width: 100%;
+  z-index: 1000;
   padding: var(--space-sm);
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid #e2e8f0;

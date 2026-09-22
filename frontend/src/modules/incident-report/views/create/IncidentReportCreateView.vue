@@ -23,27 +23,11 @@
       <h1>新建事故报告 / New Incident Report</h1>
     </div>
 
-    <div class="wizard-steps">
-      <div
-        v-for="(step, index) in WIZARD_STEPS"
-        :key="step.key"
-        :class="[
-          'wizard-step',
-          {
-            active: currentStep === index,
-            completed: currentStep > index,
-            clickable: currentStep > index || currentStep === index - 1,
-          },
-        ]"
-        @click="
-          (currentStep > index || currentStep === index - 1) &&
-          (currentStep = index as WizardStep)
-        "
-      >
-        <span class="step-number">{{ index + 1 }}</span>
-        <span class="step-label">{{ step.label }}</span>
-      </div>
-    </div>
+    <report-wizard-steps
+      :steps="WIZARD_STEPS"
+      :current-step="currentStep"
+      @go-to-step="onGoToStep"
+    />
 
     <div class="wizard-content">
       <div v-if="currentStep === 0" class="step-form zone-card">
@@ -687,13 +671,16 @@
           <p>支持富文本输入，附加信息将在生成文档时同步写入附录页。</p>
         </div>
         <div class="zone-grid">
-          <label class="field-item full-width">
+          <!-- 用 div 而不是 label：
+               label 会把点击转发给它内部第一个可标记控件，当里面包着富文本编辑器
+               （工具栏第一个按钮就是"加粗"）时，点一下编辑区就等于顺手点了加粗。 -->
+          <div class="field-item full-width">
             <span>附录内容 / Appendix Notes</span>
             <rich-text-editor
               v-model="formAnswers.appendix_notes"
               placeholder="请输入附录内容..."
             />
-          </label>
+          </div>
         </div>
       </div>
 
@@ -890,6 +877,7 @@ import {
 } from '../composables/useReportForm';
 import AiGeneratingModal from '@shared/components/AiGeneratingModal.vue';
 import FloatingToast from '@shared/components/FloatingToast.vue';
+import ReportWizardSteps from './components/ReportWizardSteps.vue';
 import BaseButton from '@shared/ui/BaseButton.vue';
 import BaseInput from '@shared/ui/BaseInput.vue';
 import BaseTextarea from '@shared/ui/BaseTextarea.vue';
@@ -922,6 +910,11 @@ const attemptedNextStep = ref(false);
 const showSubmitToast = ref(false);
 const submitToastMessage = ref('报告提交成功');
 const submitToastTitle = ref('提交成功');
+
+/** 步骤条跳转：可回退到已完成步骤，也可前进到紧邻的下一步（判断在组件内） */
+const onGoToStep = (index: number) => {
+  currentStep.value = index as WizardStep;
+};
 
 const fieldTitle = ref<HTMLLabelElement | null>(null);
 const fieldFaultDate = ref<HTMLLabelElement | null>(null);

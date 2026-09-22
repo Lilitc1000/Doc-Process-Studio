@@ -45,22 +45,30 @@
   gap: var(--space-sm);
 }
 
+/* 修复：原先 .detail-body 自己滚动，但作为 flex item 的 .detail-content 会被
+   align-items: stretch 拉成容器高度，内容实际溢出在子项之外，父容器的滚动范围却
+   仍按“被拉伸后的高度”计算 —— 结果就是内容被裁掉且滚不动（表格行数多时尤其明显）。
+   正确做法是容器不滚动，由两栏各自滚动，并为子项补上 min-height: 0。 */
 .detail-body {
   display: flex;
   gap: var(--space-xl);
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .detail-sidebar {
   width: 280px;
   flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .detail-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }

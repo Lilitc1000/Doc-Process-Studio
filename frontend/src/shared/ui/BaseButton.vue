@@ -35,8 +35,16 @@ withDefaults(
   gap: var(--space-sm);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  min-height: 38px;
-  padding: var(--space-sm) var(--space-md);
+  /* 与 BaseDropdown 触发器（40px）保持同一高度，否则并排时明显不齐 */
+  min-height: 40px;
+  /* 上下 padding 故意不对称：中文字形的 ink 中心比行盒中心偏上，把内容区整体
+     下移同样的量，文字才真正落在按钮几何中心。
+     100% 缩放时浏览器会把位置吸附到整数像素，这点偏差会被放大成整整 1px 的错位
+     （放大到 200% 有亚像素精度时反而看不出来），所以值得精确补偿。
+     注意补偿量与字号**不成比例**（浏览器对不同字号做不同的字体微调）：
+     实测 md(13.12px) 需 0.4px，sm(11.52px) 需 0.9px，故按尺寸分别设置。 */
+  padding: calc(var(--space-sm) + 0.4px) var(--space-md)
+    calc(var(--space-sm) - 0.4px);
   background: var(--color-bg-secondary);
   color: var(--color-text-primary);
   cursor: pointer;
@@ -50,6 +58,15 @@ withDefaults(
     box-shadow var(--transition-smooth),
     color var(--transition-smooth),
     transform var(--transition-fast);
+}
+
+/* 内容区已为文字下移了补偿量，但图标是按几何居中的，会跟着一起下移 ——
+   这里按同样数值反向补回，让图标也回到按钮几何中心，与文字的 ink 中心重合。
+   图标是插槽内容（带的是使用方的 scope id），必须用 :slotted 才选得到。 */
+.base-button :slotted(svg) {
+  flex: none;
+  position: relative;
+  top: -0.4px;
 }
 
 .base-button.block {
@@ -75,18 +92,30 @@ withDefaults(
 
 .base-button.size-sm {
   min-height: 32px;
-  padding: var(--space-xs) var(--space-sm);
+  padding: calc(var(--space-xs) + 0.9px) var(--space-sm)
+    calc(var(--space-xs) - 0.9px);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
 }
 
+/* sm 字号下字形偏移实测为 0.9px，比 md 大一倍多 */
+.base-button.size-sm :slotted(svg) {
+  top: -0.9px;
+}
+
 .base-button.size-lg {
   min-height: 44px;
-  padding: var(--space-sm) var(--space-lg);
+  /* 与 md 同用 0.4px：lg 只在少数场景出现（聊天输入框、用户弹窗头像按钮），
+     实测偏移与 md 接近，不值得为它单开一档 */
+  padding: calc(var(--space-sm) + 0.4px) var(--space-lg)
+    calc(var(--space-sm) - 0.4px);
   border-radius: var(--radius-lg);
   font-size: var(--text-base);
 }
 
+/* 主按钮：浅蓝实色块 + 深蓝描边 + 深蓝文字。
+   实色深蓝块放在浅色页面里，即使尺寸相同也会显得比描边按钮"膨胀"一圈；
+   浅底 + 清晰描边的组合既能保住主按钮的辨识度，又与其他按钮的体积感一致。 */
 .base-button.variant-primary {
   border-color: var(--color-primary);
   background: var(--color-primary);

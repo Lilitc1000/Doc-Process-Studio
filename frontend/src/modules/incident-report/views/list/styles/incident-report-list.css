@@ -2,7 +2,10 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: var(--space-xl);
+  min-height: 0;
+  /* 标题正上方是固定顶栏，且它与右侧 40px 高的按钮同排居中，视觉重心会再上浮，
+     所以顶部留白要给到明显大于左右的程度 */
+  padding: var(--space-3xl) var(--space-xl) var(--space-xl);
 }
 
 .incident-report-list-header {
@@ -25,9 +28,12 @@
   letter-spacing: -0.01em;
 }
 
+/* 列表内容区自行滚动：外层 .incident-report-main 是 overflow: hidden，
+   这里若不提供滚动容器，表格行多时会被裁掉且无法下滑（与详情页同一类问题）。 */
 .incident-report-list-body {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .incident-report-list-main {

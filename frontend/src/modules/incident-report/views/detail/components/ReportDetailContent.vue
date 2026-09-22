@@ -227,22 +227,27 @@
                   }}</span>
                 </div>
               </div>
-              <table v-if="timelineItems.length > 0" class="timeline-table">
-                <thead>
-                  <tr>
-                    <th>时间</th>
-                    <th>事件</th>
-                    <th>处理</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(item, idx) in timelineItems" :key="idx">
-                    <td>{{ item.time || '-' }}</td>
-                    <td>{{ item.event || '-' }}</td>
-                    <td>{{ item.resolution || '-' }}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div
+                v-if="timelineItems.length > 0"
+                class="timeline-table-wrapper"
+              >
+                <table class="timeline-table">
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>事件</th>
+                      <th>处理</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(item, idx) in timelineItems" :key="idx">
+                      <td>{{ item.time || '-' }}</td>
+                      <td>{{ item.event || '-' }}</td>
+                      <td>{{ item.resolution || '-' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -577,6 +582,12 @@ const hasAnyData = computed(() => {
   gap: var(--space-xs);
 }
 
+/* 表格外层容器负责横向滚动，避免列多时内容被裁掉且无法横向滑动 */
+.timeline-table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .timeline-table {
   width: 100%;
   border-collapse: collapse;
@@ -605,6 +616,8 @@ const hasAnyData = computed(() => {
 
 .appendix-html {
   line-height: var(--leading-relaxed);
+  /* 富文本里的表格无法单独包容器，这里让父级承担横向滚动 */
+  overflow-x: auto;
 }
 
 .appendix-html :deep(img) {

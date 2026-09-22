@@ -4,15 +4,25 @@
       <div v-if="visible" class="modal-overlay" @click.self="$emit('close')">
         <div class="modal-container">
           <div class="modal-left">
+            <!-- 只在编辑态预览草稿颜色，其余情况一律显示账号真实颜色。
+                 原先写的是 `editAvatarColor ?? userInfo?.avatarColor`，而
+                 editAvatarColor 初始是空串 —— ?? 不会对空串回退，于是初次打开
+                 拿到空串画不出头像；且草稿值在关闭后不重置，会一直"记住"上次
+                 没保存的编辑。 -->
             <user-avatar
               :username="userInfo?.username ?? ''"
-              :color="editAvatarColor ?? userInfo?.avatarColor ?? '#4f46e5'"
+              :color="
+                isEditing
+                  ? editAvatarColor || '#4f46e5'
+                  : (userInfo?.avatarColor ?? '#4f46e5')
+              "
               size="lg"
               class="modal-avatar"
             />
             <div class="modal-info">
               <div class="modal-info-name">{{ userInfo?.username }}</div>
-              <div class="modal-info-id">{{ userInfo?.userId }}</div>
+              <!-- 刻意不展示内部用户 ID（形如 usr_xxx）：对使用者没有意义，
+                   只增加理解成本 -->
               <div class="modal-info-date">
                 {{ formatDate(userInfo?.createdAt, '') }}
               </div>
@@ -197,6 +207,9 @@ watch(
       currentPassword.value = '';
       newPassword.value = '';
       confirmPassword.value = '';
+      // 草稿也要清掉：否则上一次"编辑但没保存"的颜色会在下次打开时继续显示
+      editUsername.value = '';
+      editAvatarColor.value = '';
     }
   },
 );
@@ -210,6 +223,9 @@ function startEditing() {
 
 function cancelEditing() {
   isEditing.value = false;
+  // 放弃草稿：不清的话下次点"编辑"之前这段时间里草稿还留着
+  editUsername.value = '';
+  editAvatarColor.value = '';
   errorMessage.value = '';
 }
 
@@ -281,12 +297,6 @@ async function savePassword() {
   font-size: var(--text-base);
   font-weight: var(--font-bold);
   color: var(--color-text-primary);
-}
-
-.modal-info-id {
-  font-size: var(--text-xs);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-2xs);
 }
 
 .modal-info-date {
