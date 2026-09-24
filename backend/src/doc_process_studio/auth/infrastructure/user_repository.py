@@ -171,19 +171,29 @@ class SqlUserRepository(UserRepository):
             return {row[0]: row[1] for row in result.all()}
 
     async def assign_all_roles_to_admin(self, user_id: str) -> None:
-        from ...incident_report.domain.values.permission import VALID_ROLES
-        from ...incident_report.infrastructure.persistence.incident_report_role import IncidentReportUserRole
+        from sqlalchemy.dialects.postgresql import insert
 
+        from ...incident_report.domain.values.permission import VALID_ROLES
+        from ...incident_report.infrastructure.persistence.incident_report_role import (
+            IncidentReportUserRole,
+        )
+
+        # 幂等：并发初始化时可能重复调用，用 ON CONFLICT DO NOTHING 避免
+        # 触发 uq_user_role 唯一约束导致重复插入报错。
+        stmt = insert(IncidentReportUserRole).values(
+            [
+                {
+                    "id": generate_user_id(),
+                    "user_id": user_id,
+                    "role_key": role_key,
+                    "assigned_by": user_id,
+                }
+                for role_key in VALID_ROLES
+            ]
+        )
+        stmt = stmt.on_conflict_do_nothing(index_elements=["user_id", "role_key"])
         async with async_session_factory() as session:
-            for role_key in VALID_ROLES:
-                session.add(
-                    IncidentReportUserRole(
-                        id=generate_user_id(),
-                        user_id=user_id,
-                        role_key=role_key,
-                        assigned_by=user_id,
-                    )
-                )
+            await session.execute(stmt)
             await session.commit()
 
     async def get_role(self, user_id: str) -> str | None:

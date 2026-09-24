@@ -27,7 +27,7 @@ class RagflowCredentialDTO(BaseModel):
     """系统级 RAGFlow 凭据的**可展示信息**（无明文）。"""
 
     configured: bool = Field(..., description="是否已由管理员写入密钥")
-    masked_api_key: str = Field(..., description="掩码串，如 ••••••••Y30tkYQ；未配置时为固定掩码")
+    masked_api_key: str = Field(..., description="掩码串，如 ••••••••Y30tkYQ；未配置时为空串")
     hint: str | None = Field(default=None, description="掩码尾串；明文过短时为 None")
     source: SecretSource = Field(..., description="当前生效凭据来源")
     updated_at: datetime | None = Field(default=None, description="密钥最后更新时间")

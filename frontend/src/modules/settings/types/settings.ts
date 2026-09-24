@@ -30,7 +30,7 @@ export interface UserPreferences {
 /** 系统级 RAGFlow 凭据的**可展示信息**（无明文） */
 export interface RagflowCredential {
   configured: boolean;
-  /** 掩码串，如 `••••••••Y30tkYQ`；未配置时为固定掩码 */
+  /** 掩码串，如 `••••••••Y30tkYQ`；未配置时为空串 */
   maskedApiKey: string;
   /** 掩码尾串；明文过短时为 null（只显示固定掩码，避免掩码本身泄露内容） */
   hint: string | null;

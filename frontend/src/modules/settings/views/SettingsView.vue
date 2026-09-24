@@ -65,9 +65,13 @@
             >
 
             <div v-if="!keyEditing" class="secret-readonly">
-              <span class="secret-mask" data-testid="secret-mask">{{
-                credential.maskedApiKey
-              }}</span>
+              <span
+                v-if="credential.configured"
+                class="secret-mask"
+                data-testid="secret-mask"
+                >{{ credential.maskedApiKey }}</span
+              >
+              <span v-else class="secret-mask secret-mask--empty">未设置</span>
               <span
                 class="secret-badge"
                 :class="{ 'secret-badge--ok': credential.configured }"
@@ -313,7 +317,7 @@ const credential = computed(
   () =>
     settingsStore.ragflow?.credential ?? {
       configured: false,
-      maskedApiKey: '••••••••',
+      maskedApiKey: '',
       hint: null,
       source: 'none' as const,
       updatedAt: null,

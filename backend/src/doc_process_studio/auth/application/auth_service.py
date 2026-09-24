@@ -5,6 +5,8 @@
 
 import logging
 
+from sqlalchemy.exc import IntegrityError
+
 from ...common.security.security import (
     create_access_token,
     create_refresh_token,
@@ -217,12 +219,29 @@ class AuthService:
             return
 
         user_id = generate_user_id()
-        await self._users.create(
-            user_id=user_id,
-            username=admin_username,
-            hashed_password=hash_password(admin_password),
-            avatar_color=_DEFAULT_AVATAR_COLOR,
-            role=ROLE_ADMIN,
-        )
+        try:
+            await self._users.create(
+                user_id=user_id,
+                username=admin_username,
+                hashed_password=hash_password(admin_password),
+                avatar_color=_DEFAULT_AVATAR_COLOR,
+                role=ROLE_ADMIN,
+            )
+        except IntegrityError:
+            # 多 worker 并发启动时，另一个进程可能已抢先创建同名账号。
+            # 幂等兜底：忽略唯一约束冲突，复用已存在的账号。
+            existing_after = await self._users.get_by_username(admin_username)
+            if existing_after is None:
+                raise
+            user_id = existing_after[0]
+            _logger.info(
+                "管理员账号 %s 已由并发进程创建，本进程复用 (user_id=%s)",
+                admin_username,
+                user_id,
+            )
+        else:
+            _logger.info("已创建初始管理员账号 %s(user_id=%s)", admin_username, user_id)
+
+        # assign_all_roles_to_admin 已幂等（ON CONFLICT DO NOTHING），
+        # 无论本进程是创建还是复用，都确保角色分配完整。
         await self._users.assign_all_roles_to_admin(user_id)
-        _logger.info("已创建初始管理员账号 %s(user_id=%s)", admin_username, user_id)

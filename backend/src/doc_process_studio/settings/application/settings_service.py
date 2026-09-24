@@ -257,7 +257,7 @@ class SettingsService:
             base_url_source=_ENABLED_SOURCE_SYSTEM if base_url_from_system else _ENABLED_SOURCE_ENV,
             credential=RagflowCredentialDTO(
                 configured=stored_secret is not None,
-                masked_api_key=mask_secret_hint(stored_secret.hint if stored_secret else None),
+                masked_api_key=mask_secret_hint(stored_secret.hint) if stored_secret else "",
                 hint=stored_secret.hint if stored_secret else None,
                 source=config.source,
                 updated_at=stored_secret.updated_at if stored_secret else None,
