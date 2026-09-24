@@ -70,7 +70,7 @@ backend/src/doc_process_studio/common/
 `.env.{env}` 与 `.env.{env}.local` 是**两段式加载**，后者覆盖前者、且被 `.gitignore`
 的 `.env*.local` 忽略。所以：
 
-- 需要覆盖配置的人自己建 `backend/.env.dev.local`；**不要把密钥写进入库的 `.env.dev` / `.env.prod`**；
+- 需要覆盖配置的人自己建 `backend/.env.dev.local`；**不要把密钥写进入库的 `.env.dev`**（生产 `.env.prod` 已移出仓库，改用部署注入，仅留 `.env.prod.example` 模板）**；
 - 生产用环境变量注入，或在部署机上放 `.env.prod.local`。
 
 ### RAGFlow 的配置优先级（只有一个开关）

@@ -124,7 +124,8 @@ class Settings(BaseSettings):
     #     主密钥一致，即使共用同一个 dev 数据库也能互相解密，无需传递密钥文件。
     #     代价：dev 的加密强度等于 jwt_secret_key 的强度，而它本身就在 .env.dev 里，
     #     所以 dev 只做到"防脱库裸读"，不是强保护。
-    # 切勿把主密钥写进被 git 跟踪的 .env.dev / .env.prod，用 .env.<env>.local 或部署环境注入。
+    # 切勿把主密钥写进被 git 跟踪的 .env.dev；生产环境改用部署机 .env / 环境变量注入。
+    # 仓库已不再提交 .env.prod（其含真实生产凭据），仅留 .env.prod.example 模板。
     settings_encryption_key: str | None = None
     settings_encryption_key_id: str = "k1"
     # 是否允许开发环境从 jwt_secret_key 派生主密钥。生产环境该开关无效（永远要求显式配置）。
