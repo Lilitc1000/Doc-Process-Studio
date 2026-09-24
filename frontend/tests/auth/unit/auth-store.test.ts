@@ -18,6 +18,20 @@ vi.mock('@modules/auth/api/auth', async (importOriginal) => {
   };
 });
 
+/**
+ * 构造一个带 exp 声明的 JWT。
+ * 只用于测试续期排期，不参与任何签名校验。
+ */
+function makeJwt(expiresInSeconds: number): string {
+  const payload = btoa(
+    JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expiresInSeconds }),
+  )
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return `header.${payload}.signature`;
+}
+
 describe('useAuthStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -107,18 +121,116 @@ describe('useAuthStore', () => {
     expect(store.isAuthenticated).toBe(false);
   });
 
-  it('refreshAccessToken 失败时清除认证状态', async () => {
+  it('refreshAccessToken 令牌被拒绝（401）时清除认证状态', async () => {
     const store = useAuthStore();
     store.refreshToken = 'expired_refresh';
     localStorage.setItem('refresh_token', 'expired_refresh');
 
     const mockRefresh = authApi.refreshToken as ReturnType<typeof vi.fn>;
-    mockRefresh.mockRejectedValue(new Error('Token expired'));
+    mockRefresh.mockRejectedValue(
+      Object.assign(new Error('Unauthorized'), {
+        response: { status: 401 },
+      }),
+    );
 
     const result = await store.refreshAccessToken();
     expect(result).toBeNull();
     expect(store.isAuthenticated).toBe(false);
     expect(localStorage.getItem('refresh_token')).toBeNull();
+  });
+
+  it('refreshAccessToken 网络错误时保留登录态', async () => {
+    const store = useAuthStore();
+    store.accessToken = 'existing_access';
+    store.refreshToken = 'valid_refresh';
+    localStorage.setItem('refresh_token', 'valid_refresh');
+
+    const mockRefresh = authApi.refreshToken as ReturnType<typeof vi.fn>;
+    // 没有 response，属于网络层失败，不该把用户踢下线
+    mockRefresh.mockRejectedValue(new Error('Network Error'));
+
+    const result = await store.refreshAccessToken();
+    expect(result).toBeNull();
+    expect(store.isAuthenticated).toBe(true);
+    expect(localStorage.getItem('refresh_token')).toBe('valid_refresh');
+  });
+
+  it('并发刷新只发一次请求，且共享结果', async () => {
+    const store = useAuthStore();
+    store.refreshToken = 'shared_refresh';
+    localStorage.setItem('refresh_token', 'shared_refresh');
+
+    const mockRefresh = authApi.refreshToken as ReturnType<typeof vi.fn>;
+    mockRefresh.mockResolvedValue({
+      accessToken: 'concurrent_access',
+      refreshToken: 'concurrent_refresh',
+    });
+
+    // 同时发起三次刷新（模拟三个请求同时撞上 401）
+    const results = await Promise.all([
+      store.refreshAccessToken(),
+      store.refreshAccessToken(),
+      store.refreshAccessToken(),
+    ]);
+
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([
+      'concurrent_access',
+      'concurrent_access',
+      'concurrent_access',
+    ]);
+    expect(store.accessToken).toBe('concurrent_access');
+  });
+
+  it('令牌已进入过期窗口时立即主动续期', async () => {
+    const store = useAuthStore();
+    const mockLogin = authApi.loginUser as ReturnType<typeof vi.fn>;
+    const mockRefresh = authApi.refreshToken as ReturnType<typeof vi.fn>;
+    const mockGetUser = authApi.getCurrentUser as ReturnType<typeof vi.fn>;
+
+    mockGetUser.mockResolvedValue({ userId: 'usr_1', username: 'tester' });
+    // 30 秒后过期，已经落在"提前 60 秒续期"的窗口内
+    mockLogin.mockResolvedValue({
+      accessToken: makeJwt(30),
+      refreshToken: 'r1',
+    });
+    mockRefresh.mockResolvedValue({
+      accessToken: makeJwt(900),
+      refreshToken: 'r2',
+    });
+
+    await store.login('tester', 'password123');
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('令牌离过期还早时不立即刷新，到期前才续', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = useAuthStore();
+      const mockLogin = authApi.loginUser as ReturnType<typeof vi.fn>;
+      const mockRefresh = authApi.refreshToken as ReturnType<typeof vi.fn>;
+      const mockGetUser = authApi.getCurrentUser as ReturnType<typeof vi.fn>;
+
+      mockGetUser.mockResolvedValue({ userId: 'usr_1', username: 'tester' });
+      // 15 分钟后过期
+      mockLogin.mockResolvedValue({
+        accessToken: makeJwt(900),
+        refreshToken: 'r1',
+      });
+      mockRefresh.mockResolvedValue({
+        accessToken: makeJwt(900),
+        refreshToken: 'r2',
+      });
+
+      await store.login('tester', 'password123');
+      expect(mockRefresh).not.toHaveBeenCalled();
+
+      // 快进到"过期前 60 秒"的续期点之后
+      await vi.advanceTimersByTimeAsync((900 - 60) * 1000 + 1000);
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('logout 清除所有认证状态', async () => {

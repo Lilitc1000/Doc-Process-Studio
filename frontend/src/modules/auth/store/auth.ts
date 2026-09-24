@@ -9,13 +9,55 @@ import {
   getCurrentUser,
 } from '../api/auth';
 
+/** 在令牌过期前多久主动续期 */
+const REFRESH_LEAD_SECONDS = 60;
+/** setTimeout 的毫秒上限，超过会被当成 0 立即触发 */
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+/** 从 JWT 解析过期时间（Unix 秒）。解析失败返回 null，退回"401 之后被动刷新"。 */
+function parseTokenExpiration(token: string | null): number | null {
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    // JWT 用的是 base64url，需要先转成标准 base64
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = JSON.parse(atob(normalized)) as { exp?: unknown };
+    return typeof decoded.exp === 'number' ? decoded.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 是否属于"令牌确实被拒绝"。
+ *
+ * 网络抖动、后端临时不可用不该让用户掉线 —— 那种情况下保留登录态，
+ * 让当前请求失败即可，下一次操作还有机会自动恢复。
+ */
+function isTokenRejected(error: unknown): boolean {
+  const status = (error as { response?: { status?: number } } | null)?.response
+    ?.status;
+  return status === 401 || status === 400;
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(null);
   const refreshToken = ref<string | null>(
     localStorage.getItem('refresh_token'),
   );
   const userInfo = ref<UserInfoResponse | null>(null);
-  const isRefreshing = ref(false);
+
+  /**
+   * 正在进行的刷新请求。
+   *
+   * 后端刷新会轮换令牌（签发新 refresh token 后把旧的加入黑名单），
+   * 因此并发发起多个刷新必然只有一个成功、其余拿到已失效的令牌。
+   * 并发的 401 必须共用同一个 Promise，而不是各自发起一次刷新。
+   */
+  let refreshPromise: Promise<string | null> | null = null;
+  /** 主动续期的定时器 */
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   const isAuthenticated = computed(() => !!accessToken.value);
   const userId = computed(() => userInfo.value?.userId ?? '');
@@ -31,12 +73,43 @@ export const useAuthStore = defineStore('auth', () => {
    */
   const isGlobalAdmin = computed(() => userInfo.value?.role === 'admin');
 
+  /**
+   * 在令牌过期前主动续期。
+   *
+   * 不做这一步的话，过期那一刻所有并发请求会同时撞上 401，
+   * 即便有并发保护，用户也会感知到一次明显的卡顿。
+   */
+  function scheduleProactiveRefresh() {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+
+    // 后台标签不排期：浏览器会节流定时器，回到前台时会重新检查
+    if (document.visibilityState === 'hidden') return;
+
+    const expiresAt = parseTokenExpiration(accessToken.value);
+    if (!expiresAt) return;
+
+    const delay = (expiresAt - REFRESH_LEAD_SECONDS) * 1000 - Date.now();
+    if (delay <= 0) {
+      // 已进入过期窗口，立即续
+      void refreshAccessToken();
+      return;
+    }
+    refreshTimer = setTimeout(
+      () => void refreshAccessToken(),
+      Math.min(delay, MAX_TIMEOUT_MS),
+    );
+  }
+
   async function login(usernameVal: string, password: string) {
     const response = await loginUser({ username: usernameVal, password });
     accessToken.value = response.accessToken;
     refreshToken.value = response.refreshToken;
     localStorage.setItem('refresh_token', response.refreshToken);
     await fetchUserInfo();
+    scheduleProactiveRefresh();
   }
 
   async function register(usernameVal: string, password: string) {
@@ -44,27 +117,36 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function refreshAccessToken(): Promise<string | null> {
-    if (isRefreshing.value) return null;
     if (!refreshToken.value) {
       clearAuth();
       return null;
     }
 
-    isRefreshing.value = true;
-    try {
-      const response = await refreshTokenApi({
-        refreshToken: refreshToken.value,
-      });
-      accessToken.value = response.accessToken;
-      refreshToken.value = response.refreshToken;
-      localStorage.setItem('refresh_token', response.refreshToken);
-      return response.accessToken;
-    } catch {
-      clearAuth();
-      return null;
-    } finally {
-      isRefreshing.value = false;
-    }
+    // 已有刷新在进行：共用同一个 Promise，让并发请求一起等结果
+    if (refreshPromise) return refreshPromise;
+
+    refreshPromise = (async () => {
+      try {
+        const response = await refreshTokenApi({
+          refreshToken: refreshToken.value as string,
+        });
+        accessToken.value = response.accessToken;
+        refreshToken.value = response.refreshToken;
+        localStorage.setItem('refresh_token', response.refreshToken);
+        scheduleProactiveRefresh();
+        return response.accessToken;
+      } catch (error) {
+        // 只有令牌确实被拒绝才清理登录态；网络问题保留登录态
+        if (isTokenRejected(error)) {
+          clearAuth();
+        }
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+
+    return refreshPromise;
   }
 
   async function logout() {
@@ -87,17 +169,39 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearAuth() {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
     accessToken.value = null;
     refreshToken.value = null;
     userInfo.value = null;
     localStorage.removeItem('refresh_token');
   }
 
+  // 标签页切回前台：令牌可能已在后台期间过期，这里补一次检查
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      return;
+    }
+    const expiresAt = parseTokenExpiration(accessToken.value);
+    if (!expiresAt) return;
+    const remaining = expiresAt * 1000 - Date.now();
+    if (remaining <= REFRESH_LEAD_SECONDS * 1000) {
+      void refreshAccessToken();
+    } else {
+      scheduleProactiveRefresh();
+    }
+  });
+
   return {
     accessToken,
     refreshToken,
     userInfo,
-    isRefreshing,
     isAuthenticated,
     userId,
     username,
