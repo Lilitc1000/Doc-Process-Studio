@@ -31,7 +31,6 @@ def is_admin_role(role: str | None) -> bool:
     **严格匹配**，只容忍首尾空白（数据库中偶尔会带上），不做大小写折叠：
     这是权限判定，未知取值一律视为非管理员（fail closed）。
     宽容地接受 ``"Admin"`` 这类变体，等于给"某个地方不小心写了个变体值"
-    留下提权空间，宁可让它在启动日志里露出 ERROR（见
-    ``AuthService.ensure_admin_user``），也不要静默放行。
+    留下提权空间，宁可让相关操作在日志里露出告警，也不要静默放行。
     """
     return (role or "").strip() == ROLE_ADMIN

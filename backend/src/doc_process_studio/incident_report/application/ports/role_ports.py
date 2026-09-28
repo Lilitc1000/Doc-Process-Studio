@@ -47,7 +47,3 @@ class RoleRepository(ABC):
     @abstractmethod
     async def seed_rbac_data(self) -> None:
         """初始化 RBAC 种子数据。"""
-
-    @abstractmethod
-    async def ensure_admin_role(self) -> None:
-        """确保 admin 用户拥有 admin 角色。"""

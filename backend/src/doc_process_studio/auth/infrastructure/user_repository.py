@@ -12,7 +12,7 @@ from sqlalchemy.engine import CursorResult
 from ...common.infrastructure.database import async_session_factory
 from ...common.security.security import generate_user_id
 from ..application.ports import UserRepository
-from ..domain.roles import ROLE_MEMBER
+from ..domain.roles import ROLE_ADMIN, ROLE_MEMBER
 from .persistence.user import User
 
 
@@ -162,6 +162,11 @@ class SqlUserRepository(UserRepository):
         async with async_session_factory() as session:
             result = await session.execute(select(User).limit(1))
             return 0 if result.scalar_one_or_none() is None else 1
+
+    async def has_admin(self) -> bool:
+        async with async_session_factory() as session:
+            result = await session.execute(select(User.user_id).where(User.role == ROLE_ADMIN).limit(1))
+            return result.scalar_one_or_none() is not None
 
     async def resolve_usernames(self, user_ids: set[str]) -> dict[str, str]:
         if not user_ids:

@@ -17,6 +17,13 @@ const router = createRouter({
       meta: { requiresAuth: false, hideForAuth: true },
     },
     {
+      // 首次部署引导：系统中还没有任何管理员时，由路由守卫强制进入这里
+      path: '/setup',
+      name: 'setup',
+      component: () => import('@modules/auth/views/SetupView.vue'),
+      meta: { requiresAuth: false, hideForAuth: true },
+    },
+    {
       path: '/',
       component: () => import('../layouts/DefaultLayout.vue'),
       meta: { requiresAuth: true },
@@ -122,11 +129,25 @@ router.beforeEach(async (to, _from, next) => {
     await authStore.fetchUserInfo();
   }
 
+  // 未认证时惰性拉取一次 setup 状态：系统缺管理员 → 一律先引导到 /setup
+  if (!authStore.isAuthenticated && !authStore.setupStatusLoaded) {
+    await authStore.loadSetupStatus();
+  }
+
   const requiresAuth = to.matched.some((r) => r.meta.requiresAuth);
   const hideForAuth = to.matched.some((r) => r.meta.hideForAuth);
   const requiresAdmin = to.matched.some((r) => r.meta.requiresAdmin);
 
-  if (requiresAuth && !authStore.isAuthenticated) {
+  if (to.name === 'setup') {
+    // setup 页只对「未认证 + 系统缺管理员」开放；其余情况回登录页
+    if (authStore.isAuthenticated || !authStore.needsSetup) {
+      next({ name: 'login' });
+    } else {
+      next();
+    }
+  } else if (!authStore.isAuthenticated && authStore.needsSetup) {
+    next({ name: 'setup' });
+  } else if (requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login', query: { redirect: to.fullPath } });
   } else if (hideForAuth && authStore.isAuthenticated) {
     next({ name: 'home' });

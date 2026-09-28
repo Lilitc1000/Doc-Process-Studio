@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .auth.infrastructure.dependencies import get_auth_service
 from .auth.router.auth import router as auth_router
 from .chat.infrastructure.attachments import cleanup_expired_attachments
 from .chat.router.attachments import router as chat_attachments_router
@@ -48,13 +47,10 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-    await get_auth_service().ensure_admin_user(
-        admin_username=settings.admin_username,
-        admin_password=settings.admin_password,
-    )
+    # 管理员不再由 ADMIN_USERNAME/ADMIN_PASSWORD 在启动时创建：
+    # 全新部署时前端会引导到 /setup 由部署者自行创建首个管理员（auth_service.setup_admin）。
     role_repo = get_role_repository()
     await role_repo.seed_rbac_data()
-    await role_repo.ensure_admin_role()
     cleanup_expired_attachments()
     await warmup_model_context_cache()
 

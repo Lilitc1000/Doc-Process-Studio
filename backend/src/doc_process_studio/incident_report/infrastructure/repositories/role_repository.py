@@ -233,29 +233,3 @@ class SqlRoleRepository(RoleRepository):
 
             await session.commit()
             logger.info("RBAC 种子数据初始化完成")
-
-    async def ensure_admin_role(self) -> None:
-        async with async_session_factory() as session:
-            result = await session.execute(select(User).where(User.username == "admin").limit(1))
-            admin_user = result.scalar_one_or_none()
-            if admin_user is None:
-                return
-
-            existing = await session.execute(
-                select(IncidentReportUserRole).where(
-                    IncidentReportUserRole.user_id == admin_user.user_id,
-                    IncidentReportUserRole.role_key == "admin",
-                ),
-            )
-            if existing.scalar_one_or_none() is not None:
-                return
-
-            entry = IncidentReportUserRole(
-                id=generate_user_id(),
-                user_id=admin_user.user_id,
-                role_key="admin",
-                assigned_by=None,
-            )
-            session.add(entry)
-            await session.commit()
-            logger.info("确保管理员角色: user_id=%s", admin_user.user_id)

@@ -248,7 +248,8 @@ draft ──submit──→ pending ──approve──→ approved ──start�
 
 应用启动时通过 `RoleRepository` 自动执行（见 `main.py`）：
 1. `role_repo.seed_rbac_data()` — 初始化角色定义、权限定义和角色-权限映射
-2. `role_repo.ensure_admin_role()` — 确保系统管理员拥有事故报告管理员角色
+
+管理员获得事故报告全部角色的时点已从启动期移到**首个管理员创建时**：`auth_service.setup_admin()` 创建管理员后调用 `UserRepository.assign_all_roles_to_admin()` 授予全部角色。原启动期的 `ensure_admin_role()`（硬编码查 `username == "admin"`，管理员用户名可自定后会静默失效）已删除。
 
 权限定义、角色定义和角色-权限映射作为领域知识定义在 `domain/values/permission.py` 中（`ROLE_DEFINITIONS` / `PERMISSION_DEFINITIONS` / `ROLE_PERMISSIONS`），`SqlRoleRepository.seed_rbac_data()` 读取这些常量写入数据库。
 

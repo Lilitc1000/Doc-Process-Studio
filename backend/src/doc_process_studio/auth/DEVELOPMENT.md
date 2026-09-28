@@ -59,12 +59,16 @@ backend/src/doc_process_studio/auth/
 
 ## 核心流程
 
-1. 用户通过 `POST /register` 注册账号，密码使用 passlib + bcrypt 哈希存储
-2. 通过 `POST /login` 登录，请求体为 `application/x-www-form-urlencoded` 格式（OAuth2PasswordRequestForm），返回 access_token + refresh_token
-3. 后续请求携带 `Authorization: Bearer <access_token>` 访问受保护资源
-4. access_token 过期后，使用 refresh_token 调用 `POST /refresh` 获取新令牌对
-5. 登出时调用 `POST /logout`，refresh_token 的 jti 写入 Redis 黑名单
-6. 删除用户时调用 `DELETE /users/{user_id}`，关联的 chat_sessions 和 incident_reports 通过 FK `ON DELETE CASCADE` 自动清理
+1. 全新部署（系统中无任何全局管理员）时，前端 `GET /api/auth/setup-status` 检测到
+   `needs_setup=true` 会引导到 `/setup` 页，由部署者通过 `POST /api/auth/setup-admin`
+   自行创建首个管理员；创建成功即授予事故报告全部角色（管理员不再来自
+   `ADMIN_USERNAME` / `ADMIN_PASSWORD` 环境变量，`main.py` 启动期也不再建号）
+2. 用户通过 `POST /register` 注册账号，密码使用 passlib + bcrypt 哈希存储
+3. 通过 `POST /login` 登录，请求体为 `application/x-www-form-urlencoded` 格式（OAuth2PasswordRequestForm），返回 access_token + refresh_token
+4. 后续请求携带 `Authorization: Bearer <access_token>` 访问受保护资源
+5. access_token 过期后，使用 refresh_token 调用 `POST /refresh` 获取新令牌对
+6. 登出时调用 `POST /logout`，refresh_token 的 jti 写入 Redis 黑名单
+7. 删除用户时调用 `DELETE /users/{user_id}`，关联的 chat_sessions 和 incident_reports 通过 FK `ON DELETE CASCADE` 自动清理
 
 ## 环境变量
 
@@ -75,15 +79,15 @@ backend/src/doc_process_studio/auth/
 | `JWT_ALGORITHM` | JWT 算法 | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | access_token 有效期（分钟） | `15` |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | refresh_token 有效期（天） | `7` |
-| `ADMIN_USERNAME` | 默认管理员用户名 | `admin` |
-| `ADMIN_PASSWORD` | 默认管理员密码 | `admin123` |
+
+管理员账号不通过环境变量配置：首次访问由前端引导到 `/setup` 页创建（见核心流程第 1 步）。
 
 ## 跨域依赖
 
 - `common.security.security` — JWT 令牌生成/验证、密码哈希/校验、`get_current_user_id` 依赖（被其他域 router 使用）
 - `common.infrastructure.database` — PostgreSQL 异步连接池
 - `common.infrastructure.cache` — Redis 缓存客户端（token 黑名单）
-- `common.infrastructure.config` — 配置（JWT 密钥、过期时间、管理员账号）
+- `common.infrastructure.config` — 配置（JWT 密钥、过期时间）
 
 ## 数据模型
 

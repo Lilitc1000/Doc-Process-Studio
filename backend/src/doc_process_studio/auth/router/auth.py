@@ -9,6 +9,7 @@ from ...common.infrastructure.config import settings
 from ...common.security.security import get_current_user_id
 from ..application.auth_service import AuthService
 from ..domain.errors import (
+    AdminAlreadyExistsError,
     AuthError,
     IncorrectPasswordError,
     InvalidCredentialsError,
@@ -22,11 +23,13 @@ from .schemas.request import (
     LogoutRequest,
     RefreshTokenRequest,
     RegisterRequest,
+    SetupAdminRequest,
     UpdateProfileRequest,
 )
 from .schemas.response import (
     MessageResponse,
     RegisterResponse,
+    SetupStatusResponse,
     TokenResponse,
     UpdateProfileResponse,
     UserInfoResponse,
@@ -67,7 +70,7 @@ def _check_auth_rate_limit(client_key: str) -> None:
 
 
 def _handle_auth_error(exc: AuthError) -> HTTPException:
-    if isinstance(exc, UserAlreadyExistsError):
+    if isinstance(exc, (UserAlreadyExistsError, AdminAlreadyExistsError)):
         logger.warning("Auth error: %s", exc)
         return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, (InvalidCredentialsError, InvalidTokenError)):
@@ -92,6 +95,28 @@ async def register(
     _check_auth_rate_limit(request.client.host if request.client else "unknown")
     try:
         return await service.register(username=payload.username, password=payload.password)
+    except AuthError as exc:
+        raise _handle_auth_error(exc) from exc
+
+
+@router.get("/setup-status", response_model=SetupStatusResponse)
+async def setup_status(
+    service: AuthService = Depends(get_auth_service),
+) -> SetupStatusResponse:
+    """系统是否还需要创建首个管理员（公开端点，登录页/引导页据此分流）。"""
+    return SetupStatusResponse(needs_setup=await service.needs_setup())
+
+
+@router.post("/setup-admin", response_model=RegisterResponse, status_code=201)
+async def setup_admin(
+    payload: SetupAdminRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+) -> RegisterResponse:
+    """创建首个管理员（公开端点，但系统已存在管理员时返回 409）。"""
+    _check_auth_rate_limit(request.client.host if request.client else "unknown")
+    try:
+        return await service.setup_admin(username=payload.username, password=payload.password)
     except AuthError as exc:
         raise _handle_auth_error(exc) from exc
 
@@ -206,13 +231,3 @@ if settings.env == "dev":
         client_host = request.client.host if request.client else "unknown"
         _RATE_LIMIT_WHITELIST.add(client_host)
         return MessageResponse(message=f"Added {client_host} to rate limit whitelist")
-
-    @router.post("/ensure-admin", response_model=MessageResponse)
-    async def ensure_admin(
-        service: AuthService = Depends(get_auth_service),
-    ) -> MessageResponse:
-        await service.ensure_admin_user(
-            admin_username=settings.admin_username,
-            admin_password=settings.admin_password,
-        )
-        return MessageResponse(message="Admin user ensured")

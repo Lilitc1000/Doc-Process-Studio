@@ -17,13 +17,14 @@ from ...common.security.security import (
 )
 from ...common.utils.dtutils import to_utc8
 from ..domain.errors import (
+    AdminAlreadyExistsError,
     IncorrectPasswordError,
     InvalidCredentialsError,
     InvalidTokenError,
     UserAlreadyExistsError,
     UserNotFoundError,
 )
-from ..domain.roles import ROLE_ADMIN, is_admin_role
+from ..domain.roles import ROLE_ADMIN
 from .dtos import (
     RegisterResponse,
     TokenResponse,
@@ -181,67 +182,42 @@ class AuthService:
     async def delete_users_by_prefix(self, prefix: str) -> int:
         return await self._users.delete_by_username_prefix(prefix)
 
-    async def ensure_admin_user(self, *, admin_username: str, admin_password: str) -> None:
-        """保证存在一个全局管理员（幂等）。
+    async def needs_setup(self) -> bool:
+        """系统是否还没有任何全局管理员（前端据此引导到 setup 页还是登录页）。"""
+        return not await self._users.has_admin()
 
-        1. **账号已存在** → 只确保它的全局 ``role='admin'``，**不动密码**。
-           这是幂等兜底：即使有人手工把 role 改回 member，启动也会纠回来。
-        2. **账号不存在且库为空** → 保持原有「空库初始化」语义，按
-           ``ADMIN_USERNAME`` / ``ADMIN_PASSWORD`` 创建，并授予事故报告全部角色。
-        3. **账号不存在但库中已有用户** → **不擅自创建**（避免 env 写错就凭空多出
-           一个高权限账号），只打 ERROR 并给出可执行的修复 SQL。
+    async def setup_admin(self, *, username: str, password: str) -> RegisterResponse:
+        """创建第一个管理员（仅当系统中不存在任何全局管理员时可用）。
 
-        为什么不再沿用 ``count_users() > 0 就直接 return``：那个早退意味着
-        「已有数据的库在启动时完全不保证存在管理员」。而系统级共享设置只能由
-        管理员修改（见 ``auth.infrastructure.dependencies.require_admin``），
-        一旦没有管理员就彻底没人能配密钥 —— 这是个会把人卡死的隐形状态。
+        管理员不再来自 ``ADMIN_USERNAME`` / ``ADMIN_PASSWORD`` 配置：部署者首次
+        访问时在前端 setup 页自行设定用户名与密码。创建成功即授予事故报告全部
+        角色（接管原启动期 ``ensure_admin_role`` 的职责），无需重启。
         """
-        existing = await self._users.get_by_username(admin_username)
-        if existing is not None:
-            user_id = existing[0]
-            role = existing[5]
-            if not is_admin_role(role):
-                await self._users.set_role(user_id, ROLE_ADMIN)
-                _logger.warning(
-                    "已将账号 %s(user_id=%s) 的全局角色修正为 admin（原值=%r）",
-                    admin_username,
-                    user_id,
-                    role,
-                )
-            return
-
-        if await self._users.count_users() > 0:
-            _logger.error(
-                "未找到管理员账号 %r，但库中已有用户，因此不自动创建。"
-                "请手工提权：UPDATE users SET role='admin' WHERE username='<管理员账号>';",
-                admin_username,
-            )
-            return
+        if await self._users.has_admin():
+            raise AdminAlreadyExistsError("系统已完成初始化，管理员已存在")
+        if await self._users.username_exists(username):
+            raise UserAlreadyExistsError("Username already exists")
 
         user_id = generate_user_id()
         try:
-            await self._users.create(
+            created_at = await self._users.create(
                 user_id=user_id,
-                username=admin_username,
-                hashed_password=hash_password(admin_password),
+                username=username,
+                hashed_password=hash_password(password),
                 avatar_color=_DEFAULT_AVATAR_COLOR,
                 role=ROLE_ADMIN,
             )
-        except IntegrityError:
-            # 多 worker 并发启动时，另一个进程可能已抢先创建同名账号。
-            # 幂等兜底：忽略唯一约束冲突，复用已存在的账号。
-            existing_after = await self._users.get_by_username(admin_username)
-            if existing_after is None:
-                raise
-            user_id = existing_after[0]
-            _logger.info(
-                "管理员账号 %s 已由并发进程创建，本进程复用 (user_id=%s)",
-                admin_username,
-                user_id,
-            )
-        else:
-            _logger.info("已创建初始管理员账号 %s(user_id=%s)", admin_username, user_id)
+        except IntegrityError as exc:
+            # 并发初始化兜底：另一个请求可能已抢先建号。此时若已有管理员则视为
+            # setup 已完成，否则按用户名冲突处理。（两个请求用不同用户名同时穿过
+            # has_admin 检查的窗口理论上存在，但只出现在"全新空库 + 首次并发注册"
+            # 的极端场景，结果也只是多一个管理员，不构成权限提升。）
+            if await self._users.has_admin():
+                raise AdminAlreadyExistsError("系统已完成初始化，管理员已存在") from exc
+            raise UserAlreadyExistsError("Username already exists") from exc
 
-        # assign_all_roles_to_admin 已幂等（ON CONFLICT DO NOTHING），
-        # 无论本进程是创建还是复用，都确保角色分配完整。
+        _logger.info("已创建初始管理员账号 %s(user_id=%s)", username, user_id)
+        # assign_all_roles_to_admin 已幂等（ON CONFLICT DO NOTHING）；
+        # 事故报告全部角色在这里一并授予（原启动期 ensure_admin_role 的职责）。
         await self._users.assign_all_roles_to_admin(user_id)
+        return RegisterResponse(user_id=user_id, username=username, created_at=to_utc8(created_at))

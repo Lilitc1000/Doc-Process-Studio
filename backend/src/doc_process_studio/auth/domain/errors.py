@@ -12,6 +12,10 @@ class UserAlreadyExistsError(AuthError):
     """用户名已被占用。"""
 
 
+class AdminAlreadyExistsError(AuthError):
+    """系统已完成初始化：管理员已存在，不能再走 setup 流程。"""
+
+
 class InvalidCredentialsError(AuthError):
     """用户名或密码错误。"""
 

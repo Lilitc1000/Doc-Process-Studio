@@ -1,6 +1,7 @@
 from ...application.dtos import (
     MessageResponse,
     RegisterResponse,
+    SetupStatusResponse,
     TokenResponse,
     UpdateProfileResponse,
     UserInfoResponse,
@@ -9,6 +10,7 @@ from ...application.dtos import (
 __all__ = [
     "MessageResponse",
     "RegisterResponse",
+    "SetupStatusResponse",
     "TokenResponse",
     "UpdateProfileResponse",
     "UserInfoResponse",

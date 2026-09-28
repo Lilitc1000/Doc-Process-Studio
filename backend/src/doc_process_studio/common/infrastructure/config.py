@@ -105,8 +105,6 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
-    admin_username: str = "admin"
-    admin_password: str = "admin123"
     kb_max_upload_size_bytes: int = 100 * 1024 * 1024
     kb_search_top_k: int = 6
     # 知识库列表缓存秒数。RAGFlow 是外部真相源，其侧变更不会通知本服务，

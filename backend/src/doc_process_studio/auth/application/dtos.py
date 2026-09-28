@@ -16,6 +16,12 @@ class RegisterResponse(BaseModel):
     created_at: datetime = Field(..., description="创建时间")
 
 
+class SetupStatusResponse(BaseModel):
+    """首次初始化状态：是否还需要创建管理员。"""
+
+    needs_setup: bool = Field(..., description="系统中不存在任何全局管理员时为 true")
+
+
 class TokenResponse(BaseModel):
     access_token: str = Field(..., description="访问令牌")
     refresh_token: str = Field(..., description="刷新令牌")

@@ -2,11 +2,13 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { UserInfoResponse } from '../types/auth';
 import {
+  fetchSetupStatus,
   loginUser,
   registerUser,
   refreshToken as refreshTokenApi,
   logoutUser,
   getCurrentUser,
+  setupAdmin as setupAdminApi,
 } from '../api/auth';
 
 /** 在令牌过期前多久主动续期 */
@@ -65,6 +67,16 @@ export const useAuthStore = defineStore('auth', () => {
   const avatarColor = computed(() => userInfo.value?.avatarColor ?? '#4f46e5');
 
   /**
+   * 系统是否还缺少首个管理员。
+   *
+   * 未认证时由路由守卫惰性拉取一次（见 `setupStatusLoaded`），为 true 时
+   * 所有路由都会被引导到 `/setup`；创建成功后立即翻回 false。
+   */
+  const needsSetup = ref(false);
+  /** setup 状态是否已拉取过（只拉一次，避免每次导航都打接口） */
+  const setupStatusLoaded = ref(false);
+
+  /**
    * 全局管理员。用于判定能否查看/修改全系统共享设置（如 RAGFlow 连接信息与密钥）。
    *
    * 命名刻意与事故报告模块的 `isAdmin` 区分开：那个是**模块级**角色
@@ -114,6 +126,22 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function register(usernameVal: string, password: string) {
     await registerUser({ username: usernameVal, password });
+  }
+
+  /** 拉取一次 setup 状态（失败按"无需 setup"处理，回退到登录页） */
+  async function loadSetupStatus() {
+    try {
+      needsSetup.value = await fetchSetupStatus();
+    } catch {
+      needsSetup.value = false;
+    } finally {
+      setupStatusLoaded.value = true;
+    }
+  }
+
+  async function setupAdmin(usernameVal: string, password: string) {
+    await setupAdminApi({ username: usernameVal, password });
+    needsSetup.value = false;
   }
 
   async function refreshAccessToken(): Promise<string | null> {
@@ -207,8 +235,12 @@ export const useAuthStore = defineStore('auth', () => {
     username,
     avatarColor,
     isGlobalAdmin,
+    needsSetup,
+    setupStatusLoaded,
     login,
     register,
+    loadSetupStatus,
+    setupAdmin,
     refreshAccessToken,
     logout,
     fetchUserInfo,

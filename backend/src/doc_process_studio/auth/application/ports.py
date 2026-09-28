@@ -68,6 +68,10 @@ class UserRepository(ABC):
         """统计用户总数。"""
 
     @abstractmethod
+    async def has_admin(self) -> bool:
+        """是否存在全局角色为 admin 的用户（决定是否需要首次 setup）。"""
+
+    @abstractmethod
     async def resolve_usernames(self, user_ids: set[str]) -> dict[str, str]:
         """解析用户 ID → 用户名映射。"""
 

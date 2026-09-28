@@ -6,6 +6,14 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6)
 
 
+class SetupAdminRequest(RegisterRequest):
+    """首个管理员创建请求。
+
+    校验规则刻意与普通注册完全一致（继承 RegisterRequest），
+    差别只在服务端语义：仅当系统中不存在任何全局管理员时可用。
+    """
+
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(..., min_length=1)
 

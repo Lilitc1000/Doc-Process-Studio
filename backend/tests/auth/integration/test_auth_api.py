@@ -13,6 +13,7 @@ from doc_process_studio.auth.application.dtos import (
     UserInfoResponse,
 )
 from doc_process_studio.auth.domain.errors import (
+    AdminAlreadyExistsError,
     IncorrectPasswordError,
     InvalidCredentialsError,
     InvalidTokenError,
@@ -90,8 +91,15 @@ class FakeAuthService(AuthServiceContract):
         self._record("delete_users_by_prefix", prefix)
         return int(self.responses.get("delete_users_by_prefix", 0))
 
-    async def ensure_admin_user(self, *, admin_username: str, admin_password: str) -> None:
-        self._record("ensure_admin_user", admin_username, admin_password)
+    async def needs_setup(self) -> bool:
+        self._record("needs_setup")
+        return bool(self.responses.get("needs_setup", False))
+
+    async def setup_admin(self, *, username: str, password: str) -> RegisterResponse:
+        self._record("setup_admin", username, password)
+        if exc := self.errors.get("setup_admin"):
+            raise exc
+        return cast(RegisterResponse, self.responses["setup_admin"])
 
 
 @pytest.fixture()
@@ -132,6 +140,71 @@ def test_api_auth_register_duplicate_username(fake_auth_service: FakeAuthService
 
     assert response.status_code == 409
     assert "already exists" in response.json()["detail"]
+
+
+def test_api_auth_setup_status_needs_setup(fake_auth_service: FakeAuthService) -> None:
+    fake_auth_service.responses["needs_setup"] = True
+
+    client = TestClient(main_module.app)
+    response = client.get("/api/auth/setup-status")
+
+    assert response.status_code == 200
+    assert response.json() == {"needs_setup": True}
+
+
+def test_api_auth_setup_status_ready(fake_auth_service: FakeAuthService) -> None:
+    # 不设置 responses：needs_setup 默认 False（注入依赖仍需该 fixture）
+    assert fake_auth_service.responses.get("needs_setup", False) is False
+
+    client = TestClient(main_module.app)
+    response = client.get("/api/auth/setup-status")
+
+    assert response.status_code == 200
+    assert response.json() == {"needs_setup": False}
+
+
+def test_api_auth_setup_admin_success(fake_auth_service: FakeAuthService) -> None:
+    fake_auth_service.responses["setup_admin"] = RegisterResponse(
+        user_id="usr_admin001",
+        username="boss",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+    client = TestClient(main_module.app)
+    response = client.post(
+        "/api/auth/setup-admin",
+        json={"username": "boss", "password": "password123"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["user_id"] == "usr_admin001"
+    assert data["username"] == "boss"
+
+
+def test_api_auth_setup_admin_rejected_when_admin_exists(fake_auth_service: FakeAuthService) -> None:
+    fake_auth_service.errors["setup_admin"] = AdminAlreadyExistsError("系统已完成初始化，管理员已存在")
+
+    client = TestClient(main_module.app)
+    response = client.post(
+        "/api/auth/setup-admin",
+        json={"username": "boss", "password": "password123"},
+    )
+
+    assert response.status_code == 409
+    assert "已完成初始化" in response.json()["detail"]
+
+
+def test_api_auth_setup_admin_invalid_payload(fake_auth_service: FakeAuthService) -> None:
+    client = TestClient(main_module.app)
+    response = client.post(
+        "/api/auth/setup-admin",
+        json={"username": "ab", "password": "123"},
+    )
+
+    assert response.status_code == 422
+    # 422 在 pydantic 校验层就被拦下，不应触达应用服务
+    assert fake_auth_service.calls.get("setup_admin") is None
 
 
 def test_api_auth_login_success(fake_auth_service: FakeAuthService) -> None:

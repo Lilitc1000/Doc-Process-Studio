@@ -5,10 +5,29 @@ import type {
   LogoutRequest,
   RefreshTokenRequest,
   RegisterRequest,
+  SetupStatusResponse,
   TokenResponse,
   UpdateProfileRequest,
   UserInfoResponse,
 } from '../types/auth';
+
+/**
+ * 系统是否还需要创建首个管理员（公开端点）。
+ *
+ * 未认证时由路由守卫惰性调用一次：`needsSetup=true` 会把所有路由
+ * 引导到 `/setup`，创建完管理员再回登录页。
+ */
+export async function fetchSetupStatus(): Promise<boolean> {
+  const response =
+    await apiClient.get<SetupStatusResponse>('/auth/setup-status');
+  return response.data.needsSetup;
+}
+
+/** 创建首个管理员（公开端点；系统已有管理员时后端返回 409）。 */
+export async function setupAdmin(data: RegisterRequest) {
+  const response = await apiClient.post('/auth/setup-admin', data);
+  return response.data;
+}
 
 export async function registerUser(data: RegisterRequest) {
   const response = await apiClient.post('/auth/register', data);

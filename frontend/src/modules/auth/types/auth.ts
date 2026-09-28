@@ -3,6 +3,11 @@ export interface RegisterRequest {
   password: string;
 }
 
+/** 首次初始化状态：系统中是否存在管理员 */
+export interface SetupStatusResponse {
+  needsSetup: boolean;
+}
+
 export interface LoginRequest {
   username: string;
   password: string;
