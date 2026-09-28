@@ -1,11 +1,14 @@
 """CompositeReferenceContext 单元测试。
 
 覆盖：纯事实章节跳过检索、启用章节拼接素材、检索异常/无命中降级、英文 query 构造。
+
+RAGFLOW 配置（启用章节 / 召回条数）已改为运行期从 ``RagflowConfigProvider`` 解析，
+因此这里用 ``_FakeProvider`` 提供一份确定性的 ``RagflowConfig``。
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 from doc_process_studio.incident_report.application.ports import (
     KnowledgeChunk,
@@ -15,6 +18,8 @@ from doc_process_studio.incident_report.infrastructure.adapters.reference_contex
     CompositeReferenceContext,
     _build_retrieval_query,
 )
+from doc_process_studio.settings.application.ports import RagflowConfigProvider
+from doc_process_studio.settings.domain.values import RagflowConfig, SecretSource
 
 ENABLED_SECTIONS = "quick,impact,root_cause,follow_up"
 
@@ -37,6 +42,33 @@ class _FakeBase(ReferenceContextPort):
         return self.text, ["body-sections/common.md"], "heuristic"
 
 
+class _FakeProvider(RagflowConfigProvider):
+    def __init__(
+        self,
+        *,
+        enabled_sections: str = ENABLED_SECTIONS,
+        top_k: int = 3,
+        base_url: str = "",
+        api_key: str = "",
+        enabled: bool = False,
+    ) -> None:
+        self._config = RagflowConfig(
+            base_url=base_url,
+            api_key=api_key,
+            enabled=enabled,
+            source=SecretSource.NONE,
+            enabled_sections=enabled_sections,
+            top_k=top_k,
+        )
+
+    async def resolve(self, *, scope: str = "system") -> RagflowConfig:
+        del scope  # 伪造实现：匹配真实 Provider 的签名，测试中忽略该参数
+        return self._config
+
+    def invalidate(self, *, scope: str | None = None) -> None:
+        del scope  # 伪造实现：无缓存，无需失效
+
+
 def _chunk(content: str, doc_id: str = "d1", score: float = 0.9) -> KnowledgeChunk:
     return KnowledgeChunk(
         content=content,
@@ -47,15 +79,22 @@ def _chunk(content: str, doc_id: str = "d1", score: float = 0.9) -> KnowledgeChu
     )
 
 
-async def test_description_section_skips_knowledge() -> None:
-    base = _FakeBase()
-    retriever = AsyncMock()
-    comp = CompositeReferenceContext(
-        base=base,
+def _composite(
+    retriever: AsyncMock,
+    *,
+    enabled_sections: str = ENABLED_SECTIONS,
+    top_k: int = 3,
+) -> CompositeReferenceContext:
+    return CompositeReferenceContext(
+        base=_FakeBase(),
         retriever=retriever,
-        ragflow_enabled_sections=ENABLED_SECTIONS,
-        ragflow_top_k=3,
+        config_provider=_FakeProvider(enabled_sections=enabled_sections, top_k=top_k),
     )
+
+
+async def test_description_section_skips_knowledge() -> None:
+    retriever = AsyncMock()
+    comp = _composite(retriever)
     text, files, reason = await comp.resolve(
         model="m",
         section_id="description",
@@ -68,14 +107,8 @@ async def test_description_section_skips_knowledge() -> None:
 
 
 async def test_timeline_section_skips_knowledge() -> None:
-    base = _FakeBase()
     retriever = AsyncMock()
-    comp = CompositeReferenceContext(
-        base=base,
-        retriever=retriever,
-        ragflow_enabled_sections=ENABLED_SECTIONS,
-        ragflow_top_k=3,
-    )
+    comp = _composite(retriever)
     text, _, _ = await comp.resolve(
         model="m",
         section_id="timeline_item",
@@ -88,15 +121,9 @@ async def test_timeline_section_skips_knowledge() -> None:
 
 
 async def test_impact_section_appends_material() -> None:
-    base = _FakeBase()
     retriever = AsyncMock()
     retriever.retrieve = AsyncMock(return_value=[_chunk("NAS2 shutdown at 20:35 due to I/O overload")])
-    comp = CompositeReferenceContext(
-        base=base,
-        retriever=retriever,
-        ragflow_enabled_sections=ENABLED_SECTIONS,
-        ragflow_top_k=3,
-    )
+    comp = _composite(retriever)
     text, files, reason = await comp.resolve(
         model="m",
         section_id="impact",
@@ -107,7 +134,7 @@ async def test_impact_section_appends_material() -> None:
     assert "[RAGFlow · report.md]" in text
     assert "NAS2 shutdown at 20:35 due to I/O overload" in text
     assert "ragflow:1 chunks" in reason
-    retriever.retrieve.assert_awaited_once()
+    retriever.retrieve.assert_awaited_once_with(query=ANY, scope="history", top_k=3)
 
 
 async def test_material_block_carries_usage_notice() -> None:
@@ -116,15 +143,9 @@ async def test_material_block_carries_usage_notice() -> None:
     背景：素材描述的是其他事故。没有这条声明时，模型会把历史报告里的
     设备编号、时间戳、交易笔数照抄进新报告，产出看似翔实但全假的内容。
     """
-    base = _FakeBase()
     retriever = AsyncMock()
     retriever.retrieve = AsyncMock(return_value=[_chunk("NAS2 shutdown at 20:35")])
-    comp = CompositeReferenceContext(
-        base=base,
-        retriever=retriever,
-        ragflow_enabled_sections=ENABLED_SECTIONS,
-        ragflow_top_k=3,
-    )
+    comp = _composite(retriever)
     text, _, _ = await comp.resolve(
         model="m",
         section_id="impact",
@@ -138,15 +159,9 @@ async def test_material_block_carries_usage_notice() -> None:
 
 
 async def test_retriever_exception_degrades_to_base() -> None:
-    base = _FakeBase()
     retriever = AsyncMock()
     retriever.retrieve = AsyncMock(side_effect=RuntimeError("boom"))
-    comp = CompositeReferenceContext(
-        base=base,
-        retriever=retriever,
-        ragflow_enabled_sections=ENABLED_SECTIONS,
-        ragflow_top_k=3,
-    )
+    comp = _composite(retriever)
     text, files, reason = await comp.resolve(
         model="m",
         section_id="impact",
@@ -159,15 +174,9 @@ async def test_retriever_exception_degrades_to_base() -> None:
 
 
 async def test_no_hits_keeps_base_with_reason() -> None:
-    base = _FakeBase()
     retriever = AsyncMock()
     retriever.retrieve = AsyncMock(return_value=[])
-    comp = CompositeReferenceContext(
-        base=base,
-        retriever=retriever,
-        ragflow_enabled_sections=ENABLED_SECTIONS,
-        ragflow_top_k=3,
-    )
+    comp = _composite(retriever)
     text, files, reason = await comp.resolve(
         model="m",
         section_id="quick",
@@ -181,12 +190,7 @@ async def test_no_hits_keeps_base_with_reason() -> None:
 
 async def test_base_exception_does_not_propagate() -> None:
     retriever = AsyncMock()
-    comp = CompositeReferenceContext(
-        base=_FakeBase(),
-        retriever=retriever,
-        ragflow_enabled_sections=ENABLED_SECTIONS,
-        ragflow_top_k=3,
-    )
+    comp = _composite(retriever)
     # 强制 base.resolve 抛异常，composite 应降级为空 base 而非崩溃
     comp._base = AsyncMock()
     comp._base.resolve = AsyncMock(side_effect=RuntimeError("base down"))
@@ -198,6 +202,22 @@ async def test_base_exception_does_not_propagate() -> None:
         context_json="{}",
     )
     assert text.startswith("[fallback]")
+
+
+async def test_disabled_section_is_skipped() -> None:
+    """enabled_sections 不含当前章节时，即使 retriever 可用也不应检索。"""
+    retriever = AsyncMock()
+    retriever.retrieve = AsyncMock(return_value=[_chunk("x")])
+    comp = _composite(retriever, enabled_sections="impact")
+    text, _, _ = await comp.resolve(
+        model="m",
+        section_id="quick",
+        timeline_index=None,
+        prompt="p",
+        context_json="{}",
+    )
+    assert text == "[base] reference"
+    retriever.retrieve.assert_not_called()
 
 
 def test_query_builder_uses_english_and_entities() -> None:

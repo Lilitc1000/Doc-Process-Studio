@@ -37,205 +37,370 @@
           </p>
         </section>
 
-        <section v-if="isGlobalAdmin" class="settings-section">
-          <h3 class="settings-section-title">RAGFlow 知识库</h3>
+        <!-- 父容器：系统密钥（分组标题）。子卡片 = 各注册密钥槽位，RAGFlow 知识库是首个派生实例 -->
+        <section
+          v-if="isGlobalAdmin"
+          class="settings-section settings-section--secrets"
+        >
+          <h3 class="settings-section-title">系统密钥</h3>
           <p class="settings-section-desc">
-            全系统共享的连接信息与密钥。密钥加密后存入数据库，保存后立即生效，无需重启服务。
+            所有系统级密文凭据集中在此管理，加密后入库，保存后立即生效。新增第三方密钥只需在后端注册一个槽位，无需改动接口。
           </p>
 
-          <div class="selector-group">
-            <label id="settings-base-url-label" class="selector-label"
-              >Base URL</label
-            >
-            <base-input
-              v-model="baseUrlDraft"
-              :class="{ invalid: !!baseUrlError }"
-              placeholder="http://ragflow.example.com:10108"
-              aria-labelledby="settings-base-url-label"
-            />
-            <p v-if="baseUrlError" class="field-error">{{ baseUrlError }}</p>
-            <p v-else-if="baseUrlSourceHint" class="field-hint">
-              {{ baseUrlSourceHint }}
-            </p>
-          </div>
+          <!-- 子卡片：RAGFlow 知识库（首个派生实例：连接信息 + 其 API 密钥） -->
+          <article class="secret-child-card">
+            <header class="secret-child-head">
+              <h4 class="secret-child-title">RAGFlow 知识库</h4>
+              <p class="secret-child-desc">
+                全系统共享的连接信息与密钥。密钥加密后存入数据库，保存后立即生效，无需重启服务。
+              </p>
+            </header>
 
-          <div class="selector-group">
-            <label id="settings-api-key-label" class="selector-label"
-              >API 密钥</label
-            >
-
-            <div v-if="!keyEditing" class="secret-readonly">
-              <span
-                v-if="credential.configured"
-                class="secret-mask"
-                data-testid="secret-mask"
-                >{{ credential.maskedApiKey }}</span
+            <div class="selector-group">
+              <label id="settings-base-url-label" class="selector-label"
+                >Base URL</label
               >
-              <span v-else class="secret-mask secret-mask--empty">未设置</span>
-              <span
-                class="secret-badge"
-                :class="{ 'secret-badge--ok': credential.configured }"
-                >{{ credential.configured ? '已配置' : '未配置' }}</span
-              >
-              <base-button size="sm" @click="startEditKey">修改</base-button>
-            </div>
-
-            <div v-else class="secret-editing">
-              <password-input
-                v-model="apiKeyDraft"
-                placeholder="粘贴新的 API Key"
-                aria-labelledby="settings-api-key-label"
+              <base-input
+                v-model="baseUrlDraft"
+                :class="{ invalid: !!baseUrlError }"
+                placeholder="http://ragflow.example.com:10108"
+                aria-labelledby="settings-base-url-label"
               />
-              <base-button size="sm" @click="cancelEditKey">取消</base-button>
+              <p v-if="baseUrlError" class="field-error">{{ baseUrlError }}</p>
+              <p v-else-if="baseUrlSourceHint" class="field-hint">
+                {{ baseUrlSourceHint }}
+              </p>
             </div>
 
+            <div class="selector-group">
+              <label id="settings-api-key-label" class="selector-label"
+                >API 密钥</label
+              >
+
+              <div v-if="!keyEditing" class="secret-readonly">
+                <span
+                  v-if="ragflowApiKeySecret?.configured"
+                  class="secret-mask"
+                  data-testid="secret-mask"
+                  >{{ ragflowApiKeySecret.maskedValue }}</span
+                >
+                <span v-else class="secret-mask secret-mask--empty"
+                  >未设置</span
+                >
+                <span
+                  class="secret-badge"
+                  :class="{
+                    'secret-badge--ok': ragflowApiKeySecret?.configured,
+                  }"
+                  >{{
+                    ragflowApiKeySecret?.configured ? '已配置' : '未配置'
+                  }}</span
+                >
+                <base-button size="sm" @click="startEditKey">修改</base-button>
+              </div>
+
+              <div v-else class="secret-editing">
+                <password-input
+                  v-model="apiKeyDraft"
+                  placeholder="粘贴新的 API Key"
+                  aria-labelledby="settings-api-key-label"
+                />
+                <base-button size="sm" @click="saveApiKey">保存</base-button>
+                <base-button size="sm" @click="cancelEditKey">取消</base-button>
+              </div>
+
+              <p class="field-hint">
+                <template v-if="keyEditing">
+                  明文只用于本次输入；服务端加密保存，之后不再回显，只会显示掩码。
+                </template>
+                <template v-else-if="ragflowApiKeySecret?.updatedAt">
+                  最后更新：{{ formatTime(ragflowApiKeySecret.updatedAt) }}
+                </template>
+                <template v-else> 清空输入框不会清除已保存的密钥。 </template>
+              </p>
+            </div>
+
+            <div class="selector-group selector-group--inline">
+              <label id="settings-enabled-label" class="selector-label"
+                >启用 RAGFlow</label
+              >
+              <base-switch
+                v-model="enabledDraft"
+                aria-labelledby="settings-enabled-label"
+              />
+            </div>
+
+            <div class="selector-group">
+              <div class="dataset-picker-head">
+                <label id="settings-datasets-label" class="selector-label"
+                  >报告检索使用的知识库</label
+                >
+                <base-button
+                  size="sm"
+                  :disabled="datasetsLoading"
+                  @click="loadDatasets"
+                >
+                  {{ datasetsLoading ? '读取中…' : '刷新列表' }}
+                </base-button>
+              </div>
+
+              <p class="field-hint">
+                从当前 RAGFlow
+                连接中选择；勾选的知识库会参与事故报告的检索增强。 更换 Base URL
+                或密钥后，请保存再刷新列表。
+              </p>
+
+              <p v-if="datasetsError" class="field-error">
+                {{ datasetsError }}
+              </p>
+              <p v-else-if="datasetsLoading" class="field-hint">
+                正在读取知识库列表…
+              </p>
+              <p v-else-if="!datasetOptions.length" class="field-hint">
+                当前连接下没有可访问的知识库。
+              </p>
+
+              <ul v-else class="dataset-list">
+                <li
+                  v-for="ds in datasetOptions"
+                  :key="ds.id"
+                  class="dataset-item"
+                >
+                  <label class="dataset-item-label">
+                    <input
+                      type="checkbox"
+                      :checked="selectedDatasetIds.includes(ds.id)"
+                      @change="toggleDataset(ds.id)"
+                    />
+                    <span class="dataset-item-name">{{ ds.name }}</span>
+                    <span class="dataset-item-meta">
+                      {{ ds.documentCount }} 文档 · {{ ds.chunkCount }} 片段
+                    </span>
+                  </label>
+                </li>
+              </ul>
+
+              <p v-if="missingDatasetIds.length" class="field-error">
+                以下已保存的知识库在当前连接中不存在，请取消勾选或改选：
+                {{ missingDatasetIds.join('、') }}
+              </p>
+            </div>
+
+            <div class="settings-grid-two">
+              <div class="selector-group">
+                <label id="settings-threshold-label" class="selector-label"
+                  >相似度阈值</label
+                >
+                <base-input
+                  v-model="thresholdDraft"
+                  :class="{ invalid: !!thresholdError }"
+                  inputmode="decimal"
+                  aria-labelledby="settings-threshold-label"
+                />
+                <p v-if="thresholdError" class="field-error">
+                  {{ thresholdError }}
+                </p>
+                <p v-else class="field-hint">0.0 ~ 1.0，越高越严格</p>
+              </div>
+
+              <div class="selector-group">
+                <label id="settings-topk-label" class="selector-label"
+                  >检索条数 topK</label
+                >
+                <base-input
+                  v-model="topKDraft"
+                  :class="{ invalid: !!topKError }"
+                  inputmode="numeric"
+                  aria-labelledby="settings-topk-label"
+                />
+                <p v-if="topKError" class="field-error">{{ topKError }}</p>
+                <p v-else class="field-hint">1 ~ 20，单次注入的素材块上限</p>
+              </div>
+            </div>
+
+            <div class="settings-divider" />
+
+            <h5 class="settings-subtitle">高级检索参数</h5>
             <p class="field-hint">
-              <template v-if="keyEditing">
-                明文只用于本次输入；服务端加密保存，之后不再回显，只会显示掩码。
-              </template>
-              <template v-else-if="credential.updatedAt">
-                最后更新：{{ formatTime(credential.updatedAt) }}
-              </template>
-              <template v-else> 清空输入框不会清除已保存的密钥。 </template>
+              以下参数库里未配置时回落内置默认值；修改后立即对所有 RAGFlow
+              检索生效。
             </p>
-          </div>
 
-          <div class="selector-group selector-group--inline">
-            <label id="settings-enabled-label" class="selector-label"
-              >启用 RAGFlow</label
-            >
-            <base-switch
-              v-model="enabledDraft"
-              aria-labelledby="settings-enabled-label"
-            />
-          </div>
+            <div class="settings-grid-two">
+              <div class="selector-group">
+                <label id="settings-timeout-label" class="selector-label"
+                  >检索请求超时（秒）</label
+                >
+                <base-input
+                  v-model="timeoutDraft"
+                  :class="{ invalid: !!timeoutError }"
+                  inputmode="decimal"
+                  aria-labelledby="settings-timeout-label"
+                />
+                <p v-if="timeoutError" class="field-error">
+                  {{ timeoutError }}
+                </p>
+                <p v-else class="field-hint">0 &lt; t ≤ 600</p>
+              </div>
 
-          <div class="selector-group">
-            <div class="dataset-picker-head">
-              <label id="settings-datasets-label" class="selector-label"
-                >报告检索使用的知识库</label
+              <div class="selector-group">
+                <label id="settings-parse-timeout-label" class="selector-label"
+                  >解析触发超时（秒）</label
+                >
+                <base-input
+                  v-model="parseTimeoutDraft"
+                  :class="{ invalid: !!parseTimeoutError }"
+                  inputmode="decimal"
+                  aria-labelledby="settings-parse-timeout-label"
+                />
+                <p v-if="parseTimeoutError" class="field-error">
+                  {{ parseTimeoutError }}
+                </p>
+                <p v-else class="field-hint">0 &lt; t ≤ 600</p>
+              </div>
+            </div>
+
+            <div class="selector-group">
+              <label id="settings-max-chunks-label" class="selector-label"
+                >单文档最大片段数</label
               >
+              <base-input
+                v-model="maxChunksDraft"
+                :class="{ invalid: !!maxChunksError }"
+                inputmode="numeric"
+                aria-labelledby="settings-max-chunks-label"
+              />
+              <p v-if="maxChunksError" class="field-error">
+                {{ maxChunksError }}
+              </p>
+              <p v-else class="field-hint">
+                1 ~ 50，单次注入同一文档的片段上限
+              </p>
+            </div>
+
+            <div class="selector-group">
+              <label class="selector-label">启用知识增强的章节</label>
+              <p class="field-hint">
+                勾选的事故报告章节会附带 RAGFlow 检索增强；未勾选则不使用。
+              </p>
+              <div class="section-checkbox-grid">
+                <label
+                  v-for="opt in ragflowKnowledgeSections"
+                  :key="opt.id"
+                  class="section-checkbox"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="isSectionEnabled(opt.id)"
+                    @change="toggleSection(opt.id)"
+                  />
+                  <span>{{ opt.label }}</span>
+                </label>
+              </div>
+            </div>
+
+            <p v-if="fallbackHint" class="settings-hint settings-hint--warn">
+              {{ fallbackHint }}
+            </p>
+
+            <div class="settings-actions">
               <base-button
-                size="sm"
-                :disabled="datasetsLoading"
-                @click="loadDatasets"
+                variant="primary"
+                :disabled="
+                  saving ||
+                  !!baseUrlError ||
+                  !!thresholdError ||
+                  !!topKError ||
+                  !!timeoutError ||
+                  !!parseTimeoutError ||
+                  !!maxChunksError
+                "
+                @click="onSave"
               >
-                {{ datasetsLoading ? '读取中…' : '刷新列表' }}
+                {{ saving ? '保存中…' : '保存' }}
+              </base-button>
+              <base-button :disabled="testing || saving" @click="onTest">
+                {{ testing ? '测试中…' : '测试连接' }}
+              </base-button>
+              <base-button
+                v-if="ragflowApiKeySecret?.configured"
+                variant="danger"
+                :disabled="saving"
+                @click="confirmClearVisible = true"
+              >
+                清除密钥
               </base-button>
             </div>
 
-            <p class="field-hint">
-              从当前 RAGFlow 连接中选择；勾选的知识库会参与事故报告的检索增强。
-              更换 Base URL 或密钥后，请保存再刷新列表。
-            </p>
-
-            <p v-if="datasetsError" class="field-error">{{ datasetsError }}</p>
-            <p v-else-if="datasetsLoading" class="field-hint">
-              正在读取知识库列表…
-            </p>
-            <p v-else-if="!datasetOptions.length" class="field-hint">
-              当前连接下没有可访问的知识库。
-            </p>
-
-            <ul v-else class="dataset-list">
-              <li
-                v-for="ds in datasetOptions"
-                :key="ds.id"
-                class="dataset-item"
-              >
-                <label class="dataset-item-label">
-                  <input
-                    type="checkbox"
-                    :checked="selectedDatasetIds.includes(ds.id)"
-                    @change="toggleDataset(ds.id)"
-                  />
-                  <span class="dataset-item-name">{{ ds.name }}</span>
-                  <span class="dataset-item-meta">
-                    {{ ds.documentCount }} 文档 · {{ ds.chunkCount }} 片段
-                  </span>
-                </label>
-              </li>
-            </ul>
-
-            <p v-if="missingDatasetIds.length" class="field-error">
-              以下已保存的知识库在当前连接中不存在，请取消勾选或改选：
-              {{ missingDatasetIds.join('、') }}
-            </p>
-          </div>
-
-          <div class="settings-grid-two">
-            <div class="selector-group">
-              <label id="settings-threshold-label" class="selector-label"
-                >相似度阈值</label
-              >
-              <base-input
-                v-model="thresholdDraft"
-                :class="{ invalid: !!thresholdError }"
-                inputmode="decimal"
-                aria-labelledby="settings-threshold-label"
-              />
-              <p v-if="thresholdError" class="field-error">
-                {{ thresholdError }}
-              </p>
-              <p v-else class="field-hint">0.0 ~ 1.0，越高越严格</p>
-            </div>
-
-            <div class="selector-group">
-              <label id="settings-topk-label" class="selector-label"
-                >检索条数 topK</label
-              >
-              <base-input
-                v-model="topKDraft"
-                :class="{ invalid: !!topKError }"
-                inputmode="numeric"
-                aria-labelledby="settings-topk-label"
-              />
-              <p v-if="topKError" class="field-error">{{ topKError }}</p>
-              <p v-else class="field-hint">1 ~ 20，单次注入的素材块上限</p>
-            </div>
-          </div>
-
-          <p v-if="fallbackHint" class="settings-hint settings-hint--warn">
-            {{ fallbackHint }}
-          </p>
-
-          <div class="settings-actions">
-            <base-button
-              variant="primary"
-              :disabled="
-                saving || !!baseUrlError || !!thresholdError || !!topKError
-              "
-              @click="onSave"
+            <p
+              v-if="actionMessage"
+              class="settings-hint"
+              :class="{
+                'settings-hint--warn': actionMessageKind === 'warn',
+                'settings-hint--error': actionMessageKind === 'error',
+              }"
             >
-              {{ saving ? '保存中…' : '保存' }}
-            </base-button>
-            <base-button :disabled="testing || saving" @click="onTest">
-              {{ testing ? '测试中…' : '测试连接' }}
-            </base-button>
-            <base-button
-              v-if="credential.configured"
-              variant="danger"
-              :disabled="saving"
-              @click="confirmClearVisible = true"
-            >
-              清除密钥
-            </base-button>
-          </div>
+              {{ actionMessage }}
+            </p>
+          </article>
 
-          <p
-            v-if="actionMessage"
-            class="settings-hint"
-            :class="{
-              'settings-hint--warn': actionMessageKind === 'warn',
-              'settings-hint--error': actionMessageKind === 'error',
-            }"
+          <!-- 其余派生槽位（当前暂无；新增第三方密钥后自动出现，复用同一渲染模式） -->
+          <article
+            v-for="secret in otherSecrets"
+            :key="secret.key"
+            class="secret-child-card"
           >
-            {{ actionMessage }}
-          </p>
+            <header class="secret-child-head">
+              <h4 class="secret-child-title">{{ secret.label }}</h4>
+              <p class="secret-child-desc">{{ secret.description }}</p>
+            </header>
+
+            <div class="secret-readonly">
+              <span
+                class="secret-badge"
+                :class="{ 'secret-badge--ok': secret.configured }"
+                >{{ secret.configured ? '已配置' : '未配置' }}</span
+              >
+              <span
+                v-if="secret.configured"
+                class="secret-mask"
+                :data-testid="`system-secret-mask-${secret.key}`"
+                >{{ secret.maskedValue }}</span
+              >
+              <span v-else class="secret-mask secret-mask--empty">未设置</span>
+            </div>
+            <p class="field-hint">{{ secret.description }}</p>
+
+            <div v-if="secretEditingKey === secret.key" class="secret-editing">
+              <password-input
+                v-model="secretDraftValue"
+                placeholder="粘贴新的密钥"
+                :aria-labelledby="`secret-${secret.key}`"
+              />
+              <base-button size="sm" @click="saveSystemSecret(secret)"
+                >保存</base-button
+              >
+              <base-button size="sm" @click="cancelEditSecret"
+                >取消</base-button
+              >
+            </div>
+            <div v-else class="settings-actions">
+              <base-button size="sm" @click="startEditSecret(secret)"
+                >修改</base-button
+              >
+              <base-button
+                v-if="secret.configured"
+                size="sm"
+                variant="danger"
+                @click="removeSystemSecret(secret)"
+                >清除</base-button
+              >
+            </div>
+          </article>
         </section>
 
         <section v-else class="settings-section settings-section--muted">
-          <h3 class="settings-section-title">RAGFlow 知识库</h3>
+          <h3 class="settings-section-title">系统密钥</h3>
           <p class="settings-section-desc">
             连接信息与密钥是全系统共享的，只有管理员可以查看和修改。
           </p>
@@ -246,7 +411,7 @@
     <base-confirm-dialog
       v-model="confirmClearVisible"
       title="清除 API 密钥"
-      message="清除后，如果环境变量里也没有兜底密钥，知识库检索与报告参考将不可用。确定要清除吗？"
+      message="清除后，如果未配置任何其他可用密钥，知识库检索与报告参考将不可用。确定要清除吗？"
       confirm-text="清除"
       confirm-variant="danger"
       @confirm="onClearKey"
@@ -265,11 +430,17 @@ import BaseInput from '@shared/ui/BaseInput.vue';
 import BaseSwitch from '@shared/ui/BaseSwitch.vue';
 import PasswordInput from '@shared/ui/PasswordInput.vue';
 import { useAuthStore } from '@modules/auth';
-import { fetchRagflowDatasets } from '../api/settings';
+import {
+  fetchRagflowDatasets,
+  listSystemSecrets,
+  setSystemSecret,
+  clearSystemSecret,
+} from '../api/settings';
 import { useUserSettingsStore } from '../store/user-settings';
 import type {
   ModelPreferences,
   RagflowDatasetSummary,
+  SystemSecret,
 } from '../types/settings';
 
 const appStore = useAppStore();
@@ -286,6 +457,9 @@ const { loadAvailableModels } = useCatalogLoader();
  */
 const isGlobalAdmin = computed(() => authStore.isGlobalAdmin);
 
+/** RAGFlow API Key 在系统密钥清单里的槽位 key（首个派生实例） */
+const RAGFLOW_API_KEY = 'ragflow.api_key';
+
 const modelOptions = computed(() =>
   appStore.availableModels.map((model) => ({ label: model, value: model })),
 );
@@ -295,6 +469,10 @@ const enabledDraft = ref(false);
 const apiKeyDraft = ref('');
 const thresholdDraft = ref('0.55');
 const topKDraft = ref('3');
+const timeoutDraft = ref('15');
+const parseTimeoutDraft = ref('60');
+const maxChunksDraft = ref('2');
+const enabledSectionsDraft = ref('');
 
 /** 当前连接下可访问的知识库（列表随连接变化，不在前端缓存超时） */
 const datasetOptions = ref<RagflowDatasetSummary[]>([]);
@@ -304,6 +482,67 @@ const datasetsError = ref('');
 const selectedDatasetIds = ref<string[]>([]);
 const keyEditing = ref(false);
 const confirmClearVisible = ref(false);
+/** 通用系统密钥（泛化自 RAGFlow 专属实现） */
+const systemSecrets = ref<SystemSecret[]>([]);
+const secretEditingKey = ref<string | null>(null);
+const secretDraftValue = ref('');
+
+/** RAGFlow 知识库对应的 API 密钥槽位（从系统密钥清单中按 key 取出） */
+const ragflowApiKeySecret = computed<SystemSecret | undefined>(() =>
+  systemSecrets.value.find((s) => s.key === RAGFLOW_API_KEY),
+);
+
+/** 除 RAGFlow 之外的其它派生密钥槽位（当前暂无，新增第三方密钥后自动出现） */
+const otherSecrets = computed(() =>
+  systemSecrets.value.filter((s) => s.key !== RAGFLOW_API_KEY),
+);
+
+const loadSystemSecrets = async () => {
+  try {
+    const result = await listSystemSecrets();
+    systemSecrets.value = result.secrets;
+  } catch {
+    // 非管理员或加载失败：静默，不阻塞设置页其余功能
+  }
+};
+
+const startEditSecret = (secret: SystemSecret) => {
+  secretEditingKey.value = secret.key;
+  secretDraftValue.value = '';
+};
+
+const cancelEditSecret = () => {
+  secretEditingKey.value = null;
+  secretDraftValue.value = '';
+};
+
+const saveSystemSecret = async (secret: SystemSecret) => {
+  const value = secretDraftValue.value.trim();
+  if (!value) {
+    cancelEditSecret();
+    return;
+  }
+  try {
+    await setSystemSecret(secret.key, value);
+    secretEditingKey.value = null;
+    secretDraftValue.value = '';
+    await loadSystemSecrets();
+  } catch {
+    actionMessageKind.value = 'error';
+    actionMessage.value = '保存密钥失败，请稍后重试。';
+  }
+};
+
+const removeSystemSecret = async (secret: SystemSecret) => {
+  try {
+    await clearSystemSecret(secret.key);
+    await loadSystemSecrets();
+  } catch {
+    actionMessageKind.value = 'error';
+    actionMessage.value = '清除密钥失败，请稍后重试。';
+  }
+};
+
 /** 草稿是否已用服务端值初始化过（只做一次，避免覆盖用户编辑） */
 const draftsInitialized = ref(false);
 
@@ -313,16 +552,6 @@ const actionMessageKind = ref<'info' | 'warn' | 'error'>('info');
 
 const saving = computed(() => settingsStore.saving);
 const testing = computed(() => settingsStore.testing);
-const credential = computed(
-  () =>
-    settingsStore.ragflow?.credential ?? {
-      configured: false,
-      maskedApiKey: '',
-      hint: null,
-      source: 'none' as const,
-      updatedAt: null,
-    },
-);
 
 const baseUrlError = computed(() => {
   const value = baseUrlDraft.value.trim();
@@ -334,17 +563,15 @@ const baseUrlError = computed(() => {
 });
 
 const baseUrlSourceHint = computed(() =>
-  settingsStore.ragflow?.baseUrlSource === 'env'
-    ? '当前值来自环境变量兜底；保存后将改为库内配置。'
+  settingsStore.ragflow?.baseUrlSource === 'default'
+    ? '当前值为内置默认值；保存后将改为库内配置。'
     : '',
 );
 
 const fallbackHint = computed(() => {
   const ragflow = settingsStore.ragflow;
-  if (!ragflow || ragflow.credential.configured) return '';
-  if (ragflow.credential.source === 'env') {
-    return '当前未配置系统级密钥，正在使用环境变量中的兜底密钥。';
-  }
+  const secret = ragflowApiKeySecret.value;
+  if (!ragflow || secret?.configured) return '';
   return '当前尚未配置任何可用密钥，知识库检索与报告参考将不可用。';
 });
 
@@ -374,6 +601,10 @@ const syncDrafts = () => {
   enabledDraft.value = ragflow?.enabled ?? false;
   thresholdDraft.value = String(ragflow?.similarityThreshold ?? 0.55);
   topKDraft.value = String(ragflow?.topK ?? 3);
+  timeoutDraft.value = String(ragflow?.timeoutSeconds ?? 15);
+  parseTimeoutDraft.value = String(ragflow?.parseTimeoutSeconds ?? 60);
+  maxChunksDraft.value = String(ragflow?.maxChunksPerDocument ?? 2);
+  enabledSectionsDraft.value = ragflow?.enabledSections ?? '';
   selectedDatasetIds.value = parseHistoryDatasetIds(
     ragflow?.datasetsJson ?? '',
   );
@@ -457,6 +688,60 @@ const topKError = computed(() => {
   return '';
 });
 
+const timeoutError = computed(() => {
+  const raw = timeoutDraft.value.trim();
+  if (!raw) return '不能为空';
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0 || value > 600)
+    return '需为 0 < t ≤ 600';
+  return '';
+});
+
+const parseTimeoutError = computed(() => {
+  const raw = parseTimeoutDraft.value.trim();
+  if (!raw) return '不能为空';
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0 || value > 600)
+    return '需为 0 < t ≤ 600';
+  return '';
+});
+
+const maxChunksError = computed(() => {
+  const raw = maxChunksDraft.value.trim();
+  if (!raw) return '不能为空';
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 50) return '需为 1 ~ 50';
+  return '';
+});
+
+/** 启用知识增强的报告章节：闭集，与后端 INCIDENT_REPORT_SECTION_REFERENCE_MAP 对齐 */
+const ragflowKnowledgeSections = [
+  { id: 'quick', label: '快速填充（全部字段）' },
+  { id: 'description', label: '事件描述' },
+  { id: 'timeline', label: '时间线' },
+  { id: 'timeline_item', label: '时间线条目' },
+  { id: 'impact', label: '影响' },
+  { id: 'root_cause', label: '根本原因' },
+  { id: 'follow_up', label: '后续行动' },
+];
+
+const normalizeSections = (raw: string): string[] =>
+  (raw ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+const isSectionEnabled = (id: string): boolean =>
+  normalizeSections(enabledSectionsDraft.value).includes(id);
+
+const toggleSection = (id: string) => {
+  const current = normalizeSections(enabledSectionsDraft.value);
+  const next = current.includes(id)
+    ? current.filter((x) => x !== id)
+    : [...current, id];
+  enabledSectionsDraft.value = next.join(',');
+};
+
 const startEditKey = () => {
   // 刻意不回填掩码：掩码不是密钥，回填会让用户误以为可以直接保存
   apiKeyDraft.value = '';
@@ -467,6 +752,27 @@ const startEditKey = () => {
 const cancelEditKey = () => {
   apiKeyDraft.value = '';
   keyEditing.value = false;
+};
+
+/** 单独保存 RAGFlow API 密钥（走通用系统密钥端点，与连接设置分离） */
+const saveApiKey = async () => {
+  const newKey = apiKeyDraft.value.trim();
+  if (!newKey) {
+    cancelEditKey();
+    return;
+  }
+  actionMessage.value = '';
+  try {
+    await setSystemSecret(RAGFLOW_API_KEY, newKey);
+    apiKeyDraft.value = '';
+    keyEditing.value = false;
+    await loadSystemSecrets();
+    actionMessageKind.value = 'info';
+    actionMessage.value = '已保存 API 密钥，立即生效。';
+  } catch {
+    actionMessageKind.value = 'error';
+    actionMessage.value = '保存密钥失败，请稍后重试。';
+  }
 };
 
 const onSelectModel = async (model: string) => {
@@ -510,10 +816,6 @@ const onSave = async () => {
   if (nextBaseUrl !== ragflow.baseUrl) payload.baseUrl = nextBaseUrl;
   if (enabledDraft.value !== ragflow.enabled)
     payload.enabled = enabledDraft.value;
-  // 四态语义：只有用户真的输入了新密钥才提交明文；空串等于"不变"
-  const newKey = apiKeyDraft.value.trim();
-  if (keyEditing.value && newKey) payload.apiKey = newKey;
-
   // 检索参数：只在有改动时提交，空串表示撤销库内覆盖
   const nextDatasets = buildDatasetsJson(selectedDatasetIds.value);
   if (nextDatasets !== (ragflow.datasetsJson ?? '').trim())
@@ -523,6 +825,20 @@ const onSave = async () => {
     payload.similarityThreshold = nextThreshold;
   const nextTopK = Number(topKDraft.value);
   if (nextTopK !== ragflow.topK) payload.topK = nextTopK;
+  const nextTimeout = Number(timeoutDraft.value);
+  if (nextTimeout !== ragflow.timeoutSeconds)
+    payload.timeoutSeconds = nextTimeout;
+  const nextParseTimeout = Number(parseTimeoutDraft.value);
+  if (nextParseTimeout !== ragflow.parseTimeoutSeconds)
+    payload.parseTimeoutSeconds = nextParseTimeout;
+  const nextMaxChunks = Number(maxChunksDraft.value);
+  if (nextMaxChunks !== ragflow.maxChunksPerDocument)
+    payload.maxChunksPerDocument = nextMaxChunks;
+  const nextSections = normalizeSections(enabledSectionsDraft.value).join(',');
+  const savedSections = normalizeSections(ragflow.enabledSections ?? '').join(
+    ',',
+  );
+  if (nextSections !== savedSections) payload.enabledSections = nextSections;
 
   if (Object.keys(payload).length === 0) {
     actionMessageKind.value = 'info';
@@ -560,8 +876,8 @@ const onTest = async () => {
 const onClearKey = async () => {
   actionMessage.value = '';
   try {
-    await settingsStore.removeApiKey();
-    syncDrafts();
+    await clearSystemSecret(RAGFLOW_API_KEY);
+    await loadSystemSecrets();
     actionMessageKind.value = 'info';
     actionMessage.value = '已清除系统级密钥。';
   } catch {
@@ -574,8 +890,7 @@ watch(
   // 只在**首次加载成功**时把服务端值灌进草稿区。
   //
   // 不要监听 `settingsStore.ragflow` 本身：`ragflow` 是服务端状态的镜像，任何一次
-  // 重新加载都会换掉它的引用，从而把用户此刻正在编辑的 Base URL / 密钥草稿、
-  // 以及刚拨动的开关一并重置回去（"我点了它自己变回来"就是这么来的）。
+  // 重新加载都会换掉它的引用，从而把用户此刻正在编辑的草稿重置回去（"我点了它自己变回来"就是这么来的）。
   // 之后的草稿变化只应该由用户操作或保存成功后的显式同步触发。
   () => settingsStore.loaded,
   (isLoaded) => {
@@ -584,6 +899,7 @@ watch(
       draftsInitialized.value = true;
       // 只有管理员能读知识库列表（非管理员会拿到 403，静默跳过即可）
       if (isGlobalAdmin.value) void loadDatasets();
+      void loadSystemSecrets();
     }
   },
   { immediate: true },
@@ -593,6 +909,7 @@ onMounted(async () => {
   await loadAvailableModels();
   await settingsStore.loadSettings();
   applyServerPreferences();
+  if (isGlobalAdmin.value) void loadSystemSecrets();
 });
 </script>
 

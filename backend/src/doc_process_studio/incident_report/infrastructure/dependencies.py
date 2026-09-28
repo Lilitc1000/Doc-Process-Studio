@@ -5,7 +5,6 @@
 
 from functools import lru_cache
 
-from ...common.infrastructure.config import settings
 from ...settings.infrastructure.dependencies import get_ragflow_config_provider
 from ..application.services.analytics_service import AnalyticsService
 from ..application.services.audit_query_service import AuditQueryService
@@ -116,17 +115,11 @@ def get_reference_context() -> CompositeReferenceContext:
 
     retriever = RagflowKnowledgeRetriever(
         config_provider=get_ragflow_config_provider(),
-        timeout_seconds=settings.ragflow_timeout_seconds,
-        similarity_threshold=settings.ragflow_similarity_threshold,
-        top_k=settings.ragflow_top_k,
-        datasets_json=settings.ragflow_datasets_json,
-        max_chunks_per_document=settings.ragflow_max_chunks_per_document,
     )
     return CompositeReferenceContext(
         base=SkillReferenceContext(),
         retriever=retriever,
-        ragflow_enabled_sections=settings.ragflow_enabled_sections,
-        ragflow_top_k=settings.ragflow_top_k,
+        config_provider=get_ragflow_config_provider(),
     )
 
 

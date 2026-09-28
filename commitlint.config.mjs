@@ -5,7 +5,7 @@ export default {
     'scope-enum': [
       2,
       'always',
-      ['frontend', 'backend', 'chat', 'skill', 'incident-report', 'knowledge-base', 'auth', 'infra'],
+      ['frontend', 'backend', 'settings', 'chat', 'skill', 'incident-report', 'knowledge-base', 'auth', 'infra'],
     ],
     'scope-empty': [2, 'never'],
   },

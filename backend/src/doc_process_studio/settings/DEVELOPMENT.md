@@ -21,7 +21,7 @@ settings/
 │   ├── ragflow_probe.py         # 复用 RagflowClient 做连通性自检
 │   └── dependencies.py          # 依赖装配（**全部为单例，见下方说明**）
 └── router/                      # 用户接口层
-    ├── settings.py              # 5 个端点
+    ├── settings.py              # 8 个端点（5 个 RAGFlow/偏好 + 3 个通用系统密钥）
     └── schemas/                 # 请求 / 响应模型
 ```
 
@@ -33,13 +33,15 @@ settings/
 | `system_secrets` | 系统级**密文**凭据（`ragflow.api_key`） | 让「敏感值不可能被误序列化进 API 响应」成为**结构保证**，而不是靠"记得排除那个字段"的代码纪律 |
 | `user_settings` | 用户级**非敏感**偏好（模型选择），按 `user_id` 隔离，外键级联删除 | — |
 
-## 三级回退链
+## 两级回退链
 
 `SqlRagflowConfigProvider.resolve(scope="system")` 按以下顺序解析：
 
 1. **系统级配置**（`system_settings` + `system_secrets` 解密结果）
-2. **环境变量兜底**（`RAGFLOW_BASE_URL` / `RAGFLOW_API_KEY` / `RAGFLOW_ENABLED`）
+2. **内置默认值兜底**（`values.py` 中的 `DEFAULT_RAGFLOW_*` 常量，如 `DEFAULT_RAGFLOW_BASE_URL` / `DEFAULT_RAGFLOW_API_KEY` / `DEFAULT_RAGFLOW_ENABLED`）
 3. **不可用**（`RagflowConfig.disabled()`，消费方走既有的"返回空容器"降级路径）
+
+> ⚠️ **已从链路中移除环境变量兜底**：RAGFlow 的全部配置（Base URL、API Key、启用开关、检索参数、启用章节）均由管理员在「系统设置」页写入并加密入库，不再读取 `.env` 里的 `RAGFLOW_*` 变量。修改后立即生效，无需改 `.env` 或重启。
 
 两个细节值得强调：
 
@@ -48,7 +50,7 @@ settings/
 - **`enabled` 以库内值为准**：库里写了 `false`，即使 env 里是 `true` 也停用。
   这样"管理员在页面上关掉 RAGFlow"才是真的关掉。
 
-### env 兜底是「按项、随时」生效，不是「启动那一次」
+### 默认值兜底是按项、随时生效，不是「启动那一次」
 
 这是最容易被理解错的地方：**兜底是按单个配置项判定的，而且每次缓存过期后重新求值**
 （不是只在启动时读一次）。所以准确的语义是「库里有就用库里的，那一项没有才用 env」，
@@ -56,18 +58,65 @@ settings/
 
 | 情形 | 结果 |
 |---|---|
-| 三项都由管理员在页面保存过 | env 的这三个变量**完全不参与**，改它们没有任何效果 |
-| 只保存了密钥，没动 Base URL | Base URL 仍来自 env，密钥来自库 |
-| 在页面点「清除密钥」 | 库里那行没了 → **回落 env**（若 env 有值），设置页会显示"正在使用环境变量兜底" |
+| 三项都由管理员在页面保存过 | 使用库内值，与内置默认值无关 |
+| 只保存了密钥，没动 Base URL | Base URL 回落内置默认值，密钥来自库 |
+| 在页面点「清除密钥」 | 库里那行没了 → **回落内置默认值**，设置页会显示"当前值为内置默认值" |
 
-最后一行是刻意的设计而非缺陷：env 兜底存在的意义就是"库还没配时别让功能直接断"。
-但要清楚它的代价 —— **只要 env 里还有密钥，「清除」就不是真的关掉**。
-想让某一项彻底与 env 脱钩，正确做法是**把 `.env.*` 里那一行删掉**，而不是再写一个
-"从 env 播种到库"的机制：播种同样要读 env，等于把同一个值换个地方存，还多出一个
-"清除后被重新灌回来"的坑（除非再加标记位）。
-本仓库的选择是保留这条回退链，把它的状态**显式暴露**出去 —— `ragflow.base_url_source` /
-`ragflow.enabled_source` / `credential.source` 三个字段会如实报告当前值来自 `system` 还是 `env`，
-设置页据此给出提示。
+最后一行是刻意的设计而非缺陷：内置默认值兜底存在的意义就是"库还没配时别让功能直接断"。
+本仓库的选择是把这条回退链的状态**显式暴露**出去 —— `ragflow.base_url_source` /
+`ragflow.enabled_source` 两个字段会如实报告连接配置当前值来自 `system`（库内配置）还是 `default`（内置默认值）；
+密钥（如 `ragflow.api_key`）的"是否已配置 / 掩码 / 来源"则统一由 `GET /api/settings/secrets`
+提供，设置页据此给出"当前值为内置默认值"之类的提示。
+
+### 设置页可配置的 RAGFlow 非密钥项
+
+管理员在「系统设置 → 系统密钥（RAGFlow 知识库子卡）」里维护以下非密钥项，保存后立即生效
+（解析逻辑见上方两级回退链；各值未配置时回落对应的 `DEFAULT_RAGFLOW_*` 内置默认值）：
+
+| 项 | 字段 | 内置默认值 | 说明 |
+|---|---|---|---|
+| Base URL | `ragflow.base_url` | 空 | RAGFlow 服务地址；清空表示撤销库内覆盖、回落内置默认值 |
+| 启用 RAGFlow | `ragflow.enabled` | `False` | 总开关 |
+| 报告检索使用的知识库 | `ragflow.datasets_json` | `{"history":["f05e5a4aadac11f1b9211b18c23af0c8"]}` | `scope→dataset_id` 映射；决定报告侧检索命中哪个 dataset |
+| 相似度阈值 | `ragflow.similarity_threshold` | `0.55` | 低于该分的 chunk 不纳入参考 |
+| 检索条数 | `ragflow.top_k` | `6` | 每个章节最多取几条历史样本 |
+| 检索超时(秒) | `ragflow.timeout_seconds` | `15.0` | 单次检索的 http 超时 |
+| 解析触发超时(秒) | `ragflow.parse_timeout_seconds` | `60.0` | 触发 RAGFlow 解析任务的等待上限 |
+| 单文档最大片段数 | `ragflow.max_chunks_per_document` | `2` | 单文档切块上限，超出部分跳过 |
+| **启用知识增强的章节** | `ragflow.enabled_sections` | `quick,impact,root_cause,follow_up` | 见下 |
+
+#### 启用知识增强的章节（enabled_sections）
+
+控制「生成事故报告时，哪些章节会去 RAGFlow 的 `history` 知识库检索历史报告样本并注入 prompt」。
+它是一段逗号分隔的 section id 集合，取值必须落在 `incident_report` 模块的
+`INCIDENT_REPORT_SECTION_REFERENCE_MAP` 闭集内：
+
+| section id | 含义 |
+|---|---|
+| `quick` | 快速填充（一次性生成全部字段） |
+| `description` | 事件描述 |
+| `timeline` | 时间线 |
+| `timeline_item` | 时间线条目 |
+| `impact` | 影响 |
+| `root_cause` | 根本原因 |
+| `follow_up` | 后续行动 |
+
+页面上以一组复选框呈现（与上面映射一一对应），默认值勾选 `quick` / `impact` / `root_cause` / `follow_up`。
+
+运行期行为（消费方 `CompositeReferenceContext.resolve()`）：
+
+- 把保存的字符串按逗号 split，转小写、去空格后得到生效集合；
+- 当前 `section_id` **不在**集合里 → 该章节**跳过检索**，只用工件里的本地规范（不阻断生成）；
+- 在集合里 → 检索 `history` dataset，取 `top_k` 条相似 chunk 拼进该章节上下文。
+
+因为每次调用实时解析，改完**立即生效**，无需重启服务。
+
+**怎么选**：
+
+- 只用「快速填充」时保持默认即可——`quick` 本身已给 impact / root_cause / follow_up 等喂了检索素材；
+- 习惯逐章节生成、想让某章节也带历史参考，就把对应 id 勾上；
+- 经验上 `impact` / `root_cause` / `follow_up` 写法最讲究、最吃历史样本，建议常开；
+  `description` / `timeline` 多半靠表单数据本身就能写准，可不开以省检索。
 
 ## 缓存与「立即生效」
 
@@ -123,9 +172,12 @@ settings/
 |---|---|---|---|
 | GET | `/api/settings` | 登录用户 | 设置页视图；**`ragflow` 段仅管理员可见**，非管理员为 `null` |
 | PUT | `/api/settings/preferences` | 登录用户 | 部分更新**自己的**偏好 |
-| PUT | `/api/settings/ragflow` | **管理员** | 更新系统级连接信息与密钥 |
+| PUT | `/api/settings/ragflow` | **管理员** | 更新系统级 RAGFlow **连接信息（非密钥）** |
+| GET | `/api/settings/ragflow/datasets` | **管理员** | 列出当前连接下可访问的知识库 |
 | POST | `/api/settings/ragflow/test` | **管理员** | 用**已保存的**配置做连通性自检 |
-| DELETE | `/api/settings/ragflow/api-key` | **管理员** | 清除系统级密钥 |
+| GET | `/api/settings/secrets` | **管理员** | 列出所有已注册的系统密钥槽位（无明文） |
+| PUT | `/api/settings/secrets/{key}` | **管理员** | 写入/覆盖一个系统级密钥（加密入库） |
+| DELETE | `/api/settings/secrets/{key}` | **管理员** | 清除一个系统级密钥 |
 
 ### 读侧分层（`GET /api/settings`）
 
@@ -141,19 +193,20 @@ settings/
 各自向 `RagflowConfigProvider` 现取配置，与本接口完全无关。
 本接口只是"把共享配置拿给页面显示"。
 
-### `apiKey` 的四态语义（最容易做错的地方，已定死）
+### 系统密钥的写入语义（最容易做错的地方，已定死）
 
-| 请求里的 `apiKey` | 行为 |
+密钥统一走通用系统密钥端点 `PUT/DELETE /api/settings/secrets/{key}`，**不再有 RAGFlow
+专属的 `apiKey` 字段**。语义如下：
+
+| 操作 | 行为 |
 |---|---|
-| 字段缺失 | 保持不变 |
-| `""` 空串 | 保持不变（避免前端空输入框误清密钥） |
-| 非空字符串 | strip 后加密覆盖 |
-| 走 DELETE 专用接口 | 清除 |
+| `PUT /secrets/{key}` 传非空值 | strip 后加密覆盖该槽位 |
+| `PUT /secrets/{key}` 传空串 / 缺 `value` | **被拒（422）**——避免前端空输入框误清线上密钥 |
+| `DELETE /secrets/{key}` | 清除该槽位（回落内置默认值兜底，见上文两级回退链） |
 
-`baseUrl` 的语义相反：传空串或 `null` 表示"撤销库内覆盖、回落环境变量兜底"——
-Base URL 不是敏感值，清空是常见且安全的操作。
-
-实现上靠 `body.model_fields_set` 区分"字段缺失"与"值为空"，别用 `is not None` 代替。
+`base_url` 的语义**不受此影响**：传空串或 `null` 仍表示"撤销库内覆盖、回落内置默认值兜底"——
+Base URL 不是敏感值，清空是常见且安全的操作。`ragflow` 段不再含 `credential` 字段，
+密钥的"是否已配置 / 掩码 / 来源"改由 `GET /api/settings/secrets` 提供，保证单一来源。
 
 ### 权限模型
 

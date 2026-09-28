@@ -2,7 +2,7 @@
 
 重点覆盖三处"改错了会造成安全问题或数据丢失"的逻辑：
 
-1. ``apiKey`` 的四态语义（缺失 / 空串 = 不变，非空 = 覆盖，DELETE = 清除）
+1. 系统密钥的保存 / 清除（加密入库、写后让依赖它的 provider 失效、绝不回显明文）
 2. 任何对外 DTO 都不含明文密钥
 3. ``base_url`` 的协议/长度校验与"撤销库内覆盖、回落 env"的语义
 """
@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from doc_process_studio.common.security.secret_cipher import SecretCipher, build_secret_hint
+from doc_process_studio.common.security.secret_cipher import SecretCipher
 from doc_process_studio.settings.application.ports import (
     RagflowConnectionProbe,
     RagflowDatasetCatalog,
@@ -169,75 +169,7 @@ def _service(
     return service, secrets, settings, users, provider, probe
 
 
-# ------------------------------------------------------------------ apiKey 四态
-
-
-async def test_api_key_absent_keeps_existing_value() -> None:
-    service, secrets, _, _, provider, _ = _service()
-    await service.update_ragflow_settings(api_key_provided=True, api_key=SAMPLE_API_KEY)
-    stored_before = secrets.rows[SECRET_RAGFLOW_API_KEY].ciphertext
-
-    # 字段缺失（provided=False）
-    await service.update_ragflow_settings(base_url_provided=True, base_url="http://x:1")
-    assert secrets.rows[SECRET_RAGFLOW_API_KEY].ciphertext == stored_before
-
-    # provided=True 但值为 None
-    await service.update_ragflow_settings(api_key_provided=True, api_key=None)
-    assert secrets.rows[SECRET_RAGFLOW_API_KEY].ciphertext == stored_before
-    assert provider.invalidate_calls == 2
-
-
-async def test_api_key_empty_string_keeps_existing_value() -> None:
-    """空串必须"不变"，否则前端一个空输入框就能把线上密钥清掉。"""
-    service, secrets, _, _, _, _ = _service()
-    await service.update_ragflow_settings(api_key_provided=True, api_key=SAMPLE_API_KEY)
-    stored_before = secrets.rows[SECRET_RAGFLOW_API_KEY].ciphertext
-    version_before = secrets.rows[SECRET_RAGFLOW_API_KEY].updated_at
-
-    await service.update_ragflow_settings(api_key_provided=True, api_key="")
-    await service.update_ragflow_settings(api_key_provided=True, api_key="    ")
-
-    row = secrets.rows[SECRET_RAGFLOW_API_KEY]
-    assert row.ciphertext == stored_before
-    assert row.updated_at == version_before
-
-
-async def test_api_key_non_empty_overwrites_and_encrypts() -> None:
-    service, secrets, _, _, provider, _ = _service()
-    view = await service.update_ragflow_settings(api_key_provided=True, api_key=f"  {SAMPLE_API_KEY}  ")
-
-    row = secrets.rows[SECRET_RAGFLOW_API_KEY]
-    assert row.ciphertext.startswith("v1:k1:")
-    assert SAMPLE_API_KEY not in row.ciphertext
-    assert CIPHER.decrypt(row.ciphertext, aad=SECRET_RAGFLOW_API_KEY) == SAMPLE_API_KEY  # 外部空白被 strip
-    assert row.hint == build_secret_hint(SAMPLE_API_KEY)
-    assert row.key_id == "k1"
-    assert view.credential.configured is True
-    assert provider.invalidate_calls == 1, "写操作后必须让缓存失效"
-
-
-async def test_clear_api_key_removes_row() -> None:
-    service, secrets, _, _, provider, _ = _service()
-    await service.update_ragflow_settings(api_key_provided=True, api_key=SAMPLE_API_KEY)
-
-    view = await service.clear_ragflow_api_key()
-    assert SECRET_RAGFLOW_API_KEY not in secrets.rows
-    assert view.credential.configured is False
-    assert provider.invalidate_calls == 2
-
-
-async def test_clear_api_key_when_absent_is_noop() -> None:
-    service, _, _, _, provider, _ = _service()
-    view = await service.clear_ragflow_api_key()
-    assert view.credential.configured is False
-    assert provider.invalidate_calls == 0, "没删到东西就不该触发缓存失效"
-
-
-async def test_oversized_api_key_rejected() -> None:
-    service, secrets, _, _, _, _ = _service()
-    with pytest.raises(InvalidSettingValueError):
-        await service.update_ragflow_settings(api_key_provided=True, api_key="x" * 513)
-    assert SECRET_RAGFLOW_API_KEY not in secrets.rows
+# 系统密钥（保存/清除/加密已由下方"通用系统密钥"用例覆盖）
 
 
 # ------------------------------------------------------------------ 明文不外泄
@@ -246,14 +178,7 @@ async def test_oversized_api_key_rejected() -> None:
 async def test_overview_never_contains_plaintext_secret() -> None:
     """把整个响应体序列化后搜明文 —— 这是最实际的"有没有漏"检查。"""
     service, secrets, settings, _, _, _ = _service()
-    await service.update_ragflow_settings(
-        base_url_provided=True,
-        base_url="http://ragflow.local:10108",
-        enabled_provided=True,
-        enabled=True,
-        api_key_provided=True,
-        api_key=SAMPLE_API_KEY,
-    )
+    await service.set_system_secret(SECRET_RAGFLOW_API_KEY, SAMPLE_API_KEY)
     # 同时让 provider 也返回真实明文，确保明文确实存在于服务端内存里
     overview = await service.get_overview(USER_ID)
 
@@ -262,18 +187,19 @@ async def test_overview_never_contains_plaintext_secret() -> None:
     assert secrets.rows[SECRET_RAGFLOW_API_KEY].ciphertext not in payload
     # 系统视角（include_system_settings=True）必须给出这一段，供下方断言其内容
     assert overview.ragflow is not None
-    assert overview.ragflow.credential.configured is True
-    assert overview.ragflow.credential.hint == SAMPLE_API_KEY[-4:]
+    # 密钥状态改由系统密钥清单给出，且同样不含明文
+    secrets_payload = (await service.list_system_secrets()).model_dump_json()
+    assert SAMPLE_API_KEY not in secrets_payload
     assert SAMPLE_API_KEY[:8] not in payload
 
 
 async def test_unconfigured_credential_is_reported_honestly() -> None:
     service, _, _, _, _, _ = _service()
-    overview = await service.get_overview(USER_ID)
-    assert overview.ragflow is not None
-    assert overview.ragflow.credential.configured is False
-    assert overview.ragflow.credential.hint is None
-    assert overview.ragflow.credential.source is SecretSource.NONE
+    view = await service.list_system_secrets()
+    rag = next(s for s in view.secrets if s.key == SECRET_RAGFLOW_API_KEY)
+    assert rag.configured is False
+    assert rag.hint is None
+    assert rag.source is SecretSource.NONE
 
 
 # ------------------------------------------------------------------ base_url
@@ -288,10 +214,10 @@ async def test_base_url_empty_clears_override_and_falls_back() -> None:
     assert SETTING_RAGFLOW_BASE_URL not in settings.values
     assert provider.invalidate_calls == 2
 
-    provider.config = RagflowConfig(base_url="http://env:1", api_key="k", enabled=True, source=SecretSource.ENV)
+    provider.config = RagflowConfig(base_url="http://env:1", api_key="k", enabled=True, source=SecretSource.SYSTEM)
     view = await service.get_ragflow_settings()
     assert view.base_url == "http://env:1"
-    assert view.base_url_source == "env"
+    assert view.base_url_source == "default"
 
 
 async def test_base_url_trailing_slash_normalized() -> None:
@@ -323,8 +249,8 @@ async def test_enabled_null_clears_override() -> None:
 
 async def test_enabled_source_reported() -> None:
     service, _, settings, _, provider, _ = _service()
-    provider.config = RagflowConfig(base_url="http://x:1", api_key="k", enabled=True, source=SecretSource.ENV)
-    assert (await service.get_ragflow_settings()).enabled_source == "env"
+    provider.config = RagflowConfig(base_url="http://x:1", api_key="k", enabled=True, source=SecretSource.SYSTEM)
+    assert (await service.get_ragflow_settings()).enabled_source == "default"
 
     settings.values[SETTING_RAGFLOW_ENABLED] = True
     assert (await service.get_ragflow_settings()).enabled_source == "system"
@@ -430,10 +356,10 @@ async def test_provider_is_always_resolved_with_system_scope() -> None:
 
 
 async def test_write_operations_invalidate_all_scopes() -> None:
-    """保存 / 清除走的是全量失效（``scope=None``），确保任何缓存都不会残留旧凭据。"""
+    """保存 / 清除系统密钥走的是全量失效（``scope=None``），确保任何缓存都不会残留旧凭据。"""
     service, _, _, _, provider, _ = _service()
-    await service.update_ragflow_settings(api_key_provided=True, api_key=SAMPLE_API_KEY)
-    await service.clear_ragflow_api_key()
+    await service.set_system_secret(SECRET_RAGFLOW_API_KEY, SAMPLE_API_KEY)
+    await service.clear_system_secret(SECRET_RAGFLOW_API_KEY)
     assert provider.invalidated_scopes == [None, None]
 
 
@@ -491,3 +417,58 @@ async def test_dataset_list_empty_is_explained_not_silent() -> None:
     assert result.ok is False
     assert result.datasets == []
     assert "未取到任何知识库" in result.message
+
+
+# ------------------------------------------------------------------ 通用系统密钥
+
+
+async def test_list_system_secrets_includes_ragflow_slot() -> None:
+    service, _, _, _, _, _ = _service()
+    view = await service.list_system_secrets()
+    keys = [s.key for s in view.secrets]
+    assert SECRET_RAGFLOW_API_KEY in keys
+    # 未配置时不应泄露明文，masked_value 为空串
+    rag = next(s for s in view.secrets if s.key == SECRET_RAGFLOW_API_KEY)
+    assert rag.configured is False
+    assert rag.masked_value == ""
+    assert rag.source is SecretSource.NONE
+
+
+async def test_set_system_secret_encrypts_and_invalidates_provider() -> None:
+    service, secrets, _, _, provider, _ = _service()
+    view = await service.set_system_secret(SECRET_RAGFLOW_API_KEY, f"  {SAMPLE_API_KEY}  ")
+    assert view.configured is True
+    assert view.masked_value.endswith(SAMPLE_API_KEY[-4:])
+    assert SAMPLE_API_KEY not in view.masked_value
+    row = secrets.rows[SECRET_RAGFLOW_API_KEY]
+    assert SAMPLE_API_KEY not in row.ciphertext
+    assert CIPHER.decrypt(row.ciphertext, aad=SECRET_RAGFLOW_API_KEY) == SAMPLE_API_KEY
+    assert provider.invalidate_calls == 1, "写后必须让依赖该密钥的 provider 失效"
+
+
+async def test_clear_system_secret_removes_row() -> None:
+    service, secrets, _, _, provider, _ = _service()
+    await service.set_system_secret(SECRET_RAGFLOW_API_KEY, SAMPLE_API_KEY)
+    view = await service.clear_system_secret(SECRET_RAGFLOW_API_KEY)
+    assert view.configured is False
+    assert SECRET_RAGFLOW_API_KEY not in secrets.rows
+    assert provider.invalidate_calls == 2
+
+
+async def test_set_unknown_secret_key_rejected() -> None:
+    service, _, _, _, _, _ = _service()
+    with pytest.raises(InvalidSettingValueError):
+        await service.set_system_secret("totally.unknown", "x")
+
+
+async def test_set_empty_secret_rejected() -> None:
+    service, _, _, _, _, _ = _service()
+    with pytest.raises(InvalidSettingValueError):
+        await service.set_system_secret(SECRET_RAGFLOW_API_KEY, "   ")
+
+
+async def test_list_system_secrets_never_returns_plaintext() -> None:
+    service, _, _, _, _, _ = _service()
+    await service.set_system_secret(SECRET_RAGFLOW_API_KEY, SAMPLE_API_KEY)
+    payload = (await service.list_system_secrets()).model_dump_json()
+    assert SAMPLE_API_KEY not in payload

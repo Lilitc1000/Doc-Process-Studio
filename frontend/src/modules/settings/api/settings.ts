@@ -7,6 +7,8 @@ import type {
   UpdatePreferencesRequest,
   UpdateRagflowRequest,
   UserPreferences,
+  SystemSecret,
+  SystemSecretList,
 } from '../types/settings';
 
 /** 拉取设置页所需的全部内容（个人偏好 + 系统 RAGFlow 设置视图）。 */
@@ -27,10 +29,10 @@ export const updateUserPreferences = async (
 };
 
 /**
- * 更新系统级 RAGFlow 设置（**仅管理员**，非管理员会拿到 403）。
+ * 更新系统级 RAGFlow 非密钥设置（**仅管理员**，非管理员会拿到 403）。
  *
- * 注意 `apiKey` 只传"用户这次新输入的明文"；不要把自己读回来的掩码再传回去，
- * 那样等于把掩码存成了密钥。
+ * 密钥（API Key）统一走通用系统密钥端点 `setSystemSecret` / `clearSystemSecret`，
+ * 不在本请求里出现，避免两套密钥写入路径并存。
  */
 export const updateRagflowSettings = async (
   payload: UpdateRagflowRequest,
@@ -70,10 +72,28 @@ export const testRagflowConnection =
     return response.data;
   };
 
-/** 清除系统级 API Key（**仅管理员**）。独立接口，避免在保存流程里误清。 */
-export const clearRagflowApiKey = async (): Promise<RagflowSettings> => {
-  const response = await apiClient.delete<RagflowSettings>(
-    '/settings/ragflow/api-key',
+/** 拉取所有已注册的系统级密钥槽位及其配置状态（**仅管理员**）。 */
+export const listSystemSecrets = async (): Promise<SystemSecretList> => {
+  const response = await apiClient.get<SystemSecretList>('/settings/secrets');
+  return response.data;
+};
+
+/** 写入/覆盖一个系统级密钥（**仅管理员**）。明文只用于本次请求，服务端加密入库。 */
+export const setSystemSecret = async (
+  key: string,
+  value: string,
+): Promise<SystemSecret> => {
+  const response = await apiClient.put<SystemSecret>(
+    `/settings/secrets/${key}`,
+    { value },
+  );
+  return response.data;
+};
+
+/** 清除一个系统级密钥（**仅管理员**）。 */
+export const clearSystemSecret = async (key: string): Promise<SystemSecret> => {
+  const response = await apiClient.delete<SystemSecret>(
+    `/settings/secrets/${key}`,
   );
   return response.data;
 };

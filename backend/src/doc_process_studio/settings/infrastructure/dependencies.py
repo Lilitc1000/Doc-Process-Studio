@@ -46,25 +46,21 @@ def get_user_settings_repository() -> UserSettingsRepository:
 
 @lru_cache(maxsize=1)
 def get_ragflow_config_provider() -> RagflowConfigProvider:
-    """RAGFlow 连接配置解析器（全局单例，见模块 docstring）。"""
+    """RAGFlow 连接配置解析器（全局单例，见模块 docstring）。
+
+    RAGFLOW 配置全部来自数据库（页面写入），不再读环境变量。
+    """
     return SqlRagflowConfigProvider(
         secret_repo=get_system_secret_repository(),
         setting_repo=get_system_setting_repository(),
         cipher=get_secret_cipher(),
         ttl_seconds=settings.system_settings_cache_ttl_seconds,
-        env_base_url=settings.ragflow_base_url,
-        env_api_key=settings.ragflow_api_key,
-        env_enabled=settings.ragflow_enabled,
-        # 检索参数的 env 兜底：库里没配时保持既有部署行为
-        env_datasets_json=settings.ragflow_datasets_json,
-        env_similarity_threshold=settings.ragflow_similarity_threshold,
-        env_top_k=settings.ragflow_top_k,
     )
 
 
 @lru_cache(maxsize=1)
 def get_ragflow_connection_probe() -> RagflowConnectionProbe:
-    return RagflowClientConnectionProbe(timeout_seconds=settings.ragflow_timeout_seconds)
+    return RagflowClientConnectionProbe()
 
 
 @lru_cache(maxsize=1)
@@ -74,7 +70,7 @@ def get_ragflow_dataset_catalog() -> RagflowDatasetCatalog:
     刻意**不加进程内缓存**：列表要反映当前生效凭据下的真实情况，
     管理员换连接后必须立刻看到变化。
     """
-    return RagflowClientDatasetCatalog(timeout_seconds=settings.ragflow_timeout_seconds)
+    return RagflowClientDatasetCatalog()
 
 
 @lru_cache(maxsize=1)

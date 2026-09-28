@@ -4,8 +4,10 @@
 
 - **个人设置**（``/preferences``）—— 任何登录用户都能读写**自己的**偏好。
   user_id 一律取自 JWT，不接受请求体传入，从根上堵死越权。
-- **系统设置**（``/ragflow*``）—— 只有管理员能读写。RAGFlow 的连接信息与密钥是
-  **全系统共享**的，一旦被普通用户改错（比如把 Base URL 填错），
+- **系统设置**—— 只有管理员能读写。RAGFlow 的**连接信息**（Base URL / 启用 /
+  数据集 / 阈值等）走 ``/ragflow*``，而**密钥（API Key）统一走通用系统密钥端点**
+  ``/secrets*``（``GET /api/settings/secrets`` 列出所有已注册槽位及其配置状态）。
+  两者都是**全系统共享**的，一旦被普通用户改错（比如把 Base URL 填错），
   全系统的知识库检索和报告参考都会立刻失效，这既是权限问题也是可用性问题。
   读侧同样分层：``GET /api/settings`` 的 ``ragflow`` 段对非管理员为 ``null``
   （见 ``read_settings``），普通用户**使用** RAGFlow 检索不受影响 ——
@@ -25,12 +27,14 @@ from ...common.security.security import get_current_user_id
 from ..application.settings_service import ModelPreferencesUpdate, SettingsService
 from ..domain.errors import InvalidBaseUrlError, InvalidSettingValueError
 from ..infrastructure.dependencies import get_settings_service
-from .schemas.request import PreferencesUpdateRequest, RagflowSettingsUpdateRequest
+from .schemas.request import PreferencesUpdateRequest, RagflowSettingsUpdateRequest, SecretSetRequest
 from .schemas.response import (
     RagflowConnectionTestResponse,
     RagflowDatasetListResponse,
     RagflowSettingsResponse,
     SettingsOverviewResponse,
+    SystemSecretListResponse,
+    SystemSecretSummaryResponse,
     UserPreferencesResponse,
 )
 
@@ -89,7 +93,7 @@ async def update_ragflow_settings(
     body: RagflowSettingsUpdateRequest,
     service: SettingsService = Depends(get_settings_service),
 ) -> RagflowSettingsResponse:
-    """更新系统级 RAGFlow 设置（仅管理员）。apiKey 的四态语义见请求模型 docstring。"""
+    """更新系统级 RAGFlow 非密钥设置（仅管理员）。密钥统一走通用系统密钥端点 /secrets/{key}。"""
     provided = body.model_fields_set
     try:
         return await service.update_ragflow_settings(
@@ -97,14 +101,20 @@ async def update_ragflow_settings(
             base_url=body.base_url,
             enabled_provided="enabled" in provided,
             enabled=body.enabled,
-            api_key_provided="api_key" in provided,
-            api_key=body.api_key,
             datasets_json_provided="datasets_json" in provided,
             datasets_json=body.datasets_json,
             similarity_threshold_provided="similarity_threshold" in provided,
             similarity_threshold=body.similarity_threshold,
             top_k_provided="top_k" in provided,
             top_k=body.top_k,
+            timeout_seconds_provided="timeout_seconds" in provided,
+            timeout_seconds=body.timeout_seconds,
+            parse_timeout_seconds_provided="parse_timeout_seconds" in provided,
+            parse_timeout_seconds=body.parse_timeout_seconds,
+            max_chunks_per_document_provided="max_chunks_per_document" in provided,
+            max_chunks_per_document=body.max_chunks_per_document,
+            enabled_sections_provided="enabled_sections" in provided,
+            enabled_sections=body.enabled_sections,
         )
     except (InvalidBaseUrlError, InvalidSettingValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -142,13 +152,46 @@ async def test_ragflow_connection(
     return await service.test_ragflow_connection()
 
 
-@router.delete(
-    "/ragflow/api-key",
-    response_model=RagflowSettingsResponse,
+@router.get(
+    "/secrets",
+    response_model=SystemSecretListResponse,
     dependencies=[Depends(require_admin)],
 )
-async def clear_ragflow_api_key(
+async def list_system_secrets(
     service: SettingsService = Depends(get_settings_service),
-) -> RagflowSettingsResponse:
-    """清除系统级 API Key（仅管理员）。独立接口，避免误清。"""
-    return await service.clear_ragflow_api_key()
+) -> SystemSecretListResponse:
+    """列出所有已注册的系统级密钥槽位及其配置状态（仅管理员，无明文）。"""
+    return await service.list_system_secrets()
+
+
+@router.put(
+    "/secrets/{secret_key}",
+    response_model=SystemSecretSummaryResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def set_system_secret(
+    secret_key: str,
+    body: SecretSetRequest,
+    service: SettingsService = Depends(get_settings_service),
+) -> SystemSecretSummaryResponse:
+    """写入/覆盖一个系统级密钥（加密入库，立即生效）。"""
+    try:
+        return await service.set_system_secret(secret_key, body.value)
+    except InvalidSettingValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/secrets/{secret_key}",
+    response_model=SystemSecretSummaryResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def clear_system_secret(
+    secret_key: str,
+    service: SettingsService = Depends(get_settings_service),
+) -> SystemSecretSummaryResponse:
+    """清除一个系统级密钥（仅管理员）。"""
+    try:
+        return await service.clear_system_secret(secret_key)
+    except InvalidSettingValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

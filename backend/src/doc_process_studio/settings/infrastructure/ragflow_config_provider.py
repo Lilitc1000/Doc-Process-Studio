@@ -24,11 +24,24 @@ from ..application.ports import (
     SystemSettingRepository,
 )
 from ..domain.values import (
+    DEFAULT_RAGFLOW_BASE_URL,
+    DEFAULT_RAGFLOW_DATASETS_JSON,
+    DEFAULT_RAGFLOW_ENABLED,
+    DEFAULT_RAGFLOW_ENABLED_SECTIONS,
+    DEFAULT_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT,
+    DEFAULT_RAGFLOW_PARSE_TIMEOUT_SECONDS,
+    DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD,
+    DEFAULT_RAGFLOW_TIMEOUT_SECONDS,
+    DEFAULT_RAGFLOW_TOP_K,
     SECRET_RAGFLOW_API_KEY,
     SETTING_RAGFLOW_BASE_URL,
     SETTING_RAGFLOW_DATASETS_JSON,
     SETTING_RAGFLOW_ENABLED,
+    SETTING_RAGFLOW_ENABLED_SECTIONS,
+    SETTING_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT,
+    SETTING_RAGFLOW_PARSE_TIMEOUT_SECONDS,
     SETTING_RAGFLOW_SIMILARITY_THRESHOLD,
+    SETTING_RAGFLOW_TIMEOUT_SECONDS,
     SETTING_RAGFLOW_TOP_K,
     RagflowConfig,
     SecretSource,
@@ -38,7 +51,11 @@ logger = logging.getLogger(__name__)
 
 
 class SqlRagflowConfigProvider(RagflowConfigProvider):
-    """按"库里配置优先、env 兜底"的顺序解析 RAGFlow 连接配置。"""
+    """按"库里配置优先、内置默认值兜底"的顺序解析 RAGFlow 连接配置。
+
+    环境变量不再作为数据源：所有 RAGFLOW 配置均通过页面写入 ``system_settings``
+    （及 ``system_secrets`` 存密钥），未配置时回落 ``values.py`` 中的 ``DEFAULT_RAGFLOW_*``。
+    """
 
     def __init__(
         self,
@@ -47,23 +64,11 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
         setting_repo: SystemSettingRepository,
         cipher: SecretCipher,
         ttl_seconds: int,
-        env_base_url: str | None,
-        env_api_key: str | None,
-        env_enabled: bool,
-        env_datasets_json: str = "",
-        env_similarity_threshold: float | None = None,
-        env_top_k: int | None = None,
     ) -> None:
         self._secrets = secret_repo
         self._settings = setting_repo
         self._cipher = cipher
         self._ttl = max(0, int(ttl_seconds))
-        self._env_base_url = (env_base_url or "").strip().rstrip("/")
-        self._env_api_key = (env_api_key or "").strip()
-        self._env_enabled = bool(env_enabled)
-        self._env_datasets_json = (env_datasets_json or "").strip()
-        self._env_similarity_threshold = env_similarity_threshold
-        self._env_top_k = env_top_k
         self._cache: dict[str, tuple[float, int, RagflowConfig]] = {}
         self._epoch = 0
 
@@ -99,13 +104,14 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
         stored_enabled = await self._settings.get(SETTING_RAGFLOW_ENABLED)
         stored_secret = await self._secrets.get(SECRET_RAGFLOW_API_KEY)
 
-        if isinstance(stored_base_url, str) and stored_base_url.strip():
-            base_url = stored_base_url.strip().rstrip("/")
-        else:
-            base_url = self._env_base_url
+        base_url = (
+            stored_base_url.strip().rstrip("/")
+            if isinstance(stored_base_url, str) and stored_base_url.strip()
+            else DEFAULT_RAGFLOW_BASE_URL
+        )
 
-        # 库里有明确配置就用库里的；没有则回落到 env（保持既有部署行为不变）
-        enabled = stored_enabled if isinstance(stored_enabled, bool) else self._env_enabled
+        # 库里有明确配置就用库里的；没有则回落到内置默认值
+        enabled = stored_enabled if isinstance(stored_enabled, bool) else DEFAULT_RAGFLOW_ENABLED
 
         api_key = ""
         source = SecretSource.NONE
@@ -116,14 +122,11 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
             except SecretCipherError as exc:
                 # 主密钥换了 / 密文被篡改 / 手工改过库 —— 不阻断启动，降级并留下明确线索
                 logger.error(
-                    "系统级 RAGFlow 凭据解密失败（key=%s, key_id=%s）：%s；将回落到环境变量兜底",
+                    "系统级 RAGFlow 凭据解密失败（key=%s, key_id=%s）：%s；将回落到未配置状态",
                     SECRET_RAGFLOW_API_KEY,
                     stored_secret.key_id,
                     exc,
                 )
-        if not api_key and self._env_api_key:
-            api_key = self._env_api_key
-            source = SecretSource.ENV
 
         return RagflowConfig(
             base_url=base_url,
@@ -132,20 +135,35 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
             source=source,
             datasets_json=await self._load_datasets_json(),
             similarity_threshold=await self._load_float(
-                SETTING_RAGFLOW_SIMILARITY_THRESHOLD, self._env_similarity_threshold
+                SETTING_RAGFLOW_SIMILARITY_THRESHOLD, DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD
             ),
-            top_k=await self._load_int(SETTING_RAGFLOW_TOP_K, self._env_top_k),
+            top_k=await self._load_int(SETTING_RAGFLOW_TOP_K, DEFAULT_RAGFLOW_TOP_K),
+            timeout_seconds=await self._load_float(SETTING_RAGFLOW_TIMEOUT_SECONDS, DEFAULT_RAGFLOW_TIMEOUT_SECONDS),
+            parse_timeout_seconds=await self._load_float(
+                SETTING_RAGFLOW_PARSE_TIMEOUT_SECONDS, DEFAULT_RAGFLOW_PARSE_TIMEOUT_SECONDS
+            ),
+            max_chunks_per_document=await self._load_int(
+                SETTING_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT, DEFAULT_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT
+            ),
+            enabled_sections=await self._load_str(SETTING_RAGFLOW_ENABLED_SECTIONS, DEFAULT_RAGFLOW_ENABLED_SECTIONS),
         )
 
     async def _load_datasets_json(self) -> str:
-        """库里配置优先，未配置或不是字符串时回落 env。"""
+        """库里配置优先，未配置或不是字符串时回落内置默认 dataset 映射。"""
         stored = await self._settings.get(SETTING_RAGFLOW_DATASETS_JSON)
         if isinstance(stored, str) and stored.strip():
             return stored.strip()
-        return self._env_datasets_json
+        return DEFAULT_RAGFLOW_DATASETS_JSON
 
-    async def _load_float(self, key: str, fallback: float | None) -> float | None:
-        """读取浮点型设置；库里没有、非数值或类型不对时回落 env 默认值。"""
+    async def _load_str(self, key: str, fallback: str) -> str:
+        """读取字符串型设置；库里为空或非字符串时回落内置默认值。"""
+        stored = await self._settings.get(key)
+        if isinstance(stored, str) and stored.strip():
+            return stored.strip()
+        return fallback
+
+    async def _load_float(self, key: str, fallback: float) -> float:
+        """读取浮点型设置；库里没有、非数值或类型不对时回落内置默认值。"""
         stored = await self._settings.get(key)
         if isinstance(stored, bool):
             return fallback
@@ -155,12 +173,12 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
             try:
                 return float(stored)
             except ValueError:
-                logger.warning("系统设置 %s 不是合法数值，回落环境变量: %r", key, stored)
+                logger.warning("系统设置 %s 不是合法数值，回落内置默认值: %r", key, stored)
                 return fallback
         return fallback
 
-    async def _load_int(self, key: str, fallback: int | None) -> int | None:
-        """读取整型设置；库里没有、非数值或类型不对时回落 env 默认值。"""
+    async def _load_int(self, key: str, fallback: int) -> int:
+        """读取整型设置；库里没有、非数值或类型不对时回落内置默认值。"""
         stored = await self._settings.get(key)
         if isinstance(stored, bool):
             return fallback
@@ -172,6 +190,6 @@ class SqlRagflowConfigProvider(RagflowConfigProvider):
             try:
                 return int(float(stored))
             except ValueError:
-                logger.warning("系统设置 %s 不是合法数值，回落环境变量: %r", key, stored)
+                logger.warning("系统设置 %s 不是合法数值，回落内置默认值: %r", key, stored)
                 return fallback
         return fallback

@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from ...common.infrastructure.config import settings as app_settings
 from ...common.security.secret_cipher import (
     SecretCipher,
     build_secret_hint,
@@ -28,6 +27,9 @@ from ...common.security.secret_cipher import (
 from ..domain.errors import InvalidBaseUrlError, InvalidSettingValueError
 from ..domain.values import (
     ALLOWED_BASE_URL_SCHEMES,
+    DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD,
+    DEFAULT_RAGFLOW_TOP_K,
+    KNOWN_SYSTEM_SECRET_SLOTS,
     MAX_BASE_URL_LENGTH,
     MAX_MODEL_NAME_LENGTH,
     MAX_SECRET_LENGTH,
@@ -35,24 +37,32 @@ from ..domain.values import (
     SETTING_RAGFLOW_BASE_URL,
     SETTING_RAGFLOW_DATASETS_JSON,
     SETTING_RAGFLOW_ENABLED,
+    SETTING_RAGFLOW_ENABLED_SECTIONS,
+    SETTING_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT,
+    SETTING_RAGFLOW_PARSE_TIMEOUT_SECONDS,
     SETTING_RAGFLOW_SIMILARITY_THRESHOLD,
+    SETTING_RAGFLOW_TIMEOUT_SECONDS,
     SETTING_RAGFLOW_TOP_K,
     RagflowConfig,
+    SecretSlot,
+    SecretSource,
 )
 from .dtos import (
     ModelPreferencesDTO,
     RagflowConnectionTestDTO,
-    RagflowCredentialDTO,
     RagflowDatasetListDTO,
     RagflowDatasetSummaryDTO,
     RagflowSettingsDTO,
     SettingsOverviewDTO,
+    SystemSecretListDTO,
+    SystemSecretSummaryDTO,
     UserPreferencesDTO,
 )
 from .ports import (
     RagflowConfigProvider,
     RagflowConnectionProbe,
     RagflowDatasetCatalog,
+    StoredSecret,
     SystemSecretRepository,
     SystemSettingRepository,
     UserSettingsRepository,
@@ -61,7 +71,7 @@ from .ports import (
 logger = logging.getLogger(__name__)
 
 _ENABLED_SOURCE_SYSTEM = "system"
-_ENABLED_SOURCE_ENV = "env"
+_ENABLED_SOURCE_DEFAULT = "default"
 
 
 @dataclass(slots=True)
@@ -102,23 +112,23 @@ def _validate_model_name(raw: str) -> str | None:
 
 
 def _coerce_threshold(value: float | int | None) -> float:
-    """相似度阈值：库里未配置时回落 env 默认值。"""
+    """相似度阈值：库里未配置时回落内置默认值。"""
     if value is None:
-        return app_settings.ragflow_similarity_threshold
+        return DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD
     try:
         return float(value)
     except (TypeError, ValueError):
-        return app_settings.ragflow_similarity_threshold
+        return DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD
 
 
 def _coerce_top_k(value: float | int | None) -> int:
-    """检索条数：库里未配置时回落 env 默认值。"""
+    """检索条数：库里未配置时回落内置默认值。"""
     if value is None:
-        return app_settings.ragflow_top_k
+        return DEFAULT_RAGFLOW_TOP_K
     try:
         return int(value)
     except (TypeError, ValueError):
-        return app_settings.ragflow_top_k
+        return DEFAULT_RAGFLOW_TOP_K
 
 
 def _validate_datasets_json(raw: str) -> bool:
@@ -245,7 +255,6 @@ class SettingsService:
 
     async def get_ragflow_settings(self) -> RagflowSettingsDTO:
         config = await self._provider.resolve(scope="system")
-        stored_secret = await self._secrets.get(SECRET_RAGFLOW_API_KEY)
         stored_base_url = await self._settings.get(SETTING_RAGFLOW_BASE_URL)
         stored_enabled = await self._settings.get(SETTING_RAGFLOW_ENABLED)
 
@@ -253,18 +262,15 @@ class SettingsService:
         return RagflowSettingsDTO(
             base_url=config.base_url,
             enabled=config.enabled,
-            enabled_source=_ENABLED_SOURCE_SYSTEM if isinstance(stored_enabled, bool) else _ENABLED_SOURCE_ENV,
-            base_url_source=_ENABLED_SOURCE_SYSTEM if base_url_from_system else _ENABLED_SOURCE_ENV,
-            credential=RagflowCredentialDTO(
-                configured=stored_secret is not None,
-                masked_api_key=mask_secret_hint(stored_secret.hint) if stored_secret else "",
-                hint=stored_secret.hint if stored_secret else None,
-                source=config.source,
-                updated_at=stored_secret.updated_at if stored_secret else None,
-            ),
+            enabled_source=_ENABLED_SOURCE_SYSTEM if isinstance(stored_enabled, bool) else _ENABLED_SOURCE_DEFAULT,
+            base_url_source=_ENABLED_SOURCE_SYSTEM if base_url_from_system else _ENABLED_SOURCE_DEFAULT,
             similarity_threshold=_coerce_threshold(config.similarity_threshold),
             top_k=_coerce_top_k(config.top_k),
             datasets_json=config.datasets_json,
+            timeout_seconds=config.timeout_seconds,
+            parse_timeout_seconds=config.parse_timeout_seconds,
+            max_chunks_per_document=config.max_chunks_per_document,
+            enabled_sections=config.enabled_sections,
         )
 
     async def update_ragflow_settings(
@@ -274,27 +280,31 @@ class SettingsService:
         base_url: str | None = None,
         enabled_provided: bool = False,
         enabled: bool | None = None,
-        api_key_provided: bool = False,
-        api_key: str | None = None,
         datasets_json_provided: bool = False,
         datasets_json: str | None = None,
         similarity_threshold_provided: bool = False,
         similarity_threshold: float | None = None,
         top_k_provided: bool = False,
         top_k: int | None = None,
+        timeout_seconds_provided: bool = False,
+        timeout_seconds: float | None = None,
+        parse_timeout_seconds_provided: bool = False,
+        parse_timeout_seconds: float | None = None,
+        max_chunks_per_document_provided: bool = False,
+        max_chunks_per_document: int | None = None,
+        enabled_sections_provided: bool = False,
+        enabled_sections: str | None = None,
     ) -> RagflowSettingsDTO:
-        """更新系统级 RAGFlow 设置。
+        """更新系统级 RAGFlow 非密钥设置。
 
-        ``api_key`` 的语义（最容易做错的地方，已定死）：
+        密钥（API Key）统一走通用系统密钥端点
+        ``PUT/DELETE /api/settings/secrets/{key}``，不在本方法里出现，
+        避免两套密钥写入路径并存。
 
-        - 请求里**没有** ``api_key`` 字段 → 保持不变
-        - ``api_key`` 为空串 → 保持不变（避免前端空输入框误清密钥）
-        - ``api_key`` 为非空字符串 → 加密后覆盖
-        - 要清除，只能走 ``DELETE /api/settings/ragflow/api-key`` 这个独立接口
-
-        ``base_url`` 传空串 / null 表示"撤销库内覆盖，回落到环境变量兜底"，
-        与 api_key 的"空串不生效"不同 —— 因为 Base URL 不是敏感值，
-        清空是常见且安全的操作。
+        ``base_url`` 传空串 / null 表示"撤销库内覆盖，回落到内置默认值"，
+        清空是常见且安全的操作。其余检索 / 超时 / 章节参数同理：
+        传 ``None``（字段不出现）表示保持原值，传具体值覆盖，传 ``null``
+        （字段出现但为空）表示撤销库内覆盖、回落内置默认值。
         """
         changed = False
 
@@ -313,21 +323,6 @@ class SettingsService:
                 await self._settings.set(SETTING_RAGFLOW_ENABLED, bool(enabled))
             changed = True
 
-        if api_key_provided and api_key is not None:
-            cleaned = api_key.strip()
-            if cleaned:
-                if len(cleaned) > MAX_SECRET_LENGTH:
-                    raise InvalidSettingValueError(f"API Key 过长（上限 {MAX_SECRET_LENGTH} 字符）")
-                await self._secrets.upsert(
-                    secret_key=SECRET_RAGFLOW_API_KEY,
-                    ciphertext=self._cipher.encrypt(cleaned, aad=SECRET_RAGFLOW_API_KEY),
-                    key_id=self._cipher.active_key_id,
-                    hint=build_secret_hint(cleaned),
-                )
-                changed = True
-                # 只记事件与掩码，绝不记密钥内容
-                logger.info("系统级 RAGFlow 凭据已更新（key=%s）", SECRET_RAGFLOW_API_KEY)
-
         if datasets_json_provided:
             cleaned = (datasets_json or "").strip()
             if cleaned:
@@ -337,7 +332,7 @@ class SettingsService:
                     )
                 await self._settings.set(SETTING_RAGFLOW_DATASETS_JSON, cleaned)
             else:
-                # 空串表示撤销库内覆盖，回落到环境变量兜底
+                # 空串表示撤销库内覆盖，回落到内置默认 dataset 映射
                 await self._settings.delete(SETTING_RAGFLOW_DATASETS_JSON)
             changed = True
 
@@ -359,18 +354,125 @@ class SettingsService:
                 await self._settings.set(SETTING_RAGFLOW_TOP_K, int(top_k))
             changed = True
 
+        if timeout_seconds_provided:
+            if timeout_seconds is None:
+                await self._settings.delete(SETTING_RAGFLOW_TIMEOUT_SECONDS)
+            else:
+                try:
+                    value = float(timeout_seconds)
+                except (TypeError, ValueError):
+                    raise InvalidSettingValueError("timeout_seconds 必须是数字") from None
+                if value <= 0 or value > 600:
+                    raise InvalidSettingValueError("timeout_seconds 必须落在 0 < t <= 600")
+                await self._settings.set(SETTING_RAGFLOW_TIMEOUT_SECONDS, value)
+            changed = True
+
+        if parse_timeout_seconds_provided:
+            if parse_timeout_seconds is None:
+                await self._settings.delete(SETTING_RAGFLOW_PARSE_TIMEOUT_SECONDS)
+            else:
+                try:
+                    value = float(parse_timeout_seconds)
+                except (TypeError, ValueError):
+                    raise InvalidSettingValueError("parse_timeout_seconds 必须是数字") from None
+                if value <= 0 or value > 600:
+                    raise InvalidSettingValueError("parse_timeout_seconds 必须落在 0 < t <= 600")
+                await self._settings.set(SETTING_RAGFLOW_PARSE_TIMEOUT_SECONDS, value)
+            changed = True
+
+        if max_chunks_per_document_provided:
+            if max_chunks_per_document is None:
+                await self._settings.delete(SETTING_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT)
+            else:
+                try:
+                    value = int(max_chunks_per_document)
+                except (TypeError, ValueError):
+                    raise InvalidSettingValueError("max_chunks_per_document 必须是整数") from None
+                if value < 1 or value > 50:
+                    raise InvalidSettingValueError("max_chunks_per_document 必须落在 1 ~ 50")
+                await self._settings.set(SETTING_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT, value)
+            changed = True
+
+        if enabled_sections_provided:
+            cleaned = (enabled_sections or "").strip()
+            if cleaned:
+                await self._settings.set(SETTING_RAGFLOW_ENABLED_SECTIONS, cleaned)
+            else:
+                await self._settings.delete(SETTING_RAGFLOW_ENABLED_SECTIONS)
+            changed = True
+
         if changed:
             self._provider.invalidate()
 
         return await self.get_ragflow_settings()
 
-    async def clear_ragflow_api_key(self) -> RagflowSettingsDTO:
-        """清除系统级 API Key（回落环境变量兜底或变为不可用）。"""
-        removed = await self._secrets.delete(SECRET_RAGFLOW_API_KEY)
-        if removed:
+    # ------------------------------------------------------------------ 通用系统密钥
+    # 泛化自 RAGFLOW 专属实现：system_secrets 端口本就按 key 通用存储，
+    # 这里只补一层"按已注册槽位管理"的服务方法，使新增第三方密钥无需改接口。
+
+    def _secret_slot(self, secret_key: str) -> SecretSlot:
+        for slot in KNOWN_SYSTEM_SECRET_SLOTS:
+            if slot.key == secret_key:
+                return slot
+        raise InvalidSettingValueError(f"未知的系统密钥槽位：{secret_key}")
+
+    @staticmethod
+    def _secret_source(_slot: SecretSlot, stored: StoredSecret | None) -> SecretSource:
+        # RAGFLOW 等凭据已全面页面化、库内持久化，不再有"环境变量兜底"来源，
+        # 因此来源只可能是 system（库里已配置）或 none（未配置）。
+        if stored is not None:
+            return SecretSource.SYSTEM
+        return SecretSource.NONE
+
+    async def list_system_secrets(self) -> SystemSecretListDTO:
+        """列出所有已注册的系统密钥槽位及其配置状态（无明文）。"""
+        summaries: list[SystemSecretSummaryDTO] = []
+        for slot in KNOWN_SYSTEM_SECRET_SLOTS:
+            stored = await self._secrets.get(slot.key)
+            summaries.append(
+                SystemSecretSummaryDTO(
+                    key=slot.key,
+                    label=slot.label,
+                    description=slot.description,
+                    kind=slot.kind.value,
+                    configured=stored is not None,
+                    masked_value=mask_secret_hint(stored.hint) if stored else "",
+                    hint=stored.hint if stored else None,
+                    source=self._secret_source(slot, stored),
+                    updated_at=stored.updated_at if stored else None,
+                )
+            )
+        return SystemSecretListDTO(secrets=summaries)
+
+    async def set_system_secret(self, secret_key: str, value: str) -> SystemSecretSummaryDTO:
+        """写入/覆盖一个系统密钥（加密入库，立即生效）。"""
+        slot = self._secret_slot(secret_key)
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise InvalidSettingValueError("密钥不能为空")
+        if len(cleaned) > MAX_SECRET_LENGTH:
+            raise InvalidSettingValueError(f"密钥过长（上限 {MAX_SECRET_LENGTH} 字符）")
+        await self._secrets.upsert(
+            secret_key=slot.key,
+            ciphertext=self._cipher.encrypt(cleaned, aad=slot.key),
+            key_id=self._cipher.active_key_id,
+            hint=build_secret_hint(cleaned),
+        )
+        # 若该密钥被某个配置 provider 依赖（如 RAGFlow），让缓存失效以立即生效
+        if slot.key == SECRET_RAGFLOW_API_KEY:
             self._provider.invalidate()
-            logger.info("系统级 RAGFlow 凭据已清除（key=%s）", SECRET_RAGFLOW_API_KEY)
-        return await self.get_ragflow_settings()
+        logger.info("系统级密钥已更新（key=%s）", slot.key)
+        return (await self.list_system_secrets()).secrets[KNOWN_SYSTEM_SECRET_SLOTS.index(slot)]
+
+    async def clear_system_secret(self, secret_key: str) -> SystemSecretSummaryDTO:
+        """清除一个系统密钥（变为不可用；不再有环境变量兜底）。"""
+        slot = self._secret_slot(secret_key)
+        removed = await self._secrets.delete(slot.key)
+        if removed and slot.key == SECRET_RAGFLOW_API_KEY:
+            self._provider.invalidate()
+        if removed:
+            logger.info("系统级密钥已清除（key=%s）", slot.key)
+        return (await self.list_system_secrets()).secrets[KNOWN_SYSTEM_SECRET_SLOTS.index(slot)]
 
     async def test_ragflow_connection(self) -> RagflowConnectionTestDTO:
         """用**当前生效的**服务器侧配置做一次连通性自检。

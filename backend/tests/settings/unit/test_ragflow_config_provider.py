@@ -1,8 +1,8 @@
-"""RAGFlow 配置解析（三级回退 + 缓存失效）单元测试。
+"""RAGFlow 配置解析（库优先 + 内置默认兜底 + 缓存失效）单元测试。
 
-这是"管理员改完密钥立不立即生效"这条承诺的实现处，所以重点验证：
+重点验证"管理员改完密钥立即可生效"这条承诺的实现：
 
-- 回退顺序：系统级密文 → 环境变量兜底 → 不可用
+- 回退顺序：系统级密文 / 系统设置 → 内置默认值（不再读环境变量）
 - 密文解不开时**降级而不是抛异常**（否则改错主密钥会让整个服务起不来）
 - 写入后 ``invalidate()`` 能立刻穿透缓存（这是修掉 ``@lru_cache`` 钉死凭据那个老问题的关键）
 """
@@ -16,19 +16,30 @@ from typing import Any
 from doc_process_studio.common.security.secret_cipher import SecretCipher
 from doc_process_studio.settings.application.ports import StoredSecret
 from doc_process_studio.settings.domain.values import (
+    DEFAULT_RAGFLOW_BASE_URL,
+    DEFAULT_RAGFLOW_DATASETS_JSON,
+    DEFAULT_RAGFLOW_ENABLED,
+    DEFAULT_RAGFLOW_ENABLED_SECTIONS,
+    DEFAULT_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT,
+    DEFAULT_RAGFLOW_PARSE_TIMEOUT_SECONDS,
+    DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD,
+    DEFAULT_RAGFLOW_TIMEOUT_SECONDS,
+    DEFAULT_RAGFLOW_TOP_K,
     SECRET_RAGFLOW_API_KEY,
     SETTING_RAGFLOW_BASE_URL,
     SETTING_RAGFLOW_ENABLED,
+    SETTING_RAGFLOW_ENABLED_SECTIONS,
+    SETTING_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT,
+    SETTING_RAGFLOW_PARSE_TIMEOUT_SECONDS,
+    SETTING_RAGFLOW_SIMILARITY_THRESHOLD,
+    SETTING_RAGFLOW_TIMEOUT_SECONDS,
+    SETTING_RAGFLOW_TOP_K,
     SecretSource,
 )
 from doc_process_studio.settings.infrastructure.ragflow_config_provider import SqlRagflowConfigProvider
 
 KEY = os.urandom(32)
 CIPHER = SecretCipher(keys={"k1": KEY}, active_key_id="k1")
-
-ENV_BASE_URL = "http://env-fallback:10108"
-ENV_API_KEY = "env-fallback-key"
-ENV_ENABLED = True
 
 
 class FakeSecretRepository:
@@ -85,24 +96,29 @@ def _provider(
         setting_repo=setting_repo,  # type: ignore[arg-type]
         cipher=cipher,
         ttl_seconds=ttl,
-        env_base_url=ENV_BASE_URL,
-        env_api_key=ENV_API_KEY,
-        env_enabled=ENV_ENABLED,
     )
     return provider, secret_repo, setting_repo
 
 
-async def test_empty_database_falls_back_to_env() -> None:
+async def test_empty_database_falls_back_to_defaults() -> None:
     provider, _, _ = _provider()
     config = await provider.resolve()
-    assert config.base_url == ENV_BASE_URL
-    assert config.api_key == ENV_API_KEY
-    assert config.enabled is True
-    assert config.source is SecretSource.ENV
-    assert config.usable is True
+    assert config.base_url == DEFAULT_RAGFLOW_BASE_URL
+    assert config.api_key == ""
+    assert config.enabled is DEFAULT_RAGFLOW_ENABLED
+    assert config.source is SecretSource.NONE
+    assert config.usable is False
+    # 检索参数回落内置默认值
+    assert config.similarity_threshold == DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD
+    assert config.top_k == DEFAULT_RAGFLOW_TOP_K
+    assert config.timeout_seconds == DEFAULT_RAGFLOW_TIMEOUT_SECONDS
+    assert config.parse_timeout_seconds == DEFAULT_RAGFLOW_PARSE_TIMEOUT_SECONDS
+    assert config.max_chunks_per_document == DEFAULT_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT
+    assert config.enabled_sections == DEFAULT_RAGFLOW_ENABLED_SECTIONS
+    assert config.datasets_json == DEFAULT_RAGFLOW_DATASETS_JSON
 
 
-async def test_system_secret_wins_over_env() -> None:
+async def test_system_secret_wins_over_defaults() -> None:
     ciphertext = CIPHER.encrypt("system-key-value", aad=SECRET_RAGFLOW_API_KEY)
     provider, _, _ = _provider(
         settings={
@@ -117,8 +133,8 @@ async def test_system_secret_wins_over_env() -> None:
     assert config.base_url == "http://system-host:10108"  # 尾部斜杠被规整
 
 
-async def test_system_enabled_false_overrides_env_true() -> None:
-    """管理员停用后，即使 env 里开着也必须停用。"""
+async def test_system_enabled_false_overrides_default_true() -> None:
+    """管理员停用后，默认开启也必须被覆盖为停用。"""
     ciphertext = CIPHER.encrypt("k", aad=SECRET_RAGFLOW_API_KEY)
     provider, _, _ = _provider(settings={SETTING_RAGFLOW_ENABLED: False}, ciphertext=ciphertext)
     config = await provider.resolve()
@@ -126,13 +142,14 @@ async def test_system_enabled_false_overrides_env_true() -> None:
     assert config.usable is False
 
 
-async def test_system_base_url_without_secret_uses_env_key() -> None:
-    """允许"只覆盖 Base URL、密钥仍走环境变量"的中间状态。"""
+async def test_system_base_url_without_secret_is_not_usable() -> None:
+    """只覆盖 Base URL、密钥仍空缺时，凭据不可用（不再有环境变量兜底）。"""
     provider, _, _ = _provider(settings={SETTING_RAGFLOW_BASE_URL: "http://only-url:10108"})
     config = await provider.resolve()
     assert config.base_url == "http://only-url:10108"
-    assert config.api_key == ENV_API_KEY
-    assert config.source is SecretSource.ENV
+    assert config.api_key == ""
+    assert config.source is SecretSource.NONE
+    assert config.usable is False
 
 
 async def test_undecryptable_secret_degrades_instead_of_raising() -> None:
@@ -141,27 +158,29 @@ async def test_undecryptable_secret_degrades_instead_of_raising() -> None:
     broken = foreign.encrypt("unreadable", aad=SECRET_RAGFLOW_API_KEY)
     provider, _, _ = _provider(ciphertext=broken)
     config = await provider.resolve()
-    assert config.api_key == ENV_API_KEY
-    assert config.source is SecretSource.ENV
+    assert config.api_key == ""
+    assert config.source is SecretSource.NONE
 
 
-async def test_no_env_and_no_database_is_disabled() -> None:
-    secret_repo = FakeSecretRepository(None)
-    setting_repo = FakeSettingRepository({})
-    provider = SqlRagflowConfigProvider(
-        secret_repo=secret_repo,  # type: ignore[arg-type]
-        setting_repo=setting_repo,  # type: ignore[arg-type]
-        cipher=CIPHER,
-        ttl_seconds=60,
-        env_base_url=None,
-        env_api_key=None,
-        env_enabled=False,
+async def test_explicit_setting_overrides_default_value() -> None:
+    """库里写了具体值就覆盖内置默认（验证阈值 / 条数 / 超时 / 章节字段）。"""
+    provider, _, _ = _provider(
+        settings={
+            SETTING_RAGFLOW_SIMILARITY_THRESHOLD: 0.42,
+            SETTING_RAGFLOW_TOP_K: 12,
+            SETTING_RAGFLOW_TIMEOUT_SECONDS: 30.0,
+            SETTING_RAGFLOW_PARSE_TIMEOUT_SECONDS: 90.0,
+            SETTING_RAGFLOW_MAX_CHUNKS_PER_DOCUMENT: 5,
+            SETTING_RAGFLOW_ENABLED_SECTIONS: "quick,impact",
+        }
     )
     config = await provider.resolve()
-    assert config.base_url == ""
-    assert config.api_key == ""
-    assert config.usable is False
-    assert config.source is SecretSource.NONE
+    assert config.similarity_threshold == 0.42
+    assert config.top_k == 12
+    assert config.timeout_seconds == 30.0
+    assert config.parse_timeout_seconds == 90.0
+    assert config.max_chunks_per_document == 5
+    assert config.enabled_sections == "quick,impact"
 
 
 async def test_ttl_caches_and_invalidate_breaks_through() -> None:

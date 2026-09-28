@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from ....common.utils.error_utils import summarize_exception
+from ....settings.application.ports import RagflowConfigProvider
+from ....settings.domain.values import DEFAULT_RAGFLOW_TOP_K
 from ....skill.application.dtos.runtime import SkillPlanDecision
 from ....skill.infrastructure.selector import (
     SelectorOption,
@@ -420,13 +422,11 @@ class CompositeReferenceContext(ReferenceContextPort):
         *,
         base: ReferenceContextPort,
         retriever: KnowledgeRetrieverPort,
-        ragflow_enabled_sections: str = "quick,impact,root_cause,follow_up",
-        ragflow_top_k: int = 3,
+        config_provider: RagflowConfigProvider,
     ) -> None:
         self._base = base
         self._retriever = retriever
-        self._enabled_sections = {s.strip().lower() for s in (ragflow_enabled_sections or "").split(",") if s.strip()}
-        self._top_k = ragflow_top_k
+        self._config_provider = config_provider
 
     async def resolve(
         self,
@@ -451,13 +451,21 @@ class CompositeReferenceContext(ReferenceContextPort):
         except Exception as exc:
             logger.warning("Base reference resolve failed, use empty base: %s", exc)
 
+        # 运行期解析 RAGFlow 配置，保证管理员在设置页改完"启用章节 / 召回条数"后立即生效，
+        # 不必重启进程（凭据同理，由 RagflowConfigProvider 在每次 retrieve 时解析）。
+        config = await self._config_provider.resolve(scope="system")
+        enabled_sections = {s.strip().lower() for s in (config.enabled_sections or "").split(",") if s.strip()}
         section_key = (section_id or "").strip().lower()
-        if section_key not in self._enabled_sections:
+        if section_key not in enabled_sections:
             return base_text, base_files, base_reason
 
         try:
             query = _build_retrieval_query(section_id=section_id, context_json=context_json)
-            chunks = await self._retriever.retrieve(query=query, scope="history", top_k=self._top_k)
+            chunks = await self._retriever.retrieve(
+                query=query,
+                scope="history",
+                top_k=config.top_k if config.top_k is not None else DEFAULT_RAGFLOW_TOP_K,
+            )
         except Exception as exc:
             logger.warning("Knowledge retrieval failed, degrade to base: %s", exc)
             return base_text, base_files, f"{base_reason} | ragflow:error:{type(exc).__name__}"

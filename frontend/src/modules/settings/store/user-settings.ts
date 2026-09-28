@@ -2,7 +2,6 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { logger } from '@shared/utils/logger';
 import {
-  clearRagflowApiKey,
   fetchSettings,
   testRagflowConnection,
   updateRagflowSettings,
@@ -92,10 +91,10 @@ export const useUserSettingsStore = defineStore('user-settings', () => {
   };
 
   /**
-   * 保存系统级 RAGFlow 设置（仅管理员）。
+   * 保存系统级 RAGFlow 非密钥设置（仅管理员）。
    *
-   * 调用方必须遵守 `apiKey` 的四态语义：**空串等于"不变"**，
-   * 只有用户真的输入了新密钥才把明文放进来。
+   * 密钥（API Key）的保存/清除由调用方走 `setSystemSecret` / `clearSystemSecret`，
+   * 不经由本方法，避免两套密钥写入路径并存。
    */
   const saveRagflow = async (payload: UpdateRagflowRequest): Promise<void> => {
     saving.value = true;
@@ -131,22 +130,6 @@ export const useUserSettingsStore = defineStore('user-settings', () => {
       }
     };
 
-  const removeApiKey = async (): Promise<void> => {
-    saving.value = true;
-    try {
-      ragflow.value = await clearRagflowApiKey();
-      lastTestResult.value = null;
-    } catch (error) {
-      logger.error('清除 RAGFlow 密钥失败', {
-        context: 'user-settings',
-        error,
-      });
-      throw error;
-    } finally {
-      saving.value = false;
-    }
-  };
-
   return {
     preferences,
     ragflow,
@@ -160,6 +143,5 @@ export const useUserSettingsStore = defineStore('user-settings', () => {
     saveModelPreferences,
     saveRagflow,
     runConnectionTest,
-    removeApiKey,
   };
 });

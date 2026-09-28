@@ -9,14 +9,12 @@ export {
   updateUserPreferences,
   updateRagflowSettings,
   testRagflowConnection,
-  clearRagflowApiKey,
 } from './api/settings';
 
 // --- Types ---
 export type {
   ModelPreferences,
   UserPreferences,
-  RagflowCredential,
   RagflowSettings,
   SettingsOverviewResponse,
   UpdatePreferencesRequest,

@@ -150,7 +150,7 @@ def _usable_config() -> RagflowConfig:
         base_url=TEST_BASE_URL,
         api_key=SAMPLE_API_KEY,
         enabled=True,
-        source=SecretSource.ENV,
+        source=SecretSource.SYSTEM,
     )
 
 
@@ -193,7 +193,6 @@ def _headers(user_id: str = "usr_api_test") -> dict[str, str]:
         ("put", "/api/settings/preferences"),
         ("put", "/api/settings/ragflow"),
         ("post", "/api/settings/ragflow/test"),
-        ("delete", "/api/settings/ragflow/api-key"),
     ],
 )
 def test_all_endpoints_require_authentication(method: str, path: str) -> None:
@@ -207,7 +206,8 @@ def test_all_endpoints_require_authentication(method: str, path: str) -> None:
     [
         ("put", "/api/settings/ragflow"),
         ("post", "/api/settings/ragflow/test"),
-        ("delete", "/api/settings/ragflow/api-key"),
+        ("put", f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}"),
+        ("delete", f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}"),
     ],
 )
 def test_system_endpoints_reject_non_admin(method: str, path: str) -> None:
@@ -243,12 +243,12 @@ def test_read_settings_shape() -> None:
 
     ragflow = body["ragflow"]
     assert ragflow["base_url"] == TEST_BASE_URL
-    assert ragflow["base_url_source"] == "env"
+    assert ragflow["base_url_source"] == "default"
     assert ragflow["enabled"] is True
-    assert ragflow["enabled_source"] == "env"
+    assert ragflow["enabled_source"] == "default"
     assert ragflow["similarity_threshold"] > 0
     assert ragflow["top_k"] >= 1
-    assert set(ragflow["credential"]) == {"configured", "masked_api_key", "hint", "source", "updated_at"}
+    # 密钥状态不再挂在 ragflow 段上，改由 /api/settings/secrets 提供
 
 
 def test_read_endpoint_never_returns_plaintext_even_if_configured() -> None:
@@ -283,9 +283,15 @@ def test_member_overview_omits_system_section() -> None:
 def test_member_overview_omits_system_section_even_when_configured() -> None:
     """即使系统级密钥已配好，普通用户也拿不到掩码与尾串。"""
     service = _build_service()
-    TestClient(_app(ROLE_ADMIN, service)).put(
+    admin_client = TestClient(_app(ROLE_ADMIN, service))
+    admin_client.put(
         "/api/settings/ragflow",
-        json={"api_key": SAMPLE_API_KEY, "base_url": TEST_BASE_URL, "enabled": True},
+        json={"base_url": TEST_BASE_URL, "enabled": True},
+        headers=_headers(),
+    )
+    admin_client.put(
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
         headers=_headers(),
     )
 
@@ -294,24 +300,24 @@ def test_member_overview_omits_system_section_even_when_configured() -> None:
     assert SAMPLE_API_KEY[-4:] not in response.text
 
 
-def test_save_api_key_then_read_back_is_masked() -> None:
+def test_save_secret_then_read_back_is_masked() -> None:
     service = _build_service()
     client = TestClient(_app(ROLE_ADMIN, service))
 
     saved = client.put(
-        "/api/settings/ragflow",
-        json={"api_key": SAMPLE_API_KEY, "base_url": TEST_BASE_URL, "enabled": True},
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
         headers=_headers(),
     )
     assert saved.status_code == 200, saved.text
-    credential = saved.json()["credential"]
-    assert credential["configured"] is True
-    assert credential["masked_api_key"] == f"{MASK_PLACEHOLDER}{SAMPLE_API_KEY[-4:]}"
+    assert saved.json()["configured"] is True
+    assert saved.json()["masked_value"] == f"{MASK_PLACEHOLDER}{SAMPLE_API_KEY[-4:]}"
     # 关键：整个响应体里不得出现明文
     assert SAMPLE_API_KEY not in saved.text
 
-    reread = client.get("/api/settings", headers=_headers())
-    assert reread.json()["ragflow"]["credential"]["masked_api_key"].endswith(SAMPLE_API_KEY[-4:])
+    reread = client.get("/api/settings/secrets", headers=_headers())
+    secret = next(s for s in reread.json()["secrets"] if s["key"] == SECRET_RAGFLOW_API_KEY)
+    assert secret["masked_value"].endswith(SAMPLE_API_KEY[-4:])
     assert SAMPLE_API_KEY not in reread.text
 
 
@@ -328,7 +334,7 @@ def test_saved_secret_is_stored_encrypted_not_plain() -> None:
         dataset_catalog=FakeCatalog(),
     )
     TestClient(_app(ROLE_ADMIN, service)).put(
-        "/api/settings/ragflow", json={"api_key": SAMPLE_API_KEY}, headers=_headers()
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}", json={"value": SAMPLE_API_KEY}, headers=_headers()
     )
 
     stored = secrets.rows[SECRET_RAGFLOW_API_KEY]
@@ -337,27 +343,28 @@ def test_saved_secret_is_stored_encrypted_not_plain() -> None:
     assert stored.hint == SAMPLE_API_KEY[-4:]
 
 
-def test_empty_api_key_does_not_wipe_saved_key() -> None:
+def test_empty_secret_is_rejected_and_does_not_wipe_saved_key() -> None:
     service = _build_service()
     client = TestClient(_app(ROLE_ADMIN, service))
-    client.put("/api/settings/ragflow", json={"api_key": SAMPLE_API_KEY}, headers=_headers())
+    client.put(f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}", json={"value": SAMPLE_API_KEY}, headers=_headers())
 
-    response = client.put("/api/settings/ragflow", json={"api_key": ""}, headers=_headers())
-    assert response.status_code == 200
-    assert response.json()["credential"]["configured"] is True
+    # 空串必须被拒绝（schema 层 min_length=1），且不能把已保存的密钥清掉
+    response = client.put(f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}", json={"value": ""}, headers=_headers())
+    assert response.status_code == 422
 
-    response = client.put("/api/settings/ragflow", json={"base_url": TEST_BASE_URL}, headers=_headers())
-    assert response.json()["credential"]["configured"] is True
+    reread = client.get("/api/settings/secrets", headers=_headers())
+    secret = next(s for s in reread.json()["secrets"] if s["key"] == SECRET_RAGFLOW_API_KEY)
+    assert secret["configured"] is True
 
 
-def test_clear_api_key_endpoint() -> None:
+def test_clear_secret_endpoint() -> None:
     service = _build_service()
     client = TestClient(_app(ROLE_ADMIN, service))
-    client.put("/api/settings/ragflow", json={"api_key": SAMPLE_API_KEY}, headers=_headers())
+    client.put(f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}", json={"value": SAMPLE_API_KEY}, headers=_headers())
 
-    response = client.delete("/api/settings/ragflow/api-key", headers=_headers())
+    response = client.delete(f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}", headers=_headers())
     assert response.status_code == 200
-    assert response.json()["credential"]["configured"] is False
+    assert response.json()["configured"] is False
 
 
 @pytest.mark.parametrize("bad_url", ["ftp://nope:21", "file:///etc/passwd", "not-a-url"])
@@ -447,7 +454,7 @@ def test_member_can_save_own_preferences_but_not_system_settings() -> None:
         client.put("/api/settings/preferences", json={"models": {"selected": "qwen3:8b"}}, headers=headers).status_code
         == 200
     )
-    assert client.put("/api/settings/ragflow", json={"api_key": SAMPLE_API_KEY}, headers=headers).status_code == 403
+    assert client.put("/api/settings/ragflow", json={"base_url": TEST_BASE_URL}, headers=headers).status_code == 403
 
 
 # ------------------------------------------------------------------ 知识库列表
@@ -488,3 +495,64 @@ def test_dataset_list_requires_admin() -> None:
     """知识库列表会暴露连接的可用范围，非管理员一律拒绝。"""
     response = TestClient(_app(ROLE_MEMBER)).get("/api/settings/ragflow/datasets", headers=_headers())
     assert response.status_code == 403
+
+
+# ------------------------------------------------------------------ 通用系统密钥
+
+
+def test_list_system_secrets_endpoint_admin_only() -> None:
+    """系统级密钥清单只能管理员看（含掩码尾串，普通用户不应拿到）。"""
+    client = TestClient(_app(ROLE_MEMBER))
+    assert client.get("/api/settings/secrets", headers=_headers()).status_code == 403
+    admin_client = TestClient(_app(ROLE_ADMIN))
+    resp = admin_client.get("/api/settings/secrets", headers=_headers())
+    assert resp.status_code == 200
+    keys = [s["key"] for s in resp.json()["secrets"]]
+    assert SECRET_RAGFLOW_API_KEY in keys
+
+
+def test_set_system_secret_endpoint_roundtrip() -> None:
+    service = _build_service()
+    client = TestClient(_app(ROLE_ADMIN, service))
+    set_resp = client.put(
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
+        headers=_headers(),
+    )
+    assert set_resp.status_code == 200, set_resp.text
+    body = set_resp.json()
+    assert body["configured"] is True
+    assert body["masked_value"].endswith(SAMPLE_API_KEY[-4:])
+    # 全链路不得回显明文
+    assert SAMPLE_API_KEY not in set_resp.text
+    list_resp = client.get("/api/settings/secrets", headers=_headers())
+    assert SAMPLE_API_KEY not in list_resp.text
+
+
+def test_set_system_secret_unknown_key_400() -> None:
+    client = TestClient(_app(ROLE_ADMIN))
+    resp = client.put("/api/settings/secrets/does.not.exist", json={"value": "x"}, headers=_headers())
+    assert resp.status_code == 400
+
+
+def test_set_system_secret_rejects_non_admin() -> None:
+    client = TestClient(_app(ROLE_MEMBER))
+    resp = client.put(
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
+        headers=_headers(),
+    )
+    assert resp.status_code == 403
+
+
+def test_clear_system_secret_endpoint() -> None:
+    service = _build_service()
+    client = TestClient(_app(ROLE_ADMIN, service))
+    client.put(
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
+        headers=_headers(),
+    )
+    clear = client.delete(f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}", headers=_headers())
+    assert clear.status_code == 200
+    assert clear.json()["configured"] is False

@@ -13,6 +13,10 @@
   overflow-y: auto;
   display: flex;
   justify-content: center;
+  /* 必须 flex-start：默认 stretch 会在内容高于视口时把子项高度压成视口高，
+     溢出的章节内容会盖住 .settings-content 的 padding-bottom，导致末节卡片
+     贴到页面底部（甚至被操作系统任务栏遮挡）。 */
+  align-items: flex-start;
   background:
     radial-gradient(circle at 8% 12%, rgba(37, 99, 235, 0.06), transparent 42%),
     radial-gradient(
@@ -65,6 +69,10 @@
 .settings-section-desc:last-child {
   margin-bottom: 0;
 }
+
+/* 末节与页面底部留白：`.settings-content` 自身的 `padding-bottom`（space-2xl）已足够。
+   关键是上方 `.settings-body` 用了 `align-items: flex-start` 而非默认 stretch——
+   否则内容高于视口时溢出会盖住 padding，末节卡片会贴到页面底部。此处无需额外 margin。 */
 
 .selector-group {
   position: relative;
@@ -275,4 +283,65 @@
   .secret-mask {
     flex-basis: 100%;
   }
+}
+
+/* 高级检索参数区：分隔 + 小标题 + 章节勾选网格 */
+.settings-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-xl) 0;
+}
+
+.settings-subtitle {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.section-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm) var(--space-lg);
+  margin-top: var(--space-sm);
+}
+
+.section-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .section-checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.secret-child-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg) var(--space-xl);
+  margin-top: var(--space-lg);
+  background: var(--color-bg-secondary);
+}
+
+.secret-child-head {
+  margin-bottom: var(--space-md);
+}
+
+.secret-child-title {
+  margin: 0 0 var(--space-2xs);
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+}
+
+.secret-child-desc {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
 }

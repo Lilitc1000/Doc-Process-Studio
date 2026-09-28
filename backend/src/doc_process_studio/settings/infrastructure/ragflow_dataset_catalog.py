@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-from ...common.infrastructure.config import settings
 from ...knowledge_base.infrastructure.ragflow_client import RagflowClient
 from ..application.ports import RagflowDatasetCatalog, RagflowDatasetInfo
 from ..domain.values import RagflowConfig
@@ -29,10 +28,13 @@ def _to_int(value: object) -> int:
 
 
 class RagflowClientDatasetCatalog(RagflowDatasetCatalog):
-    """用当前生效凭据调 ``GET /api/v1/datasets`` 取知识库列表。"""
+    """用当前生效凭据调 ``GET /api/v1/datasets`` 取知识库列表。
+
+    超时取自当前生效配置（``config.timeout_seconds``），不再依赖环境变量。
+    """
 
     def __init__(self, *, timeout_seconds: float | None = None) -> None:
-        self._timeout = timeout_seconds if timeout_seconds is not None else settings.ragflow_timeout_seconds
+        self._fallback_timeout = timeout_seconds
 
     async def list_datasets(self, config: RagflowConfig) -> list[RagflowDatasetInfo]:
         if not config.usable:
@@ -41,7 +43,7 @@ class RagflowClientDatasetCatalog(RagflowDatasetCatalog):
         client = RagflowClient(
             base_url=config.base_url,
             api_key=config.api_key,
-            timeout_seconds=self._timeout,
+            timeout_seconds=config.timeout_seconds if config.timeout_seconds is not None else self._fallback_timeout,
         )
         raw_items = await client.list_datasets()
 

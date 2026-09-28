@@ -17,10 +17,16 @@ frontend/src/modules/settings/
 
 设置页分两层，权限不同：
 
-| 分区               | 谁能看           | 内容                                                             |
-| ------------------ | ---------------- | ---------------------------------------------------------------- |
-| **个人设置**       | 任何登录用户     | 生成模型、重排序模型 —— 按用户保存在服务端                       |
-| **RAGFlow 知识库** | **仅全局管理员** | Base URL、API 密钥（掩码展示）、启用开关、测试连接 —— 全系统共享 |
+| 分区         | 谁能看           | 内容                                                                              |
+| ------------ | ---------------- | --------------------------------------------------------------------------------- |
+| **个人设置** | 任何登录用户     | 生成模型、重排序模型 —— 按用户保存在服务端                                        |
+| **系统密钥** | **仅全局管理员** | 系统级密文凭据的分组容器；其子卡片 = 各注册密钥槽位，RAGFlow 知识库是首个派生实例 |
+
+**父容器 / 子卡片（派生设计）**：`系统密钥` 是一个分组标题（父容器），下面挂载若干
+`.secret-child-card` 子卡片。RAGFlow 知识库是**首个、也是目前唯一的**派生实例（连接信息
+
+- 其 API 密钥）。新增第三方密钥只需在后端 `values.KNOWN_SYSTEM_SECRET_SLOTS` 注册一个槽位，
+  前端会按统一模式自动渲染一张新的子卡片，无需改接口、无需改 UI。
 
 非管理员看到的是同一分区的说明块（`.settings-section--muted`），而非空白：
 让用户知道"这项存在但归管理员管"，比直接隐藏更好排障。
@@ -69,31 +75,36 @@ frontend/src/modules/settings/
 | 测试中 / 测试成功 / 测试失败 | 按钮 loading；结果通过 `settings-hint` 展示后端返回的具体原因（401 / DNS / 超时各不相同）                          |
 | 保存中                       | 保存按钮文案变「保存中…」并禁用                                                                                    |
 | 保存成功                     | 回到只读态显示新掩码 + 「已保存，立即生效。」                                                                      |
-| 清除密钥                     | `BaseConfirmDialog` 二次确认后调 DELETE                                                                            |
+| 清除密钥                     | `BaseConfirmDialog` 二次确认后调 `DELETE /settings/secrets/{key}`（`clearSystemSecret`）                           |
 | 全局兜底生效                 | 黄色提示条「当前未配置系统级密钥，正在使用环境变量中的兜底密钥。」                                                 |
 
 ## API 依赖
 
-| API                     | 方法   | 路径                        | 权限     |
-| ----------------------- | ------ | --------------------------- | -------- |
-| `fetchSettings`         | GET    | `/settings`                 | 登录用户 |
-| `updateUserPreferences` | PUT    | `/settings/preferences`     | 登录用户 |
-| `updateRagflowSettings` | PUT    | `/settings/ragflow`         | 管理员   |
-| `testRagflowConnection` | POST   | `/settings/ragflow/test`    | 管理员   |
-| `clearRagflowApiKey`    | DELETE | `/settings/ragflow/api-key` | 管理员   |
+| API                     | 方法   | 路径                         | 权限     |
+| ----------------------- | ------ | ---------------------------- | -------- |
+| `fetchSettings`         | GET    | `/settings`                  | 登录用户 |
+| `updateUserPreferences` | PUT    | `/settings/preferences`      | 登录用户 |
+| `updateRagflowSettings` | PUT    | `/settings/ragflow`          | 管理员   |
+| `fetchRagflowDatasets`  | GET    | `/settings/ragflow/datasets` | 管理员   |
+| `testRagflowConnection` | POST   | `/settings/ragflow/test`     | 管理员   |
+| `listSystemSecrets`     | GET    | `/settings/secrets`          | 管理员   |
+| `setSystemSecret`       | PUT    | `/settings/secrets/{key}`    | 管理员   |
+| `clearSystemSecret`     | DELETE | `/settings/secrets/{key}`    | 管理员   |
 
 后端一律 snake_case，camelCase 只存在于前端（`shared/api/request` 的 humps 拦截器负责转换）。
 
-### `apiKey` 的四态语义（改这部分前务必先读）
+### 系统密钥的写入语义（改这部分前务必先读）
 
-| 传值                    | 行为                                           |
-| ----------------------- | ---------------------------------------------- |
-| 字段不传                | 保持不变                                       |
-| `''` 空串               | **保持不变**（防止一个空输入框把线上密钥清掉） |
-| 非空字符串              | 覆盖                                           |
-| 调 `clearRagflowApiKey` | 清除                                           |
+密钥统一走通用系统密钥端点，不再有 RAGFlow 专属的 `apiKey` 字段：
 
-保存时只提交**用户这次真正改动**的字段；若一个字段都没变，前端直接提示
+| 操作                                   | 行为                                            |
+| -------------------------------------- | ----------------------------------------------- |
+| `PUT /settings/secrets/{key}` 传非空值 | 加密覆盖该槽位                                  |
+| `PUT /settings/secrets/{key}` 传空串   | **被拒（422）**——避免一个空输入框把线上密钥清掉 |
+| `DELETE /settings/secrets/{key}`       | 清除该槽位（回落 env 兜底，见上文三级回退链）   |
+
+`syncDrafts()` 刻意**不回填**掩码：掩码不是密钥，回填会让用户误以为能直接保存。
+保存时只提交**用户这次真正改动**的连接字段；若一个字段都没变，前端直接提示
 「没有检测到改动。」而不发请求。
 
 ## 开发注意

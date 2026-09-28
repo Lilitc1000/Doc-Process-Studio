@@ -111,11 +111,18 @@ async def test_saved_api_key_is_ciphertext_in_database(
 
     response = await client.put(
         "/api/settings/ragflow",
-        json={"api_key": SAMPLE_API_KEY, "base_url": "http://db-test-host:10108", "enabled": True},
+        json={"base_url": "http://db-test-host:10108", "enabled": True},
         headers=_headers(admin),
     )
     assert response.status_code == 200
-    assert SAMPLE_API_KEY not in response.text
+
+    secret_resp = await client.put(
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
+        headers=_headers(admin),
+    )
+    assert secret_resp.status_code == 200
+    assert SAMPLE_API_KEY not in secret_resp.text
 
     row = (
         await db_session.execute(select(SystemSecret).where(SystemSecret.secret_key == SECRET_RAGFLOW_API_KEY))
@@ -138,18 +145,26 @@ async def test_read_back_is_masked_and_reports_system_source(
     headers = _headers(admin)
     await client.put(
         "/api/settings/ragflow",
-        json={"api_key": SAMPLE_API_KEY, "base_url": "http://db-test-host:10108", "enabled": True},
+        json={"base_url": "http://db-test-host:10108", "enabled": True},
+        headers=headers,
+    )
+    await client.put(
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
         headers=headers,
     )
 
     body = (await client.get("/api/settings", headers=headers)).json()
     ragflow = body["ragflow"]
-    assert ragflow["credential"]["configured"] is True
-    assert ragflow["credential"]["masked_api_key"] == f"{MASK_PLACEHOLDER}{SAMPLE_API_KEY[-4:]}"
-    assert ragflow["credential"]["source"] == "system"
     assert ragflow["base_url"] == "http://db-test-host:10108"
     assert ragflow["base_url_source"] == "system"
     assert ragflow["enabled_source"] == "system"
+
+    secrets_body = (await client.get("/api/settings/secrets", headers=headers)).json()
+    secret = next(s for s in secrets_body["secrets"] if s["key"] == SECRET_RAGFLOW_API_KEY)
+    assert secret["configured"] is True
+    assert secret["masked_value"] == f"{MASK_PLACEHOLDER}{SAMPLE_API_KEY[-4:]}"
+    assert secret["source"] == "system"
 
 
 async def test_provider_resolves_saved_key_for_consumers(
@@ -159,8 +174,13 @@ async def test_provider_resolves_saved_key_for_consumers(
     """这是本次改造的核心承诺：写入后**同一进程内立即**能被消费方读到，无需重启。"""
     admin = await _make_user(db_session, ROLE_ADMIN)
     await client.put(
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
+        headers=_headers(admin),
+    )
+    await client.put(
         "/api/settings/ragflow",
-        json={"api_key": SAMPLE_API_KEY, "enabled": True},
+        json={"enabled": True},
         headers=_headers(admin),
     )
 
@@ -176,11 +196,11 @@ async def test_clear_api_key_removes_database_row(
 ) -> None:
     admin = await _make_user(db_session, ROLE_ADMIN)
     headers = _headers(admin)
-    await client.put("/api/settings/ragflow", json={"api_key": SAMPLE_API_KEY}, headers=headers)
+    await client.put(f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}", json={"value": SAMPLE_API_KEY}, headers=headers)
 
-    response = await client.delete("/api/settings/ragflow/api-key", headers=headers)
+    response = await client.delete(f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}", headers=headers)
     assert response.status_code == 200
-    assert response.json()["credential"]["configured"] is False
+    assert response.json()["configured"] is False
 
     remaining = (
         await db_session.execute(select(SystemSecret).where(SystemSecret.secret_key == SECRET_RAGFLOW_API_KEY))
@@ -198,7 +218,7 @@ async def test_member_is_rejected_by_real_role_check(
     member = await _make_user(db_session, ROLE_MEMBER)
     response = await client.put(
         "/api/settings/ragflow",
-        json={"api_key": SAMPLE_API_KEY},
+        json={"base_url": "http://db-member-reject:10108"},
         headers=_headers(member),
     )
     assert response.status_code == 403
@@ -230,11 +250,12 @@ async def test_member_overview_omits_system_section(
     admin = await _make_user(db_session, ROLE_ADMIN)
     await client.put(
         "/api/settings/ragflow",
-        json={
-            "api_key": SAMPLE_API_KEY,
-            "base_url": "http://db-member-test:10108",
-            "enabled": True,
-        },
+        json={"base_url": "http://db-member-test:10108", "enabled": True},
+        headers=_headers(admin),
+    )
+    await client.put(
+        f"/api/settings/secrets/{SECRET_RAGFLOW_API_KEY}",
+        json={"value": SAMPLE_API_KEY},
         headers=_headers(admin),
     )
 

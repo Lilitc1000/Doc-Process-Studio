@@ -23,32 +23,31 @@ class UserPreferencesDTO(BaseModel):
     models: ModelPreferencesDTO = Field(default_factory=ModelPreferencesDTO, description="模型偏好")
 
 
-class RagflowCredentialDTO(BaseModel):
-    """系统级 RAGFlow 凭据的**可展示信息**（无明文）。"""
-
-    configured: bool = Field(..., description="是否已由管理员写入密钥")
-    masked_api_key: str = Field(..., description="掩码串，如 ••••••••Y30tkYQ；未配置时为空串")
-    hint: str | None = Field(default=None, description="掩码尾串；明文过短时为 None")
-    source: SecretSource = Field(..., description="当前生效凭据来源")
-    updated_at: datetime | None = Field(default=None, description="密钥最后更新时间")
-
-
 class RagflowSettingsDTO(BaseModel):
-    """RAGFlow 系统设置视图。"""
+    """RAGFlow 系统设置视图（**不含密钥**——密钥统一走通用系统密钥清单）。
+
+    凭据（是否已配置 / 掩码 / 来源）由 ``GET /api/settings/secrets`` 提供，
+    这样密钥的存储、展示、清除都是单一来源，避免与 RAGFlow 专属端点重复。
+    """
 
     base_url: str = Field(..., description="当前生效的 Base URL")
     enabled: bool = Field(..., description="当前生效的启用状态")
-    enabled_source: str = Field(..., description="启用状态来源：system（库里配置）或 env（环境变量兜底）")
-    base_url_source: str = Field(..., description="Base URL 来源：system 或 env")
-    credential: RagflowCredentialDTO = Field(..., description="凭据展示信息")
+    enabled_source: str = Field(..., description="启用状态来源：system（库里配置）或 default（内置默认值）")
+    base_url_source: str = Field(..., description="Base URL 来源：system 或 default")
     similarity_threshold: float = Field(..., description="检索相似度阈值（当前为全局配置）")
     top_k: int = Field(..., description="检索条数（当前为全局配置）")
     datasets_json: str = Field(
         default="",
         description=(
             '报告侧检索使用的 dataset 映射，形如 {"history": ["<dataset_id>"]}。'
-            "库里未配置时返回环境变量兜底值；空串表示未配置任何 dataset"
+            "库里未配置时返回内置默认 dataset 映射；空串表示未配置任何 dataset"
         ),
+    )
+    timeout_seconds: float = Field(..., description="RAGFlow 请求超时（秒），库里未配置时取内置默认值")
+    parse_timeout_seconds: float = Field(..., description="触发服务端解析的超时（秒），库里未配置时取内置默认值")
+    max_chunks_per_document: int = Field(..., description="同一文档最多注入的片段数，库里未配置时取内置默认值")
+    enabled_sections: str = Field(
+        ..., description="启用 RAGFlow 知识增强的报告章节（逗号分隔）；库里未配置时取内置默认值"
     )
 
 
@@ -94,3 +93,23 @@ class RagflowConnectionTestDTO(BaseModel):
     ok: bool = Field(..., description="是否连通且鉴权通过")
     message: str = Field(..., description="结果说明（失败时给出具体原因）")
     dataset_count: int = Field(default=0, description="可访问的 dataset 数量")
+
+
+class SystemSecretSummaryDTO(BaseModel):
+    """通用系统密钥的可展示信息（无明文）。"""
+
+    key: str = Field(..., description="密钥槽位 key，如 ragflow.api_key")
+    label: str = Field(..., description="展示名")
+    description: str = Field(..., description="用途说明")
+    kind: str = Field(..., description="密钥种类：api_key / oauth2 / generic_token，前端按此分发渲染")
+    configured: bool = Field(..., description="是否已由管理员写入")
+    masked_value: str = Field(..., description="掩码串；未配置时为空串")
+    hint: str | None = Field(default=None, description="掩码尾串；明文过短时为 None")
+    source: SecretSource = Field(..., description="当前生效来源：system / env / none")
+    updated_at: datetime | None = Field(default=None, description="最后更新时间")
+
+
+class SystemSecretListDTO(BaseModel):
+    """系统密钥列表视图。"""
+
+    secrets: list[SystemSecretSummaryDTO] = Field(default_factory=list, description="已注册的密钥槽位")

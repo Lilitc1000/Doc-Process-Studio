@@ -132,16 +132,18 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
 
     async def _resolve_runtime(
         self,
-    ) -> tuple[str, str, dict[str, list[str]], float, int]:
-        """解析出 (base_url, api_key, datasets, threshold, top_k)。
+    ) -> tuple[str, str, dict[str, list[str]], float, int, float, int]:
+        """解析出 (base_url, api_key, datasets, threshold, top_k, timeout, max_chunks)。
 
         dataset 映射与召回参数支持管理员在设置页调整并立即生效：
         provider 解析出的值优先于构造时的快照；库里没配则回落构造时传入的
-        env 默认值，保证只配了环境变量的既有部署行为不变。
+        快照默认值，保证单测 / 特殊场景的静态构造行为不变。
         """
         fallback_datasets = self._datasets
         fallback_threshold = self._threshold
         fallback_top_k = self._top_k
+        fallback_timeout = self._timeout
+        fallback_max_chunks = self._max_chunks_per_document
 
         if self._has_static:
             # 静态凭据（单测 / 特殊场景）优先，参数也一律用构造时快照
@@ -151,19 +153,25 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
                 fallback_datasets,
                 fallback_threshold,
                 fallback_top_k,
+                fallback_timeout,
+                fallback_max_chunks,
             )
         if self._provider is None:
-            return "", "", fallback_datasets, fallback_threshold, fallback_top_k
+            return "", "", fallback_datasets, fallback_threshold, fallback_top_k, fallback_timeout, fallback_max_chunks
 
         config = await self._provider.resolve(scope="system")
         if not config.enabled or not config.base_url or not config.api_key:
-            return "", "", fallback_datasets, fallback_threshold, fallback_top_k
+            return "", "", fallback_datasets, fallback_threshold, fallback_top_k, fallback_timeout, fallback_max_chunks
 
         datasets = _parse_datasets_json(config.datasets_json) or fallback_datasets
         # RagflowConfig 上的类型已经收窄为 float | None / int | None，这里只做"未配置则回落"
         threshold = config.similarity_threshold if config.similarity_threshold is not None else fallback_threshold
         top_k = config.top_k if config.top_k is not None else fallback_top_k
-        return config.base_url, config.api_key, datasets, threshold, top_k
+        timeout = config.timeout_seconds if config.timeout_seconds is not None else fallback_timeout
+        max_chunks = (
+            config.max_chunks_per_document if config.max_chunks_per_document is not None else fallback_max_chunks
+        )
+        return config.base_url, config.api_key, datasets, threshold, top_k, timeout, max_chunks
 
     async def retrieve(
         self,
@@ -172,7 +180,7 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
         scope: str,
         top_k: int,
     ) -> list[KnowledgeChunk]:
-        base_url, api_key, datasets, threshold, configured_top_k = await self._resolve_runtime()
+        base_url, api_key, datasets, threshold, configured_top_k, timeout, max_chunks = await self._resolve_runtime()
         if not base_url or not api_key:
             logger.debug("RAGFlow retriever unavailable (no usable credentials), skip retrieval")
             return []
@@ -196,7 +204,7 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
         url = f"{base_url}/api/v1/retrieval"
 
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(self._timeout)) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
                 resp = await client.post(url, json=payload, headers=headers)
                 resp.raise_for_status()
                 body = resp.json()
@@ -230,14 +238,14 @@ class RagflowKnowledgeRetriever(KnowledgeRetrieverPort):
             # top_k 形同虚设；语料铺开后更会让召回内容被头部文档独占。
             if doc_id:
                 used = per_document_counts.get(doc_id, 0)
-                if used >= self._max_chunks_per_document:
+                if used >= max_chunks:
                     continue
                 per_document_counts[doc_id] = used + 1
             try:
                 score = float(item.get("similarity", 0.0))
             except (TypeError, ValueError):
                 score = 0.0
-            if score < self._threshold:
+            if score < threshold:
                 continue
             source = str(item.get("document_keyword") or doc_id or "unknown")
             chunks.append(

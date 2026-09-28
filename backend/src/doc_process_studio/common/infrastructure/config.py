@@ -134,35 +134,6 @@ class Settings(BaseSettings):
     # 其他 worker 最长要等这个 TTL 才生效。设为 0 表示每次都查库（强一致但多一次查询）。
     system_settings_cache_ttl_seconds: int = 60
 
-    # ------------------------------------------------------------------ RAGFlow
-    # RAGFlow 本体开关（结构性）：决定"要不要把 RAGFlow 检索引擎装进报告侧参考上下文"。
-    # 改它需要重启。运行期的启停由系统设置里的 ragflow.enabled 控制（admin 可改，立即生效）。
-    ragflow_enabled: bool = False
-    # 连接信息与凭据的**开发期兜底**。生产环境应通过管理员的设置页写入数据库
-    # （system_settings / system_secrets），这里的值只在库中没有配置时生效。
-    # 切勿把 api_key 提交进版本库 —— 用 .env.<env>.local。
-    ragflow_base_url: str | None = None
-    ragflow_api_key: str | None = None
-    ragflow_timeout_seconds: float = 15.0
-    # 实测最高相似度 0.72，默认 0.70 余量偏小，暂取 0.55 观测召回。
-    ragflow_similarity_threshold: float = 0.55
-    ragflow_top_k: int = 6
-    # 同一文档最多取回的片段数。原先按 document_id 整体去重（等于 1），
-    # 语料只有一篇时每次只注入 1 个片段，top_k 形同虚设。
-    ragflow_max_chunks_per_document: int = 2
-    # 报告侧参考上下文使用的 dataset 列表，形如 {"scope": ["dataset_id", ...]}。
-    # 只接受**数组**值：字符串值会被 _parse_datasets_json 静默忽略
-    # （见 incident_report/infrastructure/adapters/ragflow_knowledge.py）。
-    # 注意当前唯一调用点把 scope 写死为 "history"
-    # （reference_context.py 的 CompositeReferenceContext.resolve），
-    # 因此本项实际上等价于"一个 dataset 列表"，多 scope 能力尚未接线。
-    ragflow_datasets_json: str = '{"history":["f05e5a4aadac11f1b9211b18c23af0c8"]}'
-    # 启用 RAGFlow 知识增强的报告章节。description / timeline 是纯事实章节，
-    # 注入外部素材会诱导编造，必须排除在外。
-    ragflow_enabled_sections: str = "quick,impact,root_cause,follow_up"
-    # 触发服务端解析的超时（解析是异步的，只等触发动作本身）。
-    ragflow_parse_timeout_seconds: float = 60.0
-
     model_config = SettingsConfigDict(
         extra="ignore",
         # 两段式加载：``.env.{env}`` 入库（不放密钥），

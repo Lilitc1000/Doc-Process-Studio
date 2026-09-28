@@ -11,6 +11,7 @@
 """
 
 from ...common.infrastructure.config import settings
+from ...settings.domain.values import DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD
 from ...settings.infrastructure.dependencies import get_ragflow_config_provider
 from ..application.kb_service import KnowledgeBaseService
 from ..application.ports import KnowledgeBaseRepository
@@ -29,9 +30,11 @@ async def get_ragflow_client() -> RagflowClient:
     return RagflowClient(
         base_url=config.base_url if config.enabled else "",
         api_key=config.api_key if config.enabled else "",
-        timeout_seconds=settings.ragflow_timeout_seconds,
-        parse_timeout_seconds=settings.ragflow_parse_timeout_seconds,
-        similarity_threshold=settings.ragflow_similarity_threshold,
+        timeout_seconds=config.timeout_seconds,
+        parse_timeout_seconds=config.parse_timeout_seconds,
+        similarity_threshold=config.similarity_threshold
+        if config.similarity_threshold is not None
+        else DEFAULT_RAGFLOW_SIMILARITY_THRESHOLD,
         top_k=settings.kb_search_top_k,
     )
 
