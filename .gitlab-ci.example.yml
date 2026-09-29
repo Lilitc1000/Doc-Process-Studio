@@ -1,0 +1,49 @@
+# .gitlab-ci.example.yml —— GitLab CI/CD 部署流水线模板（对齐群组 common 部署体系）
+#
+# ⚠️ 本文件不会被 CI 读取（GitLab 只识别根目录的 .gitlab-ci.yml）。
+# 启用方式：复制为 .gitlab-ci.yml 即可；workflow 限定 dev 分支触发（与兄弟项目一致）。
+#
+# 与 AiVideo 等兄弟项目的差异（都是 DPS 特有，模式完全一致）：
+#   1) compose 全部命令带 --env-file /opt/dps/.env（密钥由部署机文件承载，不进流水线）
+#   2) 上线前先跑 scripts/ensure_env.py --env prod 生成/补齐密钥文件（幂等，只补缺）
+#   3) build 之后、up 之前跑 alembic upgrade head（DPS 有数据库迁移）
+#   4) rsync 排除 .env / 密钥派生文件，防止部署机侧出现第二份密钥
+#
+# 前置条件：部署机有 python3（ensure_env 只用标准库）+ docker compose 插件；
+# /opt/dps/.env 若部署账号不可写，把 ensure_env 那行改成 sudo python3 并注意文件属主。
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+
+include:
+  - project: $CI_PROJECT_NAMESPACE/common
+    file: .default.yml
+
+variables:
+  SSH: ssh -o StrictHostKeyChecking=no -i $PK -p $SRV_PORT $SRV
+  # 部署目录与 AiVideo 的 /opt/AiVideo 区分开；/opt/dps/.env 在该目录之外，
+  # 不会被下面的 rsync --delete 清掉。若 DPS 部署在另一台机器，在这里覆盖
+  # SRV_IP / SRV 即可（本地 variables 会覆盖 common 模板里的同名键）。
+  DEPLOY_DIR: /opt/dps
+
+stages:
+  - deploy
+
+deploy-dev:
+  stage: deploy
+  tags: [office-shell]
+  environment: $CI_JOB_NAME
+  script:
+    # 1) 同步代码（排除密钥派生文件与无关产物）
+    - rsync -e "ssh -i $PK" -avz --delete --exclude .git --exclude node_modules --exclude .venv --exclude __pycache__ --exclude .env --exclude backend/.env.dev ./ ${SRV}:${DEPLOY_DIR}/
+    # 2) 生成/补齐密钥文件（幂等：已有则零改动；只打印键名不打印值）
+    - $SSH "cd $DEPLOY_DIR && python3 scripts/ensure_env.py --env prod --path /opt/dps/.env"
+    # 3) 构建镜像（此时旧栈仍在服务）
+    - $SSH "cd $DEPLOY_DIR && export DOCKER_BUILDKIT=1 && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml build"
+    # 4) 停旧栈 → 迁移 → 上线（compose run 会自动拉起 db 依赖）
+    - $SSH "cd $DEPLOY_DIR && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml down"
+    - $SSH "cd $DEPLOY_DIR && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml run --rm app alembic upgrade head"
+    - $SSH "cd $DEPLOY_DIR && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml up -d"
+  extends:
+    - .srvInfo-dev

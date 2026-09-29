@@ -1,19 +1,21 @@
 # docker-compose.prod.yml  (生产环境)
-# 与 docker-compose.yml（开发部署版）完全独立：本文件面向生产，密钥全部走
-# 插值变量（${VAR}），来源是部署机上的 .env（建议放在 rsync 同步目录之外，如 /opt/dps/.env，并用 `docker compose --env-file /opt/dps/.env` 读取；切勿放在仓库根目录让 rsync 覆盖进来——下一次部署的 rsync --delete 会把它删掉），也可来自 GitLab CI/CD 变量。
-# 不把任何密钥写进本文件；仓库已不再提交 .env.prod（其含真实生产凭据，已移除），生产密钥全部来自部署机 .env / CI/CD 变量。
+# 与开发环境（.devcontainer/docker-compose.devcontainer.yml）完全独立：本文件面向生产，
+# 密钥全部走插值变量（${VAR}），来源是部署机上的 .env（务必放在 rsync 同步目录之外，
+# 如 /opt/dps/.env，并用 `docker compose --env-file /opt/dps/.env` 读取；切勿放在仓库根目录
+# 让 rsync 覆盖进来——下一次部署的 rsync --delete 会把它删掉）。
 #
 # 部署机准备（一次性）：
-#   1) 复制模板并放到 rsync 目录【之外】：cp .env.prod.example /opt/dps/.env
-#      然后将下方所有 <...> 占位符替换为真实值（根 .gitignore 已忽略 .env，不会入库）；
-#   2) 生成主密钥：python -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())"
-#      放入 SETTINGS_ENCRYPTION_KEY；
-#   3) 部署作业用 `docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml ...` 读取该文件。
+#   1) 在仓库根目录执行：python3 scripts/ensure_env.py --env prod --path /opt/dps/.env
+#      —— 文件不存在则自动生成 4 个基础设施密钥（POSTGRES/REDIS/JWT/ENCRYPTION），
+#      已存在则只补缺、绝不覆盖（根 .gitignore 已忽略 /.env，不会入库）；
+#   2) 备份 /opt/dps/.env（它是唯一真相源：删除后重新生成会导致密码与既有数据卷错位）；
+#   3) 部署作业用 `docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml ...` 读取该文件；
+#      也可以把根目录 .gitlab-ci.example.yml 复制为 .gitlab-ci.yml 走流水线部署（见模板内说明）。
 #
 # 上线步骤：
 #   docker compose -f docker-compose.prod.yml run --rm app alembic upgrade head   # 建表/迁移
 #   docker compose -f docker-compose.prod.yml up -d --build
-#   # 首次启动后，管理员需在「系统设置 → 系统密钥」页填入 RAGFlow API Key（通用密钥库，见 config.py 注释）。
+#   # 首次启动后，部署者在 /setup 页创建管理员，再在「系统设置 → 系统密钥」页填入 RAGFlow API Key。
 
 services:
   db:

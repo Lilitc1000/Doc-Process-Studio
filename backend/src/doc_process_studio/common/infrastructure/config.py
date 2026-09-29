@@ -1,11 +1,16 @@
 import os
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_ENV = "dev"
 BACKEND_DIR = Path(__file__).resolve().parents[4]
+
+# 仓库内置的 JWT 示例占位值：仅用于本地开发兜底。ENV=prod 下出现它（或任何
+# <32 字符的弱值）都视为"忘了配密钥"，启动期直接失败——否则任何拿到仓库的
+# 人都能用这个公开值伪造任意用户（含管理员）的登录令牌。
+JWT_SECRET_PLACEHOLDER = "your-super-secret-key-change-in-production-min-32-chars"
 
 
 def resolve_runtime_env() -> str:
@@ -101,7 +106,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DPS_TEST_DATABASE_URL", "TEST_DATABASE_URL"),
     )
     auto_create_schema: bool = False
-    jwt_secret_key: str = "your-super-secret-key-change-in-production-min-32-chars"
+    jwt_secret_key: str = JWT_SECRET_PLACEHOLDER
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
@@ -122,8 +127,8 @@ class Settings(BaseSettings):
     #     主密钥一致，即使共用同一个 dev 数据库也能互相解密，无需传递密钥文件。
     #     代价：dev 的加密强度等于 jwt_secret_key 的强度，而它本身就在 .env.dev 里，
     #     所以 dev 只做到"防脱库裸读"，不是强保护。
-    # 切勿把主密钥写进被 git 跟踪的 .env.dev；生产环境改用部署机 .env / 环境变量注入。
-    # 仓库已不再提交 .env.prod（其含真实生产凭据），仅留 .env.prod.example 模板。
+    # 主密钥由 scripts/ensure_env.py 自动生成（dev 写入 .env.dev、prod 写入部署机 .env），
+    # 均不入库；未显式配置时的 HKDF 派生仅作为旧开发环境兜底。
     settings_encryption_key: str | None = None
     settings_encryption_key_id: str = "k1"
     # 是否允许开发环境从 jwt_secret_key 派生主密钥。生产环境该开关无效（永远要求显式配置）。
@@ -134,14 +139,32 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         extra="ignore",
-        # 两段式加载：``.env.{env}`` 入库（不放密钥），
-        # ``.env.{env}.local`` 由 .gitignore 覆盖，用于放主密钥等敏感值。
-        # pydantic-settings 按顺序读取，后面的文件覆盖前面的。
+        # 两段式加载：``.env.{env}``（由 scripts/ensure_env.py 生成，不入库），
+        # ``.env.{env}.local`` 用于本地手工覆盖。pydantic-settings 按顺序读取，
+        # 后面的文件覆盖前面的。
         env_file=(
             str(resolve_env_file_path()),
             f"{resolve_env_file_path()}.local",
         ),
     )
+
+    @model_validator(mode="after")
+    def _enforce_prod_jwt_secret(self) -> "Settings":
+        """ENV=prod 强制显式强随机 JWT_SECRET_KEY（与 SETTINGS_ENCRYPTION_KEY 同标准）。
+
+        缺失时服务"能跑"（回落仓库占位值），但这种静默降级等于把伪造任意用户
+        令牌的能力公开出去，必须启动期 fail fast。真实密钥由
+        ``scripts/ensure_env.py --env prod`` 生成，不走手工填写。
+        """
+        if resolve_runtime_env() != "prod":
+            return self
+        key = self.jwt_secret_key.strip()
+        if len(key) < 32 or key == JWT_SECRET_PLACEHOLDER:
+            raise ValueError(
+                "ENV=prod 必须显式配置强随机 JWT_SECRET_KEY（≥32 字符、不得使用示例占位值）；"
+                "生产部署请运行 scripts/ensure_env.py --env prod 自动生成。"
+            )
+        return self
 
     @field_validator("redis_url", mode="before")
     @classmethod

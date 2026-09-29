@@ -35,7 +35,9 @@ services:
     restart: always
     environment:
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: postgres_password
+      # 密码来自 .devcontainer/.env（由 scripts/ensure_env.py --env dev 生成）；
+      # compose 在项目目录自动读取该文件做插值。缺失即报错，防止空密码初始化数据卷。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?缺少 POSTGRES_PASSWORD —— 先在仓库根目录运行 python3 scripts/ensure_env.py --env dev}
       POSTGRES_DB: master
     ports:
       - "5432:5432"
@@ -51,11 +53,11 @@ services:
     restart: always
     ports:
       - "6379:6379"
-    command: redis-server --requirepass redis_dev_password --appendonly yes
+    command: redis-server --requirepass ${REDIS_PASSWORD:?缺少 REDIS_PASSWORD —— 先在仓库根目录运行 python3 scripts/ensure_env.py --env dev} --appendonly yes
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "redis_dev_password", "ping" ]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 3
