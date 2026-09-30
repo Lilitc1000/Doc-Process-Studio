@@ -147,7 +147,8 @@ env ENV=dev uv run --no-sync pytest tests/auth/unit/test_security.py -q
 # 真实数据库测试（持久化 + 真实库集成）
 # 测试库 DSN 依次从 --db-dsn > 环境变量 DPS_TEST_DATABASE_URL > settings.test_database_url 解析；
 # 开发环境 .env.dev 已配好 DPS_TEST_DATABASE_URL，直接跑即可，无需额外传环境变量。
-uv run python scripts/init_test_db.py                                   # 首次：建 dps_test 库
+# 测试库不存在时夹具会自动创建（仅限本地/开发库 host，见 conftest.ensure_test_database）；
+# init_test_db.py 仅保留 --drop 重置用途（库结构脏了时用）。
 env ENV=dev uv run --no-sync pytest tests/persistence/ -m db -q
 env ENV=dev uv run --no-sync pytest tests/integration_db/ -m db -q
 env ENV=dev uv run --no-sync pytest -m db -q                            # 两组一起跑

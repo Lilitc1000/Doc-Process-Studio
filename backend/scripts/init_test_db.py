@@ -1,11 +1,13 @@
 """创建（或重置）后端持久化测试用的独立数据库 dps_test。
 
 用法：
-    uv run python scripts/init_test_db.py           # 不存在则创建
     uv run python scripts/init_test_db.py --drop    # 先删后建（库结构脏了时用）
 
 说明：
-- 目标库名取自 DPS_TEST_DATABASE_URL（默认 postgresql://admin:postgres_password@db:5432/dps_test）
+- 目标库名取自 DPS_TEST_DATABASE_URL（必须设置；.env.dev 已由 scripts/ensure_env.py 生成）
+- **常规路径已不需要本脚本**：pytest 会话夹具检测到测试库不存在时会自动创建
+  （仅限本地/开发库 host，见 tests/conftest.py 的 ensure_test_database）
+- 本脚本保留的用途：--drop 重置一个脏了的测试库
 - 建库动作必须连到维护库（默认同实例的 postgres 库）执行
 - 测试表的创建/销毁由 pytest 夹具负责（会话开始 create_all、结束 drop_all），本脚本不建表
 """
@@ -16,10 +18,10 @@ import argparse
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 import asyncpg
 
-DEFAULT_TEST_DSN = "postgresql://admin:postgres_password@db:5432/dps_test"
 MAINT_DB = "postgres"
 
 
@@ -55,12 +57,42 @@ async def _ensure_database(test_dsn: str, drop: bool) -> None:
         await conn.close()
 
 
+def _resolve_test_dsn() -> str:
+    """解析测试库 DSN：进程环境变量优先，其次 backend/.env.dev（脚本裸跑时的兜底）。"""
+    from_env = os.getenv("DPS_TEST_DATABASE_URL", "").strip()
+    if from_env:
+        return from_env
+    env_file = Path(__file__).resolve().parents[1] / ".env.dev"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.strip().startswith("DPS_TEST_DATABASE_URL="):
+                return line.split("=", 1)[1].strip()
+    return ""
+
+
+def _redact(dsn: str) -> str:
+    """隐藏 DSN 中的密码段，用于日志/提示输出。"""
+    head, sep, tail = dsn.rpartition("@")
+    if not sep:
+        return dsn
+    scheme_end = head.find("://")
+    prefix = head[: scheme_end + 3] if scheme_end != -1 else ""
+    creds = head[scheme_end + 3 :] if scheme_end != -1 else head
+    user = creds.split(":", 1)[0]
+    return f"{prefix}{user}:***@{tail}"
+
+
 async def _main(drop: bool) -> None:
-    test_dsn = _normalize(os.getenv("DPS_TEST_DATABASE_URL", DEFAULT_TEST_DSN))
+    test_dsn = _normalize(_resolve_test_dsn())
+    if not test_dsn:
+        raise SystemExit(
+            "未设置 DPS_TEST_DATABASE_URL，且 backend/.env.dev 中也没有该键"
+            "（.env.dev 由 scripts/ensure_env.py 生成）。"
+        )
     await _ensure_database(test_dsn, drop)
     sqlalchemy_dsn = test_dsn.replace("postgresql://", "postgresql+asyncpg://")
     print("[init_test_db] 运行持久化测试：")
-    print(f'  DPS_TEST_DATABASE_URL="{sqlalchemy_dsn}" uv run pytest tests/persistence -m db')
+    print(f'  DPS_TEST_DATABASE_URL="{_redact(sqlalchemy_dsn)}" uv run pytest tests/persistence -m db')
 
 
 if __name__ == "__main__":

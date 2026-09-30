@@ -20,7 +20,9 @@ import sys
 from collections.abc import AsyncIterator, Generator
 from types import ModuleType
 from typing import Literal
+from urllib.parse import urlparse
 
+import asyncpg
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -61,6 +63,46 @@ def register_orm_metadata() -> None:
     """导入全部 ORM 模块，保证 Base.metadata 覆盖所有表。"""
     for name in _ORM_MODULE_NAMES:
         importlib.import_module(name)
+
+
+# 允许"测试库不存在就自动创建"的主机白名单：仅限本地/开发库。防止哪天把
+# --db-dsn / DPS_TEST_DATABASE_URL 指向远程或生产库时，测试进程悄悄在那边建库。
+AUTO_CREATE_HOSTS = frozenset({"db", "localhost", "127.0.0.1"})
+MAINTENANCE_DB = "postgres"
+
+
+def _strip_async_dialect(dsn: str) -> str:
+    """asyncpg 不认 sqlalchemy 的 +asyncpg 方言后缀。"""
+    return dsn.replace("postgresql+asyncpg://", "postgresql://").replace("postgres+asyncpg://", "postgresql://")
+
+
+def _dsn_allows_auto_create(dsn: str) -> bool:
+    host = (urlparse(_strip_async_dialect(dsn)).hostname or "").lower()
+    return host in AUTO_CREATE_HOSTS
+
+
+async def ensure_test_database(dsn: str) -> None:
+    """测试库不存在时自动创建（幂等：库已存在则只做一次探测连接）。
+
+    仅当 DSN 的 host 在 ``AUTO_CREATE_HOSTS`` 白名单内才生效；白名单外
+    （远程/生产库）保持原语义——连不上就失败或跳过，绝不自动建库。
+    """
+    stripped = _strip_async_dialect(dsn)
+    db_name = urlparse(stripped).path.lstrip("/")
+    if not db_name or not _dsn_allows_auto_create(dsn):
+        return
+
+    try:
+        probe = await asyncpg.connect(stripped)
+    except asyncpg.exceptions.InvalidCatalogNameError:
+        maint_dsn = stripped.rpartition("/")[0] + f"/{MAINTENANCE_DB}"
+        maint = await asyncpg.connect(maint_dsn)
+        try:
+            await maint.execute(f'CREATE DATABASE "{db_name}"')
+        finally:
+            await maint.close()
+        probe = await asyncpg.connect(stripped)
+    await probe.close()
 
 
 def resolve_db_dsn(config: pytest.Config) -> tuple[str, bool]:
@@ -124,6 +166,13 @@ async def db_engine(request: pytest.FixtureRequest) -> AsyncIterator[AsyncEngine
     dsn, explicit = resolve_db_dsn(request.config)
     if not dsn:
         pytest.skip(f"未设置 {TEST_DSN_ENV}（或 --db-dsn），跳过数据库测试")
+
+    try:
+        await ensure_test_database(dsn)
+    except Exception as exc:  # noqa: BLE001
+        if explicit:
+            pytest.fail(f"自动创建测试数据库失败（{dsn}）：{exc}", pytrace=False)
+        pytest.skip(f"自动创建测试数据库失败，跳过数据库测试：{exc}")
 
     register_orm_metadata()
     engine = create_async_engine(dsn, poolclass=NullPool)
