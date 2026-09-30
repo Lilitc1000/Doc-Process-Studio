@@ -56,6 +56,9 @@ if [ -d backend ]; then
   run_step ensure_env backend "python3 scripts/ensure_env.py --env dev" \
     || echo "[startup] ensure_env failed (non-fatal, see log)"
   run_step uv_sync backend "uv sync"
+  # 数据库迁移：幂等（已是 head 则零操作）。失败不阻断启动，下次容器重启会重试。
+  run_step alembic backend "env ENV=dev uv run --no-sync alembic upgrade head" \
+    || echo "[startup] alembic failed (non-fatal, see log)"
 fi
 
 if [ -d frontend ]; then

@@ -12,10 +12,24 @@
 #   3) 部署作业用 `docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml ...` 读取该文件；
 #      也可以把根目录 .gitlab-ci.example.yml 复制为 .gitlab-ci.yml 走流水线部署（见模板内说明）。
 #
-# 上线步骤：
-#   docker compose -f docker-compose.prod.yml run --rm app alembic upgrade head   # 建表/迁移
-#   docker compose -f docker-compose.prod.yml up -d --build
+# 上线步骤（数据库迁移由 migrate 容器自动执行，无需手工跑 alembic）：
+#   docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml up -d --build
 #   # 首次启动后，部署者在 /setup 页创建管理员，再在「系统设置 → 系统密钥」页填入 RAGFlow API Key。
+
+# app / migrate 共用的环境变量（单一来源，避免两处漂移）
+x-app-env: &app-env
+  ENV: prod
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://59.152.224.254:8081}
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+  REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-doc-process-studio}
+  REDIS_TTL_SECONDS: ${REDIS_TTL_SECONDS:-43200}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-master}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+  REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+  SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
 
 services:
   db:
@@ -46,24 +60,25 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # 一次性迁移容器：每次 up 自动把 schema 迁到最新（alembic 幂等，已是 head 则零操作）。
+  # app 等 migrate 成功退出后才启动，杜绝"旧代码碰新表结构 / 新代码碰旧表结构"。
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   app:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    # ENV=prod：缺失 SETTINGS_ENCRYPTION_KEY 会在启动期 fail-fast（设计如此）
-    environment:
-      ENV: prod
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://59.152.224.254:8081}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-doc-process-studio}
-      REDIS_TTL_SECONDS: ${REDIS_TTL_SECONDS:-43200}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-master}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
-      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
-      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
+    # ENV=prod：缺失 SETTINGS_ENCRYPTION_KEY / 弱 JWT_SECRET_KEY 会在启动期 fail-fast（设计如此）
+    environment: *app-env
     # 附件持久化：容器内默认路径为 /app/generated-attachments，必须挂卷否则容器重启丢文件
     volumes:
       - dps_attachments:/app/generated-attachments
@@ -72,6 +87,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   web:

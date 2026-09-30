@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
+from doc_process_studio.common.infrastructure.config import settings
 from doc_process_studio.common.infrastructure.database import Base
 import doc_process_studio.auth.infrastructure.persistence  # noqa: F401
 import doc_process_studio.chat.infrastructure.persistence  # noqa: F401
@@ -16,9 +17,13 @@ import doc_process_studio.settings.infrastructure.persistence  # noqa: F401
 
 config = context.config
 
-# 允许用环境变量覆盖 alembic.ini 里硬编码的连接串（迁移到测试库时必需）
+# 连接串优先级：进程环境变量 DATABASE_URL > settings（pydantic 会加载
+# backend/.env.{env}，即 ensure_env 生成的唯一真相源）。绝不回落到
+# alembic.ini 里的硬编码值——那会在密钥轮换后静默失效。
 if os.getenv("DATABASE_URL"):
     config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+else:
+    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

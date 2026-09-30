@@ -6,7 +6,7 @@
 # 与 AiVideo 等兄弟项目的差异（都是 DPS 特有，模式完全一致）：
 #   1) compose 全部命令带 --env-file /opt/dps/.env（密钥由部署机文件承载，不进流水线）
 #   2) 上线前先跑 scripts/ensure_env.py --env prod 生成/补齐密钥文件（幂等，只补缺）
-#   3) build 之后、up 之前跑 alembic upgrade head（DPS 有数据库迁移）
+#   3) 数据库迁移由 migrate 容器在 up 时自动执行（alembic 幂等），无需手工操作
 #   4) rsync 排除 .env / 密钥派生文件，防止部署机侧出现第二份密钥
 #
 # 前置条件：部署机有 python3（ensure_env 只用标准库）+ docker compose 插件；
@@ -39,11 +39,7 @@ deploy-dev:
     - rsync -e "ssh -i $PK" -avz --delete --exclude .git --exclude node_modules --exclude .venv --exclude __pycache__ --exclude .env --exclude backend/.env.dev ./ ${SRV}:${DEPLOY_DIR}/
     # 2) 生成/补齐密钥文件（幂等：已有则零改动；只打印键名不打印值）
     - $SSH "cd $DEPLOY_DIR && python3 scripts/ensure_env.py --env prod --path /opt/dps/.env"
-    # 3) 构建镜像（此时旧栈仍在服务）
-    - $SSH "cd $DEPLOY_DIR && export DOCKER_BUILDKIT=1 && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml build"
-    # 4) 停旧栈 → 迁移 → 上线（compose run 会自动拉起 db 依赖）
-    - $SSH "cd $DEPLOY_DIR && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml down"
-    - $SSH "cd $DEPLOY_DIR && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml run --rm app alembic upgrade head"
-    - $SSH "cd $DEPLOY_DIR && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml up -d"
+    # 3) 构建并上线（数据库迁移由 migrate 容器自动执行，无需手工跑 alembic）
+    - $SSH "cd $DEPLOY_DIR && export DOCKER_BUILDKIT=1 && sudo docker compose --env-file /opt/dps/.env -f docker-compose.prod.yml up -d --build"
   extends:
     - .srvInfo-dev

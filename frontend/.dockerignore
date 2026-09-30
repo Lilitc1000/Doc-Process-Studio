@@ -1,0 +1,6 @@
+# 构建/传输上下文排除：node_modules 里有符号链接会让 build context 报
+# "invalid file request"，且体积巨大（数百 MB）；dist 也不应进上下文。
+node_modules
+dist
+.git
+.env*

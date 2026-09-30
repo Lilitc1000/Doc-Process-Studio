@@ -1,0 +1,8 @@
+# 缩小构建上下文：这些内容不参与 COPY，只会拖慢传输并可能夹带敏感/本地文件
+.venv
+**/__pycache__
+.pytest_cache
+tests
+scripts
+.env*
+docs
